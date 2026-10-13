@@ -55,3 +55,21 @@ Tab-separated text, one request a stock, about 100KB for a heavily traded one. F
 Apple 2.77M calls and 2.13M puts (0.77 puts per call) over 24 expiries; Tesla 3.11M and 2.44M; SPY 5.50M calls and 12.78M puts (2.32); Berkshire B 0.59; Coca-Cola Consolidated a few thousand of each.
 
 Tests were a scratchpad Node suite (44 checks, the parser on a synthetic report and on Apple's real one). No surface was rendered in a browser by the build.
+
+## Added up: the market, a sector, an industry (2026-10-12)
+
+The owner: "I don't think there is any option related page in promo at the market, sector or industry level". Three cards from one builder, `optGroupCard(tpl)` in `cards.js`, one under each of Market, Sector and Industry, each named "Options" in its group:
+
+- `optmkt` (control `omkSp500`): every company in the cut, a row a sector.
+- `optsec` (`oscName`, `oscSp500`): one sector, a row an industry.
+- `optind` (`oinName`, `oinSp500`): one industry, a row a company.
+
+Rules:
+
+- **They read the row** (`optCalls`, `optPuts`, `optDate`, stamped by `flowsOf`), so no host fetches anything and the cards cannot disagree with the column or the stock page.
+- **Two readings of puts per call, both shown.** Over every contract, which a few names dominate; and **the middle company**, the median of each company's own ratio among those with at least a thousand contracts (the column's floor). Where the two largest names are 15% or more of the contracts the note names them and says that is why the two readings differ.
+- **Funds are left out of the sums** (`isFundRow`). On the market card the index funds' own ratios (SPY, QQQ, IWM, DIA) are given in the note, apart.
+- A company with nothing on file is counted in the note as that, never as zero. Fewer than three companies with options (two for an industry) draws no card.
+- The largest groups by contracts are shown (11, 7 or 12 by shape), with "of N" in the note.
+- The same wording rule as the single-stock card: a count, never a direction. The note avoids the word "hold" as well.
+- Scratchpad suite, 24 checks. Not rendered in a browser by the build.

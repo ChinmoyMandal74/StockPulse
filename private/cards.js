@@ -7749,6 +7749,136 @@
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
 
+  // ---- Options open interest, added up: the market, a sector, an industry --------
+  //
+  // (2026-10-12, the owner: "I don't think there is any option related page in
+  // promo at the market, sector or industry level".) The single-stock card
+  // one step out, three times: every company in the cut with its sectors
+  // under it, one sector with its industries, one industry with its companies.
+  //
+  // IT READS THE ROW, the screener's own optCalls and optPuts, so the cards,
+  // the column and the stock page cannot disagree and no host has to fetch
+  // anything.
+  //
+  // TWO READINGS OF "PUTS PER CALL", BOTH SHOWN, because they answer different
+  // questions and differ a great deal. Over ALL THE CONTRACTS it is dominated
+  // by a handful of names: Nvidia and Tesla alone carry more open contracts
+  // than most sectors. THE MIDDLE COMPANY is the median of each company's own
+  // ratio, and says what is typical. One without the other misleads.
+  //
+  // FUNDS ARE NOT COMPANIES and are left out of the sums: SPY alone carries more
+  // contracts than any sector and would be the card. On the market card
+  // the index funds' own readings are given in the note, apart.
+  //
+  // A COUNT, NOT A LEAN, as on the single-stock card: no word here reads a
+  // direction into it, and calls and puts are the accent and orange.
+  const OG_TPLS = {
+    optmkt: { p: 'omk', dim: null, by: 'sector', row: 'Sector', min: 3 },
+    optsec: { p: 'osc', dim: 'sector', by: 'industry', row: 'Industry', min: 2 },
+    optind: { p: 'oin', dim: 'industry', by: null, row: 'Company', min: 2 },
+  };
+  const OG_ROWS = { portrait: 11, square: 7, story: 12 };
+  // A company's own ratio counts toward the middle only on a thousand
+  // contracts, the screener column's own floor.
+  const OG_RATIO_MIN = 1000;
+  function optGroupCard(tpl) {
+    const T = OG_TPLS[tpl];
+    const cut = SP_CUTS.some(([k]) => k === O[T.p + 'Sp500']) ? O[T.p + 'Sp500'] : 'All';
+    const name = T.dim ? String(O[T.p + 'Name'] || '') : '';
+    const fin = (v) => (v != null && isFinite(Number(v)) ? Number(v) : null);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const cutWord = SP_CUT_LABEL[cut] || 'The whole screen';
+    if (T.dim && !name) return shell(cutWord, 'Options', 'pick ' + (T.dim === 'sector' ? 'a sector' : 'an industry'), 'No ' + T.dim + ' is chosen yet.');
+    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((r) => !T.dim || r[T.dim] === name);
+    const has = [];
+    for (const r of pool) {
+      const c = fin(r.optCalls), p = fin(r.optPuts);
+      if (c == null || p == null || !(c + p > 0)) continue;
+      has.push({ r, c, p, n: c + p });
+    }
+    const what = T.dim ? name : 'the market';
+    if (has.length < T.min) {
+      return shell(cutWord, T.dim ? name : 'Options', 'too few to add up',
+        'Only ' + has.length + ' of ' + pool.length + ' companies here have options open on file. Widen the index choice' + (T.dim ? ' or pick another ' + T.dim : '') + '.');
+    }
+    const C = has.reduce((s, x) => s + x.c, 0), P = has.reduce((s, x) => s + x.p, 0);
+    const all = C > 0 ? P / C : null;
+    const own = has.filter((x) => x.n >= OG_RATIO_MIN && x.c > 0).map((x) => x.p / x.c).sort((a, b) => a - b);
+    const mid = own.length >= 3 ? (own.length % 2 ? own[(own.length - 1) / 2] : (own[own.length / 2 - 1] + own[own.length / 2]) / 2) : null;
+    // the rows: the groups one step down, or the companies themselves
+    let rows;
+    if (T.by) {
+      const by = new Map();
+      for (const x of has) {
+        const k = x.r[T.by] ? String(x.r[T.by]) : null;
+        if (!k) continue;
+        const g = by.get(k) || by.set(k, { label: k, sub: '', c: 0, p: 0, k: 0 }).get(k);
+        g.c += x.c; g.p += x.p; g.k++;
+      }
+      rows = [...by.values()].map((g) => Object.assign(g, { n: g.c + g.p, sub: g.k + (g.k === 1 ? ' co' : ' cos') }));
+    } else {
+      rows = has.map((x) => ({ label: x.r.symbol, sub: nameOf(x.r), c: x.c, p: x.p, n: x.n }));
+    }
+    rows.sort((a, b) => b.n - a.n || (a.label < b.label ? -1 : 1));
+    const top = rows.slice(0, OG_ROWS[size.id] || 11);
+    const cnt = (v) => (v == null ? '\u2014' : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e8 ? 0 : v >= 1e7 ? 1 : 2) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'K' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v)));
+    const rat = (v) => (v == null ? '\u2014' : v.toFixed(2));
+    const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const dates = has.map((x) => x.r.optDate).filter(Boolean).sort();
+    const asOf = dates.length ? dates[dates.length - 1] : null;
+    const A = 'var(--accent)', B = pal.ink('#fb923c');
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('Calls open', cnt(C), Math.round(C / (C + P) * 100) + '% of the contracts')
+      + fig('Puts open', cnt(P), Math.round(P / (C + P) * 100) + '% of the contracts')
+      + fig('Puts per call', rat(all), 'over every contract')
+      + fig('The middle company', rat(mid), mid == null ? 'too few to say' : 'the typical one of ' + own.length);
+    const SZ = ({
+      portrait: top.length <= 6 ? { f: 26, b: 24 } : top.length <= 9 ? { f: 23, b: 20 } : { f: 21, b: 18 },
+      square: top.length <= 5 ? { f: 21, b: 16 } : { f: 18, b: 13 },
+      story: top.length <= 8 ? { f: 32, b: 32 } : { f: 28, b: 26 },
+    })[size.id] || { f: 23, b: 20 };
+    const scale = Math.max(1e-9, ...top.map((x) => x.n));
+    const vw = Math.ceil(6 * SZ.f * 0.62) + 6, pw = Math.ceil(5 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0,40%) minmax(0,1fr) ' + vw + 'px ' + pw + 'px';
+    const body = top.map((x) => { const a = x.c / scale * 100, b = x.p / scale * 100;
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(x.label) + (x.sub ? ' <span class="bb-nm">' + esc(x.sub) + '</span>' : '') + '</span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px">'
+        + (a > 0 ? '<span class="cr-b" style="left:0;width:' + a.toFixed(2) + '%;background:' + A + '"></span>' : '')
+        + (b > 0 ? '<span class="cr-b" style="left:' + a.toFixed(2) + '%;width:' + b.toFixed(2) + '%;background:' + B + '"></span>' : '') + '</span>'
+        + '<span class="bx-v">' + esc(cnt(x.n)) + '</span>'
+        + '<span class="bx-v rm-pct">' + esc(x.c > 0 ? rat(x.p / x.c) : '\u2014') + '</span></div>'; }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>' + esc(T.row) + '</span>'
+      + '<span><b style="color:' + A + '">Calls</b> \u00b7 <b style="color:' + B + '">puts</b> open</span><span class="sb-hr">Contracts</span><span class="sb-hr">Puts/call</span></div>';
+    // On the market card, the index funds' own readings, kept apart from the sums.
+    const funds = T.dim ? [] : ['SPY', 'QQQ', 'IWM', 'DIA'].map((s) => stocks.find((r) => r && !r.error && r.symbol === s))
+      .filter((r) => r && fin(r.optCalls) > 0 && fin(r.optPuts) != null).map((r) => r.symbol + ' ' + rat(fin(r.optPuts) / fin(r.optCalls)));
+    const big = has.slice().sort((a, b) => b.n - a.n).slice(0, 2);
+    const bigShare = Math.round(big.reduce((s, x) => s + x.n, 0) / (C + P) * 100);
+    const note = 'Option contracts open on ' + has.length.toLocaleString() + ' ' + (T.dim ? 'companies in ' + name : 'companies')
+      + (asOf ? ' at the close of ' + day(asOf) : '') + ', as counted by the Options Clearing Corporation'
+      + (pool.length > has.length ? '; ' + (pool.length - has.length) + ' more have none on file' : '') + '. '
+      + (rows.length > top.length ? 'These are the ' + top.length + ' ' + (T.by ? (T.by === 'sector' ? 'sectors' : 'industries') : 'companies') + ' with the most contracts, of ' + rows.length + '. ' : '')
+      + (big.length === 2 && bigShare >= 15 ? big[0].r.symbol + ' and ' + big[1].r.symbol + ' alone account for ' + bigShare + '% of the contracts, which is why the ratio over every contract and the middle company\u2019s differ. ' : '')
+      + (funds.length ? 'Funds are left out of the sums; the index funds\u2019 own puts per call: ' + funds.join(', ') + '. ' : 'Funds are left out. ')
+      + 'Every contract has a buyer and a seller, and a put can be a bet, insurance on shares already owned, or one side of a neutral trade: this is how much is outstanding, not which way anyone is leaning. '
+      + 'A count, not a forecast.';
+    const head = T.dim
+      ? '<h2 class="s-title"><span class="mh-name' + (name.length > 30 ? ' mh-l2' : name.length > 18 ? ' mh-l1' : '') + '">' + esc(name) + '</span><span class="dim">' + esc('options open, by ' + (T.by ? 'industry' : 'company')) + '</span></h2>'
+      : '<h2 class="s-title">Options open<br><span class="dim">calls and puts, by sector</span></h2>';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutWord + ' \u00b7 ' + has.length.toLocaleString() + ' companies' + (asOf ? ' \u00b7 close of ' + day(asOf) : '')) + '</span>'
+      + head
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + body + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Insider activity: what one company's insiders did on the open market ----
   //
   // (2026-10-12, the owner: "summarize the insider transactions on individual
@@ -9421,6 +9551,9 @@
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
+    optmkt: () => optGroupCard('optmkt'),
+    optsec: () => optGroupCard('optsec'),
+    optind: () => optGroupCard('optind'),
     drawdown: tplDrawdown,
     evo2: tplEvoTwo,
     industries: tplIndustries,
