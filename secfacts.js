@@ -353,11 +353,35 @@ function deriveQuarters(rows) {
   // The filing that speaks for each distinct (start, end) — a restatement
   // should feed the subtraction, but a proxy that mentions one number must
   // not displace the 10-K that carries the statement. See `outranks`.
-  const best = new Map();
+  //
+  // EACH FIGURE FROM THE BEST FILING THAT STATES IT (2026-10-13). The filing
+  // that speaks for a period used to supply every figure, including the ones
+  // it does not state. A later 10-Q routinely mentions ONE figure for an
+  // earlier quarter -- Ford's June report says one thing about January to
+  // March -- which makes a nearly empty row for that quarter, newer than the
+  // real one. It won, so "half year minus first quarter" subtracted nothing
+  // and the June quarter had no cash flow, capex, buybacks or dividends.
+  // Measured before this: the newest quarter lacked operating cash flow at
+  // 340 of 1,184 companies. So the winner still decides identity and any
+  // figure it states (a restatement must feed the subtraction), and a figure
+  // it leaves blank is taken from the next filing down that has it. The rows
+  // themselves are not touched: this is a view for the arithmetic only.
+  const groups = new Map();
   for (const r of rows) {
     if (!r.periodStart || r.derived) continue;
     const k = r.periodStart + '|' + r.periodEnd;
-    if (outranks(r, best.get(k))) best.set(k, r);
+    const g = groups.get(k) || groups.set(k, []).get(k);
+    g.push(r);
+  }
+  const best = new Map();
+  for (const [k, g] of groups) {
+    g.sort((a, b) => (outranks(a, b) ? -1 : 1));
+    const view = Object.assign({}, g[0]);
+    for (const c of CONCEPT_KEYS) {
+      if (view[c] != null) continue;
+      for (let i = 1; i < g.length; i++) if (g[i][c] != null) { view[c] = g[i][c]; break; }
+    }
+    best.set(k, view);
   }
   // One cumulative ladder per fiscal-year start.
   const chains = new Map();
