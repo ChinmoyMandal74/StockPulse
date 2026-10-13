@@ -9368,7 +9368,7 @@ function peersFor(stock, stocks, links) {
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
   const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
-    'fund|Fwd P/E', 'act|Signal'];
+    'fund|Trailing P/E', 'fund|Fwd P/E', 'act|Signal'];
   const peerRow = (x) => {
     const v = RowCard.fieldValues(x);
     const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
@@ -9389,6 +9389,11 @@ function peersFor(stock, stocks, links) {
     // loss-making company reading -41.7 at the head of the column it is
     // meant to be compared against would be the worst place of all for it.
     out['Fwd P/E'] = Number(x.forwardPe) > 0 ? out['Fwd P/E'] : null;
+    // The same rule for the P/E on the last twelve months' earnings, added
+    // beside it on 2026-10-12 (the owner: "add live P/E next to forward
+    // P/E"): today's price over what the company actually earned. A company
+    // that lost money over those twelve months has no such multiple.
+    out['Trailing P/E'] = Number(x.trailingPe) > 0 ? out['Trailing P/E'] : null;
     return out;
   };
   return {

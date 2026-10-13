@@ -27,3 +27,10 @@
   - **A screenshot found both layout faults, as usual here**: `.rng` never resets `text-decoration`, so the `vs` pill arrived underlined; and at 390px a full legal name took the whole viewport with every number off-screen. Below 620px the name link truncates to 116px and the compare column stands aside.
   - **A short fixture name made two of those assertions vacuous.** With `Near One` in place of a real 39-character legal name they passed with the truncation reverted — caught only because the revert-proof was run. **A width assertion needs input at the length the provider actually returns.**
 
+## The trailing P/E beside the forward one (2026-10-12)
+
+The owner: "in the Similar stock section, add live P/E next to forward p/e". A column headed **P/E**, between Market cap and Fwd P/E: today's price over the last twelve months' earnings (`trailingPe`, the catalogue's `fund|Trailing P/E`). "Live" in the sense that it uses the current price and reported earnings, where the forward one uses expected earnings.
+
+- The same rule as the forward column, for the same reason: a multiple off a loss is a dash, on the anchor row too (`Number(x.trailingPe) > 0`, which also rejects an empty value before coercing).
+- The note under the table now says what each of the two is.
+- A page loaded against an older server gets no such key and draws a dash; deploy order still does not matter.

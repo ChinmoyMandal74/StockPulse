@@ -1800,7 +1800,7 @@
           ? `<span class="self">${esc(r.name)}</span>`
           : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>`}
           <span class="sym">${esc(r.symbol)}</span>${me ? '<span class="here">this stock</span>' : ''}</td>
-        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Fwd P/E'])}
+        ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Trailing P/E'])}${cell(r['Fwd P/E'])}
         <td class="av ${r.Signal ? (r.Signal.c || '') : 'na'}"${
           r.why ? ` title="${esc(r.why)}"` : ''}>${esc(r.Signal ? r.Signal.t : '—')}</td>
         <td class="cmp">${me ? '' : `<a class="rng" href="/compare/${encodeURIComponent(sym)}/${
@@ -1816,7 +1816,7 @@
           <p class="summary">${basis}</p>
           <div class="ptab"><table>
             <thead><tr><th>Company</th><th>Price</th><th>Today</th><th>1Y</th>
-              <th>Market cap</th><th>Fwd P/E</th><th>Signal</th><th></th></tr></thead>
+              <th>Market cap</th><th title="Today's price over the earnings of the last twelve months">P/E</th><th title="Today's price over the earnings analysts expect for the next twelve months">Fwd P/E</th><th>Signal</th><th></th></tr></thead>
             <tbody>${body}</tbody>
           </table></div>
           <p class="note">${p.basis === 'moves'
@@ -1826,8 +1826,9 @@
             : `Same ${p.basis}, ranked by ${p.byName ? 'how close each one is in market cap' : 'size'}.`}
             It is who else is on this screen measured the same way — not a ranking, and not a list of
             better alternatives. Hover the Signal for the rule that fired.
-            A dash under Fwd P/E is a company with no positive forward earnings, or none reported —
-            a multiple off a loss is arithmetic, not cheapness.</p>
+            P/E is today’s price over the last twelve months’ earnings; Fwd P/E is the same price over
+            the earnings expected for the next twelve. A dash under either is a company with no positive
+            earnings on that basis, or none reported — a multiple off a loss is arithmetic, not cheapness.</p>
         </div></section>`;
     }
 
