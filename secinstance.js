@@ -31,6 +31,7 @@ const SecFacts = require('./secfacts');
 
 const MAX_GAPS = 3;              // reports read for one company on one visit
 const FORMS = /^(10-K|10-Q|20-F|40-F)$/i;   // not amendments: they often carry no figures
+const STATEMENT = /^(10-K|10-Q|20-F|40-F)(\/A)?$/i;
 
 // The reports on the list that the feed knows nothing of, OLDEST FIRST, and
 // only those filed after the newest thing the feed does carry: an old report
@@ -47,7 +48,11 @@ function missing(recent, facts) {
         for (const x of units[u] || []) {
           if (!x || !x.accn) continue;
           seen.add(x.accn);
-          if (x.filed && x.filed > newest) newest = x.filed;
+          // "Newest" is the newest REPORT the feed carries. Citigroup's feed
+          // has prospectus fee tables filed after reports it lacks; dated by
+          // those, both missing reports looked older than the feed and
+          // neither was read.
+          if (x.filed && x.filed > newest && STATEMENT.test(String(x.form || ''))) newest = x.filed;
         }
       }
     }
