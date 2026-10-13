@@ -1653,6 +1653,9 @@
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
       { id: 'evo2', name: 'Evolution Two Stocks', note: 'Two companies, what each business did and what the market paid for it — from the filings, on one axis' },
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
+      { id: 'covsize', name: 'Coverage by size', note: 'How many companies the site tracks in each size band, and the value in each' },
+      { id: 'covsector', name: 'Coverage by sector', note: 'How many companies the site tracks in each sector, with its industries and value' },
+      { id: 'covindex', name: 'Coverage by index', note: 'How many S&P 500 and Nasdaq 100 members the site tracks, and how many sit outside both' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
@@ -1743,6 +1746,15 @@
       ['lines', 'Lines — any measure'],
       ['evo2', 'Evolution Two Stocks'],
     ];
+    // Coverage (2026-10-13, the owner: "Create a new group called Coverage, no
+    // need to hide it from users, it's more transparency"): what the site
+    // tracks, counted three ways. No controls, so no box; and deliberately
+    // NOT in the Brand group, which members do not see.
+    const COV_VIEWS = [
+      ['covsize', 'By size'],
+      ['covsector', 'By sector'],
+      ['covindex', 'By index'],
+    ];
     const BRAND_VIEWS = [
       ['intro', 'Intro'],
       ['howto', 'How to'],
@@ -1774,6 +1786,7 @@
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
+      { name: 'Coverage', views: COV_VIEWS, last: 'covsize' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;

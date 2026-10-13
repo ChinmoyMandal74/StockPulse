@@ -7749,6 +7749,103 @@
   // and not the same one: the kicker gives the range.
   const FH_ROWS = { portrait: 10, square: 6, story: 12 };
 
+  // ---- Coverage: what this site tracks --------------------------------------------
+  //
+  // (2026-10-13, the owner: "is there any visualization talking about the
+  // coverage of my universe, number of companies by size for example", then
+  // "Create a new group called Coverage, no need to hide it from users, it's
+  // more transparency".) Three cards from one builder, counting what is on
+  // the screen: by size band, by sector, and by index membership.
+  //
+  // A COUNT OF TODAY'S LIST, AND NOTHING ELSE. The universe is chosen by hand
+  // and changes, so every figure is computed from the rows when the card is
+  // drawn and none is written down. It says what is covered and makes no
+  // claim to be complete: it does not say "all of" anything.
+  //
+  // FUNDS ARE COUNTED APART. An ETF is not a company: it has no size band
+  // of its own here, no sector, and is no member of an index it tracks.
+  //
+  // A COMPANY WITH NOTHING ON FILE FOR THE CUT HAS ITS OWN ROW (no market
+  // value, no sector, membership not known). It is not put in a band it
+  // may not belong to, and it is not left out of the count.
+  //
+  // INDEX MEMBERSHIP IS THREE-STATE. `spMember` is true, false or unknown,
+  // and unknown is not "not a member".
+  const COV_TPLS = { covsize: { by: 'size', word: 'by size', row: 'Size band' }, covsector: { by: 'sector', word: 'by sector', row: 'Sector' }, covindex: { by: 'index', word: 'by index', row: 'Index membership' } };
+  const COV_ROWS = { portrait: 12, square: 8, story: 13 };
+  function coverageCard(tpl) {
+    const T = COV_TPLS[tpl];
+    const all = stocks.filter((x) => x && !x.error);
+    const cos = all.filter((x) => !isFundRow(x));
+    const funds = all.length - cos.length;
+    if (cos.length < 1) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">Coverage</span><h2 class="s-title">Nothing to count<br><span class="dim">the screen is empty</span></h2></div></div>' + chromeFoot();
+    }
+    const capOf = (r) => { const c = Number(r.marketCap); return r.marketCap != null && isFinite(c) && c > 0 ? c : 0; };
+    const totalCap = cos.reduce((s, r) => s + capOf(r), 0);
+    const group = (keyOf) => { const m = new Map(); for (const r of cos) { const k = keyOf(r); const g = m.get(k) || m.set(k, { n: 0, cap: 0, rows: [] }).get(k); g.n++; g.cap += capOf(r); g.rows.push(r); } return m; };
+    let rows, extra = '';
+    if (T.by === 'size') {
+      const m = group((r) => (BRD_CAP_ORDER.includes(r.capBand) ? r.capBand : ''));
+      rows = BRD_CAP_ORDER.filter((b) => m.has(b)).map((b) => ({ label: b, sub: BEAT_BAND_RANGE[b] || '', n: m.get(b).n, cap: m.get(b).cap }));
+      if (m.has('')) rows.push({ label: 'No market value on file', sub: '', n: m.get('').n, cap: null, odd: true });
+      extra = 'Size is today\u2019s market value. ';
+    } else if (T.by === 'sector') {
+      const m = group((r) => (r.sector ? String(r.sector) : ''));
+      rows = [...m.keys()].filter((k) => k).map((k) => ({ label: k, sub: new Set(m.get(k).rows.map((r) => r.industry).filter(Boolean)).size + ' industries', n: m.get(k).n, cap: m.get(k).cap }))
+        .sort((a, b) => b.n - a.n || (a.label < b.label ? -1 : 1));
+      if (m.has('')) rows.push({ label: 'No sector on file', sub: '', n: m.get('').n, cap: null, odd: true });
+    } else {
+      const pick = (f) => { const rs = cos.filter(f); return { n: rs.length, cap: rs.reduce((s, r) => s + capOf(r), 0) }; };
+      const def = [
+        ['In the S&P 500', '', (r) => r.spMember === true],
+        ['In the Nasdaq 100', '', (r) => r.ndxMember === true],
+        ['In both', 'counted in each of the two above', (r) => r.spMember === true && r.ndxMember === true],
+        ['In neither', '', (r) => r.spMember === false && r.ndxMember === false],
+        ['Membership not known', '', (r) => r.spMember == null || r.ndxMember == null],
+      ];
+      rows = def.map(([label, sub, f], i) => Object.assign({ label, sub, odd: i === 4 }, pick(f))).filter((x) => x.n > 0);
+      extra = 'Membership is read from the index funds\u2019 own published holdings. The first two rows overlap, so the rows do not add up to the total. ';
+    }
+    const top = rows.slice(0, COV_ROWS[size.id] || 12);
+    const money = (v) => (v == null ? '\u2014' : '$' + fmtMoney(v));
+    const SZ = ({
+      portrait: top.length <= 6 ? { f: 28, b: 28 } : top.length <= 9 ? { f: 24, b: 22 } : { f: 21, b: 18 },
+      square: top.length <= 6 ? { f: 21, b: 16 } : { f: 18, b: 13 },
+      story: top.length <= 8 ? { f: 34, b: 34 } : { f: 28, b: 26 },
+    })[size.id] || { f: 24, b: 22 };
+    const scale = Math.max(1, ...top.map((x) => x.n));
+    const nw = Math.ceil(6 * SZ.f * 0.62) + 6, pw = Math.ceil(5 * SZ.f * 0.62) + 6, vw = Math.ceil(7 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0,42%) minmax(0,1fr) ' + nw + 'px ' + pw + 'px ' + vw + 'px';
+    const body = top.map((x) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n">' + esc(x.label) + (x.sub ? ' <span class="bb-nm">' + esc(x.sub) + '</span>' : '') + '</span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px"><span class="cr-b" style="left:0;width:' + Math.max(0.6, x.n / scale * 100).toFixed(2) + '%;background:' + (x.odd ? 'var(--muted)' : 'var(--accent)') + '"></span></span>'
+      + '<span class="bx-v">' + esc(x.n.toLocaleString()) + '</span>'
+      + '<span class="bx-v rm-pct">' + esc((x.n / cos.length * 100 < 0.5 ? '<1' : Math.round(x.n / cos.length * 100)) + '%') + '</span>'
+      + '<span class="bx-v rm-pct">' + esc(money(x.cap)) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>' + esc(T.row) + '</span><span>Companies</span>'
+      + '<span class="sb-hr">Count</span><span class="sb-hr">Share</span><span class="sb-hr">Value</span></div>';
+    const sectors = new Set(cos.map((r) => r.sector).filter(Boolean)).size, inds = new Set(cos.map((r) => r.industry).filter(Boolean)).size;
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('Companies', cos.length.toLocaleString(), 'US-listed')
+      + fig('Funds', funds.toLocaleString(), 'indexes and sectors, counted apart')
+      + fig('Combined value', money(totalCap), 'of the companies')
+      + fig('Sectors', String(sectors), inds.toLocaleString() + ' industries');
+    const note = 'What this site tracks today: ' + cos.length.toLocaleString() + ' companies and ' + funds + ' funds. '
+      + '\u201cShare\u201d is of the companies; \u201cValue\u201d is their combined market value. ' + extra
+      + (rows.length > top.length ? 'The ' + top.length + ' largest of ' + rows.length + ' rows are shown. ' : '')
+      + 'The list is chosen by hand and changes, so these are counts of what is covered and not a claim to cover everything. '
+      + 'Every company on it is measured the same way after each close.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc('What this site tracks \u00b7 ' + cos.length.toLocaleString() + ' companies') + '</span>'
+      + '<h2 class="s-title">Coverage<br><span class="dim">' + esc(T.word) + '</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + body + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Options open interest, added up: the market, a sector, an industry --------
   //
   // (2026-10-12, the owner: "I don't think there is any option related page in
@@ -9578,6 +9675,9 @@
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
     indmargin: () => marginsCard('indmargin'),
+    covsize: () => coverageCard('covsize'),
+    covsector: () => coverageCard('covsector'),
+    covindex: () => coverageCard('covindex'),
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
     optind: () => optGroupCard('optind'),
