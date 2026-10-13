@@ -126,3 +126,21 @@ Both read fields already stamped on every snapshot row — `action` and `adviceP
 - **The caret was `--faint` at 10px and read as a bullet**, not a control — it is `--muted` at 12px, and the test asserts the rendered box rather than the markup (the `/quality` lesson).
 - Verified: 42 checks on the real page — the pickers, carets only where they earn their place, the reconciliation in the total AND column by column AND with a multi-valued column, the blank child bucket sorting last, one-open-at-a-time, a child drill holding only stocks in that sector *and* that industry, the columns-are-Industry guard with Swap disabled and a reason on it, the expansion not outliving its axis, and the computed-style checks above. The original 30-check suite still passes with its wide-fold case moved to the columns axis.
 
+
+## The move ladder over longer periods (2026-10-13)
+
+The owner, of the Columns list: "we only have Today's move, can you expand this to past week, past month, the year so far and the past year." Four more dimensions beside `move`, in rows, columns and the filter alike:
+
+| key | label | field | rungs |
+|---|---|---|---|
+| `weekmove` | Past week | `oneWeekPct` | 2% and 5% |
+| `monthmove` | Past month | `oneMonthPct` | 5% and 10% |
+| `ytdmove` | The year so far | `ytdPct` | 10% and 30% |
+| `yearmove` | Past year | `oneYearPct` | 10% and 30% |
+
+- **One `ladder(a, b)` builds all of them**: the same seven rungs as the day's (Up b+, Up a to b, Up 0 to a, Unchanged, and the three falls), with its order, its ranges and its banding function. `MOVE_BANDS` for the day is left exactly as it was, since saved pivots hold its labels as filter values.
+- **The sizes are fixed and were chosen against a real session** (2026-10-13, 1,280 stocks), the day's own rule: no rung but Unchanged empty, the largest holding about a quarter. Week 149 / 187 / 262 / 1 / 253 / 175 / 253; month 115 / 123 / 245 / 0 / 314 / 255 / 227; year so far 259 / 235 / 194 / 0 / 188 / 241 / 137; past year 333 / 228 / 167 / 1 / 148 / 208 / 165. The two year-long periods share one set of sizes so they can be read against each other.
+- **Every rung label is in `LADDER_TINT`**: `tint: 1` is a dead flag until its values appear there, which this file records happening twice already.
+- A stock with no return for the period (26 for the year so far, 30 for the past year: not enough history) has no band and sits in the blank bucket, never in Unchanged.
+- These are the screener's own return columns banded: price only, no dividends.
+- 26 checks: each edge on both sides, blanks, every value in exactly one rung, every rung coloured, each dimension reading its own field through its own ladder, the keys valid for a saved pivot, and the real-session counts. **Not looked at in a browser.**

@@ -399,6 +399,12 @@
       // Unchanged sits in the middle deliberately: it is neither.
       'Up 3%+': GOOD, 'Up 1-3%': OK, 'Up 0-1%': COOL, 'Unchanged': 'var(--faint)',
       'Down 0-1%': WARM, 'Down 1-3%': WARN, 'Down 3%+': BAD,
+      // The longer periods' bands (the past week, month, year so far and
+      // year). Same seven rungs and the same colours; only the sizes differ,
+      // and Unchanged is the word above.
+      'Up 5%+': GOOD, 'Up 2-5%': OK, 'Up 0-2%': COOL, 'Down 0-2%': WARM, 'Down 2-5%': WARN, 'Down 5%+': BAD,
+      'Up 10%+': GOOD, 'Up 5-10%': OK, 'Up 0-5%': COOL, 'Down 0-5%': WARM, 'Down 5-10%': WARN, 'Down 10%+': BAD,
+      'Up 30%+': GOOD, 'Up 10-30%': OK, 'Up 0-10%': COOL, 'Down 0-10%': WARM, 'Down 10-30%': WARN, 'Down 30%+': BAD,
       // Signal moves. `tint: 1` on a dimension is a DEAD FLAG until its values
       // appear here — which this file already records happening once, with the
       // move bands. Caught the same way the second time: a screenshot, where
@@ -462,12 +468,56 @@
       return hit ? hit[0] : null;
     };
 
+    // THE SAME LADDER OVER LONGER PERIODS (2026-10-13, owner: "we only have
+    // Today's move, can you expand this to past week, past month, the year so
+    // far and the past year"). Seven rungs each, built the same way, with
+    // sizes that fit the period: a 3% move is a big day and an ordinary
+    // month. FIXED, like the day's, and for its reason -- and checked the
+    // same way, against a real session: no rung empty but Unchanged, none
+    // holding more than about a quarter of the universe. The year so far
+    // and the past year share one set of sizes so the two can be read
+    // against each other.
+    //
+    // These are the screener's own return columns (1W, 1M, YTD, 1Y), banded:
+    // price only, and a stock without the history for a period has no
+    // return for it and lands in the blank bucket.
+    const pctText = (n) => n.toFixed(2) + '%';
+    function ladder(a, b) {
+      const rungs = [
+        ['Up ' + b + '%+',            (v) => v >= b,            '+' + pctText(b) + ' and above'],
+        ['Up ' + a + '-' + b + '%',   (v) => v >= a && v < b,   '+' + pctText(a) + ' to +' + pctText(b)],
+        ['Up 0-' + a + '%',           (v) => v > 0 && v < a,    'above 0, under +' + pctText(a)],
+        ['Unchanged',                 (v) => v === 0,           'exactly 0.00%'],
+        ['Down 0-' + a + '%',         (v) => v < 0 && v > -a,   'under 0, above -' + pctText(a)],
+        ['Down ' + a + '-' + b + '%', (v) => v <= -a && v > -b, '-' + pctText(a) + ' to -' + pctText(b)],
+        ['Down ' + b + '%+',          (v) => v <= -b,           '-' + pctText(b) + ' and below'],
+      ];
+      return {
+        order: rungs.map((r) => r[0]),
+        range: Object.fromEntries(rungs.map((r) => [r[0], r[2]])),
+        band: (v) => {
+          if (v == null || v === '' || !Number.isFinite(Number(v))) return null;
+          const hit = rungs.find((r) => r[1](Number(v)));
+          return hit ? hit[0] : null;
+        },
+      };
+    }
+    const WEEK_LADDER = ladder(2, 5), MONTH_LADDER = ladder(5, 10), YEAR_LADDER = ladder(10, 30);
+
     const DIMS = {
       sector:   { label: 'Sector',          get: (s) => s.sector },
       // Ordered best to worst, so the ladder's green-to-red tint reads the way
       // the screener's own verdict cells do.
       move:     { label: "Today's move",    get: (s) => moveBand(s.todayPct),
                   order: MOVE_ORDER, range: MOVE_RANGE, tint: 1 },
+      weekmove:  { label: 'Past week',       get: (s) => WEEK_LADDER.band(s.oneWeekPct),
+                   order: WEEK_LADDER.order, range: WEEK_LADDER.range, tint: 1 },
+      monthmove: { label: 'Past month',      get: (s) => MONTH_LADDER.band(s.oneMonthPct),
+                   order: MONTH_LADDER.order, range: MONTH_LADDER.range, tint: 1 },
+      ytdmove:   { label: 'The year so far', get: (s) => YEAR_LADDER.band(s.ytdPct),
+                   order: YEAR_LADDER.order, range: YEAR_LADDER.range, tint: 1 },
+      yearmove:  { label: 'Past year',       get: (s) => YEAR_LADDER.band(s.oneYearPct),
+                   order: YEAR_LADDER.order, range: YEAR_LADDER.range, tint: 1 },
       // The band carries its dollar range in the label, because "Mid-Large" is
       // our own cut rather than a standard and nobody should have to remember
       // where the line is. Ordered by the ladder, largest first.
