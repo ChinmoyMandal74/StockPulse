@@ -83,6 +83,33 @@
     .pull .cmd code { font-family: var(--mono); font-size: 11.5px; color: var(--text); word-break: break-all; }
     .pull .cmd button { margin-left: auto; }
     .pull .errs { margin: 10px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.6; }
+    /* ---- the quality of the filings: counts to pick from, then the companies.
+       Scoped under .qual. Amber is "notice this"; nothing here is red or
+       green, which on this site mean a price fell or rose. */
+    .qual .sub2 { margin: 18px 0 8px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+                  letter-spacing: 0.16em; color: var(--faint); }
+    .qual .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .qual .chip { font: inherit; font-size: 12px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+                  border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted); }
+    .qual .chip b { font-family: var(--mono); font-weight: 500; color: var(--text); margin-left: 6px; }
+    .qual .chip.fault b, .qual .chip.gap b { color: var(--amber); }
+    .qual .chip.on { border-color: var(--accent); color: var(--text); }
+    .qual .chip[disabled] { opacity: 0.45; cursor: default; }
+    .qual .said { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 90ch; }
+    .qual .scroll { margin: 12px 0 0; overflow-x: auto; }
+    .qual table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .qual th { text-align: right; padding: 7px 10px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+               letter-spacing: 0.12em; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .qual td { text-align: right; padding: 7px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+               font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .qual th:first-child, .qual td:first-child, .qual th:last-child, .qual td:last-child { text-align: left; }
+    .qual td:first-child { font-family: var(--sans); }
+    .qual td:first-child a { color: var(--text); font-weight: 600; text-decoration: none; }
+    .qual td:first-child span { color: var(--faint); margin-left: 8px; }
+    .qual td:last-child { font-family: var(--sans); color: var(--muted); white-space: normal; min-width: 180px; }
+    .qual td .dim { color: var(--faint); }
+    .qual td.off { color: var(--amber); }
+    .qual .more { margin: 10px 0 0; font-size: 11.5px; color: var(--faint); }
     .btn.sm { font-size: 11.5px; padding: 5px 11px; }
     .loading, .error { padding: 26px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
@@ -259,11 +286,137 @@
       + 'and it must not overlap the 7:30 AM or 7:30 PM nightly job.',
       '', cmd('Fill the rest, from your machine', 'node --use-system-ca backfill-splits.js --commit --missing'));
 
-    $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + results + insider
+    $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + quality() + results + insider
       + '<p class="grp">Other scheduled pulls</p>' + short + hold + splits;
     $('foot').hidden = false;
     $('foot').textContent = 'Status read ' + when(S.at) + '. Price and company-profile refreshes are on the Refresh runs page; headlines on News runs.';
     wire();
+  }
+
+  // ---- the quality of the filings, and the filings against the API ----------
+  // Built once a day on the server and read here as one stored value. The
+  // counts are buttons: each lists the companies behind it.
+  const ALONE = ['behind the SEC list', 'never fetched', 'fetch failed', 'no quarters', 'no trailing year', 'no cash flow',
+    'currency not converted', 'newest quarter is old', 'annual reports only', 'read from the report',
+    'no company at the SEC', 'no figures at the SEC', 'nothing usable filed'];
+  const VERSUS = ['API ahead', 'filings ahead', 'revenue differs', 'net income differs', 'cash flow differs',
+    'API only', 'filings only', 'not compared (currency)'];
+  const FAULT = { 'behind the SEC list': 1, 'never fetched': 1, 'fetch failed': 1, 'no quarters': 1 };
+  const GAP = { 'no trailing year': 1, 'no cash flow': 1, 'currency not converted': 1, 'API ahead': 1,
+    'revenue differs': 1, 'net income differs': 1, 'cash flow differs': 1 };
+  const SAID = {
+    'behind the SEC list': 'The newest annual or quarterly report on the SEC’s list of this company’s filings is newer than the newest one stored here. Run Check the overdue on the card above; if it stays, the report could not be read.',
+    'never fetched': 'In the universe and never asked for. Fetch missing, on the card above.',
+    'fetch failed': 'The last attempt to read this company’s filings failed. What was stored before is still there.',
+    'no quarters': 'Fetched without error, and no quarter came out of it.',
+    'no trailing year': 'There are not four consecutive quarters with revenue, so no trailing-year figure can be worked out.',
+    'no cash flow': 'The newest quarter has no operating cash flow, filed or worked out from the year to date.',
+    'currency not converted': 'Reports in a currency that is not converted to dollars yet, so nothing is stored.',
+    'newest quarter is old': 'The newest quarter stored ended more than 200 days ago. Usually a company that reports once or twice a year.',
+    'annual reports only': 'Files a year at a time (a foreign company on Form 20-F or 40-F), so there are years and no quarters. Nothing is missing.',
+    'read from the report': 'The SEC’s facts feed does not carry this company’s newest report, so its figures were read from the report’s own data file. Nothing to do.',
+    'no company at the SEC': 'The SEC lists no company under this ticker. Normal for a fund.',
+    'no figures at the SEC': 'The SEC has the company and no tagged figures for it.',
+    'nothing usable filed': 'The SEC has figures for it, and none the reader uses.',
+    'API ahead': 'The price provider describes a later quarter than the newest one in the filings.',
+    'filings ahead': 'The filings hold a later quarter than the price provider describes. The provider catches up at its next profile pull.',
+    'revenue differs': 'Same quarter in both, and trailing-year revenue is more than 5% apart. Banks, insurers and property trusts are mostly our reader picking a partial revenue line.',
+    'net income differs': 'Same quarter in both, and trailing-year net income is more than 5% apart. Often what is counted: all owners or the parent’s shareholders, with or without discontinued operations.',
+    'cash flow differs': 'Same quarter in both, and trailing-year operating cash flow is more than 5% apart.',
+    'API only': 'The price provider has figures and there are no filings to compare them with: foreign companies and funds, mostly.',
+    'filings only': 'Filings are stored and the price provider gives no trailing figures.',
+    'not compared (currency)': 'A foreign filer. Its stored rows are converted to dollars and the provider’s figures are not, so they are not compared.',
+  };
+  let Q = null, qFlag = null, qBusy = false;
+  const money = (v) => {
+    if (v == null) return '—';
+    const a = Math.abs(v), s = v < 0 ? '−' : '';
+    return s + (a >= 1e9 ? (a / 1e9).toFixed(a >= 1e11 ? 0 : 1) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(a >= 1e8 ? 0 : 1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(0) + 'K' : String(Math.round(a)));
+  };
+  function quality() {
+    const head = '<section class="bezel pull qual" id="qua"><div class="core">';
+    const what = '<p class="what">Whether the stored filings are complete and current, and whether they agree with the price provider’s figures for the same quarter. '
+      + 'A difference is not a verdict on either side: both figures are shown.</p>';
+    if (!Q || !Q.summary) {
+      return head + '<div class="top"><h2>Quality of the filings</h2><span class="state">Not built yet</span></div>' + what
+        + '<p class="how"><b>Built by</b> the daily check, from the filings already stored. Nothing has been built yet.</p>'
+        + '<div class="acts"><button class="btn warm" type="button" id="quaBuild">Build now</button></div>'
+        + '<p class="prog" id="quaProg" hidden></p></div></section>';
+    }
+    const s = Q.summary, fl = s.flags || {}, tm = s.timing || {}, ag = s.agree || {};
+    const faults = Object.keys(FAULT).reduce((n, k) => n + (fl[k] || 0), 0);
+    const pctOf = (o) => (o && o.n ? Math.round((o.within / o.n) * 100) + '%' : '—');
+    const facts = [fact('Companies with filings', num(s.withFilings) + ' of ' + num(s.companies)),
+      fact('Nothing to look at', num(s.clean)),
+      fact('Behind the SEC list', num(fl['behind the SEC list'] || 0), '', (fl['behind the SEC list'] || 0) > 0),
+      fact('Same quarter as the API', num(tm.same || 0), num(tm.api || 0) + ' API ahead · ' + num(tm.filings || 0) + ' filings ahead'),
+      fact('Revenue within ' + s.differ + '%', pctOf(ag.rev), ag.rev ? 'of ' + num(ag.rev.n) + ' compared' : ''),
+      fact('Net income within ' + s.differ + '%', pctOf(ag.ni), ag.ni ? 'of ' + num(ag.ni.n) + ' compared' : ''),
+      fact('Cash flow within ' + s.differ + '%', pctOf(ag.ocf), ag.ocf ? 'of ' + num(ag.ocf.n) + ' compared' : '')];
+    const chip = (k) => '<button class="chip ' + (FAULT[k] ? 'fault' : GAP[k] ? 'gap' : '') + (qFlag === k ? ' on' : '') + '" type="button" data-flag="' + esc(k) + '"'
+      + (fl[k] ? '' : ' disabled') + '>' + esc(k.charAt(0).toUpperCase() + k.slice(1)) + '<b>' + num(fl[k] || 0) + '</b></button>';
+    let table = '';
+    if (qFlag) {
+      const all = Q.rows.filter((r) => r.flags.indexOf(qFlag) >= 0);
+      // Largest disagreement first where the list is about one; newest quarter otherwise.
+      const key = { 'revenue differs': 'rev', 'net income differs': 'ni', 'cash flow differs': 'ocf' }[qFlag];
+      all.sort((a, b) => (key ? (b[key] ? b[key][2] : 0) - (a[key] ? a[key][2] : 0) : String(a.s).localeCompare(String(b.s))));
+      const shown = all.slice(0, 300);
+      const pairCell = (p) => (p ? '<td>' + money(p[0]) + '</td><td>' + money(p[1]) + '</td><td' + (p[2] > s.differ ? ' class="off"' : '') + '>' + p[2].toFixed(1) + '%</td>'
+        : '<td class="dim">—</td><td class="dim">—</td><td class="dim">—</td>');
+      table = '<p class="said">' + esc(SAID[qFlag] || '') + '</p><div class="scroll"><table><thead><tr><th>Company</th><th>Filings to</th><th>Filed</th><th>API to</th>'
+        + '<th>Revenue, API</th><th>Filings</th><th>Apart</th><th>Net income, API</th><th>Filings</th><th>Apart</th><th>Cash flow, API</th><th>Filings</th><th>Apart</th><th>Also</th></tr></thead><tbody>'
+        + shown.map((r) => '<tr><td><a href="/stock/' + encodeURIComponent(r.s) + '">' + esc(r.s) + '</a><span>' + esc(r.n || '') + '</span></td>'
+          + '<td>' + esc(r.q || '—') + '</td><td>' + esc(r.filed || '—') + '</td><td' + (r.t === 'api' ? ' class="off"' : '') + '>' + esc(r.vq || '—') + '</td>'
+          + pairCell(r.rev) + pairCell(r.ni) + pairCell(r.ocf)
+          + '<td>' + esc(r.flags.filter((f) => f !== qFlag).join(', ')) + '</td></tr>').join('')
+        + '</tbody></table></div>'
+        + (all.length > shown.length ? '<p class="more">' + num(shown.length) + ' of ' + num(all.length) + ' shown.</p>' : '');
+    }
+    return head + '<div class="top"><h2>Quality of the filings</h2><span class="state ' + (faults ? 'behind' : 'ok') + '">'
+      + (faults ? plural(faults, 'company', 'companies') + ' to look at' : 'Nothing behind') + '</span></div>' + what
+      + '<div class="facts">' + facts.join('') + '</div>'
+      + '<p class="how"><b>Built by</b> the daily check, from the filings and the provider’s figures already stored — last built ' + esc(when(Q.at)) + '. '
+      + 'Trailing-year figures are compared only where both describe the same quarter and the company reports in dollars. Rebuilding reads every company’s recent filings once.</p>'
+      + '<div class="acts"><button class="btn" type="button" id="quaBuild">Rebuild now</button></div>'
+      + '<p class="prog" id="quaProg" hidden></p>'
+      + '<p class="sub2">The filings alone</p><div class="chips">' + ALONE.map(chip).join('') + '</div>'
+      + '<p class="sub2">The filings against the API</p><div class="chips">' + VERSUS.map(chip).join('') + '</div>'
+      + table + '</div></section>';
+  }
+  function repaintQuality() {
+    const old = $('qua'); if (!old) return;
+    const keep = $('quaProg') && !$('quaProg').hidden ? $('quaProg').innerHTML : null;
+    const box = document.createElement('div'); box.innerHTML = quality();
+    old.replaceWith(box.firstChild);
+    if (keep != null) say('qua', keep);
+    wireQuality();
+  }
+  function wireQuality() {
+    const c = $('qua'); if (!c) return;
+    c.querySelectorAll('button[data-flag]').forEach((b) => b.addEventListener('click', () => {
+      qFlag = qFlag === b.dataset.flag ? null : b.dataset.flag; repaintQuality();
+    }));
+    const go = $('quaBuild');
+    if (go) go.addEventListener('click', async () => {
+      if (qBusy) return;
+      qBusy = true; go.disabled = true; say('qua', 'Reading every company’s recent filings…');
+      let msg;
+      try {
+        const r = await fetch('/api/edgar-quality/rebuild', { method: 'POST' });
+        const j = await r.json().catch(() => ({}));
+        msg = r.ok ? 'Rebuilt.' : '<b class="warn">' + esc(j.error || ('HTTP ' + r.status)) + '</b>';
+      } catch (e) { msg = '<b class="warn">Could not rebuild: ' + esc(e.message) + '</b>'; }
+      qBusy = false;
+      await loadQuality(); repaintQuality(); say('qua', msg);
+    });
+  }
+  async function loadQuality() {
+    try {
+      const r = await fetch('/api/edgar-quality', { cache: 'no-store' });
+      const j = await r.json();
+      Q = r.ok ? j : null;
+    } catch (e) { Q = null; }
   }
 
   const say = (id, html) => { const p = $(id + 'Prog'); if (p) { p.hidden = false; p.innerHTML = html; } };
@@ -356,6 +509,7 @@
       (b.dataset.run === 'insider' ? runInsider() : runFilings(b.dataset.run))));
     document.querySelectorAll('button[data-get]').forEach((b) => b.addEventListener('click', () => runCheck(b.dataset.card, b.dataset.get)));
     document.querySelectorAll('button[data-stop]').forEach((b) => b.addEventListener('click', () => { halt[b.dataset.stop] = true; }));
+    wireQuality();
     document.querySelectorAll('button[data-copy]').forEach((b) => b.addEventListener('click', () => {
       const t = b.dataset.copy;
       const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1400); };
@@ -373,6 +527,7 @@
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       S = j;
+      await loadQuality();
       for (const k of Object.keys(busy)) busy[k] = false;
       paint();
     } catch (e) {

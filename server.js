@@ -11360,6 +11360,7 @@ async function newsStalePlan(windowMs) {
 // orchestration here — the news.js shape.
 const SecFacts = require('./secfacts.js');
 const SecInstance = require('./secinstance.js');
+const SecQuality = require('./secquality.js');
 // The SEC refuses an undeclared bot and asks for a way to reach the
 // operator. That address is already in the environment, so this needs no
 // new variable to work — SEC_UA only has to be set to override it.
@@ -11552,6 +11553,9 @@ async function secFetchOne(symbol) {
       if (sr.ok) {
         const sj = await sr.json();
         recent = (sj.filings && sj.filings.recent) || null;
+        // The newest report on the list, for the quality check on /edgar:
+        // is it the newest one we hold. Best effort, like the rest here.
+        try { const nr = SecQuality.newestReport(recent); if (nr) await store.setSecLastReport(sym, nr); } catch (e) { /* rides along */ }
         const best = SecFacts.newestResults(sj.filings && sj.filings.recent);
         if (best) lastResults = best.d;
         // EVERY 8-K IN THE SAME BLOCK, not only the newest results one
@@ -12215,7 +12219,18 @@ async function marginChangeBuild(opts = {}) {
   }
   // A read that found nothing is not written over a value that has figures.
   if (!opts.dry && Object.keys(m).length) await store.writeMarginChange({ at: Date.now(), m, cr });
-  return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length };
+  // THE QUALITY OF THE FILINGS DATA rides the same pass (secquality.js): it
+  // needs every company's rows, and they are in hand. Its own catch, and
+  // nothing is written where the read found no filings at all.
+  let quality = null;
+  try {
+    const [snap, state, dates, filled] = await Promise.all([store.readSnapshot(), store.readSecState(),
+      store.readSecFiled(), store.readSecInstanceAccns().catch(() => new Map())]);
+    const built = SecQuality.build({ universe, facts, stocks: (snap && snap.stocks) || [], state, dates, filled, today });
+    if (!opts.dry && facts.size) await store.writeSecQuality({ at: Date.now(), summary: built.summary, rows: built.rows });
+    quality = built.summary;
+  } catch (e) { /* the margins are the payload */ }
+  return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length, quality };
 }
 
 app.get('/api/earnings-growth', requireMember, route(async (req, res) => {
@@ -13498,6 +13513,25 @@ app.get('/api/insider/coverage', requireAdmin, route(async (req, res) => {
 // EVERY NUMBER HERE IS A CLOCK OR A COUNT off a state table. Nothing scans
 // sec_facts, insider_trans' rows or short_interest; the one aggregate over
 // insider_trans is the covering-index max(filed) its own route already makes.
+// ---- the quality of the filings data, for /edgar (2026-10-13) -----------------
+// The reading is BUILT ON THE DAILY PASS and stored; a page view reads one
+// stored value and nothing else. The rebuild is the daily pass itself, asked
+// for by hand: about 50,000 rows of filings read, so it is a button and not
+// something a page load does.
+app.get('/api/edgar-quality', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const q = await store.readSecQuality();
+  res.json(q && q.rows ? q : { at: null, summary: null, rows: [] });
+}));
+// The cron secret or an admin: this is the daily pass's own work, which the
+// secret already sets off, asked for a second time.
+app.post('/api/edgar-quality/rebuild', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  const out = await marginChangeBuild();
+  res.json({ ok: true, companies: out.universe, quality: out.quality });
+}));
+
 app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const soft = (p, d) => Promise.resolve().then(p).catch((e) => Object.assign({ failed: String((e && e.message) || e).slice(0, 120) }, d || {}));

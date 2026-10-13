@@ -1361,6 +1361,12 @@ const ADDED_COLUMNS = [
   // generally has none. Measured on MU, NVDA, AAPL, VNO and JPM -- zero 8-K
   // rows between them. The source is the submissions API, loaded locally.
   "alter table sec_state add column last_results text",
+  // The filing date of the newest annual or quarterly report on the SEC's
+  // LIST for the company (secquality.js), recorded on every refresh beside
+  // last_filed, the newest one we HOLD. The two differing is the fault that
+  // went unseen for months in 2026: 110 companies a quarter behind with
+  // every status reading ok.
+  "alter table sec_state add column last_report text",
   // A Form 4 can name several reporting owners — 2.2% do. Added the same
   // day the table shipped, because production already held it by then.
   "alter table insider_trans add column owners integer not null default 1",
@@ -2607,14 +2613,15 @@ async function writeSecFacts(symbol, rows, meta = {}) {
     // `taxonomy` and `currency` COALESCE too: `insert or replace` rewrites
     // the whole row, so a column this statement did not name would come
     // back NULL -- the way the CIK and both dates were each lost once.
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency)
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency, last_report)
           values (?, ?, ?, ?, ?, ?, ?,
                   coalesce(?, (select last_results from sec_state where symbol = ?)),
                   coalesce(?, (select taxonomy from sec_state where symbol = ?)),
-                  coalesce(?, (select currency from sec_state where symbol = ?)))`,
+                  coalesce(?, (select currency from sec_state where symbol = ?)),
+                  (select last_report from sec_state where symbol = ?))`,
     args: [sym, meta.cik == null ? null : Number(meta.cik), Date.now(), rows.length,
       meta.status || 'ok', meta.error || null, meta.lastFiled || null,
-      meta.lastResults || null, sym, meta.taxonomy || null, sym, meta.currency || null, sym],
+      meta.lastResults || null, sym, meta.taxonomy || null, sym, meta.currency || null, sym, sym],
   });
   await db.batch(stmts);
   return rows.length;
@@ -2636,12 +2643,13 @@ async function noteSecMiss(symbol, status, error, cik, filer) {
     // the same reason: it comes from a DIFFERENT source (the submissions API,
     // loaded locally) and a companyfacts miss must not wipe it. This is the
     // third field this function has had to be told to keep.
-    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency)
+    sql: `insert or replace into sec_state (symbol, cik, fetched_at, rows, status, error, last_filed, last_results, taxonomy, currency, last_report)
           values (?, coalesce(?, (select cik from sec_state where symbol = ?)), ?, 0, ?, ?,
                   (select last_filed from sec_state where symbol = ?),
                   (select last_results from sec_state where symbol = ?),
                   coalesce(?, (select taxonomy from sec_state where symbol = ?)),
-                  coalesce(?, (select currency from sec_state where symbol = ?)))`,
+                  coalesce(?, (select currency from sec_state where symbol = ?)),
+                  (select last_report from sec_state where symbol = ?))`,
     // The two trailing `sym`s are for the last_filed and last_results
     // subqueries: a symbol that could not be FETCHED this time still holds
     // whatever it already had, and blanking either date would make a
@@ -2650,7 +2658,7 @@ async function noteSecMiss(symbol, status, error, cik, filer) {
     // silently broke the insider card for 64 filers.
     args: [sym, cik == null ? null : Number(cik), sym, Date.now(),
       status || 'none', error ? String(error).slice(0, 300) : null, sym, sym,
-      (filer && filer.taxonomy) || null, sym, (filer && filer.currency) || null, sym],
+      (filer && filer.taxonomy) || null, sym, (filer && filer.currency) || null, sym, sym],
   });
 }
 
@@ -2760,6 +2768,48 @@ async function setSecLastResults(symbol, d) {
   });
 }
 
+// The newest report on the SEC's list, from the submissions file the refresh
+// already reads. A targeted update like the two above. THE COLUMN IS CARRIED
+// by both insert-or-replace statements over this table, or the next refresh
+// would blank it: the fourth column they have had to be told to keep.
+async function setSecLastReport(symbol, d) {
+  await init();
+  await db.execute({
+    sql: 'update sec_state set last_report = ? where symbol = ?',
+    args: [d || null, String(symbol).toUpperCase()],
+  });
+}
+
+// Which reports were read from their own data file, per company:
+// Map symbol -> Set of accessions. A few hundred rows, no figures.
+async function readSecInstanceAccns() {
+  await init();
+  const r = await db.execute('select symbol, accn from sec_instance where n > 0');
+  const out = new Map();
+  for (const x of r.rows) {
+    const k = String(x.symbol);
+    if (!out.has(k)) out.set(k, new Set());
+    out.get(k).add(String(x.accn));
+  }
+  return out;
+}
+
+// The filings quality reading, built on the daily pass (secquality.js).
+async function readSecQuality() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'sec_quality'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeSecQuality(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('sec_quality', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 // Both dates in one small read of a ~1,200-row table. Deliberately NOT
 // `max(filed) group by symbol` over sec_facts, which is 270,000 rows and a
 // quota event on this database rather than a slow query.
@@ -2770,11 +2820,11 @@ async function setSecLastResults(symbol, d) {
 async function readSecFiled() {
   await init();
   const r = await db.execute(
-    'select symbol, last_filed, last_results from sec_state'
+    'select symbol, last_filed, last_results, last_report from sec_state'
     + ' where last_filed is not null or last_results is not null');
   const out = {};
   for (const x of r.rows) {
-    out[x.symbol] = { filed: x.last_filed || null, results: x.last_results || null };
+    out[x.symbol] = { filed: x.last_filed || null, results: x.last_results || null, report: x.last_report || null };
   }
   return out;
 }
@@ -6847,7 +6897,7 @@ module.exports = {
   isNetDrop,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  setSecLastResults,
+  setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,
   writeInsiderQuarter, readInsider, readInsiderState, readSecCik,
