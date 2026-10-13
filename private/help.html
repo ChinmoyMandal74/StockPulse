@@ -436,6 +436,10 @@
         one opens that group's page. Then two pills, <b>Google Finance</b> and <b>Yahoo Finance</b>,
         which open this stock there in a new tab.</p>
 
+      <p>It is a long page. The <b>row of chips under the heading</b> lists every section that has
+        something to show for this stock, and each one scrolls to it. A section with nothing to show is
+        left out, so the row differs from stock to stock: a fund has far fewer than a company.</p>
+
       <p>On the chart’s toolbar, <b>Visuals</b> opens this stock as a set of cards (see
         <a href="#share" style="color:var(--muted)">section 16</a>).</p>
 
@@ -455,6 +459,29 @@
       <div class="note"><b>The y-axis switches to a log scale</b> when a range spans more than about
         four-fold, and says so in the caption. Over twenty years a linear axis flattens everything but
         the last few months into a line along the bottom.</div>
+
+      <h3>News</h3>
+      <p>The latest headlines for the stock, newest first, each linking to the publisher. The line
+        beside the heading says when the feed was last checked; <b>Check now</b> asks again rather
+        than waiting for the next round.</p>
+
+      <h3>Everything the screener knows</h3>
+      <p>Every column from the table, for this one stock, grouped the way the table groups them.
+        Hover a score for what went into it. A value the screener has no reading for is a dash, and a
+        group with nothing in it at all is left out.</p>
+
+      <h3>Month by month</h3>
+      <p>A grid of the stock’s return in each month, a row a year, with a column for the year as a
+        whole. The switch above it changes the cells from the stock’s <b>own return</b> to its return
+        <b>against the S&amp;P 500</b>, in points, which separates what the stock did from what the
+        market did.</p>
+      <ul>
+        <li><b>The foot of each column is a count</b>, such as 7/10: how many of those months the
+          stock rose. It is deliberately not an average.</li>
+        <li><b>It is a record, not a seasonal pattern.</b> Ten years is ten samples a month, and with
+          twelve months to choose from one always looks special by chance.</li>
+        <li>The month still in progress is shown and left out of the counts.</li>
+      </ul>
 
       <h3>Similar stocks</h3>
       <p>At the foot of the page, up to six other companies in the same <b>industry</b>, the ones
@@ -477,6 +504,17 @@
           is on this screen, measured the same way.</li>
       </ul>
 
+      <h3>Against its peers</h3>
+      <p>The same companies as the Similar stocks table, drawn over twenty quarters on one measure:
+        <b>revenue</b>, <b>net income</b>, <b>profit margin</b> or <b>market value</b>. <b>Value</b>
+        draws the figures themselves; <b>Rank</b> draws each company’s place among the group, first at
+        the top, so you can see who overtook whom.</p>
+      <ul>
+        <li>Revenue and income are each company’s trailing twelve months, from its own filings, at
+          each calendar quarter end. Companies on different fiscal calendars are lined up that way.</li>
+        <li>Where too few of the peers have filings to draw, the section does not appear.</li>
+      </ul>
+
       <h3>Earnings history</h3>
       <p>One bar per quarter, oldest on the left, green where the company beat the estimate and red
         where it missed, with a folded table of the estimate, what was reported, the surprise and
@@ -489,6 +527,31 @@
           of what is there, and anything past it is drawn full height and says so on hover.</li>
         <li><b>Depth varies a lot.</b> Some names hold six years, the typical one reaches back to
           2020, and the header says which.</li>
+      </ul>
+      <p>Above the bars, <b>Around earnings</b> draws how the price moved in the sessions before and
+        after each report, every quarter rebased to its own close on the day, with the middle of the
+        pack in bold. Beside it: how often the stock rose the session after, next to how often it rises
+        on an ordinary session, since a hit rate means nothing without that. It is a description of
+        what happened over a few dozen quarters, not evidence of what will.</p>
+
+      <h3>Growth and profitability</h3>
+      <p>Revenue and net income as bars and net margin as a line, quarter by quarter or year by year,
+        from the company’s filings. The bars always start at zero. The margin line has its own scale,
+        named on the right, and the note under the chart says where that scale starts, because a line
+        that does not start at zero makes a small move look steep.</p>
+
+      <h3>Financial statements</h3>
+      <p>The same filings laid out the way a statement is read: line items down the side, periods
+        across with the newest first, in three tabs: <b>Income</b>, <b>Balance sheet</b> and
+        <b>Cash flow</b>.</p>
+      <ul>
+        <li>Figures are in millions, with negatives in parentheses. Per-share figures and the share
+          count are as they are.</li>
+        <li><b>The small trend beside each line runs left to right in time</b>, the opposite way from
+          the columns, and is labelled so.</li>
+        <li>The Quarterly and Annual switch is shared with the two sections around it, so they cannot
+          be set to show different periods.</li>
+        <li>A dotted value was worked out here and not filed, as in the section below.</li>
       </ul>
 
       <h3>SEC EDGAR</h3>
@@ -547,6 +610,11 @@
           13G), with the stake reported.</li>
         <li><b>Company events.</b> The company’s recent 8-K announcements, each named for what it
           covered and linked to the filing.</li>
+        <li><b>Short interest.</b> The shares sold short, as the exchanges’ regulator publishes them
+          twice a month, about eight business days after each settlement date: a fortnightly snapshot,
+          not a live reading. The history is drawn as <b>days to cover</b> (the short position over a
+          day’s typical volume), because share counts are not restated for a stock split and a ratio
+          is unaffected by one. Percent of float is given for the latest reading only.</li>
       </ul>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
