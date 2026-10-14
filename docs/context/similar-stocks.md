@@ -38,3 +38,9 @@ The owner: "in the Similar stock section, add live P/E next to forward p/e". A c
 ### Corrected the same day: it is the screener's Live P/E
 
 The first version showed the vendor's trailing P/E under the heading "P/E". The owner had said "live P/E", and **Live P/E is a column this app already has** (`peLive`: today's price over EPS TTM, recomputed from the price on the row, catalogue key `fund|Live P/E`). Found while listing the catalogue's keys for the Company summary. The column is now headed **Live P/E** and reads that field; the trailing figure is no longer in the table. When the owner names a figure, grep the field catalogue for that name before choosing one.
+
+### Live P/E was a dash for every peer (2026-10-14)
+
+The owner, on DELL: "Live PE is not showing for most stocks in the peer section." Only the stock itself had one. Live P/E is not stored: `stampCapDerived` works it out on the way out (price over trailing EPS), and `/api/stock` applied that stamp to the anchor row alone, while the Similar stocks table is drawn from the whole snapshot list. It now stamps the whole list (1,280 rows of arithmetic, no read). Checked on a local read-only server: DELL's six peers and MSFT's six all carry it, Cloudflare (a loss) keeps its dash.
+
+- **Any new read path that draws other companies' rows must stamp THOSE rows**, not only the one it is about. CLAUDE.md's stamp-set rule says "any new read path applies all of them"; this route applied them, to the wrong set.

@@ -9512,8 +9512,14 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // page and was skipped entirely on /compare — a field that exists, is
   // offered by both field pickers, and silently has no value, which is the
   // same defect the bare-string Size getter had and was hiding behind.
-  // Synchronous and free: it reads marketCap and nothing else.
-  stampCapDerived([stock]);
+  // Synchronous and free: it reads marketCap, price and EPS and nothing else.
+  //
+  // THE WHOLE LIST, NOT THE ONE ROW (2026-10-14). The Similar stocks table on
+  // this page is drawn from `stocks`, and Live P/E is one of this stamp's
+  // fields: stamped on the anchor alone, every peer's Live P/E was a dash
+  // (the owner, on DELL: "Live PE is not showing for most stocks in the peer
+  // section"). 1,280 rows of arithmetic.
+  stampCapDerived(stocks);
   // AND THE ONE STAMP A SINGLE ROW CANNOT ANSWER. `P/E vs peers` is a ratio
   // to the stock's own industry, so `stampPeerValue([stock])` could only ever
   // be null -- it is handed the whole snapshot, which this route already holds
