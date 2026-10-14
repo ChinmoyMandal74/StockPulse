@@ -62,6 +62,8 @@
   let getMonths = () => null;
   // One company and its peers on four measures, by quarter, or null while it loads.
   let getPeerTrend = () => null;
+  // One figure's history for one company (the screener's drill-down), or null while it loads.
+  let getDrill = () => null;
   // One company's revenue and net income by filed period, or null while it loads.
   let getPerf = () => null;
   // ONE stock's own daily closes — { symbol, name, closes, dates, rangeLabel,
@@ -7874,6 +7876,100 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- One figure's history: the screener's drill-down, as a card ----------------
+  //
+  // (2026-10-13, the owner, of the panel a click on a screener cell opens:
+  // "is it possible to provide a link to open in Promo ... a complete
+  // read-only promo card with no option to choose on the side bar".) The same
+  // answer the panel shows -- drillhist.js, through /api/drill -- drawn at
+  // card size: the figure now, a year of context, the line, the last periods.
+  //
+  // IT IS REACHED BY A LINK, NOT CHOSEN. It is in no template list, has no
+  // controls and cannot be saved as a post: the stock and the column come
+  // from the link (`figSym`, `figField`). So the phone never draws one, and
+  // the one host that does supplies `getDrill`.
+  //
+  // NOTHING IS WORKED OUT HERE. Every number on the card is the server's;
+  // this formats and draws. The formatting is drillpop.js's, restated (the
+  // BENCHMARKS bargain: no requires), and the card's test compares them.
+  const FIG_ROWS = { portrait: 6, square: 4, story: 8 };
+  function figFmt(v, kind) {
+    // Empty is rejected before it is coerced: Number('') is 0.
+    if (v == null || v === '' || !isFinite(Number(v))) return '\u2014';
+    const n = Number(v), a = Math.abs(n), neg = n < 0 ? '\u2212' : '';
+    const compact = a >= 1e12 ? (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (a / 1e9).toFixed(a >= 1e11 ? 0 : 1) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(a >= 1e8 ? 0 : 1) + 'M'
+      : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e5 ? 0 : 1) + 'K' : a.toFixed(0);
+    if (kind === 'money') return neg + '$' + compact;
+    if (kind === 'pct') return neg + a.toFixed(1) + '%';
+    if (kind === 'signed') return (n > 0 ? '+' : neg) + a.toFixed(1) + '%';
+    if (kind === 'eps') return neg + '$' + a.toFixed(2);
+    if (kind === 'shares') return compact;
+    if (kind === 'days' || kind === 'ratio') return n.toFixed(1);
+    return String(v);
+  }
+  const FIG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const figMonth = (d) => (/^\d{4}-\d{2}/.test(String(d)) ? FIG_MONTHS[Number(String(d).slice(5, 7)) - 1] + ' ' + String(d).slice(0, 4) : String(d || ''));
+  function tplFigure() {
+    const sym = String(O.figSym || '').toUpperCase(), field = String(O.figField || '');
+    const row = stocks.find((r) => r.symbol === sym);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!row) return shell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const j = getDrill(sym, field);
+    if (!j) return shell(nameOf(row), 'Reading', 'the history\u2026');
+    const title = j.title || 'History';
+    const pts = (j.points || []).filter((p) => p && p.v != null && isFinite(Number(p.v))).map((p) => ({ d: p.d, v: Number(p.v) }));
+    const rows = j.rows || [];
+    if (j.error || (pts.length < 2 && !rows.length)) {
+      return shell(nameOf(row), title, 'no history on file', j.error || 'A fund, or a company that files abroad or only once a year, has none.');
+    }
+    const kind = j.kind;
+    const last = pts.length ? pts[pts.length - 1] : null, first = pts.length ? pts[0] : null;
+    let hiP = null, loP = null;
+    for (const p of pts) { if (!hiP || p.v > hiP.v) hiP = p; if (!loP || p.v < loP.v) loP = p; }
+    // The chart, in a box that takes whatever height is left. The drawing is
+    // stretched to it, so its figures are HTML beside it and never SVG text.
+    let plot = '';
+    if (pts.length >= 2) {
+      let lo = loP.v, hi = hiP.v;
+      if (j.bars) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+      if (hi === lo) { hi += Math.abs(hi) * 0.05 || 1; lo -= Math.abs(lo) * 0.05 || 1; }
+      const W = 1000, H = 400, pad = 10;
+      const y = (v) => pad + (H - 2 * pad) * (1 - (v - lo) / (hi - lo));
+      let shape;
+      if (j.bars) {
+        const step = W / pts.length, bw = step * 0.62, y0 = y(0);
+        shape = pts.map((p, i) => '<rect class="fg-bar" x="' + ((i + 0.5) * step - bw / 2).toFixed(1) + '" y="' + Math.min(y(p.v), y0).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(2, Math.abs(y(p.v) - y0)).toFixed(1) + '"/>').join('');
+      } else {
+        const x = (i) => (i / (pts.length - 1)) * W;
+        const d = pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.v).toFixed(1)).join(' ');
+        shape = '<path class="fg-area" d="' + d + ' L' + W + ' ' + H + ' L0 ' + H + ' Z"/><path class="fg-line" vector-effect="non-scaling-stroke" d="' + d + '"/>';
+      }
+      const zero = lo < 0 && hi > 0 ? '<line class="fg-zero" vector-effect="non-scaling-stroke" x1="0" x2="' + W + '" y1="' + y(0).toFixed(1) + '" y2="' + y(0).toFixed(1) + '"/>' : '';
+      plot = '<div class="fg-chart"><div class="fg-y"><span>' + esc(figFmt(hi, kind)) + '</span><span>' + esc(figFmt(lo, kind)) + '</span></div>'
+        + '<div class="fg-plot"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' + zero + shape + '</svg>'
+        + '<div class="fg-x"><span>' + esc(figMonth(first.d)) + '</span><span>' + esc(figMonth(last.d)) + '</span></div></div></div>';
+    }
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = last ? fig('Latest', figFmt(last.v, kind), figMonth(last.d)) + fig('At the start', figFmt(first.v, kind), figMonth(first.d))
+      + fig('Highest', figFmt(hiP.v, kind), figMonth(hiP.d)) + fig('Lowest', figFmt(loP.v, kind), figMonth(loP.d)) : '';
+    const kinds = j.colKinds || [];
+    const shown = rows.slice(0, FIG_ROWS[size.id] || 6);
+    const cols = 'grid-template-columns:minmax(0,1.3fr) repeat(' + Math.max(1, (j.cols || []).length - 1) + ',minmax(0,1fr))';
+    const table = shown.length ? '<div class="fg-t"><div class="fg-tr fg-th" style="' + cols + '">' + (j.cols || []).map((c) => '<span>' + esc(c) + '</span>').join('') + '</div>'
+      + shown.map((r) => '<div class="fg-tr" style="' + cols + '">' + r.map((v, i) => '<span>' + esc(i === 0 ? v : figFmt(v, kinds[i])) + '</span>').join('') + '</div>').join('') + '</div>' : '';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((j.source || '') + ' \u00b7 ' + (j.basis || '')) + '</span>'
+      + '<h2 class="s-title">' + esc(nameOf(row)) + '<br><span class="dim">' + esc(title) + '</span></h2>'
+      + (figs ? '<div class="cr-figs">' + figs + '</div>' : '')
+      + plot + table
+      + (j.note ? '<p class="s-sub wide" style="--fs:17px">' + esc(j.note) + '</p>' : '')
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Moves by sector: the pivot's grid, as a card ------------------------------
   //
   // (2026-10-13, the owner, of the pivot view with Sector down the side and
@@ -9816,6 +9912,7 @@
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
     movegrid: tplMoveGrid,
+    figure: tplFigure,
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
     optind: () => optGroupCard('optind'),
@@ -9991,6 +10088,26 @@
        backtick inside this block ends the STYLE template literal, which
        node --check PASSES because it is valid syntax and merely the wrong
        program. */
+    /* One figure's history: the chart takes the height left over. */
+    .fg-chart { flex: 1 1 0; min-height: 120px; display: flex; gap: 14px; margin: 24px 0 8px; }
+    .fg-y { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 34px;
+            font: 500 17px var(--mono); color: var(--muted); text-align: right; min-width: 84px; white-space: nowrap; }
+    .fg-plot { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .fg-plot svg { flex: 1 1 0; min-height: 0; width: 100%; display: block; overflow: visible; }
+    .fg-line { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+    .fg-area { fill: var(--accent); opacity: 0.1; }
+    .fg-bar { fill: var(--accent); opacity: 0.8; }
+    .fg-zero { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .fg-x { display: flex; justify-content: space-between; height: 34px; align-items: flex-end;
+            font: 500 17px var(--mono); color: var(--muted); }
+    .fg-t { margin: 10px 0 4px; font-size: 22px; }
+    .fg-tr { display: grid; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+    .fg-tr span { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .fg-tr span:first-child { text-align: left; font-family: var(--sans); color: var(--muted); }
+    .fg-th { border-bottom-color: var(--muted); }
+    .fg-th span { font: 500 14px var(--sans); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+    .sz-square .fg-t { font-size: 19px; } .sz-square .fg-tr { padding: 6px 0; }
+    .sz-story .fg-t { font-size: 26px; } .sz-story .fg-tr { padding: 12px 0; }
     /* Moves by sector: the pivot's grid. The rows share the height left
        over, so eleven sectors fill a portrait card and a story alike. */
     .mg-rows { flex: 1 1 0; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); margin: 22px 0 6px; }
@@ -12168,6 +12285,7 @@
     beatBenches: () => BEAT_BENCH.map((p) => p.slice()),
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
+    figureFmt: figFmt,
     moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
@@ -12240,6 +12358,7 @@
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
+      getDrill = c.getDrill || (() => null);
       getPerf = c.getPerf || (() => null);
       chartOne = c.chart || null;
       const fn = BUILDERS[id] || BUILDERS.movers;

@@ -105,9 +105,12 @@
         + rows.map((r) => '<tr>' + r.map((v, i) => '<td>' + esc(i === 0 ? v : fmt(v, kinds[i])) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
     }
     if (j.note) h += '<p class="dp-note">' + esc(j.note) + '</p>';
-    return h + foot(sym);
+    return h + foot(sym, pts.length >= 2 || rows.length ? j.field : null);
   }
-  const foot = (sym) => '<div class="dp-foot"><a href="/stock/' + encodeURIComponent(sym) + '" target="_blank" rel="noopener">Open ' + esc(sym) + ' →</a></div>';
+  // Two ways on: the stock's own page, and the same history as a card in
+  // Visuals (only where there is something to draw).
+  const foot = (sym, field) => '<div class="dp-foot"><a href="/stock/' + encodeURIComponent(sym) + '" target="_blank" rel="noopener">Open ' + esc(sym) + ' →</a>'
+    + (field ? '<a href="/promo?tpl=figure&amp;sym=' + encodeURIComponent(sym) + '&amp;field=' + encodeURIComponent(field) + '" target="_blank" rel="noopener">Open as a card →</a>' : '') + '</div>';
 
   const STYLE = '#drillPop{position:fixed;z-index:var(--z-tip);width:min(440px,calc(100vw - 24px));max-height:min(78vh,620px);overflow:auto;border-radius:16px;'
     + 'border:1px solid var(--hair-2);background:rgba(10,12,17,0.97);backdrop-filter:blur(24px);box-shadow:0 30px 80px -24px rgba(0,0,0,0.95);padding:14px 16px;}'
@@ -132,7 +135,7 @@
     + '#drillPop .dp-t th:first-child,#drillPop .dp-t td:first-child{text-align:left;padding-left:0;font-family:var(--sans);color:var(--muted);}'
     + '#drillPop .dp-note{margin:10px 0 0;font-size:11px;line-height:1.55;color:var(--faint);}'
     + '#drillPop .dp-empty{font-size:12.5px;color:var(--muted);padding:12px 0 2px;line-height:1.5;}'
-    + '#drillPop .dp-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,0.055);font-size:11.5px;}'
+    + '#drillPop .dp-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,0.055);font-size:11.5px;display:flex;justify-content:space-between;gap:12px;}'
     + '#drillPop .dp-foot a{color:var(--muted);text-decoration:none;}#drillPop .dp-foot a:hover{color:var(--text);text-decoration:underline;}';
 
   let cfg = null, pop = null, mark = null, openFor = null, seq = 0;

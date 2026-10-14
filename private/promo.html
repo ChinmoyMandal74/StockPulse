@@ -146,6 +146,14 @@
        site's own dark. */
     body.mem #themeLab, body.mem #cardTheme { display: none; }
     body.mem .deck { padding: 14px; }
+    /* A CARD OPENED BY A LINK (body.bare): no side bar, since the card has
+       nothing to choose. A strip across the top carries the way back and,
+       for the admin, the shape and the download. */
+    body.bare .panel { display: none; }
+    #bareBar { display: none; }
+    body.bare #bareBar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: fixed; top: 12px; left: 14px; z-index: 5; }
+    body.bare #bareBar .btn.on { border-color: var(--accent); color: var(--text); }
+    body.bare .deck { padding-top: 62px; }
     /* A narrow screen: the controls on top, the card under them, the page
        scrolling as one. Side by side, a phone leaves the card 60px wide. */
     @media (max-width: 820px) {
@@ -1592,6 +1600,7 @@
         rules did, which is the house line.</p>
     </aside>
 
+    <div id="bareBar"></div>
     <main class="deck"><div id="stageWrap"><div id="stage" class="s-art"></div></div></main>
   </div>
 
@@ -2090,6 +2099,23 @@
     // half that matters, and whether this template cares is the module's call.
     const ptrCache = {};
     const ptrPending = {};
+    // ONE FIGURE'S HISTORY, for the card a screener drill-down links to. The
+    // answer is /api/drill's own, so the card and the panel cannot disagree.
+    // A refusal is kept as the answer rather than asked for again.
+    const drillCache = {};
+    const drillPending = {};
+    function getDrill(symbol, field) {
+      if (!symbol || !field) return null;
+      const key = symbol + '|' + field;
+      if (drillCache[key]) return drillCache[key];
+      if (drillPending[key]) return null;
+      drillPending[key] = true;
+      fetch(`/api/drill?symbol=${encodeURIComponent(symbol)}&field=${encodeURIComponent(field)}`, { cache: 'no-store' })
+        .then((r) => r.json().then((d) => (r.ok ? d : { error: (d && d.error) || 'Could not read the history.' })))
+        .then((d) => { drillCache[key] = d || { error: 'Could not read the history.' }; delete drillPending[key]; if (tpl === 'figure') render(); })
+        .catch(() => { drillCache[key] = { error: 'Could not read the history.' }; delete drillPending[key]; if (tpl === 'figure') render(); });
+      return null;
+    }
     function getPeerTrend(symbol) {
       if (!symbol) return null;
       if (ptrCache[symbol]) return ptrCache[symbol];
@@ -2253,10 +2279,13 @@
     // value. A fetch that fails leaves it empty, which folds nothing — the
     // previous behaviour, so a card still draws.
     let filers = {};
+    // What a link asked for that no control holds: the stock and column of a
+    // drill-down card. Empty for every other card.
+    let linkOpts = {};
     const buildCard = () => Cards.build(tpl, {
-      stocks, myLists, screens: screenList, size, opts: controlOpts(),
+      stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill,
       updatedAt: pulledAt,
     });
 
@@ -2512,7 +2541,8 @@
         // On a narrow screen the page scrolls, so the height to fill is the
         // window's, not the deck's own (which grows with its content).
         const narrow = window.matchMedia('(max-width: 820px)').matches;
-        const w = deck.clientWidth, h = narrow ? Math.round(window.innerHeight * 0.92) : deck.clientHeight;
+        // A card opened by a link has a strip over it, which is not the card's room.
+        const w = deck.clientWidth, h = (narrow ? Math.round(window.innerHeight * 0.92) : deck.clientHeight) - (document.body.classList.contains('bare') ? 56 : 0);
         const z = bestSize(w, h);
         if (z.id !== size.id) { size = z; render(); return; }       // render() comes back here with the new shape
         const sm = Math.max(0.1, Math.min((w - MEMBER_PAD) / 1080, (h - MEMBER_PAD) / size.h, MEMBER_MAX_SCALE));
@@ -2521,12 +2551,27 @@
         $('stageWrap').style.height = size.h * sm + 'px';
         return;
       }
-      const s = Math.min((deck.clientWidth - 48) / 1080, (deck.clientHeight - 48) / size.h, 1);
+      const s = Math.min((deck.clientWidth - 48) / 1080, (deck.clientHeight - (document.body.classList.contains('bare') ? 104 : 48)) / size.h, 1);
       $('stage').style.transform = `scale(${s})`;
       $('stageWrap').style.width = 1080 * s + 'px';
       $('stageWrap').style.height = size.h * s + 'px';
     }
     window.addEventListener('resize', fit);
+    // The strip over a card opened by a link: the way back, and for the admin
+    // the shape and the download, which are the side bar's own controls
+    // pressed from here. A member's card fits itself and is not exported.
+    function paintBareBar() {
+      const bar = $('bareBar');
+      if (!bar || !document.body.classList.contains('bare')) return;
+      bar.innerHTML = '<a class="btn" href="/">\u2190 Screener</a>'
+        + (memberMode ? '' : SIZES.map((z) => `<button class="btn${size.id === z.id ? ' on' : ''}" type="button" data-bz="${esc(z.id)}">${esc(z.label)}</button>`).join('')
+          + '<button class="btn" type="button" id="bareDl">Download PNG</button><span class="hint" id="bareMsg"></span>');
+      bar.querySelectorAll('[data-bz]').forEach((b) => b.addEventListener('click', () => {
+        size = SIZES.find((z) => z.id === b.dataset.bz) || size; paintControls(); render(); paintBareBar();
+      }));
+      const dl = $('bareDl');
+      if (dl) dl.addEventListener('click', () => $('dlBtn').click());
+    }
 
     function paintControls() {
       const tpls = visibleTpls();
@@ -3556,6 +3601,15 @@
           const qp = new URLSearchParams(location.search);
           const qt = String(qp.get('tpl') || ''), qs = String(qp.get('sym') || '').toUpperCase();
           if (qt && visibleTpls().some((t) => t.id === qt)) tpl = qt;
+          // THE DRILL-DOWN CARD (2026-10-13): reached only by this link, from
+          // the panel a screener cell opens. It has no controls, so the side
+          // bar goes and the card has the page (body.bare).
+          const qf = String(qp.get('field') || '');
+          if (qt === 'figure' && /^[A-Za-z]{1,30}$/.test(qf) && stocks.some((s) => s.symbol === qs)) {
+            tpl = 'figure'; linkOpts = { figSym: qs, figField: qf };
+            document.body.classList.add('bare');
+            paintBareBar();
+          }
           if (qs) {
             for (const sel of document.querySelectorAll('.panel select[data-sp]')) {
               if (/Sym(B|2)$/.test(sel.id)) continue;
