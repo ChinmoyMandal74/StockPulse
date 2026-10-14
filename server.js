@@ -10785,6 +10785,47 @@ async function filerIds() {
 
 // Member, because the studio is. A filer id is a public registration number
 // and reaches no card -- it is consumed by the fold and never rendered.
+// ---- how long a page load's reads take, measured where they run -----------------
+// (2026-10-13, the owner: "promo first time load is also slow".) A laptop is a
+// continent from the database and the function is beside it, so the laptop's
+// timings say which read is the big one and not how big. This runs each read
+// a page load makes, ON THE SERVER, and answers with milliseconds and sizes.
+// READ ONLY: nothing is written and no cache is filled. Admin or the cron
+// secret.
+app.get('/api/diag/serve-timing', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  res.set('Cache-Control', 'no-store');
+  const out = [];
+  const time = async (name, f) => {
+    const t0 = Date.now(); let note = null;
+    try { note = await f(); } catch (e) { note = 'failed: ' + String((e && e.message) || e).slice(0, 80); }
+    out.push({ name, ms: Date.now() - t0, note: note == null ? null : String(note) });
+  };
+  let snap = null;
+  await time('one tiny read (round trip)', async () => { await store.snapshotUpdatedAt(); return null; });
+  await time('snapshot: read and parse', async () => { snap = await readSnapshot(); return snap ? snap.stocks.length + ' rows' : 'none'; });
+  const rows = (snap && snap.stocks) || [];
+  await time('snapshot: stringify for the browser', async () => Math.round(JSON.stringify(snap).length / 1024) + ' KB');
+  await time('score the Signal', async () => { scoreActionInto(rows); return null; });
+  for (const [name, f] of [['stamp flows', stampFlows], ['stamp short names', stampShortNames], ['stamp advice age', stampAdviceAge],
+    ['stamp priced-at', stampPricedAt], ['stamp distance from high', stampAthDistance], ['stamp index membership', stampSpMember]]) {
+    await time(name, async () => { await f(rows); return null; });
+  }
+  await time('all six stamps together', async () => { await serveStamps(rows); return null; });
+  await time('portfolios', async () => Object.keys(await readPortfolios()).length + ' lists');
+  await time('snapshot again (a second route asking)', async () => { await readSnapshot(); return null; });
+  const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  if (latest) {
+    await time('period anchors: two closes a stock', async () => {
+      const [w] = await store.closesBefore([latest.slice(0, 8) + '01', latest], rows.map((x) => x.symbol));
+      return Object.keys(w).length + ' stocks';
+    });
+  }
+  await time('filer ids', async () => Object.keys(await store.readFilerIds()).length + ' ids');
+  await time('one profile row', async () => { await store.readProfile('MSFT'); return null; });
+  res.json({ at: Date.now(), region: process.env.VERCEL_REGION || null, reads: out });
+}));
+
 app.get('/api/filers', requireMember, route(async (req, res) => {
   res.json({ filers: await filerIds() });
 }));
