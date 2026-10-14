@@ -1539,6 +1539,18 @@
           start at zero; the margin line keeps its own scale, and every margin
           is printed under its period. A fund files nothing and has no card.</p>
       </div>
+      <!-- Growth: the peer chart for a theme's companies (2026-10-14). -->
+      <div id="tgrBox">
+        <label>Theme</label>
+        <select id="tgrName"></select>
+        <label>Measure</label>
+        <select id="tgrMetric"></select>
+        <label>Show</label>
+        <select id="tgrView"></select>
+        <p class="hint">The theme's companies on one measure, the trailing year at each quarter end,
+          from their own filings. A theme of more than eight shows its eight largest by market value.
+          Value draws the figures; Rank draws places; Share draws each company's part of the total.</p>
+      </div>
       <div id="ptrBox">
         <label>Stock</label>
         <select id="ptrSym"></select>
@@ -1761,6 +1773,7 @@
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
       { id: 'secmonths', name: 'Sector, month by month', note: 'One sector year by month — the average of its companies’ returns each month, equal weight' },
+      { id: 'thmgrowth', name: 'Theme growth', note: 'A theme’s companies on revenue, earnings, margin or value, quarter by quarter — the peer chart for a theme' },
       { id: 'thmrank', name: 'Theme ranking', note: 'Themes ranked on one measure — the average of each theme’s companies, a company counting in each of its themes' },
       { id: 'thmsnap', name: 'Theme snapshot', note: 'One theme: how its companies moved, its industries, and both ends of the move' },
       { id: 'thmspot', name: 'Theme spotlight', note: 'One theme in full: its line against the S&P 500, a dozen figures and where its companies sit' },
@@ -1942,6 +1955,7 @@
       ['thmrank', 'Ranking'],
       ['thmsnap', 'Snapshot'],
       ['thmspot', 'Spotlight'],
+      ['thmgrowth', 'Growth'],
       ['thmmargin', 'Margins'],
       ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
@@ -2243,7 +2257,7 @@
           delete linPending[key];
           if (!d || !Array.isArray(d.quarters)) return;
           linCache[key] = d;
-          if (tpl === 'lines') render();
+          if (tpl === 'lines' || tpl === 'thmgrowth') render();
         })
         .catch(() => { delete linPending[key]; });
       return null;
@@ -2432,7 +2446,7 @@
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
-      'ptrSym', 'ptrMetric', 'ptrView',
+      'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
@@ -2662,6 +2676,7 @@
       $('ispBox').style.display = tpl === 'indspot' ? 'block' : 'none';
       $('secBox').style.display = tpl === 'sectors' ? 'block' : 'none';
       $('sspBox').style.display = tpl === 'secspot' ? 'block' : 'none';
+      $('tgrBox').style.display = tpl === 'thmgrowth' ? 'block' : 'none';
       for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
@@ -2948,6 +2963,9 @@
     for (const [v, label] of Cards.perfModes()) $('prfPeriod').appendChild(new Option(label, v));
     for (const [n, def] of Cards.perfCounts()) $('prfCount').appendChild(new Option(n + ' periods', n, def, def));
     for (const [v, label] of Cards.peerTrendMetrics()) $('ptrMetric').appendChild(new Option(label, v));
+    for (const [v, label] of Cards.peerTrendMetrics()) $('tgrMetric').appendChild(new Option(label, v));
+    for (const [v, label] of Cards.peerTrendViews()) $('tgrView').appendChild(new Option(label, v));
+    ['tgrName', 'tgrMetric', 'tgrView'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'thmgrowth') render(); }));
     for (const [v, label] of Cards.peerTrendViews()) $('ptrView').appendChild(new Option(label, v));
     // Month by month: its own listener list, and its view picker filled from
     // the module so it cannot offer a value the card does not know.
@@ -3886,6 +3904,7 @@
         fillOscNames();
         // The theme cards' pickers, filled with the sector ones.
         fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames();
+        { const keep = $('tgrName').value; $('tgrName').innerHTML = Cards.themeList(stocks, 'All').map((g) => `<option value="${esc(g.name)}">${esc(g.name)} \u00b7 ${g.n}</option>`).join(''); if ([...$('tgrName').options].some((o) => o.value === keep)) $('tgrName').value = keep; }
         fillOinNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing

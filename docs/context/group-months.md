@@ -35,3 +35,12 @@ The owner: "add all the other sub-templates under Sector ... under Theme, namely
 - **What a theme lacks**: a fund, so the snapshot has no fund chip (its hint says so); a dominant sector, so the spotlight's kicker carries none. Themes under three companies are not offered, as for industries and sectors.
 - **Controls** (all new prefixes, checked free): `trk*` ranking, `tsn*` snapshot, `tsp*` spotlight, `tmg*` margins, `oth*` options. The boxes are copies of the sector boxes with ids and wording changed. `CONTROL_IDS` is 274 long, so `POST_OPT_MAX` went from 300 to 400.
 - Checked: each theme card drawn from the real snapshot; the real `promo.html` loading all six views (Snapshot looked at); no duplicate id or control. Margins and Options need the server's figures, which the test harness does not have; not looked at with real data.
+
+### Growth: the peer chart for a theme (2026-10-14)
+
+The owner, of Against its peers: "can I have this chart at the theme level, you can call it Growth." Template `thmgrowth`, second in the Theme group; controls `tgrName`, `tgrMetric`, `tgrView` (the peer chart's own measures and views: value, rank, share).
+
+- **The same chart and the same drawing** (`peertrend.js`), with the theme's companies where a company and its peers were. No company is the subject, so none takes the accent and the heading names the theme; each company gets its own colour from the Lines card's palette instead, since eight grey lines could not be told apart (seen on the first picture). The share view colours its own bands.
+- **The eight largest by market value today** when a theme holds more (the series route's limit, `LINE_MAX_SYMS`); the note says how many of how many. Five years (21 quarter ends).
+- **The series come through the Lines card's channel**: `getLineSeries` in the studio, and `linesNeed` now answers for `thmgrowth` too, so the phone draws a saved one through the route it already had.
+- Checked: drawn from the real snapshot with stand-in series (the companies asked for, the note for a 35-company theme, the share view, no accent line); the real `promo.html` loading it, looked at. Not looked at with real filings.

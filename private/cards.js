@@ -9446,10 +9446,11 @@
   // made from the rows and the cut, so the card is built once with a getter
   // that only records what it was asked for.
   function linesNeed(tpl, ctx) {
-    if (tpl !== 'lines') return null;
+    // The theme Growth card asks the same channel for its companies.
+    if (tpl !== 'lines' && tpl !== 'thmgrowth') return null;
     let want = null;
     try {
-      global.Cards.build('lines', Object.assign({}, ctx || {}, {
+      global.Cards.build(tpl, Object.assign({}, ctx || {}, {
         getLineSeries: (symbols, quarters) => { want = { symbols, quarters }; return null; },
       }));
     } catch (e) { want = null; }
@@ -9847,6 +9848,70 @@
   }
   // Measured with the note at its longest, on each artboard.
   const PTR_H = { portrait: 810, square: 565, story: 1320 };
+  // ---- Growth: the peer chart for a theme ---------------------------------------
+  //
+  // (2026-10-14, the owner, of Against its peers: "can I have this chart at the
+  // theme level, you can call it Growth".) The same chart and the same
+  // drawing (peertrend.js), with a theme's companies where a company and its
+  // peers were: revenue, net income, margin or market value, the trailing
+  // year at each quarter end, from the companies' own filings.
+  //
+  // NO COMPANY IS THE SUBJECT, so none takes the accent and the heading names
+  // the theme, not a place. A theme can hold dozens; the chart holds the
+  // EIGHT LARGEST by market value today (the Lines card's own limit, and
+  // what the series route serves), and the note says how many of how many.
+  //
+  // The series come from the Lines card's channel (getLineSeries), so the
+  // phone draws a saved one through linesNeed with no route of its own.
+  const TGR_MAX = 8, TGR_QUARTERS = 21;
+  function tplThmGrowth() {
+    const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const themes = themeList(stocks, 'All');
+    const name = themes.some((g) => g.name === O.tgrName) ? O.tgrName : (themes[0] ? themes[0].name : null);
+    if (!name || !PT) return shell('Growth', 'No theme', 'of three companies', 'No theme on this screen has three companies.');
+    const all = stocks.filter((r) => r && !r.error && !isFundRow(r) && inGroup(r, 'portfolios', name))
+      .sort((a, b) => (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0));
+    const pick = all.slice(0, TGR_MAX);
+    const data = getLineSeries(pick.map((r) => r.symbol), TGR_QUARTERS);
+    if (!data || !Array.isArray(data.quarters)) return shell('Reading the filings', 'Drawing', name + '\u2026');
+    const named = Object.assign({}, data, { companies: pick.map((r) => ({ symbol: r.symbol, name: nameOf(r), self: false })) });
+    const model = PT.build(named, O.tgrMetric, O.tgrView);
+    if (model.lines.length < 2) {
+      return shell(name, 'Growth', 'not enough to compare', 'Fewer than two of these companies have ' + model.lower + ' on record.');
+    }
+    const fs = size.id === 'story' ? 24 : size.id === 'square' ? 17 : 19;
+    const room = PT.fit(model, { fs, nameMax: 15, maxLeft: size.id === 'story' ? 150 : 124, maxRight: size.id === 'story' ? 376 : 318 });
+    // A COLOUR A COMPANY: with no company of its own to single out, eight grey
+    // lines cannot be told apart. The Lines card's own colours, in the order of
+    // size. The share view colours its own bands.
+    const colors = {};
+    if (model.view !== 'share') pick.forEach((r, i) => { colors[r.symbol] = pal.ink(LINE_COLORS[i % LINE_COLORS.length]); });
+    const chart = PT.svg(model, { w: 952, h: PTR_H[size.id] || 600, left: room.left, right: room.right,
+      fs, dot: size.id === 'story' ? 6.5 : 5, nameMax: 15, xLabels: 5, colors });
+    const span = model.quarters.length ? PT.qLabel(model.quarters[0]) + ' to ' + PT.qLabel(model.quarters[model.n - 1]) : '';
+    const note = PT.measureNote(model, named)
+      + PT.shareNote(model)
+      + (model.view === 'share' ? '' : model.view === 'rank' ? 'Rank 1 is the largest; a place can change on a small gap or a large one. '
+        : (model.log ? 'Log scale, so equal distances are equal ratios. ' : ''))
+      + (model.gaps && model.metric !== 'pe' ? 'A break in a line is a quarter with no figure on record. ' : '')
+      + (all.length > pick.length ? 'The theme\u2019s ' + pick.length + ' largest companies by market value today, of ' + all.length + '. ' : 'Every company in the theme. ')
+      + 'Themes are the site\u2019s own lists, chosen by hand. A record of what was reported, not a view on which is the better company.';
+    return chromeTop()
+      + '<div class="s-body"><div class="pv-in">'
+      + '<span class="s-kick">' + esc('Theme \u00b7 ' + model.N + ' companies \u00b7 ' + span) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (name.length > 30 ? ' mh-l2' : name.length > 18 ? ' mh-l1' : '') + '">' + esc(name) + '</span><span class="dim">'
+      + esc(model.view === 'share' ? 'share of the theme\u2019s ' + model.lower
+        : model.view === 'rank' ? 'ranked on ' + model.lower
+        : model.lower + ', company by company' + (model.shareRefused ? ' (no share view for this measure)' : '')) + '</span></h2>'
+      + '<div class="pv-chart">' + chart + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   function tplPeerTrend() {
     const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
     const sym = O.ptrSym || (stocks[0] && stocks[0].symbol);
@@ -10013,6 +10078,7 @@
     thmrank: tplThmRank,
     thmspot: tplThmSpot,
     thmsnap: () => tplSecSnap(GROUPING.theme, 'tsn'),
+    thmgrowth: tplThmGrowth,
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
