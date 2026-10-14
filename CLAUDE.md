@@ -126,6 +126,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - Assert what is drawn (`getBoundingClientRect`, computed colour), not markup or stored state. Fixtures use real payload shapes and production-length names; probe thresholds on both sides.
 - Every harness boots a server on port 3999: run one suite at a time. `uni-boot.js` defaults `ADMIN_PASSWORD` to `''` (open mode), `REQUIRE_TERMS` false and `NEWS_PROVIDER` off. The first account registered becomes admin.
 - **Local tests can write to the production database.** Restore through a path that cannot transform data.
+- **Never stop a local server with `taskkill /IM node.exe`.** The schedulers on this machine are node processes; killing by name cut four nightly runs short on 2026-10-12 and 13. Kill the PID you started, and restart an interrupted run through its own task (`Start-ScheduledTask`).
 - `server.js`, `db.js` and `index.html` can be CRLF on disk and `git stash` flips endings. Patch anchors must be single-line and hit exactly once.
 - Use the Write/Edit tools, not heredocs or `sed -i`, for anything with backslashes or backticks. No backticks inside `Cards.STYLE` or SQL comments in `db.js` (both are template literals). `python3` does not exist here. `| tail` hides exit codes — judge a build by its artefact.
 
