@@ -146,6 +146,11 @@
        site's own dark. */
     body.mem #themeLab, body.mem #cardTheme { display: none; }
     body.mem .deck { padding: 14px; }
+    /* A company's name on a card is a link (linkStockNames): it keeps the card's
+       own colour and line, so the picture does not change; only the pointer and
+       a hover underline say so. */
+    #stage a.s-nl { color: inherit; text-decoration: none; cursor: pointer; }
+    #stage a.s-nl:hover { text-decoration: underline; }
     /* A CARD OPENED BY A LINK (body.bare): no side bar, since the card has
        nothing to choose. A strip across the top carries the way back and,
        for the admin, the shape and the download. */
@@ -2636,6 +2641,68 @@
       }
     }
 
+    // EVERY COMPANY NAME ON A CARD OPENS ITS PAGE (2026-10-14, the owner: "make
+    // all other visuals clickable only on the stock names"). Done here, once,
+    // after a card is drawn, rather than in each of seventy templates: any piece
+    // of text that is EXACTLY a company's name or ticker -- a whole label, never
+    // a word inside a sentence -- becomes a link to /stock/<SYM> in a new tab.
+    // A label cut short with an ellipsis ("Micron Technol\u2026") is matched when
+    // only one company starts that way. In the chart drawings the SVG label is
+    // wrapped in an SVG link.
+    //
+    // FUNDS ARE LEFT OUT: "S&P 500" on a card is the index, not a stock to open.
+    // A name two companies share links to neither. Measured over all 68
+    // templates on a real day: 110 distinct names and tickers, every one a
+    // company; none of the tickers that are also words (ALL, ON, NOW, IT, KEY,
+    // CAT) stands alone as a label anywhere.
+    //
+    // THE PICTURE IS UNCHANGED: a link takes its colour from the text around it
+    // and has no underline, so the downloaded PNG is what it was. Only the
+    // pointer and an underline on hover say it can be clicked.
+    let nameIndex = null, nameIndexFor = null;
+    function stockNameIndex() {
+      if (nameIndex && nameIndexFor === stocks) return nameIndex;
+      const by = new Map();
+      const add = (k, s) => { k = String(k || '').trim(); if (k.length < 2) return; by.set(k, by.has(k) && by.get(k) !== s ? null : s); };
+      for (const r of stocks) {
+        if (!r || !r.symbol || r.instrumentType === 'ETF') continue;
+        add(r.symbol, r.symbol); add(r.shortName, r.symbol); add(r.name, r.symbol);
+      }
+      nameIndex = by; nameIndexFor = stocks;
+      return by;
+    }
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    function linkStockNames(root) {
+      try {
+        const by = stockNameIndex();
+        const keys = [...by.keys()];
+        for (const el of root.querySelectorAll('.s-in *')) {
+          if (el.children.length || el.closest('a') || el.closest('.s-top')) continue;
+          const t = (el.textContent || '').trim();
+          if (t.length < 2 || t.length > 60) continue;
+          let sym = by.get(t);
+          if (sym === undefined && /(\u2026|\.\.\.)$/.test(t)) {
+            const stem = t.replace(/(\u2026|\.\.\.)$/, '').trim();
+            const m = stem.length >= 4 ? keys.filter((k) => k.startsWith(stem) && by.get(k)) : [];
+            const syms = [...new Set(m.map((k) => by.get(k)))];
+            sym = syms.length === 1 ? syms[0] : undefined;
+          }
+          if (!sym) continue;
+          const href = '/stock/' + encodeURIComponent(sym);
+          if (el.namespaceURI === SVG_NS) {
+            const a = document.createElementNS(SVG_NS, 'a');
+            a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('class', 's-nl');
+            el.parentNode.insertBefore(a, el); a.appendChild(el);
+          } else {
+            const a = document.createElement('a');
+            a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 's-nl';
+            while (el.firstChild) a.appendChild(el.firstChild);
+            el.appendChild(a);
+          }
+        }
+      } catch (e) { /* the card as drawn */ }
+    }
+
     function render() {
       syncStockPickers();
       syncIndustries(false);
@@ -2661,6 +2728,7 @@
         // A member's card carries the watermark; the admin's, which is the one
         // that gets posted, does not. Outside .s-in so it spans the artboard.
         `<div class="s-in">${buildCard()}</div>` + (memberMode ? Cards.watermark() : '');
+      linkStockNames(stage);
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';

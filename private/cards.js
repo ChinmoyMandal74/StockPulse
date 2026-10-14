@@ -8951,9 +8951,10 @@
     // ---- the list
     const pct = (v) => (v == null ? '\u2014' : (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(1) + '%');
     const pct0 = (v) => (v == null ? '\u2014' : (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(0) + '%');
-    const rows = shown.map((r, i) => '<a class="pb-r" href="/stock/' + encodeURIComponent(r.symbol) + '" target="_blank" rel="noopener">'
+    // Only the NAME is a link, as on every card (the studio's linkStockNames).
+    const rows = shown.map((r, i) => '<div class="pb-r">'
       + '<span class="pb-i">' + (i + 1) + '</span><span class="pb-t">' + esc(r.symbol) + '</span><span class="pb-nm">' + esc(nameOf(r)) + '</span>'
-      + '<span class="pb-v pb-dn">' + pct(num(r.todayPct)) + '</span><span class="pb-v">' + pct(num(r.vs200ma)) + '</span><span class="pb-v">' + pct0(num(r.oneYearPct)) + '</span></a>').join('');
+      + '<span class="pb-v pb-dn">' + pct(num(r.todayPct)) + '</span><span class="pb-v">' + pct(num(r.vs200ma)) + '</span><span class="pb-v">' + pct0(num(r.oneYearPct)) + '</span></div>').join('');
     const head = '<div class="pb-r pb-hd"><span class="pb-i"></span><span class="pb-t"></span><span class="pb-nm">Company</span><span class="pb-v">Today</span><span class="pb-v">vs 200-day</span><span class="pb-v">1 year</span></div>';
     const link = 'tickrlab.com/?' + c.query;
     const more = hits.length > shown.length ? (hits.length - shown.length) + ' more in the band. ' : '';

@@ -212,3 +212,13 @@ Asked, the owner chose: "switch it to 'Tickr Lab' everywhere". `wmark.js` now ti
 
 - **What was given up, knowingly**: a capture can no longer be traced to the account it came from. The mark now says where a picture came from, not who took it. Do not restore the email without the owner asking.
 - `/help` "The watermark" was rewritten in the same commit; it had promised that a capture "identifies the account it came from".
+
+## Every company name on a card is a link (2026-10-14)
+
+The owner: "make all the other visuals clickable only on the stock names". **`linkStockNames(stage)` in `promo.html`, run after every render**, not a change to seventy templates: any element under `.s-in` with no child elements whose whole text is EXACTLY a company's name, short name or ticker becomes a link to `/stock/<SYM>` in a new tab; a label cut short with an ellipsis is matched when only one company starts that way; an SVG `<text>` (or `<tspan>`) is wrapped in an SVG `<a>`.
+
+- **Funds are not in the index** ("S&P 500" on a card is the index), a name two companies share links to neither, and the brand line (`.s-top`) is skipped.
+- **Measured before it shipped**: all 68 templates built from a real day's rows, 110 distinct texts matched, every one a company. A dozen tickers are also words (ALL, ON, NOW, IT, KEY, CAT, SO, BE, ARE, TECH); none stands alone as a label on any template. A new card that prints one of those as a bare label would link it: if that happens, skip that element by class here.
+- **The picture is unchanged**: `#stage a.s-nl` keeps the colour and has no underline (hover only). Checked: the Bubble card's PNG export is 626,229 bytes with the links and without them; the Pulled back card exports with its 14 links in place.
+- The Pulled back list's rows stopped being whole-row links, so a name is the one thing to click there too.
+- The phone shows saved posts as images, so it has no links.
