@@ -2805,9 +2805,11 @@ async function readFigure(key) {
 async function writeFigures(map) {
   await init();
   const stmts = Object.entries(map || {}).map(([k, v]) => ({ sql: 'insert or replace into app_meta (key, value) values (?, ?)', args: ['fig:' + k, JSON.stringify(v)] }));
-  // TEN A WRITE: each figure is several KB of JSON, and a hundred at once was
-  // one write of megabytes that dropped the connection on the deployed app.
-  for (let i = 0; i < stmts.length; i += 10) await db.batch(stmts.slice(i, i + 10), 'write');
+  // ONE STATEMENT AT A TIME. A batch of these, of a hundred or of ten, failed
+  // on the deployed app every time ("fetch failed", measured 2026-10-14: 392
+  // figures, 967 KB in all), while single writes of far larger values succeed
+  // all over this file. About 400 small round trips, a few seconds.
+  for (const s of stmts) await db.execute(s);
   return stmts.length;
 }
 
