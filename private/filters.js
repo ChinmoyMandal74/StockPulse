@@ -384,7 +384,41 @@
     return out;
   }
 
+  // ---- a card's own question, as a screen a link can open (2026-10-14) ----------
+  //
+  // A posted card is a picture: nothing on it can be clicked. So a card that
+  // picks companies by a rule prints a link, and the screener opens that link
+  // as a screen. THE RULE IS DEFINED HERE ONCE and both read it: the card
+  // chooses its companies with screenRows(cardScreen(...).def), and the
+  // screener applies the very same definition. They cannot disagree about who
+  // is in it.
+  //
+  // `q` is the link's query, as plain strings. Every value is checked against
+  // a short list; anything else falls back to the default, so a hand-edited
+  // link can only ever ask one of the questions the card can ask.
+  const PULLBACK = {
+    down: ['3', '5', '8'],                       // fell at least this far today, %
+    band: ['0..5', '0..10', '-3..10'],           // where it now sits against its 200-day average, %
+    fly: ['0', '50'],                            // 50: had risen at least 50% over the year
+  };
+  function cardScreen(kind, q) {
+    const o = q || {};
+    if (kind !== 'pullback') return null;
+    const pick = (k, d) => (PULLBACK[k].includes(String(o[k])) ? String(o[k]) : d);
+    const down = pick('down', '5'), band = pick('band', '0..10'), fly = pick('fly', '0');
+    const sp = INDEX_CUTS.some(([k]) => k === o.sp) ? o.sp : 'All';
+    const filters = { todayPct: '<=-' + down, vs200ma: band };
+    if (fly !== '0') filters.oneYearPct = '>=' + fly;
+    return {
+      name: 'Pulled back toward the 200-day',
+      params: { down, band, fly, sp },
+      def: { filters, sp, sort: { key: 'todayPct', dir: 1 } },
+      query: 'card=pullback&down=' + down + '&band=' + band + '&fly=' + fly + '&sp=' + sp,
+    };
+  }
+
   return {
+    PULLBACK, cardScreen,
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
     CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf,
     DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,

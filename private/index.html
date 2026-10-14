@@ -4912,6 +4912,20 @@
       } catch (e) { /* the menu just says none */ }
     }
     const findScreen = (id) => screens.find((x) => x.id === id) || null;
+    // A CARD'S LINK, opened as a screen (2026-10-14). A posted card is a picture,
+    // so it prints a link -- /?card=pullback&down=5&band=0..10&fly=0&sp=All -- and
+    // this opens it: the rule comes from Filters.cardScreen, the same definition
+    // the card chose its companies with, applied as a screen that exists only in
+    // this tab. Clearing it puts back whatever was set before, as any screen does,
+    // and it is never saved with the starter screens.
+    function openCardLink() {
+      const q = Object.fromEntries(new URLSearchParams(location.search));
+      const c = q.card && Filters.cardScreen ? Filters.cardScreen(q.card, q) : null;
+      if (!c) return;
+      const id = 'card-' + q.card;
+      screens = screens.filter((x) => x.id !== id).concat([{ id, name: c.name + ' \u00b7 from a card', def: c.def, transient: true }]);
+      applyScreen(id);
+    }
 
     function screenColumnsActive() {
       const sc = activeScreenId && !screenColsOff ? findScreen(activeScreenId) : null;
@@ -5037,7 +5051,8 @@
     }
 
     async function putScreens(list) {
-      const d = await api('PUT', '/api/screens', { screens: list });
+      // A screen opened from a card's link lives in this tab only.
+      const d = await api('PUT', '/api/screens', { screens: (list || []).filter((s) => !s.transient) });
       screens = d.screens || [];
     }
 
@@ -6891,6 +6906,7 @@
       .then(() => Promise.all([loadPrefs(), loadMyPortfolios()]))
       .then(() => Promise.all([loadViews(), loadScreens()]))
       .then(() => refresh({ live: false }))
+      .then(() => { try { openCardLink(); } catch (e) { /* the screener as it was */ } })
       .then(() => {
         // THE PAGE IS USABLE HERE, and this is the only place that knows it.
         // Not `window.load`, which fires while /api/stocks is still in flight,

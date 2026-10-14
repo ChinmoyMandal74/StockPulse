@@ -8878,6 +8878,107 @@
     return out + '</svg>';
   }
 
+  // ---- Pulled back: fell hard today, now near its 200-day average ------------------
+  //
+  // (2026-10-14, the owner, on a day high-flying stocks sold off: "how to find
+  // stocks that have meaningfully corrected today and now nearing their 200 day
+  // moving average ... how to show something like this in promo". Then, of a
+  // scatter: "someone cannot drill down, and names could be hard to read if too
+  // many companies".)
+  //
+  // SO TWO PARTS. A scatter of every company that fell 3% or more today, dots
+  // only, placed by today's move against its distance from the 200-day, with
+  // the band shaded: how many fell, and how few landed near the average. Under
+  // it a numbered list of the ones in the band, largest first, the same numbers
+  // on their dots. Names live only in the list, so they never collide.
+  //
+  // DRILLING: in Visuals each row opens the stock's page in a new tab. A posted
+  // picture cannot be clicked, so the card prints a link instead, and the
+  // screener opens it as this very rule (Filters.cardScreen): the card and the
+  // table choose with one definition and cannot disagree.
+  //
+  // A DESCRIPTION OF TODAY, never an invitation: nothing here says the 200-day
+  // is support or that a fall is an opportunity.
+  // Measured on the three artboards with today's 18: more rows than these and
+  // the note runs under the footer.
+  const PB_ROWS = { portrait: 7, square: 4, story: 12 };
+  const PB_H = { portrait: 300, square: 210, story: 470 };
+  // A narrower range than the fallers span, so the band is a sixth of the width
+  // and its numbers do not sit on each other. Beyond it a dot rests on the edge.
+  const PB_X = [-20, 40], PB_Y_TOP = -3;
+  function tplPullback() {
+    const F = globalThis.Filters;
+    if (!F || !F.cardScreen) return chromeTop() + '<div class="s-body"><div class="s-empty">Not available here.</div></div>' + chromeFoot();
+    const c = F.cardScreen('pullback', { down: O.pbDown, band: O.pbBand, fly: O.pbFly, sp: O.pbSp500 || 'All' });
+    const P = c.params;
+    const cutName = P.sp === 'All' ? 'Every company tracked' : ((F.INDEX_CUTS || []).find(([k]) => k === P.sp) || [P.sp, P.sp])[1];
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const inCut = F.screenRows({ sp: P.sp }, stocks);
+    // The context: everything that fell 3% or more, with a reading on both axes.
+    const fell = inCut.filter((r) => num(r.todayPct) != null && num(r.todayPct) <= -3 && num(r.vs200ma) != null);
+    const hard = inCut.filter((r) => num(r.todayPct) != null && num(r.todayPct) <= -Number(P.down)).length;
+    const hits = F.screenRows(c.def, stocks).sort((a, b) => (num(b.marketCap) || 0) - (num(a.marketCap) || 0));
+    const shown = hits.slice(0, PB_ROWS[size.id] || 10);
+    const order = new Map(shown.map((r, i) => [r.symbol, i + 1]));
+    const [bLo, bHi] = P.band.split('..').map(Number);
+
+    // ---- the scatter, at its true pixel size so its text is safe
+    const W = 952, H = PB_H[size.id] || 330, fs = size.id === 'story' ? 20 : 16;
+    const L = 58, R = 16, T = 12, B = fs * 2.4;
+    let yLo = -10;
+    for (const r of fell) yLo = Math.min(yLo, Math.max(num(r.todayPct), -25));
+    yLo = Math.floor(yLo / 5) * 5;
+    const X = (v) => L + (Math.min(Math.max(v, PB_X[0]), PB_X[1]) - PB_X[0]) / (PB_X[1] - PB_X[0]) * (W - L - R);
+    const Y = (v) => T + (PB_Y_TOP - Math.min(Math.max(v, yLo), PB_Y_TOP)) / (PB_Y_TOP - yLo) * (H - T - B);
+    let svg = '<svg class="pb-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img">';
+    svg += '<rect class="pb-band" x="' + X(bLo).toFixed(1) + '" y="' + T + '" width="' + (X(bHi) - X(bLo)).toFixed(1) + '" height="' + (H - T - B).toFixed(1) + '"/>';
+    for (const v of [-20, 0, 10, 20, 40]) {
+      svg += '<line class="' + (v === 0 ? 'pb-zero' : 'pb-grid') + '" x1="' + X(v).toFixed(1) + '" x2="' + X(v).toFixed(1) + '" y1="' + T + '" y2="' + (H - B).toFixed(1) + '"/>'
+        + '<text class="pb-ax" x="' + X(v).toFixed(1) + '" y="' + (H - fs * 0.9).toFixed(1) + '" text-anchor="' + (v === PB_X[0] ? 'start' : v === PB_X[1] ? 'end' : 'middle') + '" font-size="' + fs + '">' + esc((v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v) + '%' + (v === PB_X[0] ? ' or less' : v === PB_X[1] ? ' or more' : '')) + '</text>';
+    }
+    for (let v = PB_Y_TOP; v >= yLo; v -= (v === PB_Y_TOP ? 2 : 5)) {
+      svg += '<text class="pb-ax" x="' + (L - 8) + '" y="' + (Y(v) + fs * 0.34).toFixed(1) + '" text-anchor="end" font-size="' + fs + '">' + esc('\u2212' + Math.abs(v) + '%') + '</text>';
+    }
+    // Out of the band first, so the numbered ones sit on top.
+    for (const r of fell) if (!order.has(r.symbol)) svg += '<circle class="pb-dot" cx="' + X(num(r.vs200ma)).toFixed(1) + '" cy="' + Y(num(r.todayPct)).toFixed(1) + '" r="' + (fs * 0.28).toFixed(1) + '"/>';
+    for (const r of shown) {
+      const x = X(num(r.vs200ma)), y = Y(num(r.todayPct));
+      svg += '<circle class="pb-hit" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (fs * 0.55).toFixed(1) + '"/>'
+        + '<text class="pb-n" x="' + x.toFixed(1) + '" y="' + (y + fs * 0.32).toFixed(1) + '" text-anchor="middle" font-size="' + (fs * 0.78).toFixed(0) + '">' + order.get(r.symbol) + '</text>';
+    }
+    svg += '</svg>';
+
+    // ---- the list
+    const pct = (v) => (v == null ? '\u2014' : (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(1) + '%');
+    const pct0 = (v) => (v == null ? '\u2014' : (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(0) + '%');
+    const rows = shown.map((r, i) => '<a class="pb-r" href="/stock/' + encodeURIComponent(r.symbol) + '" target="_blank" rel="noopener">'
+      + '<span class="pb-i">' + (i + 1) + '</span><span class="pb-t">' + esc(r.symbol) + '</span><span class="pb-nm">' + esc(nameOf(r)) + '</span>'
+      + '<span class="pb-v pb-dn">' + pct(num(r.todayPct)) + '</span><span class="pb-v">' + pct(num(r.vs200ma)) + '</span><span class="pb-v">' + pct0(num(r.oneYearPct)) + '</span></a>').join('');
+    const head = '<div class="pb-r pb-hd"><span class="pb-i"></span><span class="pb-t"></span><span class="pb-nm">Company</span><span class="pb-v">Today</span><span class="pb-v">vs 200-day</span><span class="pb-v">1 year</span></div>';
+    const link = 'tickrlab.com/?' + c.query;
+    const more = hits.length > shown.length ? (hits.length - shown.length) + ' more in the band. ' : '';
+    const list = hits.length
+      ? '<div class="pb-list">' + head + rows + '</div>'
+      : '<p class="s-sub wide" style="--fs:19px">' + esc('No company in ' + (P.sp === 'All' ? 'the screen' : cutName) + ' fell ' + P.down + '% or more today and closed ' + (bLo < 0 ? 'between ' + bLo + '% and +' + bHi + '%' : 'up to ' + bHi + '%') + ' above its 200-day average.') + '</p>';
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const flyN = hits.filter((r) => num(r.oneYearPct) != null && num(r.oneYearPct) >= 50).length;
+    const figs = fig('Fell ' + P.down + '%+ today', hard.toLocaleString(), 'of ' + inCut.length.toLocaleString())
+      + fig('Near the 200-day', hits.length.toLocaleString(), (bLo < 0 ? bLo + '% to +' : '0 to +') + bHi + '% above it')
+      + fig(P.fly !== '0' ? 'Had risen 50%+' : 'Of them up 50%+', (P.fly !== '0' ? hits.length : flyN).toLocaleString(), 'over the past year')
+      + fig('Fell 3%+ today', fell.length.toLocaleString(), 'the dots');
+    const note = 'Every dot fell 3% or more today; across is where it closed against its own 200-day average, down is today\u2019s move. '
+      + 'The numbered ones fell ' + P.down + '% or more and closed in the shaded band' + (P.fly !== '0' ? ', and had risen 50% or more over the past year' : '') + '. Largest first. '
+      + more + 'The full list, sortable: ' + link + '. A description of today\u2019s move, not a view on what comes next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName + ' \u00b7 today') + '</span>'
+      + '<h2 class="s-title">Pulled back<br><span class="dim">toward the 200-day average</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="pb-chart">' + svg + '</div>' + list
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Valuation: the index's P/E over ten years (indexpe.js) -------------------------
   //
   // (2026-10-14.) Two lines over 41 quarter ends: the index's own P/E (the
@@ -10191,6 +10292,7 @@
     thmsnap: () => tplSecSnap(GROUPING.theme, 'tsn'),
     thmgrowth: tplThmGrowth,
     idxpe: tplIndexPe,
+    pullback: tplPullback,
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
@@ -10557,6 +10659,29 @@
     .mg-stats b { font: 700 40px var(--mono); color: var(--text); white-space: nowrap; }
     .mg-stats span { font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-chart { margin-top: 16px; }
+    /* Pulled back: the scatter and its numbered list. */
+    .pb-chart { margin: 18px 0 6px; }
+    .pb-chart .pb-svg { display: block; }
+    .pb-band { fill: var(--accent); opacity: 0.12; }
+    .pb-grid { stroke: var(--hair); stroke-width: 1; }
+    .pb-zero { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 5; }
+    .pb-ax { fill: var(--faint); font-family: var(--mono); }
+    .pb-dot { fill: var(--muted); opacity: 0.55; }
+    .pb-hit { fill: var(--accent); }
+    .pb-n { fill: #0b0e14; font-family: var(--mono); font-weight: 700; }
+    .pb-list { display: flex; flex-direction: column; margin: 4px 0 6px; font-size: 21px; }
+    .pb-list .pb-r { display: grid; grid-template-columns: 34px 92px minmax(0, 1fr) 110px 140px 100px; align-items: center; gap: 10px;
+                     padding: 7px 0; border-bottom: 1px solid var(--hair); color: var(--text); text-decoration: none; }
+    .pb-list .pb-hd { font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); border-bottom-color: var(--muted); }
+    .pb-list .pb-i { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%;
+                     background: var(--accent); color: #0b0e14; font: 700 15px var(--mono); }
+    .pb-list .pb-hd .pb-i { background: none; }
+    .pb-list .pb-t { font: 700 1em var(--mono); }
+    .pb-list .pb-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .pb-list .pb-v { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .pb-list .pb-dn { color: var(--red); }
+    .sz-square .pb-list { font-size: 18px; } .sz-square .pb-list .pb-r { padding: 5px 0; }
+    .sz-story .pb-list { font-size: 23px; } .sz-story .pb-list .pb-r { padding: 9px 0; }
     .mg-chart .mg-svg { display: block; }
     .ipe-key { display: flex; gap: 28px; flex-wrap: wrap; margin: 18px 0 4px; font-size: 17px; color: var(--muted); }
     .ipe-key i { display: inline-block; width: 22px; height: 5px; border-radius: 3px; margin-right: 9px; vertical-align: middle; }
