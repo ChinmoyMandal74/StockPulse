@@ -12132,29 +12132,55 @@ const EG_FUND = { in: SP_FUND, ndx: NDX_FUND };
 const EG_TTL_MS = 30 * 60 * 1000;
 const egCache = {};
 const egWarm = (cut) => !!(egCache[cut] && Date.now() - egCache[cut].at < EG_TTL_MS);
-async function earnGrowthFor(cutIn) {
-  const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
-  if (egWarm(cut)) return egCache[cut].body;
+// WHO IS IN A CUT, AND THE FILINGS SPLIT OUT OF THE ARITHMETIC (2026-10-14), so
+// the live answer below and the daily stored build (groupFiguresBuild) are one
+// computation over the same members. `ctx` carries what a cut needs: the
+// universe, the index funds' holdings, the filer ids; `facts` is a Map symbol
+// -> rows that holds at least the cut's companies.
+async function figuresCtx(cuts) {
   const universe = await store.readUniverse();
-  const tracked = new Set(universe);
-  let syms = universe; let asOf = null;
-  if (cut !== 'All') {
-    const h = await store.readFundHoldings(EG_FUND[cut]);
-    asOf = h.asOf;
-    syms = h.holdings.map((x) => x.symbol).filter((s) => tracked.has(s));
-  }
-  // ONE COMPANY ONCE. Two share classes file one set of statements, and
-  // counting it twice would double that company in both sums.
+  const held = {};
+  for (const c of cuts) if (EG_FUND[c] && !held[c]) held[c] = await store.readFundHoldings(EG_FUND[c]);
   const ids = await filerIds().catch(() => ({}));
+  return { universe, tracked: new Set(universe), held, ids };
+}
+// ONE COMPANY ONCE. Two share classes file one set of statements, and
+// counting it twice would double that company in both sums.
+function cutMembers(ctx, cut) {
+  let syms = ctx.universe; let asOf = null;
+  if (cut !== 'All') {
+    const h = ctx.held[cut] || { holdings: [] };
+    asOf = h.asOf || null;
+    syms = (h.holdings || []).map((x) => x.symbol).filter((s) => ctx.tracked.has(s));
+  }
   const seen = new Set();
-  syms = syms.filter((s) => { const c = ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
-  const since = new Date(Date.now() - 3.6 * 365 * 86400000).toISOString().slice(0, 10);
-  const facts = await store.readSecFactsSince(syms, since);
-  const members = syms.map((s) => ({ symbol: s, rows: SecFacts.latestFilled(facts.get(s) || []) }));
+  syms = syms.filter((s) => { const c = ctx.ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
+  return { syms, asOf };
+}
+const EG_YEARS = 3.6, MG_YEARS = 5.6;
+const sinceYears = (y) => new Date(Date.now() - y * 365 * 86400000).toISOString().slice(0, 10);
+// Rows from a period end on, so a build that read further back gives exactly
+// the answer a read of just this window gives.
+const factsFrom = (facts, s, since) => (facts.get(s) || []).filter((r) => r.periodEnd >= since);
+function egCompute(ctx, cut, facts) {
+  const { syms, asOf } = cutMembers(ctx, cut);
+  const since = sinceYears(EG_YEARS);
+  const members = syms.map((s) => ({ symbol: s, rows: SecFacts.latestFilled(factsFrom(facts, s, since)) }));
   const all = EarnGrowth.build(members, { keep: 25 });
   const lead = EarnGrowth.settled(all);
   // The half-reported quarters ahead of the lead, the lead, and seven before it.
-  const body = { cut, asOf, members: syms.length, lead, quarters: all.slice(0, lead + 8), at: Date.now() };
+  return { cut, asOf, members: syms.length, lead, quarters: all.slice(0, lead + 8), at: Date.now() };
+}
+async function earnGrowthFor(cutIn) {
+  const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
+  if (egWarm(cut)) return egCache[cut].body;
+  // THE DAILY BUILD'S ANSWER FIRST: it reads nothing but one stored row.
+  const stored = await figStored('eg:' + cut);
+  if (stored) { egCache[cut] = { at: Date.now(), body: stored }; return stored; }
+  const ctx = await figuresCtx([cut]);
+  const { syms } = cutMembers(ctx, cut);
+  const facts = await store.readSecFactsSince(syms, sinceYears(EG_YEARS));
+  const body = egCompute(ctx, cut, facts);
   egCache[cut] = { at: Date.now(), body };
   return body;
 }
@@ -12188,6 +12214,31 @@ const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL
 // and the same arithmetic over fewer members, broken down one level
 // further: an index by sector, a sector by industry, an industry by
 // company. `dim` is 'sector' or 'industry' and `value` its name.
+// One group's margins from facts in hand. `groups` gives each company's sector
+// and industry and the themes' members.
+function mgCompute(ctx, groups, cut, dim, value, facts) {
+  let { syms, asOf } = cutMembers(ctx, cut);
+  if (dim === 'theme') {
+    const inTheme = new Set((groups.pf[value] || []).map((s) => String(s).toUpperCase()));
+    syms = syms.filter((s) => inTheme.has(String(s).toUpperCase()));
+  } else if (dim) syms = syms.filter((s) => (dim === 'sector' ? groups.sectorOf : groups.industryOf)[s] === value);
+  const since = sinceYears(MG_YEARS);
+  // An industry or a theme is broken down by company, so one is a row.
+  const groupOf = (s) => (!dim ? groups.sectorOf[s] : dim === 'sector' ? groups.industryOf[s] : s) || null;
+  const members = syms.map((s) => ({ symbol: s, group: groupOf(s), rows: SecFacts.latestFilled(factsFrom(facts, s, since)) }));
+  const built = Margins.build(members, { points: 17, minGroup: dim === 'industry' || dim === 'theme' ? 1 : 3 });
+  return { body: Object.assign({ cut, dim, value, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} }), syms };
+}
+async function mgGroups() {
+  const sectorOf = {}, industryOf = {};
+  try {
+    const gi = await groupIndex();
+    for (const [sec, list] of gi.sector) for (const s of list) sectorOf[s] = sec;
+    for (const [ind, list] of gi.industry) for (const s of list) industryOf[s] = ind;
+  } catch { /* a card without its breakdown rows */ }
+  const pf = await readPortfolios().catch(() => ({}));
+  return { sectorOf, industryOf, pf };
+}
 async function marginsFor(cutIn, dimIn, valueIn) {
   const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
   // A THEME (2026-10-13): one of the site's own lists, broken down by company.
@@ -12195,49 +12246,81 @@ async function marginsFor(cutIn, dimIn, valueIn) {
   const value = dim ? String(valueIn || '').slice(0, 80) : '';
   const key = cut + '|' + (dim || '') + '|' + value;
   if (mgWarm(key)) return mgCache[key].body;
-  const universe = await store.readUniverse();
-  const tracked = new Set(universe);
-  let syms = universe; let asOf = null;
-  if (cut !== 'All') {
-    const h = await store.readFundHoldings(EG_FUND[cut]);
-    asOf = h.asOf;
-    syms = h.holdings.map((x) => x.symbol).filter((s) => tracked.has(s));
-  }
-  const ids = await filerIds().catch(() => ({}));
-  const seen = new Set();
-  syms = syms.filter((s) => { const c = ids[String(s).toUpperCase()]; if (!c) return true; if (seen.has(c)) return false; seen.add(c); return true; });
-  // Each company's sector, from the same index the group pages use.
-  const sectorOf = {}, industryOf = {};
-  try {
-    const gi = await groupIndex();
-    for (const [sec, list] of gi.sector) for (const s of list) sectorOf[s] = sec;
-    for (const [ind, list] of gi.industry) for (const s of list) industryOf[s] = ind;
-  } catch { /* a card without its breakdown rows */ }
-  if (dim === 'theme') {
-    const pf = await readPortfolios().catch(() => ({}));
-    const inTheme = new Set(Array.isArray(pf[value]) ? pf[value].map((s) => String(s).toUpperCase()) : []);
-    syms = syms.filter((s) => inTheme.has(String(s).toUpperCase()));
-  } else if (dim) syms = syms.filter((s) => (dim === 'sector' ? sectorOf : industryOf)[s] === value);
-  const since = new Date(Date.now() - 5.6 * 365 * 86400000).toISOString().slice(0, 10);
-  const facts = await store.readSecFactsSince(syms, since);
-  const groupOf = (s) => (!dim ? sectorOf[s] : dim === 'sector' ? industryOf[s] : s) || null;
-  const members = syms.map((s) => ({ symbol: s, group: groupOf(s), rows: SecFacts.latestFilled(facts.get(s) || []) }));
-  // An industry or a theme is broken down by company, so one is a row.
-  const built = Margins.build(members, { points: 17, minGroup: dim === 'industry' || dim === 'theme' ? 1 : 3 });
-  const body = Object.assign({ cut, dim, value, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} });
-  // One entry per sector and industry asked for: bounded, since an instance
-  // can live long enough to be asked for all of them.
-  if (Object.keys(mgCache).length > 80) for (const k of Object.keys(mgCache)) delete mgCache[k];
-  mgCache[key] = { at: Date.now(), body };
+  const stored = await figStored('mg:' + key);
+  if (stored) { mgKeep(key, stored); return stored; }
+  const [ctx, groups] = await Promise.all([figuresCtx([cut]), mgGroups()]);
+  // Read only the companies this group needs: the same filter, done first.
+  const want = mgCompute(ctx, groups, cut, dim, value, new Map()).syms;
+  const facts = await store.readSecFactsSince(want, sinceYears(MG_YEARS));
+  const { body } = mgCompute(ctx, groups, cut, dim, value, facts);
+  mgKeep(key, body);
   return body;
 }
+// One entry per sector and industry asked for: bounded, since an instance
+// can live long enough to be asked for all of them.
+function mgKeep(key, body) {
+  if (Object.keys(mgCache).length > 80) for (const k of Object.keys(mgCache)) delete mgCache[k];
+  mgCache[key] = { at: Date.now(), body };
+}
+
+// ---- every group's margins and earnings growth, built once a day ------------------
+// (2026-10-14, the owner, of a Margins card that waited out the nightly run:
+// "why do we have this limitation" ... "go ahead".) Both read every company's
+// filings, so a live answer had to stand aside for a running refresh. Margins
+// only move when a company files, a few times a year: worked out ONCE A DAY
+// for every cut and every group from ONE read of the filings, and stored a
+// row each, they are a single small read when a card opens and never wait.
+// The live path stays for anything the build has not stored yet.
+const figMemo = new Map();
+async function figStored(key) {
+  const hit = figMemo.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.body;
+  const body = await store.readFigure(key).catch(() => null);
+  if (body) { if (figMemo.size > 400) figMemo.clear(); figMemo.set(key, { at: Date.now(), body }); }
+  return body;
+}
+async function groupFiguresBuild() {
+  const t0 = Date.now();
+  const cuts = ['in', 'ndx', 'All'];
+  const [ctx, groups] = await Promise.all([figuresCtx(cuts), mgGroups()]);
+  const facts = await store.readSecFactsSince(ctx.universe, sinceYears(MG_YEARS));
+  const tRead = Date.now() - t0;
+  const out = {};
+  for (const cut of cuts) out['eg:' + cut] = egCompute(ctx, cut, facts);
+  const names = (m) => [...new Set(Object.values(m))].filter(Boolean);
+  const dims = [[null, ['']], ['sector', names(groups.sectorOf)], ['industry', names(groups.industryOf)], ['theme', Object.keys(groups.pf)]];
+  for (const cut of cuts) for (const [dim, list] of dims) for (const value of list) {
+    const { body, syms } = mgCompute(ctx, groups, cut, dim, value, facts);
+    // A group with nobody in this cut is not stored: the card says so live.
+    if (dim && !syms.length) continue;
+    out['mg:' + cut + '|' + (dim || '') + '|' + value] = body;
+  }
+  const keys = Object.keys(out);
+  // Nothing is written over yesterday's figures by a read that found no filings.
+  if (!facts.size) return { built: false, reason: 'no filings read' };
+  await store.writeFigures(out);
+  figMemo.clear();
+  for (const k of Object.keys(egCache)) delete egCache[k];
+  for (const k of Object.keys(mgCache)) delete mgCache[k];
+  return { built: true, figures: keys.length, margins: keys.filter((k) => k.startsWith('mg:')).length, companies: facts.size, readMs: tRead, ms: Date.now() - t0 };
+}
+// The cron secret or an admin: the nightly run asks for it after its rounds,
+// once the refresh it would otherwise compete with is over.
+app.post('/api/group-figures/rebuild', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  res.json(await groupFiguresBuild());
+}));
 app.get('/api/margins', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const cut = String(req.query.cut || 'in');
   const c = EG_FUND[cut] || cut === 'All' ? cut : 'in';
   const dim = req.query.dim === 'sector' || req.query.dim === 'industry' || req.query.dim === 'theme' ? req.query.dim : null;
   const name = dim ? String(req.query.name || '').slice(0, 80) : '';
-  if (!mgWarm(c + '|' + (dim || '') + '|' + name) && await standAside(res)) return;
+  // A stored or cached answer reads one row at most, so it is served even
+  // while a refresh runs; only a live computation stands aside.
+  const key = c + '|' + (dim || '') + '|' + name;
+  if (!mgWarm(key) && !(await figStored('mg:' + key)) && await standAside(res)) return;
   res.json(await marginsFor(c, dim, name));
 }));
 
@@ -12290,7 +12373,7 @@ app.get('/api/earnings-growth', requireMember, route(async (req, res) => {
   const cut = String(req.query.cut || 'in');
   const key = EG_FUND[cut] || cut === 'All' ? cut : 'in';
   // A cached answer reads nothing, so it is served even while a refresh runs.
-  if (!egWarm(key) && await standAside(res)) return;
+  if (!egWarm(key) && !(await figStored('eg:' + key)) && await standAside(res)) return;
   res.json(await earnGrowthFor(key));
 }));
 

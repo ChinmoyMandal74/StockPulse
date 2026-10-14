@@ -534,13 +534,22 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       // Month by month for every group (groupmonths.js): one call, after the
       // prices are in. About 150,000 small reads on the server, well inside
       // one request.
+      // Every group's margins and earnings growth (server.js, groupFiguresBuild):
+      // one call, after the rounds, so the cards read a stored answer and never
+      // have to wait out a refresh.
+      async function groupFigures() {
+        const r = await fetch(`${base}/api/group-figures/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j) { say(`figures    HTTP ${r.status}`); return; }
+        say(j.built ? `figures    ${j.margins} margins and ${j.figures - j.margins} earnings-growth figures from ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `figures    not built -- ${j.reason || j.error || 'no reason given'}`);
+      }
       async function groupMonths() {
         const r = await fetch(`${base}/api/group-months/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
         const j = await r.json().catch(() => null);
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures]]) {
         try {
           await fn();
         } catch (e) {

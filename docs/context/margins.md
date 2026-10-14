@@ -46,3 +46,13 @@ The owner, of the index card: "Can this be expanded to sector and industry templ
 - Display only; the signal is identical with the field absent, present and lying.
 
 Neither surface was rendered in a browser by the build.
+
+## Built once a day for every group, so the card never waits (2026-10-14)
+
+The owner, of a Theme Margins card showing "Reading the filings…" through a whole nightly run: "why do we have this limitation" and then "go ahead". The limitation is `standAside`: a live Margins or Earnings growth answer reads every company's filings at once (about 36,000 rows for the S&P 500), and since 2026-09-19 such reads wait out a running refresh rather than push its rounds past their deadline. Correct for a live read; wrong for a figure that only moves when a company files.
+
+- **One computation, two callers.** `figuresCtx` (the universe, the index funds' holdings, the filer ids), `cutMembers` (who is in a cut, one company once), `egCompute` and `mgCompute` (the arithmetic, from facts in hand). `earnGrowthFor` and `marginsFor` are now the live path over them, reading only the companies they need, as before.
+- **`groupFiguresBuild()`** reads the whole universe's filings once (5.6 years) and computes Earnings growth for the three cuts and Margins for every cut × the market, each sector, each industry and each theme. Each is stored as its own `app_meta` row, `fig:eg:<cut>` and `fig:mg:<cut>|<dim>|<name>`, so a card reads one row. Earnings growth keeps its own 3.6-year window by filtering the rows (`factsFrom`), so its answer is the one a 3.6-year read gives.
+- **`POST /api/group-figures/rebuild`** (the cron secret or an admin, stands aside itself); `nightly-ping.js` asks for it as its last phase (`figures`).
+- **Served first.** `/api/margins`, `/api/earnings-growth`, and the phone's saved-post route all go through `marginsFor` / `earnGrowthFor`, which look for the stored row before anything else; the routes stand aside only when there is neither a cached nor a stored answer. A group the build has not stored yet (a theme added today) still works live.
+- The waiting message added the day before stays, for that live case.

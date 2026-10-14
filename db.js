@@ -2794,6 +2794,21 @@ async function readSecInstanceAccns() {
   return out;
 }
 
+// Each group's margins and earnings growth, built once a day: one app_meta row
+// a figure under `fig:`, read by key, so a card opening reads one row.
+async function readFigure(key) {
+  await init();
+  const r = await db.execute({ sql: 'select value from app_meta where key = ?', args: ['fig:' + key] });
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+async function writeFigures(map) {
+  await init();
+  const stmts = Object.entries(map || {}).map(([k, v]) => ({ sql: 'insert or replace into app_meta (key, value) values (?, ?)', args: ['fig:' + k, JSON.stringify(v)] }));
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100), 'write');
+  return stmts.length;
+}
+
 // Month by month for every group, built once a day (groupmonths.js).
 async function readGroupMonths() {
   await init();
@@ -6943,7 +6958,7 @@ module.exports = {
   isNetDrop,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  readGroupMonths, writeGroupMonths,
+  readGroupMonths, writeGroupMonths, readFigure, writeFigures,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,
