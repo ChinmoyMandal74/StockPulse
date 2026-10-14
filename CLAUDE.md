@@ -64,6 +64,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 **Deploys and serving**
 - **Production deploys happen by `git push` to `main` only.** Never `vercel` CLI deploys. `vercel env add` is not a deploy; it takes effect on the next push.
 - **`public/` is served by Vercel's CDN without running any code — nothing there can be protected.** Anything needing a session lives in `private/`, mounted at the root behind `gateAssets`. The offline builders write into `private/`.
+- **The stored snapshot is 5 MB and takes about 4 seconds to fetch.** `readSnapshot()` keeps it in memory per instance and re-fetches only when `updated_at` changes; never read it to look up one company (use `readProfile`), and time a slow page with `/api/diag/serve-timing`, not from the laptop.
 - Vercel functions are stateless and are killed at about 300s. Nothing runs after the response: await every write that matters. Shared state lives in tables (`refresh_state`, `app_meta`), never process variables. Long work is one bounded batch per request with the caller looping.
 
 **The Signal engine is sacrosanct** (the column was "Action", then "Advice", and is "Signal" since 2026-10-09)
@@ -142,7 +143,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 ## Index — `docs/context/`
 Verbatim sections of the old file. Three headings also hold unrelated material, noted below.
 
-**Foundations** — `what-this-is` · `running-the-app` · `key-files` · `persistence` · `deploys` · `serving-and-the-gate` · `api-patterns` · `conventions` · `feature-flags-in-env`
+**Foundations** — `what-this-is` · `running-the-app` · `key-files` · `persistence` · `deploys` · `serving-and-the-gate` · `api-patterns` · `page-load-speed` · `conventions` · `feature-flags-in-env`
 
 **Accounts and mail** — `auth-model` · `request-access` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `saved-column-layout`
 
