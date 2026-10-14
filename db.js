@@ -2809,7 +2809,13 @@ async function writeFigures(map) {
   // on the deployed app every time ("fetch failed", measured 2026-10-14: 392
   // figures, 967 KB in all), while single writes of far larger values succeed
   // all over this file. About 400 small round trips, a few seconds.
-  for (const s of stmts) await db.execute(s);
+  for (let i = 0; i < stmts.length; i++) {
+    try { await db.execute(stmts[i]); }
+    catch (e) {
+      const c = e && e.cause ? (e.cause.code || '') + ' ' + (e.cause.message || '') : '';
+      throw new Error('figure ' + (i + 1) + ' of ' + stmts.length + ' (' + stmts[i].args[0] + ', ' + stmts[i].args[1].length + ' bytes): ' + ((e && e.message) || e) + (c ? ' -- ' + c : ''));
+    }
+  }
   return stmts.length;
 }
 
