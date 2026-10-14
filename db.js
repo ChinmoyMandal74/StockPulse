@@ -5900,12 +5900,40 @@ async function noteChatUse(userKey, limit) {
 
 // ---- snapshot -------------------------------------------------------------
 
+// THE PAYLOAD IS KEPT IN MEMORY AND ASKED FOR AGAIN ONLY WHEN IT HAS CHANGED
+// (2026-10-13). Measured on the deployed app: this one read took 3.8 to 4.2
+// seconds, every time, for a 5 MB value, while a tiny read of the same row
+// took 7 to 40 ms. Every page starts with it, and the studio asked twice.
+//
+// So the row's `updated_at` is read first -- the tiny read -- and the text is
+// fetched only when that differs from the copy held. Both writers stamp a
+// fresh `updated_at` to the millisecond (a snapshot is always a new
+// computation), which is what makes it a version. A row with no stamp is
+// never served from memory.
+//
+// WHAT IS KEPT IS THE TEXT, AND IT IS PARSED AFRESH FOR EVERY CALLER (about
+// 35 ms). Callers stamp and score the rows they are given; a shared object
+// would hand one request's edits to the next.
+//
+// Per instance, like every cache here: a new one pays the full read once.
+let snapText = { version: null, text: null };
 async function readSnapshot() {
   await init();
-  const r = await db.execute('select payload from snapshot where id = 1');
-  if (!r.rows.length) return null;
+  const v = await db.execute('select updated_at from snapshot where id = 1');
+  if (!v.rows.length) return null;
+  const version = v.rows[0].updated_at == null ? null : String(v.rows[0].updated_at);
+  let text = version != null && snapText.version === version ? snapText.text : null;
+  if (text == null) {
+    const r = await db.execute('select payload, updated_at from snapshot where id = 1');
+    if (!r.rows.length) return null;
+    text = r.rows[0].payload;
+    // Keyed by the stamp that came WITH the text, not the one asked for a
+    // moment earlier: a write may have landed in between.
+    const got = r.rows[0].updated_at == null ? null : String(r.rows[0].updated_at);
+    snapText = got != null && typeof text === 'string' ? { version: got, text } : { version: null, text: null };
+  }
   try {
-    const snap = JSON.parse(r.rows[0].payload);
+    const snap = JSON.parse(text);
     if (snap && Array.isArray(snap.stocks)) snap.stocks.forEach(canonActionRow);
     return snap;
   } catch {
@@ -5923,6 +5951,8 @@ async function snapshotUpdatedAt() {
 
 async function writeSnapshot(payload) {
   await init();
+  // Whatever is held in memory is about to be out of date.
+  snapText = { version: null, text: null };
   await db.execute({
     sql: `insert into snapshot (id, payload, updated_at) values (1, ?, ?)
           on conflict(id) do update set payload = excluded.payload, updated_at = excluded.updated_at`,

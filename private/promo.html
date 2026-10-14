@@ -3494,6 +3494,16 @@
         $('igBox').hidden = !me.admin;
         if (me.admin) { loadPosts(); loadIg(); }
         if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
+        // FIVE REQUESTS AT ONCE, NOT ONE AFTER ANOTHER (2026-10-13, the owner:
+        // "promo first time load is also slow"). They were awaited in turn, so
+        // the page waited for the sum of them before drawing anything, and none
+        // of the four below needs the stocks to be asked for. Each keeps the
+        // fallback it always had; only when they are STARTED has changed.
+        const soft = (url, fallback) => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : fallback)).catch(() => fallback);
+        const pAnchors = soft('/api/period-anchors', null);
+        const pMine = soft('/api/my/portfolios', { portfolios: {} });
+        const pScreens = soft('/api/screens', null);
+        const pFilers = soft('/api/filers', null);
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
         pulledAt = data.updatedAt || null;
@@ -3502,7 +3512,7 @@
         // before the week or month began. Rows without an anchor stay unranked
         // in those two windows rather than showing a longer move.
         try {
-          const an = await fetch('/api/period-anchors', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+          const an = await pAnchors;
           if (an) {
             const move = (row, a) => (a && row.price != null && a.close ? (row.price / a.close - 1) * 100 : null);
             for (const row of stocks) {
@@ -3514,18 +3524,18 @@
         loadedAt = data.updatedAt || null;
         portfolioNames = data.portfolios || [];
         try {
-          const mine = await fetch('/api/my/portfolios', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { portfolios: {} }));
+          const mine = (await pMine) || { portfolios: {} };
           myLists = mine.portfolios || {};
         } catch { myLists = {}; }
         // The starter screens, so a card can be pointed at one. Optional in the
         // same way the personal lists are: an unreachable endpoint leaves the
         // Screen pickers empty rather than stopping the studio loading.
         try {
-          const sc = await fetch('/api/screens', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+          const sc = await pScreens;
           screenList = (sc && sc.screens) || [];
         } catch { screenList = []; }
         try {
-          const fl = await fetch('/api/filers', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+          const fl = await pFilers;
           filers = (fl && fl.filers) || {};
         } catch { filers = {}; }
         const keep = $('movScope').value;
