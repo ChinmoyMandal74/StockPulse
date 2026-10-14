@@ -8969,14 +8969,19 @@
       + fig('Fell 3%+ today', fell.length.toLocaleString(), 'the dots');
     const note = 'Every dot fell 3% or more today; across is where it closed against its own 200-day average, down is today\u2019s move. '
       + 'The numbered ones fell ' + P.down + '% or more and closed in the shaded band' + (P.fly !== '0' ? ', and had risen 50% or more over the past year' : '') + '. Largest first. '
-      + more + 'The full list, sortable: ' + link + '. A description of today\u2019s move, not a view on what comes next.';
+      + more + 'The full list, sortable: ';
+    // A real link in Visuals, where the card is a page (the owner: "the link at
+    // the footnote is not clickable"). In the picture it reads as before: it
+    // takes the note's colour, like every name link.
+    const noteLink = '<a class="s-nl" href="/?' + esc(c.query) + '" target="_blank" rel="noopener">' + esc(link) + '</a>';
+    const noteEnd = '. A description of today\u2019s move, not a view on what comes next.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
       + '<span class="s-kick">' + esc(cutName + ' \u00b7 today') + '</span>'
       + '<h2 class="s-title">Pulled back<br><span class="dim">toward the 200-day average</span></h2>'
       + '<div class="cr-figs">' + figs + '</div>'
       + '<div class="pb-chart">' + svg + '</div>' + list
-      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + noteLink + esc(noteEnd) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
