@@ -51,6 +51,8 @@
     return (v < 0 ? '−' : '') + '$' + a.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2) + u;
   }
   const fmtPct = (v) => (ok(v) ? (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%' : '—');
+  // An axis label: round percentages from 100 up, where the decimal is only width.
+  const fmtTick = (v) => (ok(v) ? (v < 0 ? '−' : '') + (Math.abs(v) >= 100 ? Math.round(Math.abs(v)).toLocaleString('en-US') : Math.abs(v).toFixed(1)) + '%' : '—');
 
   function build(data, modeKey, count) {
     const mode = modeKey === 'annual' ? 'annual' : 'quarterly';
@@ -82,14 +84,22 @@
     const K = 4;                                            // intervals above zero
     const maxM = Math.max(...periods.map((p) => Math.max(p.rev, p.ni || 0)));
     const minM = Math.min(0, ...periods.map((p) => (p.ni == null ? 0 : p.ni)));
-    const step = niceCeil(maxM / K);
-    const hi = step * K;
+    // THE STEP COVERS THE WHOLE RANGE WHEN THERE IS A LOSS (2026-10-14). It was
+    // sized from the top alone and then repeated down to the loss, so a loss
+    // many times the revenue drew a gridline and two labels per step: TeraWulf,
+    // $13M of revenue against a $940M loss, got 98 of them printed on top of
+    // each other (the owner: "the axis looks crazy"). About five intervals in
+    // all now, however the range divides between gain and loss. With no loss
+    // the axis is exactly what it was.
+    const step = minM < 0 ? niceCeil((maxM - minM) / 5) : niceCeil(maxM / K);
+    const above = minM < 0 ? Math.max(1, Math.ceil(maxM / step - 1e-9)) : K;   // whole steps over zero
+    const hi = step * above;
     const below = minM < 0 ? Math.ceil(-minM / step - 1e-9) : 0;   // whole steps under zero
     const lo = -below * step;
     const unit = unitFor(hi);
     const yM = (v) => (hi - v) / (hi - lo);
     const moneyTicks = [];
-    for (let k = -below; k <= K; k++) moneyTicks.push({ v: k * step, y: yM(k * step), label: fmtMoney(k * step, unit) });
+    for (let k = -below; k <= above; k++) moneyTicks.push({ v: k * step, y: yM(k * step), label: fmtMoney(k * step, unit) });
 
     // ---- the margin axis ------------------------------------------------------
     const pms = periods.map((p) => p.pm).filter(ok);
@@ -103,7 +113,7 @@
       // Rounded UP to a constant that puts round percentages on the gridlines.
       const c = niceCeil(Math.max(pMax > 0 ? pMax / hi : 0, pMin / lo) * step) / step;
       yP = (v) => yM(v / c);
-      pmTicks = moneyTicks.map((t) => ({ y: t.y, label: fmtPct(t.v * c) }));
+      pmTicks = moneyTicks.map((t) => ({ y: t.y, label: fmtTick(t.v * c) }));
     } else {
       // ITS OWN RANGE, on round numbers that land on the bars' gridlines.
       const ticksN = moneyTicks.length - 1;
@@ -112,7 +122,7 @@
       while (a + st * ticksN < pMax + st * 0.15) { st = niceCeil(st * 1.01); a = Math.max(0, Math.floor(pMin / st) * st); }
       const b = a + st * ticksN;
       yP = (v) => (b - v) / (b - a);
-      pmTicks = moneyTicks.map((t, i) => ({ y: t.y, label: fmtPct(a + st * i) }));
+      pmTicks = moneyTicks.map((t, i) => ({ y: t.y, label: fmtTick(a + st * i) }));
       model.pmFrom = a;
     }
     const last = periods[periods.length - 1];
