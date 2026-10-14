@@ -12158,6 +12158,17 @@ function cutMembers(ctx, cut) {
   return { syms, asOf };
 }
 const EG_YEARS = 3.6, MG_YEARS = 5.6;
+// IN SLICES OF A HUNDRED COMPANIES. The whole universe's filings in one read is
+// one very large answer, and on the deployed app the connection dropped part-way
+// through it, twice running (2026-10-14). A slice at a time is the same rows.
+async function readFactsSliced(syms, since) {
+  const out = new Map();
+  for (let i = 0; i < syms.length; i += 100) {
+    const part = await store.readSecFactsSince(syms.slice(i, i + 100), since);
+    for (const [k, v] of part) out.set(k, v);
+  }
+  return out;
+}
 const sinceYears = (y) => new Date(Date.now() - y * 365 * 86400000).toISOString().slice(0, 10);
 // Rows from a period end on, so a build that read further back gives exactly
 // the answer a read of just this window gives.
@@ -12179,7 +12190,7 @@ async function earnGrowthFor(cutIn) {
   if (stored) { egCache[cut] = { at: Date.now(), body: stored }; return stored; }
   const ctx = await figuresCtx([cut]);
   const { syms } = cutMembers(ctx, cut);
-  const facts = await store.readSecFactsSince(syms, sinceYears(EG_YEARS));
+  const facts = await readFactsSliced(syms, sinceYears(EG_YEARS));
   const body = egCompute(ctx, cut, facts);
   egCache[cut] = { at: Date.now(), body };
   return body;
@@ -12251,7 +12262,7 @@ async function marginsFor(cutIn, dimIn, valueIn) {
   const [ctx, groups] = await Promise.all([figuresCtx([cut]), mgGroups()]);
   // Read only the companies this group needs: the same filter, done first.
   const want = mgCompute(ctx, groups, cut, dim, value, new Map()).syms;
-  const facts = await store.readSecFactsSince(want, sinceYears(MG_YEARS));
+  const facts = await readFactsSliced(want, sinceYears(MG_YEARS));
   const { body } = mgCompute(ctx, groups, cut, dim, value, facts);
   mgKeep(key, body);
   return body;
@@ -12283,7 +12294,7 @@ async function groupFiguresBuild() {
   const t0 = Date.now();
   const cuts = ['in', 'ndx', 'All'];
   const [ctx, groups] = await Promise.all([figuresCtx(cuts), mgGroups()]);
-  const facts = await store.readSecFactsSince(ctx.universe, sinceYears(MG_YEARS));
+  const facts = await readFactsSliced(ctx.universe, sinceYears(MG_YEARS));
   const tRead = Date.now() - t0;
   const out = {};
   for (const cut of cuts) out['eg:' + cut] = egCompute(ctx, cut, facts);
