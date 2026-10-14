@@ -8872,6 +8872,9 @@
   // pixel size, so its axis text is safe, in the accent and orange: neither
   // is a price move, so neither is green or red.
   const IPE_CUTS = [['in', 'S&P 500'], ['ndx', 'Nasdaq 100'], ['All', 'Every company tracked']];
+  // A quarter END, as a reader says it: '2026-09-30' is Q3 ’26. (mgQ reads the
+  // margins' own 'YYYY-Qn' keys and printed these as "Q09-30".)
+  const ipeQ = (d) => 'Q' + Math.ceil(Number(String(d).slice(5, 7)) / 3) + ' ’' + String(d).slice(2, 4);
   const IPE_H = { portrait: 560, square: 330, story: 900 };
   function indexPeNeed(tpl, opts) {
     if (tpl !== 'idxpe') return null;
@@ -8896,7 +8899,7 @@
     }
     for (let i = n - 1; i >= 0; i -= 8) {
       out += '<text class="mg-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
-        + (i === n - 1 ? 'end' : i < 4 ? 'start' : 'middle') + '" font-size="' + fs + '">' + esc(mgQ(quarters[i])) + '</text>';
+        + (i === n - 1 ? 'end' : i < 4 ? 'start' : 'middle') + '" font-size="' + fs + '">' + esc(ipeQ(quarters[i])) + '</text>';
     }
     const line = (s, color, width) => {
       let d = '', pen = false;
@@ -8924,10 +8927,11 @@
     let hiI = -1, loI = -1;
     pe.forEach((v, i) => { if (v == null) return; if (hiI < 0 || v > pe[hiI]) hiI = i; if (loI < 0 || v < pe[loI]) loI = i; });
     const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
-    const figs = fig('The index', fmt(pe[last]), 'at ' + mgQ(q[last]))
+    const figs = fig('The index', fmt(pe[last]), 'at ' + ipeQ(q[last]))
       + fig('The middle member', fmt(med[last]), 'of the profitable ones')
-      + fig('Five years earlier', fmt(back(20)), last >= 20 ? mgQ(q[last - 20]) : '')
-      + fig('Ten-year range', hiI >= 0 ? fmt(pe[loI]) + ' \u2013 ' + fmt(pe[hiI]) : '\u2014', hiI >= 0 ? mgQ(q[loI]) + ' and ' + mgQ(q[hiI]) : '');
+      + fig('Five years earlier', fmt(back(20)), last >= 20 ? ipeQ(q[last - 20]) : '')
+      // Whole numbers here: two one-decimal multiples and a dash ran off the card.
+      + fig('Ten-year range', hiI >= 0 ? pe[loI].toFixed(0) + '\u2013' + pe[hiI].toFixed(0) + '\u00d7' : '\u2014', hiI >= 0 ? ipeQ(q[loI]) + ' and ' + ipeQ(q[hiI]) : '');
     const fs = size.id === 'story' ? 24 : size.id === 'square' ? 16 : 19;
     const chart = ipeChart(pe, med, q, 952, IPE_H[size.id] || 560, fs);
     const key = '<div class="ipe-key"><span><i style="background:var(--accent)"></i>The index: combined value over combined earnings</span>'
@@ -8939,7 +8943,7 @@
       + 'A price for past earnings, not a forecast.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
-      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + mgQ(q[0]) + ' to ' + mgQ(q[last])) + '</span>'
+      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + ipeQ(q[0]) + ' to ' + ipeQ(q[last])) + '</span>'
       + '<h2 class="s-title">Valuation<br><span class="dim">price to earnings, ten years</span></h2>'
       + '<div class="cr-figs">' + figs + '</div>'
       + key + '<div class="mg-chart">' + chart + '</div>'
