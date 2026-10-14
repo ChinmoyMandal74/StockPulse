@@ -12291,11 +12291,24 @@ async function figStored(key) {
   return body;
 }
 async function groupFiguresBuild() {
+  // WHICH STEP, reported when one fails: the first deployed runs died with only
+  // "the connection dropped", which says nothing about where.
+  let step = 'start';
+  try {
+    return await groupFiguresSteps((s) => { step = s; });
+  } catch (e) {
+    return { built: false, step, reason: String((e && e.message) || e).slice(0, 200) };
+  }
+}
+async function groupFiguresSteps(at) {
   const t0 = Date.now();
   const cuts = ['in', 'ndx', 'All'];
+  at('members');
   const [ctx, groups] = await Promise.all([figuresCtx(cuts), mgGroups()]);
+  at('filings');
   const facts = await readFactsSliced(ctx.universe, sinceYears(MG_YEARS));
   const tRead = Date.now() - t0;
+  at('arithmetic');
   const out = {};
   for (const cut of cuts) out['eg:' + cut] = egCompute(ctx, cut, facts);
   const names = (m) => [...new Set(Object.values(m))].filter(Boolean);
@@ -12309,6 +12322,7 @@ async function groupFiguresBuild() {
   const keys = Object.keys(out);
   // Nothing is written over yesterday's figures by a read that found no filings.
   if (!facts.size) return { built: false, reason: 'no filings read' };
+  at('writing ' + keys.length + ' figures, ' + Math.round(JSON.stringify(out).length / 1024) + ' KB');
   await store.writeFigures(out);
   figMemo.clear();
   for (const k of Object.keys(egCache)) delete egCache[k];
