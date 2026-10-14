@@ -537,6 +537,13 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       // Every group's margins and earnings growth (server.js, groupFiguresBuild):
       // one call, after the rounds, so the cards read a stored answer and never
       // have to wait out a refresh.
+      // The index P/E history (server.js, indexPeBuild): one call.
+      async function indexPe() {
+        const r = await fetch(`${base}/api/index-pe/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j) { say(`index P/E  HTTP ${r.status}`); return; }
+        say(j.built ? `index P/E  ${j.quarters} quarter ends, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `index P/E  not built -- ${j.reason || j.error || 'no reason given'}`);
+      }
       async function groupFigures() {
         const r = await fetch(`${base}/api/group-figures/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
         const j = await r.json().catch(() => null);
@@ -549,7 +556,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe]]) {
         try {
           await fn();
         } catch (e) {

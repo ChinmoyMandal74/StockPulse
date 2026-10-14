@@ -11069,6 +11069,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lhNeed = Cards.holdersNeed(post.tpl, post.opts || {});
   if (lhNeed && lhNeed.symbol) { try { lholders = await holdersPayload(String(lhNeed.symbol).toUpperCase()); } catch { lholders = null; } }
 
+  // The index P/E card: one stored row.
+  let ipe = null;
+  const ipeNeed = Cards.indexPeNeed(post.tpl, post.opts || {});
+  if (ipeNeed) { try { ipe = await figStored('pe:' + ipeNeed.cut); } catch { ipe = null; } }
+
   // Month by month for a group: the stored daily build, only when asked for.
   let gmonths = null;
   if (Cards.groupMonthsNeed(post.tpl, post.opts || {})) { try { gmonths = await groupMonthsStored(); } catch { gmonths = null; } }
@@ -11106,6 +11111,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
       getGroupMonths: () => gmonths,
+      getIndexPe: () => ipe,
       getHolders: () => lholders,
       getSegments: () => rmix,
       getFundHolders: () => fholders,
@@ -12334,6 +12340,53 @@ async function groupFiguresSteps(at) {
   for (const k of Object.keys(mgCache)) delete mgCache[k];
   return { built: true, figures: keys.length, margins: keys.filter((k) => k.startsWith('mg:')).length, companies: facts.size, readMs: tRead, ms: Date.now() - t0 };
 }
+// ---- the index's P/E, ten years of quarter ends (indexpe.js) -----------------------
+// Every member's market value and trailing earnings at 41 quarter ends: the
+// peer chart's own figures (trendSeries), for the whole universe, fifty
+// companies a slice so no one read is the universe at once. About 52,000
+// close seeks and every member's filings, so it is built once a day and
+// stored, a row per index (`fig:pe:<cut>`), like the margins.
+const IndexPE = require('./indexpe.js');
+const INDEX_PE_QUARTERS = 41;
+async function indexPeBuild() {
+  const t0 = Date.now();
+  const cuts = ['in', 'ndx', 'All'];
+  const ctx = await figuresCtx(cuts);
+  const snap = await snapshotCached();
+  const stocks = (snap && snap.stocks) || [];
+  const quarters = quarterEndsBefore(INDEX_PE_QUARTERS, new Date());
+  const syms = [...new Set(cuts.flatMap((c) => cutMembers(ctx, c).syms))];
+  const cap = {}, ni = {};
+  for (let i = 0; i < syms.length; i += 50) {
+    const part = syms.slice(i, i + 50);
+    const t = await trendSeries(part, quarters, stocks, false);
+    for (const s of part) { cap[s] = t.series.cap[s] || []; ni[s] = t.series.ni[s] || []; }
+  }
+  const out = {};
+  for (const cut of cuts) {
+    const m = cutMembers(ctx, cut);
+    out['pe:' + cut] = Object.assign({ cut, asOf: m.asOf, at: Date.now() }, IndexPE.build(quarters, m.syms, cap, ni));
+  }
+  // The connection a long read leaves behind is not usable for a write on
+  // the deployed app (see groupFiguresSteps): a small read takes that.
+  await store.snapshotUpdatedAt().catch(() => null);
+  await store.writeFigures(out);
+  for (const k of Object.keys(out)) figMemo.delete(k);
+  return { built: true, companies: syms.length, quarters: quarters.length,
+    now: Object.fromEntries(cuts.map((c) => [c, out['pe:' + c].pe[out['pe:' + c].pe.length - 1]])), ms: Date.now() - t0 };
+}
+app.post('/api/index-pe/rebuild', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  try { res.json(await indexPeBuild()); } catch (e) { res.json({ built: false, reason: String((e && e.message) || e).slice(0, 200) }); }
+}));
+// Members. One stored row, nothing computed on a page view.
+app.get('/api/index-pe', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const cut = ['in', 'ndx', 'All'].includes(String(req.query.cut)) ? String(req.query.cut) : 'in';
+  res.json((await figStored('pe:' + cut)) || { cut, quarters: [], pe: [], median: [], n: [] });
+}));
+
 // The cron secret or an admin: the nightly run asks for it after its rounds,
 // once the refresh it would otherwise compete with is over.
 app.post('/api/group-figures/rebuild', route(async (req, res) => {

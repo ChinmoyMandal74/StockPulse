@@ -64,6 +64,8 @@
   let getPeerTrend = () => null;
   // Month by month for every group (the daily build), or null while it loads.
   let getGroupMonths = () => null;
+  // The index P/E history for a cut (the daily build), or null while it loads.
+  let getIndexPe = () => null;
   // One figure's history for one company (the screener's drill-down), or null while it loads.
   let getDrill = () => null;
   // One company's revenue and net income by filed period, or null while it loads.
@@ -8862,6 +8864,89 @@
     return out + '</svg>';
   }
 
+  // ---- Valuation: the index's P/E over ten years (indexpe.js) -------------------------
+  //
+  // (2026-10-14.) Two lines over 41 quarter ends: the index's own P/E (the
+  // members' combined market value over their combined trailing earnings,
+  // losses included) and the middle member's own P/E. Drawn at its true
+  // pixel size, so its axis text is safe, in the accent and orange: neither
+  // is a price move, so neither is green or red.
+  const IPE_CUTS = [['in', 'S&P 500'], ['ndx', 'Nasdaq 100'], ['All', 'Every company tracked']];
+  const IPE_H = { portrait: 560, square: 330, story: 900 };
+  function indexPeNeed(tpl, opts) {
+    if (tpl !== 'idxpe') return null;
+    const c = (opts || {}).ipeCut;
+    return { cut: IPE_CUTS.some(([k]) => k === c) ? c : 'in' };
+  }
+  function ipeChart(a, b, quarters, w, h, fs) {
+    const vals = a.concat(b).filter((v) => v != null && isFinite(v));
+    if (vals.length < 2) return '';
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max(0.5, (hi - lo) * 0.12); lo = Math.max(0, lo - pad); hi += pad;
+    const span = hi - lo;
+    const step = [1, 2, 5, 10, 20, 50].find((s) => span / s <= 5) || 50;
+    const left = Math.ceil((String(Math.round(hi)).length + 1) * fs * 0.62) + 14, right = fs;
+    const y0 = fs * 0.9, y1 = h - fs * 2.2, n = quarters.length;
+    const X = (i) => left + (i / (n - 1)) * (w - left - right);
+    const Y = (v) => y0 + (hi - v) / span * (y1 - y0);
+    let out = '<svg class="mg-svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img">';
+    for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) {
+      out += '<line class="mg-grid" x1="' + left + '" x2="' + (w - right) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '"/>'
+        + '<text class="mg-ax" x="' + (left - 10) + '" y="' + (Y(t) + fs * 0.34).toFixed(1) + '" text-anchor="end" font-size="' + fs + '">' + esc(t + '\u00d7') + '</text>';
+    }
+    for (let i = n - 1; i >= 0; i -= 8) {
+      out += '<text class="mg-ax" x="' + X(i).toFixed(1) + '" y="' + (h - fs * 0.5).toFixed(1) + '" text-anchor="'
+        + (i === n - 1 ? 'end' : i < 4 ? 'start' : 'middle') + '" font-size="' + fs + '">' + esc(mgQ(quarters[i])) + '</text>';
+    }
+    const line = (s, color, width) => {
+      let d = '', pen = false;
+      s.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); pen = true; });
+      return '<path class="mg-line" style="stroke:' + color + ';stroke-width:' + width + '" d="' + d + '"/>';
+    };
+    out += line(b, 'var(--orange, #fb923c)', 3) + line(a, 'var(--accent)', 5);
+    const lastA = a.length - 1;
+    if (a[lastA] != null) out += '<circle class="mg-dot" style="fill:var(--accent)" cx="' + X(lastA).toFixed(1) + '" cy="' + Y(a[lastA]).toFixed(1) + '" r="' + (fs * 0.42).toFixed(1) + '"/>';
+    return out + '</svg>';
+  }
+  function tplIndexPe() {
+    const need = indexPeNeed('idxpe', O);
+    const cutName = (IPE_CUTS.find(([k]) => k === need.cut) || IPE_CUTS[0])[1];
+    const shell = (msg) => chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(cutName) + '</span>'
+      + '<h2 class="s-title">Valuation<br><span class="dim">price to earnings</span></h2><p class="s-empty">' + esc(msg) + '</p></div></div>' + chromeFoot();
+    const d = getIndexPe(need.cut);
+    if (!d) return shell('Reading the figures\u2026');
+    const q = d.quarters || [], pe = d.pe || [], med = d.median || [];
+    const drawn = pe.filter((v) => v != null).length;
+    if (q.length < 8 || drawn < 4) return shell('Not built yet. The index P/E is worked out once a day, after the nightly run.');
+    const fmt = (v) => (v == null ? '\u2014' : v.toFixed(1) + '\u00d7');
+    const last = q.length - 1;
+    const back = (k) => (last - k >= 0 ? pe[last - k] : null);
+    let hiI = -1, loI = -1;
+    pe.forEach((v, i) => { if (v == null) return; if (hiI < 0 || v > pe[hiI]) hiI = i; if (loI < 0 || v < pe[loI]) loI = i; });
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || '\u00a0') + '</span></div>';
+    const figs = fig('The index', fmt(pe[last]), 'at ' + mgQ(q[last]))
+      + fig('The middle member', fmt(med[last]), 'of the profitable ones')
+      + fig('Five years earlier', fmt(back(20)), last >= 20 ? mgQ(q[last - 20]) : '')
+      + fig('Ten-year range', hiI >= 0 ? fmt(pe[loI]) + ' \u2013 ' + fmt(pe[hiI]) : '\u2014', hiI >= 0 ? mgQ(q[loI]) + ' and ' + mgQ(q[hiI]) : '');
+    const fs = size.id === 'story' ? 24 : size.id === 'square' ? 16 : 19;
+    const chart = ipeChart(pe, med, q, 952, IPE_H[size.id] || 560, fs);
+    const key = '<div class="ipe-key"><span><i style="background:var(--accent)"></i>The index: combined value over combined earnings</span>'
+      + '<span><i style="background:var(--orange, #fb923c)"></i>The middle member\u2019s own P/E</span></div>';
+    const lowN = Math.min(...(d.n || []).filter((x) => x > 0));
+    const note = 'Each point is the members\u2019 combined market value at the quarter\u2019s last close over their combined net income for the year to that quarter, from their own filings; losses are in the sum. '
+      + 'The orange line is the middle member\u2019s own P/E, leaving out those with a loss. '
+      + 'The members are today\u2019s ' + d.members.toLocaleString() + ', applied to every past quarter: companies since dropped are missing, and the earliest quarter rests on ' + lowN.toLocaleString() + ' of them. '
+      + 'A price for past earnings, not a forecast.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName + ' \u00b7 ' + mgQ(q[0]) + ' to ' + mgQ(q[last])) + '</span>'
+      + '<h2 class="s-title">Valuation<br><span class="dim">price to earnings, ten years</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + key + '<div class="mg-chart">' + chart + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   function marginsCard(tpl) {
     const T = MG_TPLS[tpl];
     const need = marginsNeed(tpl, O);
@@ -10087,6 +10172,7 @@
     thmspot: tplThmSpot,
     thmsnap: () => tplSecSnap(GROUPING.theme, 'tsn'),
     thmgrowth: tplThmGrowth,
+    idxpe: tplIndexPe,
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
@@ -10454,6 +10540,8 @@
     .mg-stats span { font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-chart { margin-top: 16px; }
     .mg-chart .mg-svg { display: block; }
+    .ipe-key { display: flex; gap: 28px; flex-wrap: wrap; margin: 18px 0 4px; font-size: 17px; color: var(--muted); }
+    .ipe-key i { display: inline-block; width: 22px; height: 5px; border-radius: 3px; margin-right: 9px; vertical-align: middle; }
     .mg-chart .mg-grid { stroke: var(--hair); stroke-width: 1; }
     .mg-chart .mg-ax { fill: var(--faint); font-family: var(--mono); }
     .mg-chart .mg-line { fill: none; stroke-width: 5; stroke-linejoin: round; stroke-linecap: round; }
@@ -12470,7 +12558,8 @@
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
-    groupMonthsNeed, groupMonthThemes,
+    groupMonthsNeed, groupMonthThemes, indexPeNeed,
+    indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
     groupMonthMarkets: () => GM_MARKETS.map((m) => m.slice()),
     moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
@@ -12546,6 +12635,7 @@
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
       getGroupMonths = c.getGroupMonths || (() => null);
+      getIndexPe = c.getIndexPe || (() => null);
       getDrill = c.getDrill || (() => null);
       getPerf = c.getPerf || (() => null);
       chartOne = c.chart || null;

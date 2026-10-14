@@ -1433,6 +1433,13 @@
       <!-- Month by month for a group (groupmonths.js): the market, a sector, a
            theme. One box each, since each card sits in its own group of the
            picker and a saved post keeps its own choice. -->
+      <!-- Valuation: the index's P/E over ten years (indexpe.js). -->
+      <div id="ipeBox">
+        <label>Index</label>
+        <select id="ipeCut"></select>
+        <p class="hint">The index's own P/E (combined value over combined earnings, losses included) and the
+          middle member's, at each quarter end for ten years. Today's members, applied to every past quarter.</p>
+      </div>
       <div id="gmkBox">
         <label>Market</label>
         <select id="gmkGroup"></select>
@@ -1771,6 +1778,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'idxpe', name: 'Valuation', note: 'The index’s P/E and the typical member’s, quarter by quarter for ten years' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
       { id: 'secmonths', name: 'Sector, month by month', note: 'One sector year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'thmgrowth', name: 'Theme growth', note: 'A theme’s companies on revenue, earnings, margin or value, quarter by quarter — the peer chart for a theme' },
@@ -1890,6 +1898,7 @@
       ['earnahead', 'Earnings ahead'],
       ['corrections', 'Corrections'],
       ['margins', 'Margins'],
+      ['idxpe', 'Valuation'],
       ['optmkt', 'Options'],
       ['flow', 'Flow'],
       ['treemap', 'Treemap'],
@@ -2286,6 +2295,18 @@
     }
     // Month by month for every group: one stored value, built once a day,
     // fetched once a visit.
+    // The index P/E, one stored row a cut.
+    const ipeCache = {}, ipePending = {};
+    function getIndexPe(cut) {
+      if (ipeCache[cut]) return ipeCache[cut];
+      if (ipePending[cut]) return null;
+      ipePending[cut] = true;
+      fetch('/api/index-pe?cut=' + encodeURIComponent(cut), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { quarters: [] }))
+        .then((d) => { ipeCache[cut] = d || { quarters: [] }; delete ipePending[cut]; if (tpl === 'idxpe') render(); })
+        .catch(() => { delete ipePending[cut]; });
+      return null;
+    }
     let gmData = null, gmPending = false;
     function getGroupMonths() {
       if (gmData) return gmData;
@@ -2455,7 +2476,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
@@ -2481,7 +2502,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
 
@@ -2680,6 +2701,7 @@
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('mvgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
       $('gmkBox').style.display = tpl === 'mktmonths' ? 'block' : 'none';
+      $('ipeBox').style.display = tpl === 'idxpe' ? 'block' : 'none';
       $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
       $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
@@ -2952,6 +2974,8 @@
     ['egrQtr', 'egrCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
+    for (const [v, label] of Cards.indexPeCuts()) $('ipeCut').add(new Option(label, v));
+    $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
     [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>
       $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     ['mvgPeriod', 'mvgSp500'].forEach((id) =>
