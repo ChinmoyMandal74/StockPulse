@@ -52,3 +52,20 @@ The owner, of the panel: "you are providing a link at the bottom to open the sto
 - **`body.bare`**: the side bar is hidden and a strip sits over the card with "← Screener" and, for the admin, the three shapes and Download PNG (the side bar's own button, pressed from the strip). A member gets the back link only: the card fits itself, carries the watermark, and is not exported, as everywhere else in Visuals. `fit()` leaves room for the strip.
 - **Checked on the real `promo.html`** through `real-page.js` and `harness.sh`: as the admin (strip with shapes and download, no watermark), as a member (`mem bare`, back link only, watermark, the shape chosen to fit), with an unknown symbol (the studio opens normally), and looked at in both views. 22 checks on the card and wiring.
 - **`harness.sh` stops its own server by the PID on its port.** It replaced a pattern that killed every node process; see the nightly-job note in `CLAUDE.md`.
+
+### "Reading the history takes time" (2026-10-13)
+
+The owner asked whether the tables are indexed. They are, and the reads were never the slow part. Measured against production, each read the drill-down makes:
+
+| read | time |
+|---|---|
+| one company's filings (47 to 346 rows) | 26 to 53 ms |
+| short interest, announcements, splits | 20 to 43 ms |
+| twenty quarter-end closes | 28 ms |
+| **the stored snapshot** | **2,300 to 2,600 ms** (5 MB) |
+
+The route read the whole snapshot only to learn whether the symbol was on the screen. It now reads the company's one profile row, which answers that and carries the share count and market value the valuation history needs; the price it also needs is the newest close on file, one seek. The whole route went from about 2.5 seconds to 0.05 to 0.19, and Microsoft's figures are the same to the last digit (P/E 28.58, P/B 8.64, P/S 11.52 at September 2026).
+
+- The indexes involved: `sec_facts` and `earnings_history` are sought on the leading column of their primary keys, `short_interest` on `idx_shortint_sym (symbol, d)`, `bars` on its primary key.
+- **The stored snapshot has grown to 5 MB.** Anything that reads it to look up one company pays 2.5 seconds for it. `snapshotCached()` hides that for 20 seconds within one instance, and no longer than that.
+- A function that has been idle also pays about half a second to connect and check the schema. That is not this route's to fix.

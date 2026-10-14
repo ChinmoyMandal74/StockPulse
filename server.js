@@ -12443,15 +12443,27 @@ app.get('/api/drill', requireMember, route(async (req, res) => {
   const key = symbol + '|' + field;
   const hit = drillCache.get(key);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return res.json(hit.body);
-  const snap = await snapshotCached();
-  const stocks = (snap && snap.stocks) || [];
-  if (!stocks.some((x) => String(x.symbol).toUpperCase() === symbol)) return res.status(404).json({ error: 'Not in the screener.' });
+  // ONE ROW, NOT THE SNAPSHOT. The first version read the whole stored
+  // snapshot to learn whether the symbol was on the screen: 5 MB and about
+  // two and a half seconds, measured, in front of reads that take 20 to 50
+  // milliseconds each. The owner: "Reading the history takes time". The
+  // company's own profile row answers the same question, and carries the
+  // share count and market value the valuation history needs.
+  const prof = await store.readProfile(symbol);
+  if (!prof) return res.status(404).json({ error: 'Not in the screener.' });
   const data = {};
   if (F.src === 'filings' || F.src === 'eps') data.facts = await store.readSecFacts(symbol);
   else if (F.src === 'short') data.short = await store.readShortInterest(symbol, 400);
   else if (F.src === 'earnings') data.earnings = await store.readEarnings(symbol);
   else {
     data.quarters = quarterEndsBefore(PEER_TREND_QUARTERS, new Date());
+    // trendSeries wants the company's screener row for three things: its share
+    // count, its market value and its price (the last two to catch a share
+    // count in the wrong unit). The profile has the first two; the price is
+    // the newest close on file, one seek.
+    const ahead = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    const px = await store.closesBefore([ahead], [symbol]).catch(() => [{}]);
+    const stocks = [{ symbol, sharesOutstanding: prof.sharesOutstanding, marketCap: prof.marketCap, price: px[0] && px[0][symbol] ? px[0][symbol].close : null }];
     const t = await trendSeries([symbol], data.quarters, stocks, true);
     data.series = {}; for (const k of Object.keys(t.series)) data.series[k] = t.series[k][symbol] || [];
     data.carryDays = PEER_TREND_CARRY;
