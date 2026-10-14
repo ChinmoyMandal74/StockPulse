@@ -774,6 +774,33 @@
           companies up, the industries (cap-weighted, three companies or
           more) and the movers. The floor narrows the movers only.</p>
       </div>
+      <!-- The ssnBox card again, for a theme (2026-10-13). -->
+      <div id="tsnBox">
+        <label>Theme</label>
+        <select id="tsnName"></select>
+        <label>Period</label>
+        <select id="tsnPeriod"></select>
+        <label>How many each way</label>
+        <select id="tsnCount">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="15">Top 15</option>
+        </select>
+        <label>Smallest company in the movers</label>
+        <select id="tsnFloor">
+          <option value="0">No floor — every company</option>
+          <option value="1000000000" selected>Over $1B</option>
+          <option value="10000000000">Over $10B</option>
+          <option value="50000000000">Over $50B</option>
+        </select>
+        <label>Index</label>
+        <select id="tsnSp500"></select>
+        <p class="hint">A theme has no fund of its own, so the chips are the S&amp;P 500 and
+          how many of the theme's companies rose. Everything else is made from the theme's
+          companies on this screen, so the index narrows all of it: the count of
+          companies up, the industries (cap-weighted, three companies or
+          more) and the movers. The floor narrows the movers only.</p>
+      </div>
       <!-- Options open interest, added up: the market, a sector, an industry.
            All three read the screener's own rows, so there is nothing to fetch. -->
       <div id="omkBox">
@@ -794,6 +821,15 @@
         <p class="hint">One sector's open call and put contracts, with
           each of its industries under it.</p>
       </div>
+      <!-- The oscBox card again, for a theme (2026-10-13). -->
+      <div id="othBox">
+        <label>Theme</label>
+        <select id="othName"></select>
+        <label>Index</label>
+        <select id="othSp500"></select>
+        <p class="hint">One theme's open call and put contracts, with
+          each of its industries under it.</p>
+      </div>
       <div id="oinBox">
         <label>Industry</label>
         <select id="oinName"></select>
@@ -810,6 +846,20 @@
         <label>Measure</label>
         <select id="smgMetric"></select>
         <p class="hint">One sector's combined profit over its combined
+          revenue, a trailing year at each point, with each of its
+          industries under it. Only companies with every quarter on file
+          are counted; the card says how many. Pick "The whole screen"
+          for more companies than the index holds.</p>
+      </div>
+      <!-- The smgBox card again, for a theme (2026-10-13). -->
+      <div id="tmgBox">
+        <label>Theme</label>
+        <select id="tmgName"></select>
+        <label>Index</label>
+        <select id="tmgSp500"></select>
+        <label>Measure</label>
+        <select id="tmgMetric"></select>
+        <p class="hint">One theme's combined profit over its combined
           revenue, a trailing year at each point, with each of its
           industries under it. Only companies with every quarter on file
           are counted; the card says how many. Pick "The whole screen"
@@ -1163,6 +1213,40 @@
           it is not the sector fund's own return, which is what the
           Snapshot card prints. The square card holds ten rows at most.</p>
       </div>
+      <!-- The secBox card again, for a theme (2026-10-13). -->
+      <div id="trkBox">
+        <label>Measure</label>
+        <select id="trkMetric"></select>
+        <label>Order</label>
+        <select id="trkDir">
+          <option value="desc" selected>Highest first</option>
+          <option value="asc">Lowest first</option>
+        </select>
+        <label>How many</label>
+        <select id="trkCount">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15" selected>All of them</option>
+        </select>
+        <label>A return is</label>
+        <select id="trkWeight">
+          <option value="eq" selected>The plain average of its companies</option>
+          <option value="cap">Weighted by market value</option>
+        </select>
+        <label>Within</label>
+        <select id="trkScope"><option value="All">All screened</option></select>
+        <label>Size</label>
+        <select id="trkCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="trkScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="trkSp500"></select>
+        <p class="hint">Each row is a theme of at least three companies
+          carrying the measure; the small figure after its name is how
+          many. A return here is made from the companies on the screen, so
+          it is not the theme fund's own return, which is what the
+          Snapshot card prints. The square card holds ten rows at most.</p>
+      </div>
       <!-- Sector spotlight: the industry spotlight, one step coarser. -->
       <div id="sspBox">
         <label>Sector</label>
@@ -1184,6 +1268,28 @@
           line holds only the companies with a close on every session of
           the window. The dial is where its companies sit on average, never
           a signal for the sector.</p>
+      </div>
+      <!-- The sspBox card again, for a theme (2026-10-13). -->
+      <div id="tspBox">
+        <label>Theme</label>
+        <select id="tspName"></select>
+        <label>Window</label>
+        <select id="tspWin">
+          <option value="w1">Past week</option>
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6" selected>Past six months</option>
+          <option value="ytd">Year to date</option>
+          <option value="y1">Past year</option>
+        </select>
+        <label>Index</label>
+        <select id="tspSp500"></select>
+        <p class="hint">The index narrows the companies; a Nasdaq 100 cut
+          is drawn against the Nasdaq 100. Returns are the plain average of
+          the theme's companies and the rest are the middle company. The
+          line holds only the companies with a close on every session of
+          the window. The dial is where its companies sit on average, never
+          a signal for the theme.</p>
       </div>
       <!-- Industry spotlight: one industry in full, the Stock spotlight's
            layout with an industry where the company was. The list comes
@@ -1655,6 +1761,11 @@
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
       { id: 'secmonths', name: 'Sector, month by month', note: 'One sector year by month — the average of its companies’ returns each month, equal weight' },
+      { id: 'thmrank', name: 'Theme ranking', note: 'Themes ranked on one measure — the average of each theme’s companies, a company counting in each of its themes' },
+      { id: 'thmsnap', name: 'Theme snapshot', note: 'One theme: how its companies moved, its industries, and both ends of the move' },
+      { id: 'thmspot', name: 'Theme spotlight', note: 'One theme in full: its line against the S&P 500, a dozen figures and where its companies sit' },
+      { id: 'thmmargin', name: 'Theme margins', note: 'One theme’s combined margin over five years, and each company’s' },
+      { id: 'optthm', name: 'Theme options', note: 'Open options contracts across one theme’s companies, puts against calls' },
       { id: 'thmmonths', name: 'Theme, month by month', note: 'One theme year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
@@ -1828,6 +1939,11 @@
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
     // template for Theme"). One view to begin with; others can join it.
     const THM_VIEWS = [
+      ['thmrank', 'Ranking'],
+      ['thmsnap', 'Snapshot'],
+      ['thmspot', 'Spotlight'],
+      ['thmmargin', 'Margins'],
+      ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
     ];
     const IND_VIEWS = [
@@ -1840,7 +1956,7 @@
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
       { name: 'Sector', views: SEC_VIEWS, last: 'sectors' },
       { name: 'Industry', views: IND_VIEWS, last: 'industries' },
-      { name: 'Theme', views: THM_VIEWS, last: 'thmmonths' },
+      { name: 'Theme', views: THM_VIEWS, last: 'thmrank' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
@@ -2309,6 +2425,9 @@
       'ispName', 'ispWin', 'ispSp500',
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
+      'trkMetric', 'trkDir', 'trkCount', 'trkWeight', 'trkScope', 'trkCap', 'trkScreen', 'trkSp500',
+      'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
+      'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -2543,6 +2662,7 @@
       $('ispBox').style.display = tpl === 'indspot' ? 'block' : 'none';
       $('secBox').style.display = tpl === 'sectors' ? 'block' : 'none';
       $('sspBox').style.display = tpl === 'secspot' ? 'block' : 'none';
+      for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
@@ -2892,6 +3012,11 @@
     // largest while the picker still showed the old one.
     const fillIspNames = () => fillGroupNames('ispName', 'ispSp500', Cards.industryList, true);
     const fillSspNames = () => fillGroupNames('sspName', 'sspSp500', Cards.sectorList, false);
+    // The theme cards' pickers: the same rule, over themes.
+    const fillTspNames = () => fillGroupNames('tspName', 'tspSp500', Cards.themeList, false);
+    const fillTsnNames = () => fillGroupNames('tsnName', 'tsnSp500', Cards.themeList, false);
+    const fillTmgNames = () => fillGroupNames('tmgName', 'tmgSp500', Cards.themeList, false);
+    const fillOthNames = () => fillGroupNames('othName', 'othSp500', Cards.themeList, false);
     function fillGroupNames(nameId, cutId, listOf, bySector) {
       const keep = $(nameId).value;
       const list = listOf(stocks, $(cutId).value || 'All');
@@ -2917,6 +3042,14 @@
     }
     $('ispSp500').addEventListener('change', fillIspNames);
     $('sspSp500').addEventListener('change', fillSspNames);
+    $('tspSp500').addEventListener('change', fillTspNames);
+    $('tsnSp500').addEventListener('change', fillTsnNames);
+    $('tmgSp500').addEventListener('change', fillTmgNames);
+    $('othSp500').addEventListener('change', fillOthNames);
+    [['thmrank', ['trkMetric', 'trkDir', 'trkCount', 'trkWeight', 'trkScope', 'trkCap', 'trkScreen', 'trkSp500']],
+      ['thmsnap', ['tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500']], ['thmspot', ['tspName', 'tspWin', 'tspSp500']],
+      ['thmmargin', ['tmgName', 'tmgSp500', 'tmgMetric']], ['optthm', ['othName', 'othSp500']]].forEach(([t2, ids]) =>
+      ids.forEach((id) => $(id).addEventListener('change', () => { if (tpl === t2) render(); })));
     ['sspName', 'sspWin', 'sspSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'secspot') render(); }));
     ['ispName', 'ispWin', 'ispSp500'].forEach((id) =>
@@ -2929,7 +3062,7 @@
       'secCap', 'secScreen', 'secSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'sectors') render(); }));
     // One catalogue, two pickers: the Sectors card reads the same measures.
-    ['indMetric', 'secMetric'].forEach(function fillIndMetrics(selId) {
+    ['indMetric', 'secMetric', 'trkMetric'].forEach(function fillIndMetrics(selId) {
       const sel = $(selId);
       const groups = new Map();
       for (const [v, label, grp] of Cards.indMetrics()) {
@@ -3154,6 +3287,7 @@
       fillOinNames();
       set('ssnSp500');
       fillSsnNames();
+      for (const [k, fill] of [['tspSp500', fillTspNames], ['tsnSp500', fillTsnNames], ['tmgSp500', fillTmgNames], ['othSp500', fillOthNames]]) { set(k); fill(); }
       set('imgSp500');
       fillImgNames();
       Object.keys(opts).forEach(set);
@@ -3625,6 +3759,7 @@
         $('barScope').innerHTML = $('movScope').innerHTML;
         $('indScope').innerHTML = $('movScope').innerHTML;
         $('secScope').innerHTML = $('movScope').innerHTML;
+        $('trkScope').innerHTML = $('movScope').innerHTML;
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
@@ -3702,7 +3837,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap', 'secCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -3718,7 +3853,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen', 'secScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -3735,7 +3870,7 @@
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500', 'ssnSp500',
           'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
-          'omkSp500', 'oscSp500', 'oinSp500'].forEach((id) => {
+          'omkSp500', 'oscSp500', 'oinSp500', 'trkSp500', 'tsnSp500', 'tspSp500', 'othSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -3749,6 +3884,8 @@
         fillImgNames();
         fillSsnNames();
         fillOscNames();
+        // The theme cards' pickers, filled with the sector ones.
+        fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames();
         fillOinNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
         // know falls back to Today and draws the wrong window with nothing
@@ -3871,6 +4008,9 @@
         if ([...$('daySnapPeriod').options].some((o) => o.value === snapKeep)) {
           $('daySnapPeriod').value = snapKeep;
         }
+        { const keep = $('tsnPeriod').value;
+          $('tsnPeriod').innerHTML = $('daySnapPeriod').innerHTML;
+          $('tsnPeriod').value = [...$('tsnPeriod').options].some((o) => o.value === keep) ? keep : 'd'; }
         { const keep = $('ssnPeriod').value;
           $('ssnPeriod').innerHTML = $('daySnapPeriod').innerHTML;
           $('ssnPeriod').value = [...$('ssnPeriod').options].some((o) => o.value === keep) ? keep : 'd'; }

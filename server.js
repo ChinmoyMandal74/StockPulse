@@ -10717,7 +10717,7 @@ const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
 // which is four more controls from breaching a cap whose whole failure mode is
 // silence. 200 against 87 — this is a guard against a page being used as free
 // storage, not a budget, so the headroom costs nothing.
-const POST_OPT_MAX = 300;   // 199 real controls as of 2026-10-10; raised from 200 before it bit
+const POST_OPT_MAX = 400;   // 274 real controls on 2026-10-13, after the theme cards; raised from 300 before it bit
 
 function cleanPosts(raw) {
   const known = new Set(Cards.ids);
@@ -12190,7 +12190,8 @@ const mgWarm = (cut) => !!(mgCache[cut] && Date.now() - mgCache[cut].at < EG_TTL
 // company. `dim` is 'sector' or 'industry' and `value` its name.
 async function marginsFor(cutIn, dimIn, valueIn) {
   const cut = EG_FUND[cutIn] || cutIn === 'All' ? cutIn : 'in';
-  const dim = dimIn === 'sector' || dimIn === 'industry' ? dimIn : null;
+  // A THEME (2026-10-13): one of the site's own lists, broken down by company.
+  const dim = dimIn === 'sector' || dimIn === 'industry' || dimIn === 'theme' ? dimIn : null;
   const value = dim ? String(valueIn || '').slice(0, 80) : '';
   const key = cut + '|' + (dim || '') + '|' + value;
   if (mgWarm(key)) return mgCache[key].body;
@@ -12212,12 +12213,17 @@ async function marginsFor(cutIn, dimIn, valueIn) {
     for (const [sec, list] of gi.sector) for (const s of list) sectorOf[s] = sec;
     for (const [ind, list] of gi.industry) for (const s of list) industryOf[s] = ind;
   } catch { /* a card without its breakdown rows */ }
-  if (dim) syms = syms.filter((s) => (dim === 'sector' ? sectorOf : industryOf)[s] === value);
+  if (dim === 'theme') {
+    const pf = await readPortfolios().catch(() => ({}));
+    const inTheme = new Set(Array.isArray(pf[value]) ? pf[value].map((s) => String(s).toUpperCase()) : []);
+    syms = syms.filter((s) => inTheme.has(String(s).toUpperCase()));
+  } else if (dim) syms = syms.filter((s) => (dim === 'sector' ? sectorOf : industryOf)[s] === value);
   const since = new Date(Date.now() - 5.6 * 365 * 86400000).toISOString().slice(0, 10);
   const facts = await store.readSecFactsSince(syms, since);
   const groupOf = (s) => (!dim ? sectorOf[s] : dim === 'sector' ? industryOf[s] : s) || null;
   const members = syms.map((s) => ({ symbol: s, group: groupOf(s), rows: SecFacts.latestFilled(facts.get(s) || []) }));
-  const built = Margins.build(members, { points: 17, minGroup: dim === 'industry' ? 1 : 3 });
+  // An industry or a theme is broken down by company, so one is a row.
+  const built = Margins.build(members, { points: 17, minGroup: dim === 'industry' || dim === 'theme' ? 1 : 3 });
   const body = Object.assign({ cut, dim, value, asOf, at: Date.now() }, built || { members: syms.length, quarters: [], metrics: {} });
   // One entry per sector and industry asked for: bounded, since an instance
   // can live long enough to be asked for all of them.
@@ -12229,7 +12235,7 @@ app.get('/api/margins', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const cut = String(req.query.cut || 'in');
   const c = EG_FUND[cut] || cut === 'All' ? cut : 'in';
-  const dim = req.query.dim === 'sector' || req.query.dim === 'industry' ? req.query.dim : null;
+  const dim = req.query.dim === 'sector' || req.query.dim === 'industry' || req.query.dim === 'theme' ? req.query.dim : null;
   const name = dim ? String(req.query.name || '').slice(0, 80) : '';
   if (!mgWarm(c + '|' + (dim || '') + '|' + name) && await standAside(res)) return;
   res.json(await marginsFor(c, dim, name));

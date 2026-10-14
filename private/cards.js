@@ -1493,7 +1493,7 @@
     // shipped for an hour reading a basket that never arrived, because its
     // fetch landed and nothing repainted. Asked here instead, the way
     // chartHistoryNeed already is, so a fourth costs one line in one place.
-    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin' };
+    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin', thmspot: 'tspWin' };
     function basketDays(tpl, opts) {
       // The Lines card reads the basket only for a DAILY price window; which
       // that is depends on its measure as well as its window, so it answers
@@ -1508,7 +1508,7 @@
       // second card that may be given the calendar window -- and only that
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
-        : (tpl === 'indspot' || tpl === 'secspot') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
+        : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
 
@@ -3150,20 +3150,22 @@
   // PERCENT ONLY. The market card's "value added" is today-only arithmetic
   // and is left off rather than offered on one period of seven.
   const SSN_IND = { portrait: 12, square: 6, story: 16 };
-  function tplSecSnap() {
-    const per = SNAP_PERIODS.some(([k]) => k === O.ssnPeriod) ? O.ssnPeriod : 'd';
+  function tplSecSnap(G0, P0) {
+    // One sector by default; a theme passes its own grouping and control prefix.
+    const G = G0 || GROUPING.sector, P = P0 || 'ssn';
+    const per = SNAP_PERIODS.some(([k]) => k === O[P + 'Period']) ? O[P + 'Period'] : 'd';
     const [pctField, perLabel] = MOV_PERIODS[per];
-    const cut = SP_CUTS.some(([k]) => k === O.ssnSp500) ? O.ssnSp500 : 'All';
-    const floor = Number(O.ssnFloor) || 0;
+    const cut = SP_CUTS.some(([k]) => k === O[P + 'Sp500']) ? O[P + 'Sp500'] : 'All';
+    const floor = Number(O[P + 'Floor']) || 0;
     const CAP = { portrait: 10, square: 5, story: 15 };
-    const k = Math.min(Number(O.ssnCount) || 10, CAP[size.id] || CAP.portrait);
-    const names = sectorList(stocks, cut);
-    const name = names.some((g) => g.name === O.ssnName) ? O.ssnName : (names[0] ? names[0].name : null);
+    const k = Math.min(Number(O[P + 'Count']) || 10, CAP[size.id] || CAP.portrait);
+    const names = groupList(stocks, cut, G);
+    const name = names.some((g) => g.name === O[P + 'Name']) ? O[P + 'Name'] : (names[0] ? names[0].name : null);
     if (!name) {
-      return chromeTop() + '<div class="s-body"><div class="s-empty">No sector in this cut has three companies to read.</div></div>' + chromeFoot();
+      return chromeTop() + '<div class="s-body"><div class="s-empty">' + 'No ' + G.one + ' in this cut has three companies to read.' + '</div></div>' + chromeFoot();
     }
     const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
-    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((x) => x.sector === name);
+    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((x) => inGroup(x, G.field, name));
     const read = pool.filter((x) => num(x[pctField]) != null);
 
     // ---- the chips
@@ -7146,7 +7148,17 @@
   const GROUPING = {
     industry: { field: 'industry', one: 'industry', many: 'industries', Many: 'Industries', rank: 'ind', spot: 'isp' },
     sector: { field: 'sector', one: 'sector', many: 'sectors', Many: 'Sectors', rank: 'sec', spot: 'ssp' },
+    // THEMES (2026-10-13, the owner: "add all the other sub-templates under
+    // Sector ... under Theme"). The site's own hand-made lists, carried on each
+    // row as `portfolios`. The one thing that differs from a sector: A COMPANY
+    // CAN BE IN SEVERAL, so it counts in each of its themes. groupKeys is what
+    // makes every card below indifferent to that.
+    theme: { field: 'portfolios', one: 'theme', many: 'themes', Many: 'Themes', rank: 'trk', spot: 'tsp', multi: true },
   };
+  // The groups a row is in, for a field: one value, or a theme row's list.
+  const groupKeys = (r, field) => (!r ? [] : field === 'portfolios' ? (Array.isArray(r.portfolios) ? r.portfolios.map(String) : [])
+    : (r[field] ? [String(r[field])] : []));
+  const inGroup = (r, field, name) => groupKeys(r, field).includes(name);
   const gWords = (s, G) => String(s).replace(/\{many\}/g, G.many).replace(/\{one\}/g, G.one);
   const IND_RET = { kind: 'ret', unit: 'pct', sg: 1, plus: 1, words: ['Strongest', 'Weakest'], group: 'Returns' };
   const IND_METRICS = [
@@ -7236,10 +7248,12 @@
       if (!r || r.error) continue;
       if (r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol)) continue;
       firms++;
-      const ind = r[G.field] ? String(r[G.field]) : '';
-      if (!ind) { noInd++; continue; }
-      if (!groups.has(ind)) groups.set(ind, []);
-      groups.get(ind).push(r);
+      const keys = groupKeys(r, G.field);
+      if (!keys.length) { noInd++; continue; }
+      for (const ind of keys) {
+        if (!groups.has(ind)) groups.set(ind, []);
+        groups.get(ind).push(r);
+      }
     }
     const rows = [];
     let thin = 0;
@@ -7275,13 +7289,16 @@
     const left = [];
     if (thin) left.push(thin + ' ' + (thin === 1 ? G.one : G.many) + ' with fewer than '
       + IND_MIN + ' readings');
-    if (noInd) left.push(noInd + (noInd === 1 ? ' company' : ' companies') + ' with no ' + G.one + ' recorded');
+    // Most companies are in no theme, which is not a gap in the data.
+    if (noInd && !G.multi) left.push(noInd + (noInd === 1 ? ' company' : ' companies') + ' with no ' + G.one + ' recorded');
     const note = how + ' The small figure is how many companies stand behind each row. '
       + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
       + (drawn.broke ? 'A broken bar runs past the scale. ' : '')
       + (G.field === 'sector' && m.kind === 'ret'
         ? 'Made from the companies on this screen, so it is not the sector fund\u2019s own return. ' : '')
-      + G.Many + ' are the data provider\u2019s, not GICS. A ranking of what the screen holds, not a recommendation.';
+      + (G.multi ? 'Themes are the site\u2019s own lists, chosen by hand, and a company in two of them counts in both. '
+        : G.Many + ' are the data provider\u2019s, not GICS. ')
+      + 'A ranking of what the screen holds, not a recommendation.';
 
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">' + head
@@ -7328,13 +7345,14 @@
   function groupList(rows, cut, G) {
     const by = new Map();
     for (const r of spFilter(rows || [], cut || 'All')) {
-      if (!r || r.error || !r[G.field] || isFundRow(r)) continue;
-      const k = String(r[G.field]);
-      const g = by.get(k) || { name: k, n: 0, cap: 0, sectors: {} };
-      g.n++;
-      const c = Number(r.marketCap); if (c > 0) g.cap += c;
-      if (r.sector) g.sectors[r.sector] = (g.sectors[r.sector] || 0) + 1;
-      by.set(k, g);
+      if (!r || r.error || isFundRow(r)) continue;
+      for (const k of groupKeys(r, G.field)) {
+        const g = by.get(k) || { name: k, n: 0, cap: 0, sectors: {} };
+        g.n++;
+        const c = Number(r.marketCap); if (c > 0) g.cap += c;
+        if (r.sector) g.sectors[r.sector] = (g.sectors[r.sector] || 0) + 1;
+        by.set(k, g);
+      }
     }
     return [...by.values()].filter((g) => g.n >= IND_MIN).map((g) => ({
       name: g.name, n: g.n, cap: g.cap,
@@ -7344,6 +7362,9 @@
 
   const tplIndSpot = () => groupSpot(GROUPING.industry);
   const tplSecSpot = () => groupSpot(GROUPING.sector);
+  const tplThmSpot = () => groupSpot(GROUPING.theme);
+  const tplThmRank = () => groupRanking(GROUPING.theme);
+  const themeList = (rows, cut) => groupList(rows, cut, GROUPING.theme);
   function groupSpot(G) {
     const P = G.spot;
     // THE INDEX CUT NARROWS THE COMPANIES, not the industries: "Semiconductors
@@ -7362,7 +7383,7 @@
         + ' has ' + IND_MIN + ' companies recorded.</p>'
         + '</div></div>' + chromeFoot();
     }
-    const members = pool.filter((r) => r && !r.error && r[G.field] === pick.name && !isFundRow(r));
+    const members = pool.filter((r) => r && !r.error && inGroup(r, G.field, pick.name) && !isFundRow(r));
     // YEAR TO DATE IS A CALENDAR WINDOW, which barWin refuses on purpose: a
     // card that draws the fetched axis as-is would show a full year under
     // "this year". This card slices the basket to the last session before
@@ -7425,7 +7446,7 @@
     const fig = (field, kind, extra) => indFigure(members, Object.assign({ field, kind }, extra || {}), false);
     const val = (x) => (x ? x.v : null);
     const today = val(fig('todayPct', 'ret'));
-    const head = '<span class="s-kick">' + esc((G.field !== 'sector' && pick.sector ? pick.sector + ' \u00b7 ' : '') + G.one
+    const head = '<span class="s-kick">' + esc((G.field === 'industry' && pick.sector ? pick.sector + ' \u00b7 ' : '') + G.one
       + (cut === 'All' ? '' : ' \u00b7 ' + SP_CUT_LABEL[cut])) + '</span>'
       + '<h2 class="s-title' + tCls + '">' + esc(pick.name) + '</h2>'
       + '<div class="sp-sub">' + esc(members.length + ' companies')
@@ -8108,6 +8129,7 @@
     optmkt: { p: 'omk', dim: null, by: 'sector', row: 'Sector', min: 3 },
     optsec: { p: 'osc', dim: 'sector', by: 'industry', row: 'Industry', min: 2 },
     optind: { p: 'oin', dim: 'industry', by: null, row: 'Company', min: 2 },
+    optthm: { p: 'oth', dim: 'portfolios', by: null, row: 'Company', min: 2 },
   };
   const OG_ROWS = { portrait: 11, square: 7, story: 12 };
   // A company's own ratio counts toward the middle only on a thousand
@@ -8123,8 +8145,8 @@
       + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
       + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
     const cutWord = SP_CUT_LABEL[cut] || 'The whole screen';
-    if (T.dim && !name) return shell(cutWord, 'Options', 'pick ' + (T.dim === 'sector' ? 'a sector' : 'an industry'), 'No ' + T.dim + ' is chosen yet.');
-    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((r) => !T.dim || r[T.dim] === name);
+    if (T.dim && !name) return shell(cutWord, 'Options', 'pick ' + (T.dim === 'sector' ? 'a sector' : T.dim === 'portfolios' ? 'a theme' : 'an industry'), 'No ' + (T.dim === 'portfolios' ? 'theme' : T.dim) + ' is chosen yet.');
+    const pool = spFilter(stocks.filter((x) => x && !x.error && !isFundRow(x)), cut).filter((r) => !T.dim || inGroup(r, T.dim, name));
     const has = [];
     for (const r of pool) {
       const c = fin(r.optCalls), p = fin(r.optPuts);
@@ -8134,7 +8156,7 @@
     const what = T.dim ? name : 'the market';
     if (has.length < T.min) {
       return shell(cutWord, T.dim ? name : 'Options', 'too few to add up',
-        'Only ' + has.length + ' of ' + pool.length + ' companies here have options open on file. Widen the index choice' + (T.dim ? ' or pick another ' + T.dim : '') + '.');
+        'Only ' + has.length + ' of ' + pool.length + ' companies here have options open on file. Widen the index choice' + (T.dim ? ' or pick another ' + (T.dim === 'portfolios' ? 'theme' : T.dim) : '') + '.');
     }
     const C = has.reduce((s, x) => s + x.c, 0), P = has.reduce((s, x) => s + x.p, 0);
     const all = C > 0 ? P / C : null;
@@ -8794,6 +8816,7 @@
     margins: { p: 'mg', dim: null, row: 'Sector' },
     secmargin: { p: 'smg', dim: 'sector', row: 'Industry' },
     indmargin: { p: 'img', dim: 'industry', row: 'Company' },
+    thmmargin: { p: 'tmg', dim: 'theme', row: 'Company' },
   };
   function marginsNeed(tpl, opts) {
     const T = MG_TPLS[tpl];
@@ -8847,7 +8870,7 @@
     const metric = MG_METRICS.some(([k]) => k === O[T.p + 'Metric']) ? O[T.p + 'Metric'] : 'net';
     const mName = (MG_METRICS.find(([k]) => k === metric) || MG_METRICS[0])[1];
     if (T.dim && !need.value) {
-      return chromeTop() + '<div class="s-body"><div class="s-empty">' + esc('Pick ' + (T.dim === 'sector' ? 'a sector.' : 'an industry.')) + '</div></div>' + chromeFoot();
+      return chromeTop() + '<div class="s-body"><div class="s-empty">' + esc('Pick ' + (T.dim === 'sector' ? 'a sector.' : T.dim === 'theme' ? 'a theme.' : 'an industry.')) + '</div></div>' + chromeFoot();
     }
     const d = getMargins(need);
     if (!d) return chromeTop() + '<div class="s-body"><div class="s-empty">Reading the filings\u2026</div></div>' + chromeFoot();
@@ -9986,6 +10009,10 @@
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
+    thmmargin: () => marginsCard('thmmargin'),
+    thmrank: tplThmRank,
+    thmspot: tplThmSpot,
+    thmsnap: () => tplSecSnap(GROUPING.theme, 'tsn'),
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
@@ -9997,6 +10024,7 @@
     figure: tplFigure,
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
+    optthm: () => optGroupCard('optthm'),
     optind: () => optGroupCard('optind'),
     drawdown: tplDrawdown,
     evo2: tplEvoTwo,
@@ -12369,6 +12397,7 @@
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
     groupMonthsNeed, groupMonthThemes,
+    themeList: (rows, cut) => themeList(rows, cut),
     groupMonthMarkets: () => GM_MARKETS.map((m) => m.slice()),
     moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
     // ...and which templates want the basket at all, with the window each
