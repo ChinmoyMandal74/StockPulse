@@ -1798,7 +1798,9 @@
       const rowHtml = (r, me) => `<tr${me ? ' class="me"' : ''}>
         <td class="nm">${me
           ? `<span class="self">${esc(r.name)}</span>`
-          : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}">${esc(r.name)}</a>`}
+          // A NEW TAB (2026-10-14, the owner): a peer is opened to look at
+          // beside this one, not instead of it.
+          : `<a class="namelink" href="/stock/${encodeURIComponent(r.symbol)}" target="_blank" rel="noopener">${esc(r.name)}</a>`}
           <span class="sym">${esc(r.symbol)}</span>${me ? '<span class="here">this stock</span>' : ''}</td>
         ${cell(r.Price)}${cell(r.Today)}${cell(r['1Y'])}${cell(r['Market Cap'])}${cell(r['Live P/E'])}${cell(r['Fwd P/E'])}
         <td class="av ${r.Signal ? (r.Signal.c || '') : 'na'}"${
