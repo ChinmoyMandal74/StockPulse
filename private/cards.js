@@ -1510,7 +1510,7 @@
       // second card that may be given the calendar window -- and only that
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
-        : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
+        : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
 
@@ -3262,13 +3262,27 @@
         '<p class="s-empty">That symbol is not on this screen.</p>' +
         '</div></div>' + chromeFoot();
     }
-    const [days, winLabel] = barWin(O.spotWin);
-    const d = getBasket(days);
-    if (!d || !d.dates || !d.dates.length) {
+    // YEAR TO DATE (2026-10-14, the owner: "add Year to date in the Window
+    // dropdown here"), the group spotlights' own way: a calendar window, so
+    // the basket is fetched a year deep and sliced to the last session before
+    // 1 January, then rebased there.
+    const win = O.spotWin === 'ytd' ? CHART_WINDOWS.ytd : barWin(O.spotWin);
+    const [days, winLabel] = win;
+    const raw = getBasket(days);
+    if (!raw || !raw.dates || !raw.dates.length) {
       return chromeTop() +
         '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
         '<h2 class="s-title">Drawing<br><span class="dim">the chart\u2026</span></h2>' +
         '</div></div>' + chromeFoot();
+    }
+    let d = raw;
+    if (O.spotWin === 'ytd') {
+      const i0 = winStart(win, raw.dates);
+      if (raw.dates.length - i0 < 2) {
+        return chromeTop() + '<div class="s-body"><div><p class="s-empty">The year has not opened yet \u2014 '
+          + 'there is no session since 31 December to chart.</p></div></div>' + chromeFoot();
+      }
+      d = sliceBasket(raw, i0);
     }
 
     // ---- the line, rebased, coloured by its own direction ----------------
