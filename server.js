@@ -12323,6 +12323,11 @@ async function groupFiguresSteps(at) {
   // Nothing is written over yesterday's figures by a read that found no filings.
   if (!facts.size) return { built: false, reason: 'no filings read' };
   at('writing ' + keys.length + ' figures, ' + Math.round(JSON.stringify(out).length / 1024) + ' KB');
+  // A SMALL READ FIRST. On the deployed app the first request after the long
+  // read failed at once ("fetch failed", on a 33 KB write that works from
+  // anywhere else): the connection the reads left behind is not usable. A
+  // read may be retried, a write may not, so a read takes that failure.
+  await store.snapshotUpdatedAt().catch(() => null);
   await store.writeFigures(out);
   figMemo.clear();
   for (const k of Object.keys(egCache)) delete egCache[k];
