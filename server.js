@@ -14088,7 +14088,7 @@ async function groupMonthsBuild() {
   const body = Object.assign({ at: Date.now(), bench }, built);
   await store.writeGroupMonths(body);
   groupMonthsMemo = { at: Date.now(), body };
-  return { built: true, latest, months: built.months.length, companies: built.companies, groups: Object.keys(built.groups).length, seeks: symbols.length * bounds.length, ms: Date.now() - t0 };
+  return { built: true, latest, months: built.months.length, companies: built.companies, groups: Object.keys(built.groups).length, broken: built.broken, seeks: symbols.length * bounds.length, ms: Date.now() - t0 };
 }
 let groupMonthsMemo = null;
 async function groupMonthsStored() {

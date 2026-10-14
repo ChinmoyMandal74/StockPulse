@@ -33,6 +33,15 @@
 const YEARS = 10;
 const MIN_CLOSE = 0.01;          // server.js's own floor: a sub-cent bar is not a price
 const DAY = 86400000;
+// A BREAK IN THE SERIES IS NOT A RETURN. Chord Energy's bars run from 0.11 to
+// 34.20 across November 2020: the old company's shares were cancelled in its
+// reorganisation and new ones issued, and the archive joins the two. Read as a
+// return that is +30,991%, and with every member counting the same it alone
+// made the Energy sector's 2020 read +554% and the whole market's November
+// +49%. Found on the first real build. The largest real month in ten years
+// of this universe is GameStop's +1,625% in January 2021, so a month past
+// 25 times is left out of the average and counted in the build's report.
+const MAX_MONTH = 2500;
 const iso = (t) => new Date(t).toISOString().slice(0, 10);
 
 // The months to draw and the boundaries their returns are struck between.
@@ -64,7 +73,8 @@ function monthly(closes, bounds) {
     const a = closes[k], b = closes[k + 1];
     const prevStart = iso(Date.UTC(Number(bounds[k].slice(0, 4)), Number(bounds[k].slice(5, 7)) - 2, 1));
     const ok = a && b && a.close >= MIN_CLOSE && b.close >= MIN_CLOSE && a.d >= prevStart && a.d < bounds[k] && b.d >= bounds[k] && b.d < bounds[k + 1];
-    out.push(ok ? (b.close / a.close - 1) * 100 : null);
+    const v = ok ? (b.close / a.close - 1) * 100 : null;
+    out.push(v != null && v > MAX_MONTH ? null : v);
   }
   return out;
 }
@@ -87,10 +97,14 @@ function build(o) {
   const groups = {};
   const slot = (key) => groups[key] || (groups[key] = { members: 0, sum: months.map(() => 0), n: months.map(() => 0) });
   let companies = 0;
+  const broken = [];
   for (const row of o.rows || []) {
     if (!row || !row.symbol || row.error || row.instrumentType === 'ETF') continue;
     const sym = String(row.symbol).toUpperCase();
-    const r = monthly((o.closesBySym && o.closesBySym.get(sym)) || [], bounds);
+    const cl = (o.closesBySym && o.closesBySym.get(sym)) || [];
+    const r = monthly(cl, bounds);
+    // Which months were left out as a break, for the build's own report.
+    for (let k = 0; k < months.length; k++) { const a = cl[k], b = cl[k + 1]; if (r[k] == null && a && b && a.close >= MIN_CLOSE && (b.close / a.close - 1) * 100 > MAX_MONTH) broken.push(sym + ' ' + months[k]); }
     companies++;
     for (const key of groupsOf(row, o.themesOf ? o.themesOf(sym) : [])) {
       const g = slot(key);
@@ -104,7 +118,7 @@ function build(o) {
     // A month nobody has a return for is absent, never zero.
     out[key] = { members: g.members, n: g.n, r: g.sum.map((s, k) => (g.n[k] ? Math.round((s / g.n[k]) * 100) / 100 : null)) };
   }
-  return { latest: o.latest, years: o.years || YEARS, months, companies, groups: out };
+  return { latest: o.latest, years: o.years || YEARS, months, companies, broken, groups: out };
 }
 
-module.exports = { YEARS, plan, monthly, groupsOf, build };
+module.exports = { YEARS, MAX_MONTH, plan, monthly, groupsOf, build };

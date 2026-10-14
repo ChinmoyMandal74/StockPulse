@@ -45,6 +45,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `secprobe.js`, `secinstance.js` | The SEC probe (`/api/sec/probe`, read only): where one company's newest report stops. And the reader for a report the SEC facts feed lacks, taken from the report's own data file |
+| `groupmonths.js` | Month by month for a group (the market, a sector, a theme): the equal-weight average of the members' monthly returns, built once a day for every group and stored |
 | `secquality.js` | The quality of the filings data and how it compares with the price provider's figures: the checks behind the Quality card on `/edgar`, built on the daily pass |
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
 | `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two member pages (`/holders`, `/holder/<M or F>/<id>`) |
@@ -159,7 +160,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 
-**Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `saved-posts`
+**Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts`
 
 **Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-public-side` · `chatbot` · `company-summary`
 
