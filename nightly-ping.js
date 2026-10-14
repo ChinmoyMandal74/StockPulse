@@ -531,7 +531,16 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       // so reverting this loop currently fails nothing -- it is kept because
       // adding a FOURTH phase here is a one-line change, and a new phase is
       // exactly the thing likely to throw.
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate]]) {
+      // Month by month for every group (groupmonths.js): one call, after the
+      // prices are in. About 150,000 small reads on the server, well inside
+      // one request.
+      async function groupMonths() {
+        const r = await fetch(`${base}/api/group-months/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
+        say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
+      }
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths]]) {
         try {
           await fn();
         } catch (e) {

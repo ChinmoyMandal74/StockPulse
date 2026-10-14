@@ -11069,6 +11069,10 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const lhNeed = Cards.holdersNeed(post.tpl, post.opts || {});
   if (lhNeed && lhNeed.symbol) { try { lholders = await holdersPayload(String(lhNeed.symbol).toUpperCase()); } catch { lholders = null; } }
 
+  // Month by month for a group: the stored daily build, only when asked for.
+  let gmonths = null;
+  if (Cards.groupMonthsNeed(post.tpl, post.opts || {})) { try { gmonths = await groupMonthsStored(); } catch { gmonths = null; } }
+
   // The Margins card, likewise.
   let mgins = null;
   const mgNeed = Cards.marginsNeed(post.tpl, post.opts || {});
@@ -11101,6 +11105,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getShortMoves: () => smov,
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
+      getGroupMonths: () => gmonths,
       getHolders: () => lholders,
       getSegments: () => rmix,
       getFundHolders: () => fholders,
@@ -14055,6 +14060,55 @@ const PIVOT_PERIODS = 12;
 // MIN_CLOSE is defined beside pctChange, which is where returns are computed;
 // the guard in the loop below is the same rule applied to this page's anchors.
 const pivotPeriodCache = new Map();          // kind -> { at, body }
+// ---- month by month for a group: the market, a sector, a theme -----------------
+// (groupmonths.js, 2026-10-13.) BUILT ONCE A DAY, FOR EVERY GROUP AT ONCE, and
+// stored: about 150,000 single-row seeks (every company at each of 119 month
+// boundaries), which is a job for the nightly run and not for a page view.
+// A card reads the stored value. The seeks go a dozen boundaries at a time so
+// no one batch is larger than the pivot's own.
+const GroupMonths = require('./groupmonths.js');
+async function groupMonthsBuild() {
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
+  const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  if (!latest) return { built: false, reason: 'no prices on file' };
+  const [, pf, bench] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfolios(), benchMonthEnds().catch(() => [])]);
+  const { bounds } = GroupMonths.plan(latest, GroupMonths.YEARS);
+  const symbols = rows.filter((x) => x.instrumentType !== 'ETF').map((x) => String(x.symbol).toUpperCase());
+  const closesBySym = new Map(symbols.map((s) => [s, new Array(bounds.length).fill(null)]));
+  const t0 = Date.now();
+  for (let i = 0; i < bounds.length; i += 12) {
+    const part = bounds.slice(i, i + 12);
+    const got = await store.closesBefore(part, symbols);
+    for (let k = 0; k < part.length; k++) for (const s of symbols) { const c = got[k] && got[k][s]; if (c) closesBySym.get(s)[i + k] = c; }
+  }
+  const built = GroupMonths.build({ latest, rows, closesBySym, themesOf: (sym) => membershipOf(sym, pf) });
+  // A build that found no company with a return is not written over one that has.
+  if (!built.groups.all || !built.groups.all.r.some((v) => v != null)) return { built: false, reason: 'no returns worked out' };
+  const body = Object.assign({ at: Date.now(), bench }, built);
+  await store.writeGroupMonths(body);
+  groupMonthsMemo = { at: Date.now(), body };
+  return { built: true, latest, months: built.months.length, companies: built.companies, groups: Object.keys(built.groups).length, seeks: symbols.length * bounds.length, ms: Date.now() - t0 };
+}
+let groupMonthsMemo = null;
+async function groupMonthsStored() {
+  if (groupMonthsMemo && Date.now() - groupMonthsMemo.at < 10 * 60 * 1000) return groupMonthsMemo.body;
+  const body = await store.readGroupMonths();
+  if (body && body.groups) groupMonthsMemo = { at: Date.now(), body };
+  return body && body.groups ? body : null;
+}
+// The cron secret or an admin: the nightly run asks for it after its rounds.
+app.post('/api/group-months/rebuild', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  res.json(await groupMonthsBuild());
+}));
+// Members, like the pivot's own period axis: a group is the whole universe.
+app.get('/api/group-months', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json((await groupMonthsStored()) || { at: null, months: [], groups: {} });
+}));
+
 app.get('/api/pivot-periods', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const kind = req.query.kind === 'years' ? 'years' : 'months';

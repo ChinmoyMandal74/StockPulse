@@ -2794,6 +2794,22 @@ async function readSecInstanceAccns() {
   return out;
 }
 
+// Month by month for every group, built once a day (groupmonths.js).
+async function readGroupMonths() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'group_months'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeGroupMonths(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('group_months', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 // The filings quality reading, built on the daily pass (secquality.js).
 async function readSecQuality() {
   await init();
@@ -6927,6 +6943,7 @@ module.exports = {
   isNetDrop,
   init,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
+  readGroupMonths, writeGroupMonths,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

@@ -1324,6 +1324,33 @@
       <!-- Beating the index: how many companies did better than the S&P 500
            over a window. Like the other Market cards it takes no scope,
            sector, size or screen, so INDUSTRY_PREFIXES is left alone. -->
+      <!-- Month by month for a group (groupmonths.js): the market, a sector, a
+           theme. One box each, since each card sits in its own group of the
+           picker and a saved post keeps its own choice. -->
+      <div id="gmkBox">
+        <label>Market</label>
+        <select id="gmkGroup"></select>
+        <label>Show</label>
+        <select id="gmkView"></select>
+        <p class="hint">The average of the members’ returns each month, every company counting the same — what
+          the typical stock did, which is not what an index fund did. Today’s members, applied to every past month.</p>
+      </div>
+      <div id="gscBox">
+        <label>Sector</label>
+        <select id="gscName"></select>
+        <label>Show</label>
+        <select id="gscView"></select>
+        <p class="hint">The average of the sector’s companies each month, every company counting the same.
+          Today’s members, applied to every past month.</p>
+      </div>
+      <div id="gthBox">
+        <label>Theme</label>
+        <select id="gthName"></select>
+        <label>Show</label>
+        <select id="gthView"></select>
+        <p class="hint">The average of the theme’s companies each month, every company counting the same;
+          a fund in the theme is left out. Today’s members, applied to every past month.</p>
+      </div>
       <div id="mvgBox">
         <label>Period</label>
         <select id="mvgPeriod"></select>
@@ -1626,6 +1653,9 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
+      { id: 'secmonths', name: 'Sector, month by month', note: 'One sector year by month — the average of its companies’ returns each month, equal weight' },
+      { id: 'thmmonths', name: 'Theme, month by month', note: 'One theme year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
       { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
@@ -1731,6 +1761,7 @@
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
       ['movegrid', 'Moves by sector'],
+      ['mktmonths', 'Month by month'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
       ['corrections', 'Corrections'],
@@ -1792,6 +1823,12 @@
       ['secspot', 'Spotlight'],
       ['secmargin', 'Margins'],
       ['optsec', 'Options'],
+      ['secmonths', 'Month by month'],
+    ];
+    // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
+    // template for Theme"). One view to begin with; others can join it.
+    const THM_VIEWS = [
+      ['thmmonths', 'Month by month'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
@@ -1803,6 +1840,7 @@
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
       { name: 'Sector', views: SEC_VIEWS, last: 'sectors' },
       { name: 'Industry', views: IND_VIEWS, last: 'industries' },
+      { name: 'Theme', views: THM_VIEWS, last: 'thmmonths' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
@@ -2116,6 +2154,19 @@
         .catch(() => { drillCache[key] = { error: 'Could not read the history.' }; delete drillPending[key]; if (tpl === 'figure') render(); });
       return null;
     }
+    // Month by month for every group: one stored value, built once a day,
+    // fetched once a visit.
+    let gmData = null, gmPending = false;
+    function getGroupMonths() {
+      if (gmData) return gmData;
+      if (gmPending) return null;
+      gmPending = true;
+      fetch('/api/group-months', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { months: [], groups: {} }))
+        .then((d) => { gmData = d || { months: [], groups: {} }; gmPending = false; if (Cards.groupMonthsNeed(tpl, controlOpts())) render(); })
+        .catch(() => { gmData = { months: [], groups: {} }; gmPending = false; if (Cards.groupMonthsNeed(tpl, controlOpts())) render(); });
+      return null;
+    }
     function getPeerTrend(symbol) {
       if (!symbol) return null;
       if (ptrCache[symbol]) return ptrCache[symbol];
@@ -2259,7 +2310,7 @@
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView',
@@ -2285,7 +2336,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths,
       updatedAt: pulledAt,
     });
 
@@ -2483,6 +2534,9 @@
       $('brdBox').style.display = tpl === 'breadth' ? 'block' : 'none';
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('mvgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
+      $('gmkBox').style.display = tpl === 'mktmonths' ? 'block' : 'none';
+      $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
+      $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
@@ -2751,6 +2805,8 @@
     ['egrQtr', 'egrCount'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earngrow') render(); }));
     // Beating the index: its own listener list, like every template here.
+    [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>
+      $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     ['mvgPeriod', 'mvgSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movegrid') render(); }));
     ['beatPeriod', 'beatSp500', 'beatBench', 'beatSplit'].forEach((id) =>
@@ -3788,6 +3844,13 @@
         { const keep = $('beatSplit').value;
           $('beatSplit').innerHTML = Cards.beatSplits().map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
           if ([...$('beatSplit').options].some((o) => o.value === keep)) $('beatSplit').value = keep; }
+        // The three month-by-month group cards: lists rebuilt from the module and
+        // the rows, each keeping whatever was chosen.
+        { const fill = (id, pairs) => { const keep = $(id).value; $(id).innerHTML = pairs.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join(''); if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep; };
+          fill('gmkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
+          for (const id of ['gmkView', 'gscView', 'gthView']) fill(id, Cards.monthViews());
+          fill('gscName', Cards.sectors(stocks).map((n) => [n, n]));
+          fill('gthName', Cards.groupMonthThemes(stocks).map((n) => [n, n])); }
         { const keep = $('mvgPeriod').value;
           $('mvgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
           if ([...$('mvgPeriod').options].some((o) => o.value === keep)) $('mvgPeriod').value = keep; }

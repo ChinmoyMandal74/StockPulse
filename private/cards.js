@@ -62,6 +62,8 @@
   let getMonths = () => null;
   // One company and its peers on four measures, by quarter, or null while it loads.
   let getPeerTrend = () => null;
+  // Month by month for every group (the daily build), or null while it loads.
+  let getGroupMonths = () => null;
   // One figure's history for one company (the screener's drill-down), or null while it loads.
   let getDrill = () => null;
   // One company's revenue and net income by filed period, or null while it loads.
@@ -9599,7 +9601,9 @@
   const MON_CAP = { raw: 20, rel: 12 };
   // How many years each artboard holds at a size somebody can read. Measured
   // with the note at its longest; the newest years are the ones kept.
-  const MON_YEARS = { portrait: 11, square: 8, story: 11 };
+  // TEN YEARS, for the stock card and the group cards alike (the owner,
+  // 2026-10-13: "make it 10 for everyone").
+  const MON_YEARS = { portrait: 10, square: 8, story: 10 };
   // Asked of the module by BOTH hosts, for the reason basketDays and
   // evolutionNeed exist: a pairing restated in each host is how a card ships
   // drawing nothing.
@@ -9647,17 +9651,26 @@
       return shell(nameOf(row), 'Month by month', 'not enough history',
         'A grid needs at least a year of month ends, and ' + sym + ' has ' + rows.length + '.');
     }
-    const own = monReturns(rows), ownY = monYears(rows);
     const bench = Array.isArray(data.bench) ? data.bench : [];
-    const idx = monReturns(bench), idxY = monYears(bench);
+    return monDraw({
+      own: monReturns(rows), ownY: monYears(rows), idx: monReturns(bench), idxY: monYears(bench),
+      lastYm: rows[rows.length - 1][0], view: O.monView, name: nameOf(row),
+      kick: (yrs) => (row.sector ? row.sector + ' \u00b7 ' : '') + sym + ' \u00b7 ' + yrs,
+    });
+  }
+  // THE GRID ITSELF, for one stock or for a group (groupMonthsCard): monthly
+  // returns and yearly ones keyed by 'YYYY-MM' and 'YYYY', the index's the
+  // same way, and the words that differ between the two.
+  function monDraw(G) {
+    const own = G.own, ownY = G.ownY, idx = G.idx, idxY = G.idxY;
     // The index reading needs an index. Without one the card falls back to
     // the stock's own return AND SAYS SO in its subtitle, rather than drawing
     // raw figures under a heading that claims otherwise.
-    const rel = O.monView === 'rel' && Object.keys(idx).length >= 12;
+    const rel = G.view === 'rel' && Object.keys(idx).length >= 12;
     const val = (ym) => (own[ym] == null ? null : !rel ? own[ym] : idx[ym] == null ? null : own[ym] - idx[ym]);
     const valY = (y) => (ownY[y] == null ? null : !rel ? ownY[y] : idxY[y] == null ? null : ownY[y] - idxY[y]);
     const cap = rel ? MON_CAP.rel : MON_CAP.raw;
-    const lastYm = rows[rows.length - 1][0];
+    const lastYm = G.lastYm;
     const allYears = [...new Set(Object.keys(own).map((k) => Number(k.slice(0, 4))))].sort((a, b) => b - a);
     const years = allYears.slice(0, MON_YEARS[size.id] || 10);
 
@@ -9694,24 +9707,24 @@
       return '<span class="mh-f">' + (n ? u + '/' + n : '') + '</span>';
     }).join('');
     const base = all ? Math.round(ups / all * 100) : null;
-    const fellBack = O.monView === 'rel' && !rel;
+    const fellBack = G.view === 'rel' && !rel;
 
     const note = (rel
       ? 'Each cell is the month’s price return less the S&P 500’s, in points — whether it beat the market, not whether it rose. '
-      : 'Each cell is the price return for that calendar month, in percent; dividends are not included. ')
+      : (G.cellNote || 'Each cell is the price return for that calendar month, in percent; dividends are not included. '))
+      + (G.extraNote ? G.extraNote(years) : '')
       + 'The outlined cell is the month still running. The bottom row counts the years each month was '
       + (rel ? 'ahead' : 'up')
       + (base == null ? '. ' : '; across every month shown the figure is ' + base + '%, which is what any one month should be read against. ')
       + 'With about ' + years.length + ' readings a month and twelve months to choose from, one will always '
       + 'look special by chance — a record of what happened, not a pattern to trade.';
 
-    const n = nameOf(row);
+    const n = G.name;
     return chromeTop()
       + '<div class="s-body"><div class="mh-in">'
-      + '<span class="s-kick">' + esc((row.sector ? row.sector + ' · ' : '') + sym + ' · ' + years.length
-        + (years.length === 1 ? ' year' : ' years')) + '</span>'
+      + '<span class="s-kick">' + esc(G.kick(years.length + (years.length === 1 ? ' year' : ' years'))) + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
-      + esc('month by month' + (rel ? ', against the S&P 500' : fellBack ? ' — own return, no index reading held' : ''))
+      + esc('month by month' + (G.dimExtra || '') + (rel ? ', against the S&P 500' : fellBack ? ' — own return, no index reading held' : ''))
       + '</span></h2>'
       + '<div class="mh-grid" style="grid-template-rows:auto repeat(' + years.length + ',minmax(0,1fr)) auto;'
       + 'max-height:calc(' + years.length + ' * var(--mh-row) + 90px)">'
@@ -9722,6 +9735,72 @@
       + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Month by month for a group: the market, a sector, a theme -----------------
+  //
+  // (2026-10-13; groupmonths.js has what a cell is and why.) The same grid as
+  // the single-stock card, drawn by the same function, over the EQUAL-WEIGHT
+  // average of the group's members. Three templates so each sits in its own
+  // group of the picker; one builder.
+  //
+  // THE YEAR IS THE MONTHS COMPOUNDED, which is what holding the group in
+  // equal parts and rebalancing each month would have returned. A year with
+  // a month missing has no figure.
+  //
+  // THE NOTE CARRIES THE TWO CAVEATS a reader needs before quoting a cell:
+  // equal weight, and today's members with how many stand behind the
+  // earliest year drawn.
+  const GM_TPLS = { mktmonths: 'gmk', secmonths: 'gsc', thmmonths: 'gth' };
+  const GM_MARKETS = [['all', 'Every company'], ['sp', 'S&P 500 members'], ['ndx', 'Nasdaq 100 members']];
+  function groupMonthsNeed(tpl) { return GM_TPLS[tpl] ? {} : null; }
+  function groupMonthThemes(rows) {
+    const seen = new Set();
+    for (const r of rows || []) for (const t of (r && r.portfolios) || []) seen.add(t);
+    return [...seen].sort((a, b) => (a < b ? -1 : 1));
+  }
+  function groupMonthsCard(tpl) {
+    const P = GM_TPLS[tpl];
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const data = getGroupMonths();
+    if (!data) return shell('Reading the archive', 'Drawing', 'the months\u2026');
+    const months = Array.isArray(data.months) ? data.months : [];
+    let key, name, what;
+    if (tpl === 'mktmonths') {
+      const m = GM_MARKETS.find(([k]) => k === O.gmkGroup) || GM_MARKETS[0];
+      key = m[0]; name = m[0] === 'all' ? 'The market' : m[1]; what = m[0] === 'all' ? 'Every company tracked' : m[1];
+    } else if (tpl === 'secmonths') {
+      name = O.gscName || [...new Set(stocks.map((x) => x.sector).filter(Boolean))].sort()[0] || ''; key = 'sec:' + name; what = 'Sector';
+    } else {
+      name = O.gthName || groupMonthThemes(stocks)[0] || ''; key = 'thm:' + name; what = 'Theme';
+    }
+    const g = data.groups && data.groups[key];
+    if (!months.length || !g) {
+      return shell(what, name || 'Nothing chosen', 'month by month', months.length ? 'No company in this group has a month on record.' : 'The months have not been built yet. They are built once a day, after the nightly run.');
+    }
+    const own = {}, nBy = {};
+    months.forEach((ym, k) => { if (g.r[k] != null && isFinite(Number(g.r[k]))) { own[ym] = Number(g.r[k]); nBy[ym] = g.n[k]; } });
+    const ownY = {};
+    for (const y of new Set(months.map((ym) => ym.slice(0, 4)))) {
+      let level = 1, whole = true;
+      for (const ym of months) { if (ym.slice(0, 4) !== y) continue; if (own[ym] == null) { whole = false; break; } level *= 1 + own[ym] / 100; }
+      if (whole) ownY[y] = (level - 1) * 100;
+    }
+    const bench = Array.isArray(data.bench) ? data.bench : [];
+    return monDraw({
+      own, ownY, idx: monReturns(bench), idxY: monYears(bench), lastYm: months[months.length - 1], view: O[P + 'View'],
+      name, dimExtra: ', equal weight',
+      kick: (yrs) => what + ' \u00b7 ' + g.members.toLocaleString() + (g.members === 1 ? ' company' : ' companies') + ' today \u00b7 ' + yrs,
+      cellNote: 'Each cell is the average of the members\u2019 price returns that calendar month, in percent, each company counting the same; dividends are not included. ',
+      extraNote: (years) => {
+        const first = String(years[years.length - 1]);
+        let early = 0; for (const ym of months) if (ym.slice(0, 4) === first && nBy[ym] > early) early = nBy[ym];
+        return 'The members are today\u2019s ' + g.members.toLocaleString() + ', applied to every past month: companies since dropped are missing, and ' + first + ' rests on ' + early.toLocaleString() + ' of them. The year is its months compounded. ';
+      },
+    });
   }
 
   // ---- Against its peers: one measure, quarter by quarter ------------------
@@ -9912,6 +9991,9 @@
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
     movegrid: tplMoveGrid,
+    mktmonths: () => groupMonthsCard('mktmonths'),
+    secmonths: () => groupMonthsCard('secmonths'),
+    thmmonths: () => groupMonthsCard('thmmonths'),
     figure: tplFigure,
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
@@ -12286,6 +12368,8 @@
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
+    groupMonthsNeed, groupMonthThemes,
+    groupMonthMarkets: () => GM_MARKETS.map((m) => m.slice()),
     moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
     // ...and which templates want the basket at all, with the window each
     // one asks for. Exported for the same reason: two hosts, one pairing.
@@ -12358,6 +12442,7 @@
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
+      getGroupMonths = c.getGroupMonths || (() => null);
       getDrill = c.getDrill || (() => null);
       getPerf = c.getPerf || (() => null);
       chartOne = c.chart || null;
