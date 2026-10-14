@@ -8874,6 +8874,14 @@
     }
     const d = getMargins(need);
     if (!d) return chromeTop() + '<div class="s-body"><div class="s-empty">Reading the filings\u2026</div></div>' + chromeFoot();
+    // The host was told to wait: a data refresh is running, and this card
+    // reads every company's filings at once. Said, not left looking stuck.
+    if (d.waiting) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(mName) + '</span>'
+        + '<h2 class="s-title">Waiting for<br><span class="dim">the data refresh</span></h2>'
+        + '<p class="s-empty">A refresh is running, and this card reads every company\u2019s filings at once, so it stands aside until the run finishes. It tries again every minute and draws by itself.</p>'
+        + '</div></div>' + chromeFoot();
+    }
     const M = d.metrics && d.metrics[metric];
     const shell = (msg) => chromeTop() + '<div class="s-body"><div class="bx-in">'
       + '<span class="s-kick">' + esc((T.dim ? need.value + ' \u00b7 ' : '') + cutName) + '</span><h2 class="s-title">' + esc(mName) + '</h2>'

@@ -2363,9 +2363,21 @@
       mgPending[cut] = true;
       fetch('/api/margins?cut=' + encodeURIComponent(need.cut)
         + (need.dim ? '&dim=' + need.dim + '&name=' + encodeURIComponent(need.value) : ''), { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
+        // A REFRESH RUNNING IS A 503, and the margins stand aside for it: they
+        // read every company's filings at once. The card said "Reading the
+        // filings" for as long as the run lasted, which looks stuck (the owner,
+        // 2026-10-14). So the wait is kept as an answer the card can word, and
+        // asked again in a minute.
+        .then((r) => (r.ok ? r.json() : r.status === 503 ? r.json().then((j) => ({ waiting: (j && j.error) || 'A data refresh is running.' })).catch(() => ({ waiting: 'A data refresh is running.' })) : null))
         .then((d) => {
           mgPending[cut] = false;
+          if (d && d.waiting) {
+            mgCache[cut] = { waiting: d.waiting };
+            setTimeout(() => { if (mgCache[cut] && mgCache[cut].waiting) { delete mgCache[cut]; render(); } }, 60000);
+            const now = Cards.marginsNeed(tpl, controlOpts());
+            if (now && now.key === cut) render();
+            return;
+          }
           if (!d || !d.metrics) return;
           mgCache[cut] = d;
           const now = Cards.marginsNeed(tpl, controlOpts());
@@ -3130,7 +3142,7 @@
     // The sector and industry versions: the same two pickers each, and a name.
     // THE INDEX CHANGES WHICH NAMES EXIST, so its listener refills the list
     // FIRST, the spotlight cards' rule and their reason.
-    for (const p of ['smg', 'img']) {
+    for (const p of ['smg', 'img', 'tmg']) {
       for (const [v, label] of Cards.earnGrowthCuts()) $(p + 'Sp500').add(new Option(label, v));
       for (const [v, label] of Cards.marginMetrics()) $(p + 'Metric').add(new Option(label, v));
     }
