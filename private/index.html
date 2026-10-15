@@ -1282,6 +1282,11 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>
                   <span class="nm">Help</span>
                 </a>
+                <!-- Members: every backtest, written up. Hidden on the guest preview, which the route refuses. -->
+                <a class="pick" href="/research" id="researchLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
+                  <span class="nm">Research</span>
+                </a>
                 <a class="pick" href="/contact">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-mail" /></svg>
                   <span class="nm">Contact the owner</span>
@@ -5288,6 +5293,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
+        { const rl = document.getElementById('researchLink'); if (rl) rl.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

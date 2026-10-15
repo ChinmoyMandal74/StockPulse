@@ -155,7 +155,9 @@
     return { entries, notHtml, statuses: STATUSES.slice() };
   }
 
-  const api = { parse, STATUSES };
+  // The pieces research.js reads docs/research.md with: one reading of a
+  // heading, a table and a summary, not two.
+  const api = { parse, STATUSES, heading, html, summary, plain, clip, esc };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Backlog = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -572,7 +572,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog',
+                      '/backlog.html': '/backlog', '/research.html': '/research',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1518,6 +1518,15 @@ app.get('/quality', route(async (req, res) => {
 // see /api/backlog below and backlog.js.
 // What one institution or one fund holds, and the directory of them. For
 // members; a guest's preview is twenty stocks and these pages list hundreds.
+// Members: every backtest, written up -- docs/research.md through research.js.
+// Shared with members by the owner's decision of 2026-10-15; never guests,
+// who see the same twenty-stock preview everywhere else.
+app.get('/research', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'research');
+  res.sendFile(path.join(__dirname, 'private', 'research.html'));
+}));
 app.get('/holders', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
@@ -17707,17 +17716,20 @@ const BUILD_REPO = String(process.env.GITHUB_REPO || 'ChinmoyMandal74/StockPulse
 const Backlog = require('./backlog.js');
 const BACKLOG_TTL_MS = 10 * 60 * 1000;
 let backlogCache = null;
-async function backlogText() {
+// One reader for both files in docs/ that a page is built from (the backlog
+// and the research register): the bundled copy, else the repository's main.
+async function docText(name) {
   try {
-    const t = fs.readFileSync(path.join(__dirname, 'docs', 'backlog.md'), 'utf8');
+    const t = fs.readFileSync(path.join(__dirname, 'docs', name), 'utf8');
     if (t && t.length > 200) return { text: t, source: 'file' };
   } catch (e) { /* not bundled: ask the repository */ }
-  const r = await fetch(`https://raw.githubusercontent.com/${BUILD_REPO}/main/docs/backlog.md`, {
-    headers: { 'User-Agent': 'TickrLab backlog page' }, signal: AbortSignal.timeout(12000),
+  const r = await fetch(`https://raw.githubusercontent.com/${BUILD_REPO}/main/docs/${name}`, {
+    headers: { 'User-Agent': 'TickrLab docs page' }, signal: AbortSignal.timeout(12000),
   });
-  if (!r.ok) throw new Error('backlog file not reachable: ' + r.status);
+  if (!r.ok) throw new Error(name + ' not reachable: ' + r.status);
   return { text: await r.text(), source: 'github' };
 }
+const backlogText = () => docText('backlog.md');
 app.get('/api/backlog', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const fresh = req.query.fresh === '1';
@@ -17733,6 +17745,29 @@ app.get('/api/backlog', requireAdmin, route(async (req, res) => {
   const body = { ...parsed, source: got.source, at: Date.now(),
     file: `https://github.com/${BUILD_REPO}/blob/main/docs/backlog.md` };
   backlogCache = { at: Date.now(), body };
+  res.json(body);
+}));
+// ---- the research register -----------------------------------------------
+//
+// Every backtest, written up the same way: docs/research.md is the data,
+// research.js reads it (with backlog.js's heading, table and summary
+// readers), and /research draws it for members. An entry is added by
+// editing the file and pushing. Members, not guests: requireMember.
+const Research = require('./research.js');
+let researchCache = null;
+app.get('/api/research', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const fresh = req.query.fresh === '1' && (await isAdmin(req));
+  if (!fresh && researchCache && Date.now() - researchCache.at < BACKLOG_TTL_MS) return res.json(researchCache.body);
+  let got;
+  try { got = await docText('research.md'); }
+  catch (e) {
+    console.warn('research read failed:', e.message);
+    return res.status(502).json({ error: 'The research file could not be read just now.' });
+  }
+  const parsed = Research.parse(got.text, (s) => renderMarkdown(s));
+  const body = { ...parsed, source: got.source, at: Date.now() };
+  researchCache = { at: Date.now(), body };
   res.json(body);
 }));
 const GITHUB_TOKEN = String(process.env.GITHUB_TOKEN || '').trim();

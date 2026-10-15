@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Research — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The Backlog page's shell, so the two registers read as one set.
+       Everything this page adds is prefixed rs- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(34, 211, 238, 0.09), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 8px #22d3ee; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 70ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+
+    /* ---- the verdict counts, which are also the verdict filter ------------ */
+    .rs-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px; }
+    .rs-stats > *, .rs-bar > *, .page > * { min-width: 0; }
+    .rs-stat { text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+    .rs-stat .core { padding: 16px 18px; transition: background .25s var(--ease); height: 100%; }
+    .rs-stat:hover .core { background: rgba(255, 255, 255, 0.035); }
+    .rs-stat.on { outline: 1px solid var(--rs-c); outline-offset: -1px; border-radius: 26px; }
+    .rs-val { margin-top: 8px; font-family: var(--mono); font-size: 30px; font-weight: 500;
+              letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--rs-c); }
+    .rs-sub { margin-top: 7px; font-size: 11.5px; line-height: 1.4; color: var(--faint); }
+
+    /* ---- how every test is judged ----------------------------------------- */
+    .rs-method { margin-bottom: 16px; }
+    .rs-method > .core { padding: 0; }
+    .rs-method summary { list-style: none; cursor: pointer; padding: 14px 22px; display: flex; align-items: center; gap: 10px;
+      font-size: 12.5px; color: var(--muted); }
+    .rs-method summary::-webkit-details-marker { display: none; }
+    .rs-method summary:hover { color: var(--text); }
+    .rs-method[open] summary { border-bottom: 1px solid var(--hair); }
+    .rs-method .rs-body { margin: 0; padding: 16px 22px 8px; }
+
+    /* ---- the bar above the table ------------------------------------------ */
+    .rs-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 4px 12px; }
+    .rs-bar input, .rs-bar select {
+      padding: 8px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 12.5px var(--sans); }
+    .rs-bar input { flex: 1 1 220px; min-width: 0; }
+    .rs-bar input:focus-visible, .rs-bar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .rs-count { margin-left: auto; font-size: 12px; color: var(--faint); }
+    .rs-clear { font-size: 12px; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 4px; }
+
+    /* ---- the table -------------------------------------------------------- */
+    .rs-wrap { overflow-x: auto; }
+    table.rs { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.rs > thead th { background: var(--surface-2); text-align: left; padding: 10px 14px; white-space: nowrap;
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint);
+      border-bottom: 1px solid var(--hair); }
+    table.rs > thead th[data-k] { cursor: pointer; user-select: none; }
+    table.rs > thead th[data-k]:hover { color: var(--text); }
+    table.rs > thead th.on { color: var(--accent); }
+    table.rs > tbody > tr.rs-row { cursor: pointer; }
+    table.rs > tbody > tr.rs-row > td { padding: 14px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); vertical-align: top; }
+    table.rs > tbody > tr.rs-row:hover > td { background: rgba(255, 255, 255, 0.025); }
+    table.rs > tbody > tr.rs-row.open > td { background: rgba(255, 255, 255, 0.035); border-bottom-color: transparent; }
+    td.rs-n { font-family: var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+    td.rs-idea { min-width: 230px; width: 22%; }
+    td.rs-txt { min-width: 190px; color: var(--muted); line-height: 1.5; }
+    .rs-title { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; line-height: 1.35; color: var(--text); }
+    .rs-sum { margin-top: 5px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .rs-tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .rs-tag { font-size: 11px; color: var(--faint); border: 1px solid var(--hair); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    td.rs-v, td.rs-date { white-space: nowrap; width: 1%; }
+    .rs-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500;
+      letter-spacing: 0.02em; color: var(--rs-c); border: 1px solid color-mix(in srgb, var(--rs-c) 38%, transparent);
+      background: color-mix(in srgb, var(--rs-c) 10%, transparent); }
+    td.rs-date { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+    .rs-chev { display: inline-block; margin-left: 8px; color: var(--faint); transition: transform .3s var(--ease); }
+    .rs-row.open .rs-chev { transform: rotate(90deg); }
+    .rs-none { color: var(--faint); }
+    mark.rs-hit { background: rgba(251, 191, 36, 0.22); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+    /* ---- an opened entry -------------------------------------------------- */
+    tr.rs-detail > td { padding: 0 16px 24px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); background: rgba(255, 255, 255, 0.035); }
+    .rs-facts { display: flex; gap: 22px; flex-wrap: wrap; margin: 2px 0 14px 46px; }
+    .rs-fact .k { display: block; margin-bottom: 4px; }
+    .rs-fact span:last-child { font-size: 12.5px; color: var(--text); }
+    /* Prose keeps a reading width; a table in an entry takes what it needs. */
+    .rs-body { margin-left: 46px; padding: 2px 0 0; font-size: 13.5px; line-height: 1.68; color: var(--muted); }
+    .rs-body p, .rs-body ul, .rs-body ol { max-width: 92ch; }
+    .rs-body p { margin: 0 0 12px; }
+    .rs-body strong { color: var(--text); font-weight: 600; }
+    .rs-body code { font-family: var(--mono); font-size: 12px; color: var(--text); background: rgba(255, 255, 255, 0.06);
+                    padding: 1px 5px; border-radius: 5px; }
+    .rs-body ul, .rs-body ol { margin: 0 0 12px; padding-left: 20px; }
+    .rs-body li { margin: 0 0 6px; }
+    .rs-body h2, .rs-body h3, .rs-body h4 { margin: 20px 0 8px; font-size: 11px; font-weight: 500; color: var(--faint);
+      text-transform: uppercase; letter-spacing: 0.14em; }
+    .rs-body h3:first-child { margin-top: 6px; }
+    .rs-body a { color: var(--accent); text-decoration: none; }
+    .rs-body a:hover { text-decoration: underline; }
+    .rs-body .bk-tw { overflow-x: auto; margin: 0 0 14px; }
+    .rs-body .bk-tw table { border-collapse: collapse; font-size: 12.5px; }
+    .rs-body .bk-tw th, .rs-body .bk-tw td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .rs-body .bk-tw th { font-weight: 500; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .rs-body .bk-tw td { color: var(--text); font-variant-numeric: tabular-nums; }
+    .rs-link { margin: 4px 0 0 46px; font-size: 12px; }
+    .rs-link a { color: var(--faint); text-decoration: none; }
+    .rs-link a:hover { color: var(--text); }
+
+    .rs-empty, .rs-error { padding: 28px; font-size: 13px; color: var(--muted); }
+    .rs-error { color: var(--red); }
+    .rs-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 92ch; }
+
+    @media (max-width: 1100px) {
+      .rs-stats { grid-template-columns: repeat(3, 1fr); }
+      td.rs-h-done, th.rs-h-done, td.rs-done { display: none; }
+    }
+    @media (max-width: 760px) {
+      .page { padding: 0 16px; } .hide-sm { display: none !important; }
+      .rs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .rs-bar select { flex: 1 1 140px; }
+      th.rs-h-follows, td.rs-follows, th.rs-h-date, td.rs-date, th.rs-h-out, td.rs-out { display: none; }
+      .rs-body, .rs-facts, .rs-link { margin-left: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .rs-chev, .rs-stat .core { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Research</span>
+      <h1>What has been tested</h1>
+      <p class="lede">Every idea run against the Tickr Lab price archive, written up the same way: the idea,
+        what was done, what came back, and what follows from it. Most came back with nothing, and they are kept
+        because knowing what does not work is most of what research finds. Open a row to read it in full.</p>
+    </header>
+
+    <div class="rs-stats" id="stats"></div>
+
+    <details class="bezel rs-method" id="methodWrap" hidden><summary class="core">
+      <span class="k">How every test is judged</span><span id="methodHint">· the method every entry shares</span></summary>
+      <div class="rs-body" id="method"></div>
+    </details>
+
+    <div class="rs-bar">
+      <input type="search" id="q" placeholder="Search ideas, methods and outcomes" aria-label="Search the research" />
+      <select id="family" aria-label="Family"><option value="">Every family</option></select>
+      <select id="horizon" aria-label="Horizon"><option value="">Any horizon</option></select>
+      <select id="data" aria-label="Data"><option value="">Any data</option></select>
+      <button class="rs-clear" id="clear" hidden>Clear filters</button>
+      <span class="rs-count" id="count"></span>
+    </div>
+
+    <div class="bezel"><div class="core" style="padding:0">
+      <div class="rs-wrap" id="wrap"><div class="rs-empty">Reading the research…</div></div>
+    </div></div>
+
+    <p class="rs-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // One colour per verdict. Green and red mean a price going up or down on
+    // this site, so no verdict uses them: amber is "notice this", grey is
+    // nothing, the others are plain hues.
+    const VERDICT = {
+      'Weak lead': ['#22d3ee', 'a small effect that held in both periods'],
+      'One period only': ['#fbbf24', 'looked good in one period and not the other'],
+      'No edge': ['#9aa3b2', 'no difference worth the name'],
+      'Wrong way': ['#fb923c', 'pointed against the idea'],
+      'Used for display': ['#a78bfa', 'kept as a reading, not a forecast'],
+      'Not yet tested': ['#7c9cff', 'queued, with the data in hand'],
+    };
+    const vOrder = (v) => { const i = Object.keys(VERDICT).indexOf(v); return i < 0 ? 99 : i; };
+
+    let data = null;
+    let verdict = '';
+    let sortKey = 'n', sortDir = -1;     // newest first
+    const open = new Set();
+
+    const day = (iso) => {
+      if (!iso) return '—';
+      const t = new Date(iso + 'T12:00:00');
+      return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+    // The Data field lists sources joined by "and"; filtered one at a time.
+    const sources = (e) => (e.data || '').split(/\s*,\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+    const hay = (e) => [e.title, e.idea, e.done, e.outcome, e.follows, e.family, e.verdict, e.horizon, e.data, e.sample,
+      e.html.replace(/<[^>]+>/g, ' ')].join(' ').toLowerCase();
+
+    function shown() {
+      const q = $('q').value.trim().toLowerCase();
+      const fam = $('family').value, hz = $('horizon').value, src = $('data').value;
+      let list = data.entries.filter((e) => (!verdict || e.verdict === verdict) && (!fam || e.family === fam)
+        && (!hz || e.horizon === hz) && (!src || sources(e).includes(src))
+        && (!q || hay(e).includes(q) || String(e.n) === q));
+      const val = (e) => (sortKey === 'verdict' ? vOrder(e.verdict) : sortKey === 'date' ? (e.date || '') : e.n);
+      return list.slice().sort((a, b) => {
+        const x = val(a), y = val(b);
+        if (sortKey === 'date' && (!x || !y) && x !== y) return x ? -1 : 1;     // undated last, either way
+        return (x < y ? -1 : x > y ? 1 : b.n - a.n) * (x === y ? 1 : sortDir);
+      });
+    }
+
+    // The search term, marked where it falls in a summary. Escaped first, so
+    // the mark is the only markup.
+    function hit(text) {
+      const q = $('q').value.trim();
+      const t = we(text);
+      if (!q || q.length < 2) return t;
+      const re = new RegExp(we(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      return t.replace(re, (m) => '<mark class="rs-hit">' + m + '</mark>');
+    }
+
+    function paintStats() {
+      const counts = {};
+      for (const e of data.entries) counts[e.verdict] = (counts[e.verdict] || 0) + 1;
+      const names = Object.keys(VERDICT).concat(Object.keys(counts).filter((s) => !VERDICT[s]));
+      $('stats').innerHTML = names.map((s) => {
+        const [c, sub] = VERDICT[s] || ['#9aa3b2', 'as written in the file'];
+        return `<button class="bezel rs-stat${verdict === s ? ' on' : ''}" data-s="${we(s)}" style="--rs-c:${c}" aria-pressed="${verdict === s}">`
+          + `<div class="core"><span class="k">${we(s)}</span><div class="rs-val">${counts[s] || 0}</div>`
+          + `<div class="rs-sub">${we(sub)}</div></div></button>`;
+      }).join('');
+      $('stats').querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => {
+        verdict = verdict === b.dataset.s ? '' : b.dataset.s;
+        paintStats(); paint();
+      }));
+    }
+
+    function cell(text, cls) {
+      return `<td class="rs-txt ${cls}">` + (text ? hit(text) : '<span class="rs-none">—</span>') + '</td>';
+    }
+
+    function paint() {
+      const list = shown();
+      const th = (key, label, cls) => key
+        ? `<th class="${cls || ''}${sortKey === key ? ' on' : ''}" data-k="${key}">${label}${sortKey === key ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`
+        : `<th class="${cls || ''}">${label}</th>`;
+      const rows = list.map((e) => {
+        const c = (VERDICT[e.verdict] || ['#9aa3b2'])[0];
+        const isOpen = open.has(e.n);
+        const tags = [e.family, e.horizon].filter(Boolean).map((t) => `<span class="rs-tag">${we(t)}</span>`).join('');
+        return `<tr class="rs-row${isOpen ? ' open' : ''}" data-n="${e.n}" tabindex="0" role="button" aria-expanded="${isOpen}">`
+          + `<td class="rs-n">${e.n}<span class="rs-chev" aria-hidden="true">›</span></td>`
+          + `<td class="rs-idea"><div class="rs-title">${hit(e.title)}</div>`
+          + (e.idea ? `<div class="rs-sum">${hit(e.idea)}</div>` : '')
+          + `<div class="rs-tags">${tags}</div></td>`
+          + cell(e.done, 'rs-done') + cell(e.outcome, 'rs-out') + cell(e.follows, 'rs-follows')
+          + `<td class="rs-v"><span class="rs-pill" style="--rs-c:${c}">${we(e.verdict)}</span></td>`
+          + `<td class="rs-date">${we(day(e.date))}</td></tr>`
+          + (isOpen ? `<tr class="rs-detail"><td colspan="7">`
+            + `<div class="rs-facts">`
+            + [['Horizon', e.horizon], ['Data', e.data], ['Sample', e.sample]].filter((f) => f[1])
+              .map(([k, v]) => `<div class="rs-fact"><span class="k">${k}</span><span>${we(v)}</span></div>`).join('')
+            + `</div>`
+            // THE BODY IS THE SERVER'S OWN RENDERING of our own file: its
+            // markdown renderer escapes first, so this is markup, not text.
+            + `<div class="rs-body">${e.html}</div>`
+            + `<div class="rs-link"><a href="#${e.n}" data-copy="${e.n}">Link to this entry</a></div>`
+            + `</td></tr>` : '');
+      }).join('');
+      $('wrap').innerHTML = list.length
+        ? '<table class="rs"><thead><tr>' + th('n', '#') + th(null, 'The idea') + th(null, 'What was done', 'rs-h-done')
+          + th(null, 'Outcome', 'rs-h-out') + th(null, 'What follows', 'rs-h-follows')
+          + th('verdict', 'Verdict') + th('date', 'Date', 'rs-h-date') + '</tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="rs-empty">Nothing matches that. Clear the search or the filters.</div>';
+      const total = data.entries.length;
+      $('count').textContent = list.length === total ? total + ' entries' : list.length + ' of ' + total + ' entries';
+      $('clear').hidden = !(verdict || $('q').value || $('family').value || $('horizon').value || $('data').value);
+      $('wrap').querySelectorAll('th[data-k]').forEach((h) => h.addEventListener('click', () => {
+        const k = h.dataset.k;
+        if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'verdict' ? 1 : -1; }
+        paint();
+      }));
+      const toggle = (tr) => {
+        const n = Number(tr.dataset.n);
+        if (open.has(n)) open.delete(n); else open.add(n);
+        paint();
+      };
+      $('wrap').querySelectorAll('tr.rs-row').forEach((tr) => {
+        tr.addEventListener('click', (ev) => { if (!ev.target.closest('a')) toggle(tr); });
+        tr.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(tr); } });
+      });
+      $('wrap').querySelectorAll('a[data-copy]').forEach((a) => a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const url = location.origin + '/research#' + a.dataset.copy;
+        history.replaceState(null, '', '#' + a.dataset.copy);
+        try { navigator.clipboard.writeText(url).then(() => { a.textContent = 'Link copied'; }); } catch (e) { /* the address bar has it */ }
+      }));
+    }
+
+    function fillSelect(id, label, values) {
+      const el = $(id), keep = el.value;
+      const counts = {};
+      for (const v of values) counts[v] = (counts[v] || 0) + 1;
+      const names = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+      el.innerHTML = `<option value="">${label}</option>` + names.map((v) => `<option value="${we(v)}">${we(v)} · ${counts[v]}</option>`).join('');
+      if (names.includes(keep)) el.value = keep;
+    }
+
+    async function load() {
+      try {
+        const r = await fetch('/api/research', { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not read the research.');
+        data = d;
+      } catch (e) {
+        $('wrap').innerHTML = `<div class="rs-error">${we(e.message)}</div>`;
+        return;
+      }
+      fillSelect('family', 'Every family', data.entries.map((e) => e.family));
+      fillSelect('horizon', 'Any horizon', data.entries.map((e) => e.horizon).filter(Boolean));
+      fillSelect('data', 'Any data', data.entries.flatMap(sources));
+      if (data.introHtml) { $('method').innerHTML = data.introHtml; $('methodWrap').hidden = false; }
+      const want = Number(location.hash.slice(1));
+      if (want && data.entries.some((e) => e.n === want)) open.add(want);
+      paintStats(); paint();
+      const gaps = data.entries.filter((e) => !e.filed || e.missing.length).length;
+      $('foot').textContent = 'Nothing on this page is investment advice or a recommendation to trade. '
+        + 'It records what past prices did over the archive, which is not a forecast of what they will do. '
+        + 'Results are measured on the stocks the site tracks today, which leaves out most companies that fell away.'
+        + (gaps ? ' ' + gaps + (gaps === 1 ? ' entry is' : ' entries are') + ' not fully written up yet.' : '');
+      if (want) { const tr = document.querySelector(`tr.rs-row[data-n="${want}"]`); if (tr) tr.scrollIntoView({ block: 'center' }); }
+    }
+
+    ['q'].forEach((id) => $(id).addEventListener('input', () => { if (data) paint(); }));
+    ['family', 'horizon', 'data'].forEach((id) => $(id).addEventListener('change', () => { if (data) paint(); }));
+    $('clear').addEventListener('click', () => {
+      verdict = ''; $('q').value = ''; $('family').value = ''; $('horizon').value = ''; $('data').value = '';
+      paintStats(); paint();
+    });
+    load();
+  </script>
+</body>
+</html>

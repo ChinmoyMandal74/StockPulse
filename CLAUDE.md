@@ -11,7 +11,7 @@ A stock screener. Every symbol in the universe is measured the same way after ev
 
 The repo/folder is `StockPulse`; the app is branded **Tickr Lab** in the UI. Production is `https://www.tickrlab.com` on Vercel.
 
-The universe is hand-edited and every count written down anywhere is a snapshot — ask `node --use-system-ca analysis-db.js --stats`. The screener is descriptive, not predictive: eleven backtest framings have been tried and ten came back flat. **Read `docs/context/does-any-of-this-predict-anything.md` before designing any backtest**, and `docs/backlog.md` before proposing new work — it may already be there with numbers attached.
+The universe is hand-edited and every count written down anywhere is a snapshot — ask `node --use-system-ca analysis-db.js --stats`. The screener is descriptive, not predictive: eleven backtest framings have been tried and ten came back flat. **Read `docs/context/does-any-of-this-predict-anything.md` before designing any backtest, and write every backtest up in `docs/research.md`** (members read it at `/research`; no buy/sell/hold wording), and `docs/backlog.md` before proposing new work — it may already be there with numbers attached.
 
 ## Running the app
 ```
@@ -56,6 +56,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `backfill-*.js`, `onboard.js`, `purge-orphans.js`, `*-load.js` | Local maintenance scripts — dry run by default, `--commit` to write |
 | `nightly-ping.js`, `intraday-ping.js`, `news-ping.js` + `*-task.ps1` | The schedulers: Windows Task Scheduler on the owner's laptop, calling the deployed app over HTTP |
+| `docs/research.md`, `research.js`, `private/research.html` | **Every backtest, written up for members** at `/research`: the file is the data (idea, what was done, outcome, what follows), the parser, the page. Every backtest run gets an entry; `research-test.js` checks them |
 | `docs/backlog.md` | Work identified and deliberately not done. Each entry carries a filing line (`*Area: … · Status: …*`) that the admin page `/backlog` reads; keep it when adding one |
 
 `portfolios.json`, `snapshot.json`, `profiles.json`, `names.json`, `visitors.log` are legacy pre-migration backups; nothing reads them.
@@ -162,6 +163,6 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts`
 
-**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-public-side` · `chatbot` · `company-summary`
+**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
 
 Also in `docs/`: `backlog.md`, `momentum-scoring.md`, `momentum-delta.md`.
