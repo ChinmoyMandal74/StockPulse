@@ -151,6 +151,14 @@
        a hover underline say so. */
     #stage a.s-nl { color: inherit; text-decoration: none; cursor: pointer; }
     #stage a.s-nl:hover { text-decoration: underline; }
+    /* A dot on the Scatter card is a link too; the hover ring and the name
+       label (#dotTip, placed by the studio) draw nothing into the picture. */
+    #stage a.s-dot { cursor: pointer; }
+    #stage a.s-dot:hover circle { stroke: #fff; stroke-width: 2.5; }
+    #dotTip { position: fixed; z-index: 50; pointer-events: none; display: none;
+      padding: 4px 9px; border-radius: 6px; font: 600 13px/1.3 Geist, sans-serif;
+      color: var(--text); background: var(--surface-2, #1b1f27); border: 1px solid var(--border, #2a2f3a);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35); white-space: nowrap; }
     /* A CARD OPENED BY A LINK (body.bare): no side bar, since the card has
        nothing to choose. A strip across the top carries the way back and,
        for the admin, the shape and the download. */
@@ -1181,6 +1189,42 @@
           figure the company filed. Narrow the cut with Sector and Industry to
           compare direct competitors.</p>
       </div>
+      <!-- Scatter: any measure against any other, a dot per company. The
+           measure lists are the Bars catalogue, filled from the module at
+           boot. Scoped, so it carries the standard six and joins
+           INDUSTRY_PREFIXES. -->
+      <div id="sctBox">
+        <label>Across</label>
+        <select id="sctX"></select>
+        <label>Up</label>
+        <select id="sctY"></select>
+        <label>Colour</label>
+        <select id="sctColor">
+          <option value="sector" selected>By sector</option>
+          <option value="signal">By the signal</option>
+          <option value="size">By size</option>
+          <option value="index">By index</option>
+          <option value="none">One colour</option>
+        </select>
+        <label>How many</label>
+        <select id="sctCount"></select>
+        <label>Within</label>
+        <select id="sctScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="sctSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="sctIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="sctCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="sctScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="sctSp500"></select>
+        <p class="hint">Any two measures, a dot for each company: the
+          largest by market value in the cut. Point at a dot for its name;
+          click it to open the company's page. The picture names a few, the
+          largest and the furthest out.</p>
+      </div>
       <!-- Sectors: the Industries card one step coarser -- one row per
            SECTOR. No Sector picker, since the rows are the sectors, and no
            Industry one. The prefix is not in INDUSTRY_PREFIXES for the
@@ -1853,6 +1897,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
+      { id: 'scatter', name: 'Scatter', note: 'Any two measures against each other, a dot per company — point at one for its name, click to open it' },
       { id: 'evo2', name: 'Evolution Two Stocks', note: 'Two companies, what each business did and what the market paid for it — from the filings, on one axis' },
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
       { id: 'covsize', name: 'Coverage by size', note: 'How many companies the site tracks in each size band, and the value in each' },
@@ -1950,6 +1995,7 @@
       ['sparks', 'Sparklines'],
       ['chart', 'Chart'],
       ['lines', 'Lines — any measure'],
+      ['scatter', 'Scatter — any measure'],
       ['evo2', 'Evolution Two Stocks'],
     ];
     // Coverage (2026-10-13, the owner: "Create a new group called Coverage, no
@@ -2044,7 +2090,7 @@
       for (const part of ['Scope', 'Sector', 'Cap', 'Screen', 'Sp500', 'Industry']) scopeSyncFrom(prefix + part);
     }
     // Which scoped controls belong to which template, for an opened post.
-    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin' };
+    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct' };
     const OWNER_ONLY_TPLS = new Set(['announce']);
     let canAnnounce = false;
     // ---- member mode ---------------------------------------------------------
@@ -2498,6 +2544,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
+      'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
@@ -2532,7 +2579,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin', 'sct'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -2703,6 +2750,34 @@
       } catch (e) { /* the card as drawn */ }
     }
 
+    // THE SCATTER CARD'S HOVER LABEL. Each dot carries its company's name in
+    // data-n; this shows it beside the pointer. Outside the artboard and in
+    // the page, never in the card, so the downloaded picture is unchanged. A
+    // native <title> would show the same name, but after a second's delay.
+    (function dotTip() {
+      const st = document.getElementById('stage');
+      if (!st) return;
+      const tip = document.createElement('div');
+      tip.id = 'dotTip';
+      document.body.appendChild(tip);
+      const dotOf = (el) => (el && el.closest ? el.closest('a.s-dot') : null);
+      st.addEventListener('mouseover', (e) => {
+        const a = dotOf(e.target);
+        if (!a) return;
+        tip.textContent = a.getAttribute('data-n') || '';
+        tip.style.display = 'block';
+      });
+      st.addEventListener('mousemove', (e) => {
+        if (tip.style.display !== 'block') return;
+        tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY - 34) + 'px';
+      });
+      st.addEventListener('mouseout', (e) => {
+        const a = dotOf(e.target);
+        if (a && !a.contains(e.relatedTarget)) tip.style.display = 'none';
+      });
+    }());
+
     function render() {
       syncStockPickers();
       syncIndustries(false);
@@ -2799,6 +2874,7 @@
       $('tgrBox').style.display = tpl === 'thmgrowth' ? 'block' : 'none';
       for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
+      $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
@@ -3142,6 +3218,24 @@
       fillLineWindows();
     }());
     $('linMetric').addEventListener('change', () => { fillLineWindows(); if (tpl === 'lines') render(); });
+    // Scatter: both measure lists from the Bars catalogue, grouped as there.
+    (function fillScatterControls() {
+      for (const id of ['sctX', 'sctY']) {
+        const sel = $(id), groups = new Map();
+        for (const [v, label, grp] of Cards.scatterMeasures()) {
+          if (!groups.has(grp)) {
+            const og = document.createElement('optgroup');
+            og.label = grp; groups.set(grp, og); sel.appendChild(og);
+          }
+          groups.get(grp).appendChild(new Option(label, v));
+        }
+      }
+      $('sctX').value = 'v200'; $('sctY').value = 'm1';
+      for (const [v, label] of Cards.scatterCounts()) $('sctCount').appendChild(new Option(label, v, v === '100', v === '100'));
+    }());
+    ['sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector',
+      'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'scatter') render(); }));
     ['linWin', 'linCount', 'linScope', 'linSector',
       'linIndustry', 'linCap', 'linScreen', 'linSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'lines') render(); }));
@@ -3904,6 +3998,7 @@
         $('secScope').innerHTML = $('movScope').innerHTML;
         $('trkScope').innerHTML = $('movScope').innerHTML;
         $('linScope').innerHTML = $('movScope').innerHTML;
+        $('sctScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -3966,7 +4061,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'indSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'sctSector', 'indSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -3980,7 +4075,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'sctCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -3996,7 +4091,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'sctScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4012,7 +4107,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500', 'ssnSp500',
-          'shrtSp500', 'barSp500', 'linSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
+          'shrtSp500', 'barSp500', 'linSp500', 'sctSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
           'omkSp500', 'oscSp500', 'oinSp500', 'trkSp500', 'tsnSp500', 'tspSp500', 'othSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;

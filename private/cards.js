@@ -2576,8 +2576,9 @@
         const q1 = quart(a, 0.25), q3 = quart(a, 0.75), iqr = q3 - q1;
         // Clamped to the real data: a fence wider than the values themselves
         // would leave dead space rather than pin anything.
-        lo = Math.max(a[0], q1 - iqr * 1.5);
-        hi = Math.min(a[a.length - 1], q3 + iqr * 1.5);
+        const k = g.k || 1.5;
+        lo = Math.max(a[0], q1 - iqr * k);
+        hi = Math.min(a[a.length - 1], q3 + iqr * k);
         if (!(hi > lo)) { lo = a[0]; hi = a[a.length - 1]; }
       } else {
         lo = a[Math.floor(a.length * 0.02)];
@@ -7124,6 +7125,262 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Scatter: any measure against any other, one dot per company ---------
+  //
+  // THE OWNER'S REQUEST (2026-10-14): "under Compare like we have Lines any
+  // measure, there should be a scatter plot any measure", with colour chosen
+  // on the usual dimensions, the name on hovering a dot, and a click on a dot
+  // opening the company's page.
+  //
+  // NOT THE BUBBLE CARD. Bubble plots twenty companies with AREA as a third
+  // measure, from the seventeen fundamentals. This one plots up to the whole
+  // screen, every dot the same size, on ANY measure the Bars card ranks --
+  // returns, trend, scale, margins, valuation, ownership. The catalogue is
+  // BAR_METRICS itself, flags and all, so a measure added there is offered
+  // here and is filtered by the same rules (no funds on a company measure, no
+  // lenders where it means nothing, no mixed-currency rows, no multiple off a
+  // loss). Only the axis NAME is this card's own: the Bars label is the end of
+  // a sentence ("over the past week"), which is no name for an axis.
+  //
+  // A DOT IS A LINK. Each one is an SVG <a> to /stock/<SYM>, carrying the
+  // company's name for the studio's hover label (data-n). Neither the link nor
+  // the attribute draws anything, so the downloaded picture is the dots alone.
+  const SCT_AXIS = {
+    d: 'Today', w1: 'Past week', w2: 'Past two weeks', m1: 'Past month', m3: 'Past three months',
+    m6: 'Past six months', ytd: 'Year to date', y1: 'Past year', y5: 'Past five years',
+    va: 'Value added today', v50: 'Distance from the 50-day average', v200: 'Distance from the 200-day average',
+    rsi: 'RSI', r52: 'Place in the 52-week range', hi52: 'Distance from the 52-week high',
+    ath: 'Distance from the record close', rs: 'Relative strength', chip: 'Move on chip selloff days',
+    mdn: 'Move on market selloff days', mup: 'Move on market rally days', bad: 'Bad day', cush: 'Cushion to the exit',
+    volx: 'Relative volume', dvol: 'Dollar volume today', qual: 'Quality score',
+    cap: 'Market value', rev: 'Revenue', gp: 'Gross profit', ni: 'Net income', fcf: 'Free cash flow',
+    ebitda: 'EBITDA', ocf: 'Operating cash flow', cash: 'Net cash', debt: 'Debt',
+    gm: 'Gross margin', om: 'Operating margin', pm: 'Profit margin', fm: 'Free cash flow margin',
+    rg: 'Revenue growth', eg: 'Earnings growth', roe: 'Return on equity', roa: 'Return on assets',
+    fpe: 'Forward P/E', tpe: 'Trailing P/E', lpe: 'P/E at today’s price', ppe: 'P/E relative to the industry',
+    peg: 'PEG', ps: 'Price to sales', eve: 'EV / EBITDA', fy: 'Free cash flow yield',
+    shrt: 'Short interest', sbld: 'Short interest change', insn: 'Insider net buying', d2c: 'Days to cover',
+    ins: 'Insider ownership', inst: 'Institutional ownership',
+  };
+  const sctName = (m) => SCT_AXIS[m.key] || (m.label.charAt(0).toUpperCase() + m.label.slice(1));
+  // Colour on the dimensions the rest of the studio cuts by. Green and red
+  // are price direction on this site, so none of these ladders leans on them
+  // except the Signal's own, which every card already draws in.
+  const SCT_SIZE_TINT = { Mega: '#a78bfa', Large: '#7c9cff', 'Mid-Large': '#22d3ee', Mid: '#fbbf24',
+    Small: '#fb923c', Micro: '#f472b6' };
+  const SCT_INDEX_TINT = [['S&P 500 and Nasdaq 100', '#a78bfa'], ['S&P 500', '#7c9cff'],
+    ['Nasdaq 100', '#22d3ee'], ['Neither', '#94a3b8']];
+  const SCT_SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
+  const SCT_COUNTS = [['50', '50 largest'], ['100', '100 largest'], ['250', '250 largest'], ['all', 'Every one']];
+
+  function sctTicks(a, b, log) {
+    if (log) {
+      const out = [];
+      for (let k = Math.ceil(a); k <= b + 1e-9; k++) out.push(k);
+      if (out.length >= 2) return out;
+      for (let k = Math.ceil(a * 2) / 2; k <= b + 1e-9; k += 0.5) out.push(k);
+      return out.filter((v, i, s) => s.indexOf(v) === i).sort((m, n) => m - n);
+    }
+    const raw = (b - a) / 4;
+    if (!(raw > 0)) return [a];
+    const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    const st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+    const out = [];
+    for (let v = Math.ceil(a / st) * st; v <= b + st * 1e-6; v += st) out.push(Math.abs(v) < st * 1e-6 ? 0 : v);
+    return out;
+  }
+
+  function tplScatter() {
+    const scope = scopeOf('sctScope', 'sctSector');
+    const mx = BAR_BY_KEY[O.sctX] || BAR_BY_KEY.v200;
+    const my = BAR_BY_KEY[O.sctY] || BAR_BY_KEY.m1;
+    const xn = sctName(mx), yn = sctName(my);
+    const colorBy = ['sector', 'signal', 'size', 'index', 'none'].includes(O.sctColor) ? O.sctColor : 'sector';
+    const cnt = O.sctCount === 'all' ? Infinity : ([50, 100, 250].includes(Number(O.sctCount)) ? Number(O.sctCount) : 100);
+
+    const isFund = (r) => r.instrumentType === 'ETF'
+      || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+    // A NULL IS NOT A ZERO: the empty is rejected before it is coerced.
+    const read = (r, m) => {
+      const raw = r[m.field];
+      if (raw == null || raw === '') return null;
+      const v = Number(raw);
+      return isFinite(v) ? v : null;
+    };
+    const out = { fin: 0, mixed: 0, sign: 0 };
+    let rows = [];
+    for (const r of scope.rows) {
+      if (!r || r.error) continue;
+      const vx = read(r, mx), vy = read(r, my);
+      if (vx == null || vy == null) continue;
+      const ms = [mx, my];
+      if (ms.some((m) => m.co) && isFund(r)) continue;
+      if (ms.some((m) => m.co) && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
+      if (ms.some((m) => m.noFin) && r.sector === 'Financial Services') { out.fin++; continue; }
+      if (ms.some((m) => m.coh) && barMixed(r)) { out.mixed++; continue; }
+      if ((mx.pos && !(vx > 0)) || (my.pos && !(vy > 0))) { out.sign++; continue; }
+      rows.push({ r, vx, vy, cap: Number(r.marketCap) || 0 });
+    }
+    const withBoth = rows.length;
+    // The largest by market value, so a cut of fifty is the fifty a reader
+    // has heard of; the whole cut when asked for.
+    rows.sort((a, b) => b.cap - a.cap);
+    if (rows.length > cnt) rows = rows.slice(0, cnt);
+
+    const head = '<span class="s-kick">' + esc(scope.label + ' · '
+      + rows.length.toLocaleString('en-US') + (rows.length < withBoth
+        ? ' largest of ' + withBoth.toLocaleString('en-US') : '') + ' with both readings') + '</span>'
+      + '<h2 class="s-title">' + esc(yn) + '<br><span class="dim">against ' + esc(xn.toLowerCase()) + '</span></h2>';
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div>' + head
+        + '<p class="s-empty">Too few companies in ' + esc(scope.label) + ' carry both readings to plot. Widen the cut.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
+    // A MONEY AXIS IS DRAWN ON A LOG SCALE when every value on it is positive:
+    // market values run from millions to trillions, and on a straight scale
+    // all but a handful of dots sit in one corner. A measure that can go below
+    // zero (net income, net cash) stays straight, since a log has no zero.
+    const logX = mx.unit === 'money' && rows.every((p) => p.vx > 0);
+    const logY = my.unit === 'money' && rows.every((p) => p.vy > 0);
+    const pts = rows.map((p) => ({
+      sym: p.r.symbol, label: nameOf(p.r), row: p.r, cap: p.cap,
+      x: logX ? Math.log10(p.vx) : p.vx, y: logY ? Math.log10(p.vy) : p.vy,
+    }));
+
+    const W = 952, H = size.id === 'story' ? 1180 : size.id === 'square' ? 470 : 610;
+    const PL = 104, PR = 34, PT = 40, PB = 66;
+    // Tukey's fence, as Bubble uses, but WIDER ONCE THE PLOT IS LARGE. At the
+    // usual 1.5 quartile spreads the whole screen pinned 165 of 1,211 dots to
+    // the edges; the 2% trim instead let revenue growth run to 250% and
+    // profit margin to -500%, pressing a thousand dots into one corner.
+    // Three spreads keeps the body readable and pins only the far tail.
+    const sc = plotScales(pts, { W, H, PL, PR, PT, PB, includeZero: false,
+      fence: 'iqr', k: pts.length < 100 ? 1.5 : 3 });
+    const X = sc.X, Y = sc.Y, stray = sc.stray;
+    const pinned = pts.filter(stray).length;
+
+    let keys = [];
+    const tintOf = (() => {
+      if (colorBy === 'none') return () => pal.ink('#7c9cff');
+      if (colorBy === 'signal') {
+        keys = SCT_SIGNALS.filter((w) => pts.some((p) => p.row.action === w)).map((w) => [w, (pal.tints && pal.tints[w]) || pal.flat]);
+        return (p) => (p.row.action && pal.tints && pal.tints[p.row.action]) || pal.flat;
+      }
+      if (colorBy === 'size') {
+        keys = BRD_CAP_ORDER.filter((b) => pts.some((p) => p.row.capBand === b)).map((b) => [b, pal.ink(SCT_SIZE_TINT[b])]);
+        return (p) => (SCT_SIZE_TINT[p.row.capBand] ? pal.ink(SCT_SIZE_TINT[p.row.capBand]) : pal.flat);
+      }
+      if (colorBy === 'index') {
+        // Membership is three-state: a company neither file has been read
+        // for is unknown, not "Neither", and is drawn in the flat grey.
+        const idx = (r) => (r.spMember === true && r.ndxMember === true ? 0 : r.spMember === true ? 1
+          : r.ndxMember === true ? 2 : (r.spMember === false && r.ndxMember === false) ? 3 : -1);
+        keys = SCT_INDEX_TINT.filter((k, i) => pts.some((p) => idx(p.row) === i)).map(([n, c]) => [n, pal.ink(c)]);
+        return (p) => { const i = idx(p.row); return i >= 0 ? pal.ink(SCT_INDEX_TINT[i][1]) : pal.flat; };
+      }
+      // A fund has no sector; on a price measure it is plotted and keyed as one.
+      const secOf = (r) => r.sector || (r.instrumentType === 'ETF' ? 'Funds' : 'No sector');
+      const sectors = [...new Set(pts.map((p) => secOf(p.row)))].sort();
+      keys = sectors.map((s, i) => [s, pal.ink(BUB_SECTOR_TINTS[i % BUB_SECTOR_TINTS.length])]);
+      return (p) => pal.ink(BUB_SECTOR_TINTS[sectors.indexOf(secOf(p.row)) % BUB_SECTOR_TINTS.length]);
+    })();
+
+    const R = pts.length <= 60 ? 8 : pts.length <= 160 ? 6.5 : pts.length <= 400 ? 5 : 4;
+    // Smallest last, so a small company is never buried under a large one
+    // when two sit on the same spot -- and the one on top is the one a click
+    // reaches.
+    const order = pts.slice().sort((a, b) => b.cap - a.cap);
+    const dots = order.map((p) => {
+      const c = tintOf(p), cx = X(p.x).toFixed(1), cy = Y(p.y).toFixed(1);
+      const mark = stray(p)
+        ? '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + c + '" stroke-width="2"/>'
+        : '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="' + c + '" fill-opacity="0.78"/>';
+      return '<a class="s-dot" href="/stock/' + encodeURIComponent(p.sym) + '" target="_blank" data-n="'
+        + esc(p.label || p.sym) + '">' + mark + '</a>';
+    }).join('');
+
+    // NAMES FOR A FEW. Every dot carries its name on hover; the picture names
+    // the five largest and the five furthest out, and drops any name that
+    // would land on one already placed, by the Bubble card's rule.
+    const spanX = (sc.x1 - sc.x0) || 1, spanY = (sc.y1 - sc.y0) || 1;
+    const mid = (a) => { const s = a.slice().sort((m, n) => m - n); return s[Math.floor(s.length / 2)]; };
+    const mxv = mid(pts.map((p) => p.x)), myv = mid(pts.map((p) => p.y));
+    // A pinned dot's place on the edge is not its value, so it is not named
+    // as one of the furthest out.
+    const far = pts.filter((p) => !stray(p)).sort((a, b) =>
+      (Math.abs(b.x - mxv) / spanX + Math.abs(b.y - myv) / spanY) - (Math.abs(a.x - mxv) / spanX + Math.abs(a.y - myv) / spanY));
+    const pick = [];
+    for (const p of order.slice(0, 5).concat(far.slice(0, 5))) if (!pick.includes(p)) pick.push(p);
+    const placed = [];
+    const fits = (x0, y0, w) => {
+      const box = { x0, x1: x0 + w, y0: y0 - 16, y1: y0 + 5 };
+      if (box.x0 < PL || box.x1 > W - PR || box.y0 < PT) return false;
+      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) return false;
+      placed.push(box);
+      return true;
+    };
+    const labels = pick.map((p) => {
+      const full = p.label || p.sym;
+      const txt = full.length > 18 ? full.slice(0, 17) + '…' : full;
+      const w = txt.length * 9.2, cx = X(p.x), cy = Y(p.y) + 6;
+      const right = cx + R + 6, left = cx - R - 6 - w;
+      const go = cx < PL + (W - PL - PR) * 0.6 ? [right, left] : [left, right];
+      const at = go.find((x0) => fits(x0, cy, w));
+      if (at == null) return '';
+      return '<text x="' + at.toFixed(1) + '" y="' + cy.toFixed(1) + '" font-size="17" font-weight="600" fill="'
+        + pal.ink('#cfd6e2') + '" font-family="Geist, sans-serif">' + esc(txt) + '</text>';
+    }).join('');
+
+    // Ticks, in the measure's own unit, so a reader can read a dot's value
+    // off the axes without hovering.
+    // Round steps print without their decimals: "20%", not "20.0%".
+    const tickFig = (v, m, log) => barFig(log ? Math.pow(10, v) : v, Object.assign({}, m, { plus: 0 }))
+      .replace(/\.0+(?=\D*$)/, '');
+    const gx = sctTicks(sc.x0, sc.x1, logX), gy = sctTicks(sc.y0, sc.y1, logY);
+    const tk = (t, x, y, anchor) => '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor
+      + '" font-size="15" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(t) + '</text>';
+    const grid = gx.map((v) => '<line x1="' + X(v).toFixed(1) + '" y1="' + PT + '" x2="' + X(v).toFixed(1) + '" y2="' + (H - PB)
+      + '" stroke="rgba(255,255,255,0.06)"/>' + tk(tickFig(v, mx, logX), X(v), H - PB + 22, 'middle')).join('')
+      + gy.map((v) => '<line x1="' + PL + '" y1="' + Y(v).toFixed(1) + '" x2="' + (W - PR) + '" y2="' + Y(v).toFixed(1)
+      + '" stroke="rgba(255,255,255,0.06)"/>' + tk(tickFig(v, my, logY), PL - 10, Y(v) + 5, 'end')).join('');
+    // Zero, where it falls inside a straight axis, is the line that matters.
+    const zero = (!logX && sc.x0 < 0 && sc.x1 > 0 ? '<line x1="' + X(0).toFixed(1) + '" y1="' + PT + '" x2="' + X(0).toFixed(1)
+      + '" y2="' + (H - PB) + '" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"/>' : '')
+      + (!logY && sc.y0 < 0 && sc.y1 > 0 ? '<line x1="' + PL + '" y1="' + Y(0).toFixed(1) + '" x2="' + (W - PR)
+      + '" y2="' + Y(0).toFixed(1) + '" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"/>' : '');
+    const axis = (t, x, y, anchor) => '<text x="' + x + '" y="' + y + '" text-anchor="' + anchor
+      + '" font-size="17" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(t) + '</text>';
+    const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;margin-top:16px" role="img" aria-label="'
+      + esc(yn + ' against ' + xn) + '">'
+      + grid + zero
+      + '<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="rgba(255,255,255,0.18)"/>'
+      + '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="rgba(255,255,255,0.18)"/>'
+      + dots + labels
+      + axis(xn.toLowerCase() + (logX ? ', log scale' : '') + ' →', W - PR, H - 10, 'end')
+      + axis('↑ ' + yn.toLowerCase() + (logY ? ', log scale' : ''), PL + 8, PT - 16, 'start')
+      + '</svg>';
+
+    const legend = colorBy === 'none' ? '' : '<div class="blegend">'
+      + keys.map(([n, c]) => '<span class="bkey"><i style="background:' + c + '"></i>' + esc(n) + '</span>').join('')
+      + '</div>';
+
+    const left = [];
+    if (out.sign) left.push(out.sign + ' with no positive reading');
+    if (out.fin) left.push(out.fin + (out.fin === 1 ? ' lender' : ' lenders') + ', for whom a measure here means nothing');
+    if (out.mixed) left.push(out.mixed + ' whose reported figures are not all in dollars');
+    const note = 'Each dot is one company. '
+      + (pinned ? pinned + (pinned === 1 ? ' sits' : ' sit') + ' beyond the axis range and '
+        + (pinned === 1 ? 'is' : 'are') + ' drawn as a ring on its edge. ' : '')
+      + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
+      + 'A picture of what the screen holds, not a recommendation.';
+
+    return chromeTop()
+      + '<div class="s-body"><div>' + head + legend + svg
+      + '<p class="s-sub wide" style="--fs:17px;margin-top:14px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Industries: one row per industry, ranked on one measure -------------
   //
   // THE UNIT IS THE INDUSTRY (2026-10-10, owner's request). Every other card
@@ -10319,6 +10576,7 @@
     sectors: tplSectors,
     secspot: tplSecSpot,
     lines: tplLines,
+    scatter: tplScatter,
     months: tplMonths,
     peertrend: tplPeerTrend,
     perf: tplPerf,
@@ -12672,6 +12930,9 @@
     // card: the stock page takes these and none of the artboard's.
     drawdownStyle: () => STYLE.slice(STYLE.indexOf('/* dd:start */'), STYLE.indexOf('/* dd:end */')),
     ddStateOf: ddStateC, ddStates: () => DD_STEPS_C.map((s) => s.slice()), ddMinHistory: DD_MIN_HISTORY_C,
+    // The Scatter card: the Bars catalogue under axis names, and its counts.
+    scatterMeasures: () => BAR_METRICS.map((m) => [m.key, sctName(m), m.group]),
+    scatterCounts: () => SCT_COUNTS.map((c) => c.slice()),
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)
