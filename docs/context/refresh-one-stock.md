@@ -4,7 +4,7 @@ The owner: "an option for admin to refresh both price and fundamental" for one s
 
 ## What it is
 
-- `POST /api/admin/refresh-stock?symbol=<SYM>` (`requireAdmin`), and a **Refresh** button on the stock page's chart toolbar, shown only to the admin.
+- `POST /api/admin/refresh-stock?symbol=<SYM>` (`requireAdmin`), and a **Refresh** button in the stock page's masthead beside the price (moved off the chart toolbar on 2026-10-15, owner's request), shown only to the admin.
 - One action, three steps, each the path a full refresh already takes:
   1. **Fundamentals**: `ensureProfiles([symbol], 1, true)`. The third argument forces a pull past the one-day age. About 80 credits.
   2. **Price**: a shallow pull, and a deep one if the shallow window does not reach back to what the archive holds (the price sweep's own guard, so twelve bars can never replace years). 1 credit.

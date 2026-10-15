@@ -168,6 +168,12 @@
        — .head's own gap would space them like the chips. */
     .outs { display: inline-flex; align-items: center; gap: 8px; align-self: center;
             flex-wrap: wrap; }
+    /* The admin pair takes the free space left of the price; with both
+       hidden it is an empty span and the price still sits at the right. */
+    .adm-acts { display: inline-flex; align-items: center; gap: 8px; align-self: center;
+                flex-wrap: wrap; margin-left: auto; }
+    .adm-acts button.olink { font-family: inherit; cursor: pointer; }
+    .adm-acts button.olink:disabled { cursor: progress; opacity: 0.7; }
     .px { margin-left: auto; text-align: right; align-self: flex-end; }
     .px b { display: block; font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
     .px span { font-family: var(--mono); font-size: 12.5px; }
@@ -3265,6 +3271,15 @@
                title="Open ${esc(stock.symbol)} in Yahoo Finance — opens in a new tab">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>Yahoo Finance</a>
           </span>
+          <!-- Admin actions on the whole stock, not the chart, so they sit in
+               the masthead beside the price (the owner, 2026-10-15). Both stay
+               hidden until /api/me says admin; the ids are what the script finds. -->
+          <span class="adm-acts">
+            <button class="olink" id="rfBtn" type="button" hidden
+              title="Admin: pull this stock's price and fundamentals from the provider now, then rebuild the screen. About a minute.">Refresh</button>
+            <button class="olink" id="sumBtn" type="button" hidden
+              title="Admin: have the AI model write a Company summary of this stock from the figures on this page, saved as a blog draft for you to read. Nothing is published.">Company summary</button>
+          </span>
           <span class="px"><b>${esc(price)}</b>
             <span class="${today == null ? 'na' : today >= 0 ? 'pos' : 'neg'}">${
               today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span>
@@ -3323,10 +3338,6 @@
                 title="Draw the dashed trend-hold line: what holding only the green trend states would have returned — in during Strong uptrend and Above 200D, in cash otherwise, acted on at the close the word appears on. The trend ribbon under the chart is always shown.">TREND</button></span>
             <a class="rng" id="chartsLink" hidden href="/promo?tpl=spotlight&amp;sym=${encodeURIComponent(stock.symbol)}"
               title="See this stock as cards: revenue mix, insiders, options, capital returns and more">Visuals ▸</a>
-            <button class="rng" id="rfBtn" type="button" hidden
-              title="Admin: pull this stock's price and fundamentals from the provider now, then rebuild the screen. About a minute.">Refresh</button>
-            <button class="rng" id="sumBtn" type="button" hidden
-              title="Admin: have the AI model write a Company summary of this stock from the figures on this page, saved as a blog draft for you to read. Nothing is published.">Company summary</button>
           </div>
           <div class="rc-chart" id="chart"><div class="msg">…</div></div>
           <!-- The three optional layers, in the owner's order (2026-09-29):

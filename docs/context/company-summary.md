@@ -6,7 +6,7 @@ The owner asked whether a one-page executive summary of a stock could be made "a
 
 - `summary.js` (root, pure): `factSheet(d)`, `sheetText`, `prompt(d, sections)`, `check(text, sections, d)`, `postBody`, `slugOf`, `titleOf`, `ROW_SECTIONS`, `HEADINGS`, `RULES`.
 - `server.js`: `summaryFacts(symbol)` and `POST /api/admin/company-summary?symbol=` (`requireAdmin`). `SUMMARY_MODEL` (env) defaults to `CHAT_MODEL`.
-- `private/stock.html`: a **Company summary** button on the chart toolbar, shown only to the admin. It asks, then opens the blog editor on the draft.
+- `private/stock.html`: a **Company summary** button in the masthead beside the price (moved off the chart toolbar on 2026-10-15, owner’s request), shown only to the admin. It asks, then opens the blog editor on the draft.
 
 ## How it works
 
