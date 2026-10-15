@@ -1289,6 +1289,11 @@
                   <span class="nm">Help</span>
                 </a>
                 <!-- Members: every backtest, written up. Hidden on the guest preview, which the route refuses. -->
+                <!-- Members: paper positions, a simulation with pretend money. -->
+                <a class="pick" href="/paper" id="paperLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
+                  <span class="nm">Paper positions</span>
+                </a>
                 <a class="pick" href="/research" id="researchLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
                   <span class="nm">Research</span>
@@ -5334,7 +5339,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        { const rl = document.getElementById('researchLink'); if (rl) rl.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

@@ -49,6 +49,8 @@ const Filters = require('./private/filters.js');
 // The stock page's At a glance cards: built here, where every company's
 // figures are in memory for the comparisons; drawn by the page.
 const Glance = require('./private/glance.js');
+// Paper positions: the ledger arithmetic (paper.js) behind /paper.
+const Paper = require('./paper.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -575,7 +577,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/research.html': '/research',
+                      '/backlog.html': '/backlog', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1524,6 +1526,13 @@ app.get('/quality', route(async (req, res) => {
 // Members: every backtest, written up -- docs/research.md through research.js.
 // Shared with members by the owner's decision of 2026-10-15; never guests,
 // who see the same twenty-stock preview everywhere else.
+// Members: paper positions, a simulation with pretend cash (2026-10-15).
+app.get('/paper', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'paper');
+  res.sendFile(path.join(__dirname, 'private', 'paper.html'));
+}));
 app.get('/research', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
@@ -3173,14 +3182,22 @@ app.get('/api/users', requireAdmin, route(async (req, res) => {
   // The review half of member portfolios: each account row on /users shows
   // what its owner has built. Rows under a key with no account (the legacy
   // 'admin' key) still surface, so nothing is invisible to review.
-  const [users, allMine] = await Promise.all([store.listUsers(), store.listAllUserPortfolios()]);
+  const [users, allMine, allPaper, paperPx] = await Promise.all([store.listUsers(), store.listAllUserPortfolios(),
+    store.listAllPaper().catch(() => ({})), paperPrices().catch(() => ({}))]);
+  // Paper positions, summed per account: what is open and how it stands.
+  const paperOf = (email) => {
+    const p = allPaper[email];
+    if (!p || !p.trades.length) return null;
+    const s = Paper.summarise(p.account, p.trades, paperPx);
+    return { equity: s.equity, ret: s.ret, cash: s.cash, open: s.positions.map((x) => x.symbol), closed: s.closed.length };
+  };
   const byUser = {};
   for (const r of allMine) (byUser[r.user] ||= []).push({ name: r.name, symbols: r.symbols });
   const emails = new Set(users.map((u) => u.email));
   const orphaned = Object.keys(byUser).filter((k) => !emails.has(k))
     .map((k) => ({ user: k, portfolios: byUser[k] }));
   return res.json({
-    users: users.map((u) => ({ ...u, portfolios: byUser[u.email] || [] })),
+    users: users.map((u) => ({ ...u, portfolios: byUser[u.email] || [], paper: paperOf(u.email) })),
     otherPortfolios: orphaned,
   });
 }));
@@ -5995,6 +6012,100 @@ app.get('/alerts', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'alerts');
   res.sendFile(path.join(__dirname, 'private', 'alerts.html'));
+}));
+
+// ---- paper positions ---------------------------------------------------------
+//
+// THE OWNER'S REQUEST (2026-10-15): "Can we add mock trade feature", then
+// "go ahead" on the proposal: a pretend account per member, $100,000 to
+// start, positions opened and closed at the latest price the site holds,
+// private to the member and reviewable by the owner. In the site's own words:
+// a position is OPENED and CLOSED, never bought or sold, and nothing here is
+// read by the Signal. Members only; a guest has no key.
+//
+// A FILL IS THE SNAPSHOT'S PRICE, with the time that price was pulled. Prices
+// refresh every half hour in market hours, so a fill is delayed, never live,
+// and nothing can be entered at a past price.
+const PAPER_MAX_TRADES = 5000;
+const PAPER_SYM = /^[A-Z0-9.\-]{1,12}$/;
+
+// The latest price for every symbol the site holds, with its time and name.
+async function paperPrices() {
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && !r.error && r.price > 0);
+  try { await stampPricedAt(rows); } catch (e) { /* the price stands without its time */ }
+  const out = {};
+  for (const r of rows) {
+    out[r.symbol] = { price: Number(r.price), pricedAt: r.pricedAt || (snap && snap.updatedAt) || null,
+      name: r.shortName || r.name || null, action: r.action ? Action.canon(r.action) : null };
+  }
+  return out;
+}
+
+// The account's value at every close since it started, against SPY. One
+// indexed seek per symbol ever held, bounded to the days since the start.
+async function paperHistory(account, trades) {
+  const days = Math.ceil((Date.now() - Number(account.started_at)) / 86400000) + 10;
+  if (days > 1500) return [];
+  const limit = Math.max(15, Math.ceil(days * 0.75) + 10);
+  const syms = [...new Set(trades.map((t) => t.symbol))];
+  const toSeries = (bars) => bars.map((b) => ({ d: String(b.datetime).slice(0, 10), c: Number(b.close) })).filter((x) => x.c > 0).reverse();
+  const [bench, ...each] = await Promise.all([store.readBars('SPY', limit)].concat(syms.map((s) => store.readBars(s, limit).catch(() => []))));
+  const closes = {};
+  syms.forEach((s, i) => { closes[s] = toSeries(each[i] || []); });
+  return Paper.history(account, trades, closes, toSeries(bench || []));
+}
+
+app.get('/api/paper', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const key = await prefsKey(req);
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(key, Paper.START_CASH), paperPrices()]);
+  const sum = Paper.summarise(account, trades, prices);
+  let hist = [];
+  try { hist = await paperHistory(account, trades); } catch (e) { hist = []; }   // never fail the page over the chart
+  // The pickers' list: what can be opened, by symbol and name.
+  const universe = Object.entries(prices).map(([s, p]) => ({ s, n: p.name || '' })).sort((a, b) => a.s.localeCompare(b.s));
+  res.json({ ...sum, history: hist, universe });
+}));
+
+app.post('/api/paper/open', requireMember, route(async (req, res) => {
+  const key = await prefsKey(req);
+  const symbol = String((req.body && req.body.symbol) || '').trim().toUpperCase();
+  if (!PAPER_SYM.test(symbol)) return res.status(400).json({ error: 'Choose a stock.' });
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(key, Paper.START_CASH), paperPrices()]);
+  const now = prices[symbol];
+  if (!now) return res.status(400).json({ error: symbol + ' is not one of the stocks the site tracks.' });
+  if (trades.length >= PAPER_MAX_TRADES) return res.status(400).json({ error: 'This account has reached its limit of trades. Start again to keep going.' });
+  const sum = Paper.summarise(account, trades, prices);
+  const size = Paper.sizeOpen(req.body || {}, now.price, sum.cash);
+  if (size.error) return res.status(400).json({ error: size.error });
+  await store.addPaperTrade(key, { ts: Date.now(), kind: 'open', symbol, shares: size.shares, price: now.price,
+    priced_at: now.pricedAt, signal: now.action });
+  logAct(req, 'paper', 'open:' + symbol);
+  res.json({ ok: true, symbol, shares: size.shares, price: now.price, pricedAt: now.pricedAt });
+}));
+
+app.post('/api/paper/close', requireMember, route(async (req, res) => {
+  const key = await prefsKey(req);
+  const symbol = String((req.body && req.body.symbol) || '').trim().toUpperCase();
+  if (!PAPER_SYM.test(symbol)) return res.status(400).json({ error: 'Choose a position.' });
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(key, Paper.START_CASH), paperPrices()]);
+  const sum = Paper.summarise(account, trades, prices);
+  const pos = sum.positions.find((p) => p.symbol === symbol);
+  const size = Paper.sizeClose(req.body || {}, pos ? pos.shares : 0);
+  if (size.error) return res.status(400).json({ error: size.error });
+  // A stock no longer tracked closes at its last traded price, and says so.
+  await store.addPaperTrade(key, { ts: Date.now(), kind: 'close', symbol, shares: size.shares, price: pos.price,
+    priced_at: pos.pricedAt, note: pos.tracked ? null : 'no longer tracked: closed at its last traded price' });
+  logAct(req, 'paper', 'close:' + symbol);
+  res.json({ ok: true, symbol, shares: size.shares, price: pos.price });
+}));
+
+app.post('/api/paper/reset', requireMember, route(async (req, res) => {
+  if (!(req.body && req.body.confirm === true)) return res.status(400).json({ error: 'Confirm to start again.' });
+  await store.resetPaper(await prefsKey(req), Paper.START_CASH);
+  logAct(req, 'paper', 'reset');
+  res.json({ ok: true });
 }));
 
 app.get('/api/my/portfolios', requireMember, route(async (req, res) => {

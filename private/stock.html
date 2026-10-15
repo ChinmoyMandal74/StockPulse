@@ -3295,6 +3295,10 @@
             <a class="olink" href="${RowCard.yfUrl(stock)}" target="_blank" rel="noopener"
                title="Open ${esc(stock.symbol)} in Yahoo Finance — opens in a new tab">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>Yahoo Finance</a>
+            <!-- Paper positions (2026-10-15): opens /paper with this stock chosen.
+                 Members only; shown once /api/me says this is not the guest preview. -->
+            <a class="olink" id="paperLink" hidden href="/paper?open=${encodeURIComponent(stock.symbol)}"
+               title="Open a pretend position in ${esc(stock.symbol)} with paper money: a simulation, no real order">Paper position</a>
           </span>
           <!-- Admin actions on the whole stock, not the chart, so they sit in
                the masthead beside the price (the owner, 2026-10-15). Both stay
@@ -3966,6 +3970,7 @@
       fetch('/api/me', { cache: 'no-store' })
         .then((r) => r.json())
         .then((me) => { const cl = document.getElementById('chartsLink'); if (cl && (!me || !me.guest)) cl.hidden = false;
+          const pl = document.getElementById('paperLink'); if (pl && me && !me.guest) pl.hidden = false;
           const rf = document.getElementById('rfBtn'); if (rf && me && me.admin) rf.hidden = false;
           const sb = document.getElementById('sumBtn'); if (sb && me && me.admin) sb.hidden = false; })
         .catch(() => { const cl = document.getElementById('chartsLink'); if (cl) cl.hidden = false; });   // open mode, or /api/me down

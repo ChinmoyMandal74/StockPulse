@@ -423,6 +423,29 @@ const SCHEMA = [
      symbol   text primary key,
      added_at integer
    )`,
+  // Paper positions (2026-10-15): a member's pretend account. The ledger is
+  // append-only, one row per open or close; cash and positions are worked
+  // out from it by paper.js, so nothing stored can drift from the trades.
+  // Keyed by the member, NOT a per-symbol table: a stock leaving the
+  // universe must not erase anyone's history, so it is not in SYMBOL_TABLES.
+  `create table if not exists paper_accounts (
+     user_key   text primary key,
+     start_cash real not null,
+     started_at integer not null
+   )`,
+  `create table if not exists paper_trades (
+     id        integer primary key autoincrement,
+     user_key  text not null,
+     ts        integer not null,
+     kind      text not null,
+     symbol    text not null,
+     shares    real not null,
+     price     real not null,
+     priced_at integer,
+     signal    text,
+     note      text
+   )`,
+  `create index if not exists idx_paper_trades_user on paper_trades (user_key, id)`,
   `create table if not exists user_themes (
      user_key text not null,
      name     text not null,
@@ -6265,6 +6288,63 @@ async function writeUserPortfolios(userKey, map) {
   await db.batch(stmts, 'write');
 }
 
+// ---- paper positions --------------------------------------------------------
+// The account, made on first sight with the starting cash, and its ledger.
+async function readPaper(userKey, startCash) {
+  await init();
+  let r = await db.execute({ sql: 'select start_cash, started_at from paper_accounts where user_key = ?', args: [userKey] });
+  let account = r.rows[0] ? { start_cash: Number(r.rows[0].start_cash), started_at: Number(r.rows[0].started_at) } : null;
+  if (!account) {
+    account = { start_cash: startCash, started_at: Date.now() };
+    await db.execute({ sql: 'insert or ignore into paper_accounts (user_key, start_cash, started_at) values (?, ?, ?)',
+      args: [userKey, account.start_cash, account.started_at] });
+  }
+  r = await db.execute({
+    sql: 'select id, ts, kind, symbol, shares, price, priced_at, signal, note from paper_trades where user_key = ? order by id',
+    args: [userKey],
+  });
+  const trades = r.rows.map((x) => ({ id: Number(x.id), ts: Number(x.ts), kind: x.kind, symbol: x.symbol,
+    shares: Number(x.shares), price: Number(x.price), priced_at: x.priced_at == null ? null : Number(x.priced_at),
+    signal: x.signal || null, note: x.note || null }));
+  return { account, trades };
+}
+
+// One appended row. Never retried: a write that may have landed must not
+// land twice.
+async function addPaperTrade(userKey, t) {
+  await init();
+  await db.execute({
+    sql: 'insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    args: [userKey, t.ts, t.kind, t.symbol, t.shares, t.price, t.priced_at ?? null, t.signal ?? null, t.note ?? null],
+  });
+}
+
+// Start again: the ledger goes and the account restarts today. One batch, so
+// a half-reset (trades gone, old start date kept) cannot be left behind.
+async function resetPaper(userKey, startCash) {
+  await init();
+  await db.batch([
+    { sql: 'delete from paper_trades where user_key = ?', args: [userKey] },
+    { sql: 'insert or replace into paper_accounts (user_key, start_cash, started_at) values (?, ?, ?)', args: [userKey, startCash, Date.now()] },
+  ], 'write');
+}
+
+// The admin review: every account and every ledger, for /users.
+async function listAllPaper() {
+  await init();
+  const [a, t] = await Promise.all([
+    db.execute('select user_key, start_cash, started_at from paper_accounts'),
+    db.execute('select id, user_key, ts, kind, symbol, shares, price from paper_trades order by id'),
+  ]);
+  const out = {};
+  for (const r of a.rows) out[r.user_key] = { account: { start_cash: Number(r.start_cash), started_at: Number(r.started_at) }, trades: [] };
+  for (const r of t.rows) {
+    (out[r.user_key] ||= { account: null, trades: [] }).trades.push({ id: Number(r.id), ts: Number(r.ts), kind: r.kind,
+      symbol: r.symbol, shares: Number(r.shares), price: Number(r.price) });
+  }
+  return out;
+}
+
 // The admin review read: every account's portfolios in one query, attached to
 // /api/users by email so /users can show them beside the delete button.
 async function listAllUserPortfolios() {
@@ -6500,6 +6580,8 @@ async function deleteUser(id) {
     stmts.push({ sql: 'delete from prefs where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from user_themes where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from paper_trades where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from paper_accounts where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from column_views where scope = ?', args: [email] });
   }
   await db.batch(stmts, 'write');
@@ -7008,6 +7090,10 @@ module.exports = {
   readUserPortfolios,
   writeUserPortfolios,
   listAllUserPortfolios,
+  readPaper,
+  addPaperTrade,
+  resetPaper,
+  listAllPaper,
   removeSymbolFromUserPortfolios,
   hashPassword,
   newSalt,

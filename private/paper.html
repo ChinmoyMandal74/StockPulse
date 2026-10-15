@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Paper positions — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The research page's shell. Everything this page adds is prefixed pp- .
+       Green and red are a price going up or down, as everywhere on the site. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+    .page > * { min-width: 0; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.07), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: rgba(9, 11, 15, 0.72);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #7c9cff; box-shadow: 0 0 8px #7c9cff; }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 72ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+    .k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .pos { color: var(--green); } .neg { color: var(--red); } .na { color: var(--faint); }
+
+    .pp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .pp-stat .core { padding: 16px 18px; }
+    .pp-val { margin-top: 8px; font-family: var(--mono); font-size: 26px; font-weight: 500; letter-spacing: -0.03em;
+              font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .pp-sub { margin-top: 6px; font-size: 11.5px; color: var(--faint); }
+
+    .pp-card { margin-bottom: 16px; }
+    .pp-card > .core { padding: 18px 20px; }
+    .pp-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .pp-h h2 { margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); }
+    .pp-h .pp-note { font-size: 12px; color: var(--faint); }
+
+    .pp-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .pp-form input, .pp-form select, .pp-close-row input {
+      padding: 9px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 13px var(--sans); min-width: 0; }
+    .pp-form #sym { flex: 1 1 260px; }
+    .pp-form #amt { flex: 0 1 150px; }
+    .pp-form input:focus-visible, .pp-form select:focus-visible, .pp-close-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .pp-msg { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
+    .pp-msg.err { color: var(--red); }
+    .pp-msg.ok { color: var(--text); }
+    .pp-quote { font-size: 12px; color: var(--faint); }
+
+    .pp-chart { width: 100%; height: 220px; display: block; }
+    .pp-legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .pp-legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+
+    .pp-tw { overflow-x: auto; }
+    table.pp { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.pp th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    table.pp td { padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); white-space: nowrap;
+      font-variant-numeric: tabular-nums; }
+    table.pp td.num, table.pp th.num { text-align: right; }
+    table.pp td.mono { font-family: var(--mono); }
+    table.pp a.pp-sym { color: var(--text); font-weight: 600; text-decoration: none; }
+    table.pp a.pp-sym:hover { text-decoration: underline; }
+    .pp-name { color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+    .pp-asof { display: block; font-size: 11px; color: var(--faint); }
+    .pp-stale { color: var(--amber); }
+    .pp-close-row td { background: rgba(255, 255, 255, 0.03); }
+    .pp-close-row .pp-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; white-space: normal; }
+    .pp-close-row input { width: 140px; }
+    .pp-empty { padding: 14px 2px; font-size: 13px; color: var(--muted); }
+    .pp-foot { margin: 18px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 92ch; }
+    .pp-foot button { margin-left: 6px; }
+
+    @media (max-width: 860px) { .pp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 760px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Simulation</span>
+      <h1>Paper positions</h1>
+      <p class="lede">Practise with pretend money: $100,000 to start. Open a position in any stock the site tracks
+        and close it when you choose; each fill is the latest price the site holds, which refreshes every half hour
+        while the market is open, so fills are delayed rather than live. Only you can see this account.
+        It is a simulation, not advice, and no real money or order is involved.</p>
+    </header>
+
+    <div class="pp-stats" id="stats"></div>
+
+    <section class="bezel pp-card"><div class="core">
+      <div class="pp-h"><h2>Open a position</h2><span class="pp-note" id="cashNote"></span></div>
+      <form class="pp-form" id="openForm" autocomplete="off">
+        <input id="sym" list="symList" placeholder="Stock: symbol or name" aria-label="Stock" spellcheck="false" />
+        <datalist id="symList"></datalist>
+        <select id="mode" aria-label="Size by">
+          <option value="dollars">Dollar amount</option>
+          <option value="shares">Number of shares</option>
+        </select>
+        <input id="amt" type="number" min="0" step="any" placeholder="10000" aria-label="Amount" />
+        <button class="btn" id="openBtn" type="submit">Open position</button>
+        <span class="pp-quote" id="quote"></span>
+      </form>
+      <div class="pp-msg" id="openMsg" role="status"></div>
+    </div></section>
+
+    <section class="bezel pp-card" id="chartCard" hidden><div class="core">
+      <div class="pp-h"><h2>Account value</h2><span class="pp-note">At each close since the account started, beside the S&amp;P 500 (SPY) bought with the same $100,000 on the same day. Price only: no dividends.</span></div>
+      <div id="chart"></div>
+      <div class="pp-legend"><span><i style="background:#7c9cff"></i>This account</span><span><i style="background:#9aa3b2"></i>S&amp;P 500 (SPY)</span></div>
+    </div></section>
+
+    <section class="bezel pp-card"><div class="core">
+      <div class="pp-h"><h2>Open positions</h2><span class="pp-note" id="openNote"></span></div>
+      <div class="pp-tw" id="positions"><div class="pp-empty">Reading the account…</div></div>
+    </div></section>
+
+    <section class="bezel pp-card"><div class="core">
+      <div class="pp-h"><h2>Closed</h2><span class="pp-note">Return is the exit price against the average entry of the shares closed.</span></div>
+      <div class="pp-tw" id="closed"></div>
+    </div></section>
+
+    <p class="pp-foot">A simulation with pretend money, not investment advice; past results say nothing about future ones.
+      Fills use the latest stored price, so they can be up to half an hour old in market hours and are the last close
+      outside them. Returns are price only: no dividends, fees or tax.
+      <button class="btn" id="resetBtn" type="button">Start again with $100,000</button></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const usd = (v, d) => (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d });
+    // A figure that ROUNDS to nothing prints as nothing, uncoloured: float
+    // dust from the arithmetic must not read "+0.00%" in green.
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const sgnUsd = (v) => (r2(v) > 0 ? '+' : '') + usd(r2(v) === 0 ? 0 : v);
+    const pct = (v) => { const r = r2(v * 100); return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(2) + '%'; };
+    const cls = (v) => { const r = r2(v * 100); return r > 0 ? 'pos' : r < 0 ? 'neg' : 'na'; };
+    const clsUsd = (v) => (r2(v) > 0 ? 'pos' : r2(v) < 0 ? 'neg' : 'na');
+    const shares = (v) => (Math.abs(v - Math.round(v)) < 1e-6 ? String(Math.round(v)) : v.toFixed(4).replace(/0+$/, ''));
+    const when = (ms) => (ms ? new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+    const dayOf = (ms) => (ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+
+    let data = null;
+    let closing = null;          // the symbol whose close row is open
+    const bySym = {};
+
+    async function load() {
+      try {
+        const r = await fetch('/api/paper', { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not read the account.');
+        data = d;
+      } catch (e) {
+        $('positions').innerHTML = `<div class="pp-empty neg">${we(e.message)}</div>`;
+        return;
+      }
+      for (const u of data.universe) bySym[u.s] = u;
+      if (!$('symList').children.length) {
+        $('symList').innerHTML = data.universe.map((u) => `<option value="${we(u.s)}">${we(u.n)}</option>`).join('');
+      }
+      paint();
+    }
+
+    function paint() {
+      const d = data;
+      const h = d.history || [];
+      const benchRet = h.length ? h[h.length - 1].bench / d.startCash - 1 : null;
+      $('stats').innerHTML = [
+        ['Account value', usd(d.equity), 'Started ' + dayOf(d.startedAt) + ' with ' + usd(d.startCash, 0), ''],
+        ['Return so far', pct(d.ret), sgnUsd(d.equity - d.startCash), cls(d.ret)],
+        ['S&P 500, same days', benchRet == null ? '—' : pct(benchRet), benchRet == null ? 'from the first close after the start' : 'SPY over the same span, price only', benchRet == null ? 'na' : cls(benchRet)],
+        ['Cash', usd(d.cash), usd(d.invested) + ' in ' + d.positions.length + ' position' + (d.positions.length === 1 ? '' : 's'), ''],
+      ].map(([k, v, sub, c]) => `<div class="bezel pp-stat"><div class="core"><span class="k">${we(k)}</span>`
+        + `<div class="pp-val ${c}">${we(v)}</div><div class="pp-sub">${we(sub)}</div></div></div>`).join('');
+      $('cashNote').textContent = usd(d.cash) + ' of paper cash to use';
+
+      // The chart: two lines on one scale, drawn once there are two closes.
+      if (h.length >= 2) {
+        $('chartCard').hidden = false;
+        const W = 1000, H = 220, P = 8;
+        const vals = h.flatMap((x) => [x.value, x.bench]);
+        let lo = Math.min(...vals), hi = Math.max(...vals);
+        if (hi - lo < 1) { lo -= 1; hi += 1; }
+        const X = (i) => P + i / (h.length - 1) * (W - 2 * P);
+        const Y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 2 * P);
+        const line = (k, c, w) => `<polyline fill="none" stroke="${c}" stroke-width="${w}" vector-effect="non-scaling-stroke" points="${h.map((x, i) => X(i).toFixed(1) + ',' + Y(x[k]).toFixed(1)).join(' ')}"/>`;
+        const start = `<line x1="0" x2="${W}" y1="${Y(d.startCash).toFixed(1)}" y2="${Y(d.startCash).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+        $('chart').innerHTML = `<svg class="pp-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Account value against the S&amp;P 500">`
+          + start + line('bench', '#9aa3b2', 1.5) + line('value', '#7c9cff', 2) + '</svg>';
+      } else $('chartCard').hidden = true;
+
+      // Open positions.
+      const stale = (t) => t && Date.now() - t > 3 * 86400000;
+      $('openNote').textContent = d.positions.length ? 'Value at the latest stored price.' : '';
+      $('positions').innerHTML = d.positions.length
+        ? '<table class="pp"><thead><tr><th>Stock</th><th class="hide-sm">Name</th><th class="num">Shares</th><th class="num">Avg entry</th>'
+          + '<th class="num">Latest price</th><th class="num">Value</th><th class="num">Gain</th><th class="num">Return</th>'
+          + '<th class="hide-sm">Signal at open</th><th class="hide-sm">Opened</th><th></th></tr></thead><tbody>'
+          + d.positions.map((p) => `<tr><td><a class="pp-sym" href="/stock/${encodeURIComponent(p.symbol)}" target="_blank" rel="noopener">${we(p.symbol)}</a></td>`
+            + `<td class="pp-name hide-sm">${we(p.name || '')}</td>`
+            + `<td class="num mono">${we(shares(p.shares))}</td><td class="num mono">${we(usd(p.avgCost))}</td>`
+            + `<td class="num mono">${we(usd(p.price))}<span class="pp-asof${!p.tracked || stale(p.pricedAt) ? ' pp-stale' : ''}">${p.tracked ? 'as of ' + we(when(p.pricedAt)) : 'no longer tracked: last traded price'}</span></td>`
+            + `<td class="num mono">${we(usd(p.value))}</td><td class="num mono ${clsUsd(p.gain)}">${we(sgnUsd(p.gain))}</td>`
+            + `<td class="num mono ${cls(p.gainPct)}">${we(pct(p.gainPct))}</td>`
+            + `<td class="hide-sm">${we(p.signal || '—')}</td><td class="hide-sm">${we(dayOf(p.openedAt))}</td>`
+            + `<td><button class="btn" data-close="${we(p.symbol)}" type="button">Close</button></td></tr>`
+            + (closing === p.symbol ? `<tr class="pp-close-row"><td colspan="11"><div class="pp-inline">`
+              + `<span>Close how many of ${we(shares(p.shares))} shares?</span>`
+              + `<input id="closeAmt" type="number" min="0" step="any" value="${we(shares(p.shares))}" aria-label="Shares to close" />`
+              + `<button class="btn" id="closeGo" type="button">Close at ${we(usd(p.price))}</button>`
+              + `<button class="btn" id="closeCancel" type="button">Cancel</button>`
+              + `<span class="pp-msg" id="closeMsg" role="status"></span></div></td></tr>` : '')).join('')
+          + '</tbody></table>'
+        : '<div class="pp-empty">No open positions. Open one above, or from any stock’s page.</div>';
+
+      $('closed').innerHTML = d.closed.length
+        ? '<table class="pp"><thead><tr><th>Stock</th><th class="num">Shares</th><th class="num">Avg entry</th><th class="num">Exit</th>'
+          + '<th class="num">Gain</th><th class="num">Return</th><th class="hide-sm">Opened</th><th>Closed</th><th class="num hide-sm">Days</th></tr></thead><tbody>'
+          + d.closed.map((c) => `<tr><td><a class="pp-sym" href="/stock/${encodeURIComponent(c.symbol)}" target="_blank" rel="noopener">${we(c.symbol)}</a>`
+            + (c.note ? `<span class="pp-asof pp-stale">${we(c.note)}</span>` : '') + '</td>'
+            + `<td class="num mono">${we(shares(c.shares))}</td><td class="num mono">${we(usd(c.entry))}</td><td class="num mono">${we(usd(c.exit))}</td>`
+            + `<td class="num mono ${clsUsd(c.pnl)}">${we(sgnUsd(c.pnl))}</td><td class="num mono ${cls(c.ret)}">${we(pct(c.ret))}</td>`
+            + `<td class="hide-sm">${we(dayOf(c.openedAt))}</td><td>${we(dayOf(c.closedAt))}</td><td class="num mono hide-sm">${c.days}</td></tr>`).join('')
+          + '</tbody></table>'
+        : '<div class="pp-empty">Nothing closed yet.</div>';
+
+      $('positions').querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => {
+        closing = closing === b.dataset.close ? null : b.dataset.close;
+        paint();
+        const i = $('closeAmt'); if (i) i.focus();
+      }));
+      if ($('closeCancel')) $('closeCancel').addEventListener('click', () => { closing = null; paint(); });
+      if ($('closeGo')) $('closeGo').addEventListener('click', doClose);
+    }
+
+    async function post(url, body) {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      let d = {};
+      try { d = await r.json(); } catch (e) { /* an HTML error page */ }
+      if (!r.ok) throw new Error(d.error || 'The server answered ' + r.status + '.');
+      return d;
+    }
+
+    async function doClose() {
+      const p = data.positions.find((x) => x.symbol === closing);
+      if (!p) return;
+      const n = Number($('closeAmt').value);
+      const all = !(n > 0) || Math.abs(n - p.shares) < 1e-6;
+      const btn = $('closeGo'); btn.disabled = true;
+      try {
+        await post('/api/paper/close', all ? { symbol: p.symbol, all: true } : { symbol: p.symbol, shares: n });
+        closing = null;
+        await load();
+      } catch (e) {
+        btn.disabled = false;
+        $('closeMsg').textContent = e.message; $('closeMsg').className = 'pp-msg err';
+      }
+    }
+
+    // The stock typed may be a symbol, or "SYM" picked from the list.
+    const symOf = () => String($('sym').value || '').trim().toUpperCase().split(/\s+/)[0];
+    function quote() {
+      const u = data && bySym[symOf()];
+      $('quote').textContent = u ? u.n : '';
+    }
+    $('sym').addEventListener('input', quote);
+    $('mode').addEventListener('change', () => { $('amt').placeholder = $('mode').value === 'dollars' ? '10000' : '10'; });
+
+    $('openForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const sym = symOf(), amt = $('amt').value;
+      const msg = $('openMsg');
+      if (!sym) { msg.textContent = 'Choose a stock.'; msg.className = 'pp-msg err'; return; }
+      $('openBtn').disabled = true;
+      msg.textContent = 'Opening…'; msg.className = 'pp-msg';
+      try {
+        const d = await post('/api/paper/open', $('mode').value === 'dollars' ? { symbol: sym, dollars: amt } : { symbol: sym, shares: amt });
+        msg.textContent = `Opened ${shares(d.shares)} shares of ${d.symbol} at ${usd(d.price)} (price as of ${when(d.pricedAt)}).`;
+        msg.className = 'pp-msg ok';
+        $('amt').value = '';
+        await load();
+      } catch (err) {
+        msg.textContent = err.message; msg.className = 'pp-msg err';
+      } finally { $('openBtn').disabled = false; }
+    });
+
+    $('resetBtn').addEventListener('click', async () => {
+      if (!confirm('Start again? Every open position and closed trade in this account is deleted, and it restarts today with $100,000.')) return;
+      try { await post('/api/paper/reset', { confirm: true }); closing = null; await load(); }
+      catch (e) { alert(e.message); }
+    });
+
+    // /paper?open=MU arrives from a stock page with the stock chosen.
+    { const q = new URLSearchParams(location.search).get('open');
+      if (q) { $('sym').value = q.toUpperCase(); $('amt').focus(); } }
+    load().then(quote);
+  </script>
+</body>
+</html>
