@@ -94,41 +94,6 @@ Neither filter helped, and both pointed slightly the wrong way. Stacked together
 ### What follows
 No falling-knife filter is used anywhere.
 
-## 5. RSI, forty settings
-
-*Family: Oscillators · Verdict: One period only · Horizon: 1 month · Data: Daily prices · Sample: 40 settings, two universes*
-
-### The idea
-A stock whose RSI is very high or very low is stretched, and the next month should show it.
-
-### What was done
-Forty RSI settings, each ranking the stocks against one another on the same day, with the top tenth compared against the rest a month later.
-
-### Outcome
-The best top-tenth t-statistic was 1.76 on one set of stocks and 2.73 on a smaller one, so the list of stocks moved the answer, not the indicator. Before 2020 the t-statistic was 0.1; after, 2.2.
-
-### What follows
-RSI is shown as a reading. Nothing ranks or scores by it.
-
-### Caveats
-With forty settings tried, one looking good by chance is expected. That is the multiple-testing trap.
-
-## 6. Risk-adjusted speed of the move
-
-*Family: Momentum · Verdict: No edge · Horizon: 1 month · Data: Daily prices · Sample: 144 parameter settings*
-
-### The idea
-How fast a stock has moved, measured against its own volatility, should pick the ones that keep moving.
-
-### What was done
-144 combinations of lookback and volatility window, each ranking stocks against one another on the same day, compared a month later.
-
-### Outcome
-The best t-statistic anywhere on the grid was 1.73. With 144 tests that is what chance alone produces. Before 2020 the t-statistics ran 0.2 to 0.6; after, 1.6 to 2.1: the same split as everything else.
-
-### What follows
-Not used.
-
 ## 7. A 50-day trend rule instead of the 200-day — 2026-09-12
 
 *Family: Trend · Verdict: No edge · Horizon: Holding while the trend lasts · Data: Daily prices · Sample: 90 stocks, both periods*
@@ -160,25 +125,6 @@ The raw distance sorts risk backwards. The roomiest half sat 25.6% above its 200
 
 ### What follows
 Shown as the **Cushion** column, labelled as the size of the bad case and not as an expected return.
-
-## 9. The Signal's technical verdict, over twenty years — 2026-09-20
-
-*Family: Signal · Verdict: No edge · Horizon: 3 months · Data: Daily prices · Sample: 222 monthly start dates, 2008–2026*
-
-### The idea
-Stocks the technical rules read as Very Strong or Strong should do better over the next three months than the rest.
-
-### What was done
-On every month-start since 2008, the Very Strong and Strong stocks were collected and their next three months compared with the average stock in the same list.
-
-### Outcome
-Flat to slightly negative, in both periods. The median excess was −0.32% and the basket beat the average 44.6% of the time. Before 2020 −0.27% (47.2%), after −0.89% (39.7%).
-
-### What follows
-The Signal is described on this site as a reading of where a stock stands, not a forecast. This test is why.
-
-### Caveats
-The two tiers held about a third of the stocks, so the basket was close to the average and there was little room for a difference to show. Very Strong on its own has not been tested.
 
 ## 10. Cyclical companies against steady growers — 2026-09-29
 

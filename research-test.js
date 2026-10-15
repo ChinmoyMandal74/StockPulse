@@ -39,9 +39,11 @@ check('filing ignores an italic sentence with no key', R.filing('*just emphasis*
 
 // ---- the real file
 const real = R.parse(fs.readFileSync(__dirname + '/docs/research.md', 'utf8'));
-check('the real file has entries', real.entries.length >= 15, real.entries.length);
+check('the real file has entries', real.entries.length >= 12, real.entries.length);
 const nums = real.entries.map((e) => e.n);
 check('entry numbers are unique', new Set(nums).size === nums.length);
+// Front-end backtests are not on the page (owner, 2026-10-15); their numbers stay gaps.
+check('removed front-end entries stay out', ![5, 6, 9].some((n) => nums.includes(n)), nums.join(','));
 for (const e of real.entries) {
   check('entry ' + e.n + ' is filed', e.filed);
   check('entry ' + e.n + ' has a known verdict', R.VERDICTS.includes(e.verdict), e.verdict);
