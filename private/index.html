@@ -2900,6 +2900,9 @@
       return !a.length ? 'All' : a.length === 1 ? a[0] : a.length + ' ' + plural;
     };
     const selWords = (sel) => selList(sel).join(' or ');
+    // The Signal picker is a tick list too (2026-10-15); its values keep the
+    // ladder's order, Very Strong first, as the menu lists them.
+    const ADV_ORDER = ActionRules.ACTIONS.slice().reverse();
     // 'table' or 'tiles'. Saved per account: which shape you read in is a
     // preference, not a property of the data.
     let layout = 'table';
@@ -2998,7 +3001,7 @@
       if (industryFilter !== 'All') rows = rows.filter((s) => selHas(industryFilter, s.industry));
       if (spFilter !== 'All') rows = rows.filter((s) => Filters.indexCutIs(s, spFilter));
       if (sizeFilter !== 'All') rows = rows.filter((s) => selHas(sizeFilter, s.capBand));
-      if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
+      if (adviceFilter !== 'All') rows = rows.filter((s) => selHas(adviceFilter, filterValue(s, 'av:Balanced')));
       return rows;
     }
 
@@ -3432,28 +3435,28 @@
         const v = filterValue(s, 'av:Balanced');
         if (v) counts[v] = (counts[v] || 0) + 1; else blank++;
       });
-      const names = ActionRules.ACTIONS.slice().reverse()
-        .filter((a) => counts[a] || a === adviceFilter);
-      const row = (val, label, n) =>
-        `<button class="pick ${adviceFilter === val ? 'on' : ''}" data-adv="${we(val)}" role="option" ` +
-        `aria-selected="${adviceFilter === val}">` +
-        (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/[^a-z]+/g, '-')}"></span>`) +
-        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+      const names = ADV_ORDER.filter((a) => counts[a] || selList(adviceFilter).includes(a));
+      // A tick list like Sector's, keeping each verdict's colour dot.
+      const row = (val, label, n) => {
+        const on = val === 'All' ? adviceFilter === 'All' : adviceFilter !== 'All' && selHas(adviceFilter, val);
+        return `<button class="pick pick-multi ${on ? 'on' : ''}" data-adv="${we(val)}" role="option" ` +
+          `aria-selected="${on}">` +
+          `<span class="tick" aria-hidden="true">${on ? '<svg class="ic ic-sm"><use href="#i-check" /></svg>' : ''}</span>` +
+          (val === 'All' ? '' : `<span class="adot a-${val.toLowerCase().replace(/[^a-z]+/g, '-')}"></span>`) +
+          `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
+      };
       const note = blank
         ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no signal yet — not enough data for the rules to read.`
         : '';
       $('advMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All signals', inScope.length) +
         names.map((n) => row(n, n, counts[n] || 0)).join('') +
-        '<div class="pick-sep"></div><div class="pick-hint">What the fixed rules read today.' + (note ? ' ' + we(note) : '') + '</div>' +
+        '<div class="pick-sep"></div><div class="pick-hint">What the fixed rules read today. Tick as many as you like; All clears them.' + (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
-      $('advMenu').querySelectorAll('[data-adv]').forEach((b) => {
-        b.addEventListener('click', () => {
-          adviceFilter = b.dataset.adv;
-          window.track && track('picker', 'advice:' + adviceFilter);
-          closePickers();
-          render();
-        });
+      wireMulti($('advMenu'), 'adv', (v) => {
+        adviceFilter = v === 'All' ? 'All' : selToggle(adviceFilter, v, ADV_ORDER);
+        window.track && track('picker', 'advice:' + adviceFilter);
+        renderAdviceMenu();
       });
     }
 
@@ -3568,12 +3571,12 @@
       $('advBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-check" /></svg>' +
         '<span class="picker-label">Signal</span>' +
-        `<span class="count">${on ? we(adviceFilter) : 'All'}</span>` +
+        `<span class="count">${we(selShort(adviceFilter, 'signals'))}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('advBtn').classList.toggle('on', on);
       $('advBtn').title = on
-        ? `Showing “${adviceFilter}” only — open to change or clear`
-        : 'Filter the table to one signal';
+        ? `Showing ${selList(adviceFilter).map((a) => '“' + a + '”').join(' or ')} only — open to change or clear`
+        : 'Filter the table to one or more signals';
     }
 
     function renderIndustryTrigger() {
@@ -4007,7 +4010,7 @@
           : sectorFilter !== 'All' ? selWords(sectorFilter) : 'All';
         const spWhere = ({ in: ' in the S&P 500', ndx: ' in the Nasdaq 100', either: ' in either index',
           ndxonly: ' in the Nasdaq 100 and not the S&P 500', neither: ' in neither index', out: ' outside the S&P 500' })[spFilter] || '';
-        const where = (adviceFilter !== 'All' ? `“${adviceFilter}” in ` : '') +
+        const where = (adviceFilter !== 'All' ? selList(adviceFilter).map((a) => '“' + a + '”').join(' or ') + ' in ' : '') +
           (narrowest === 'All' ? tabName : `${narrowest} in ${tabName}`) + spWhere;
         const msg = activeColFilters().length && prefilterStocks().length
           ? 'Nothing matches the column filters \u2014 loosen one, or Clear filters in the bar above the table.'
@@ -4985,9 +4988,11 @@
       const mv = screenMove(d);
       const preds = Object.entries(d.filters || {}).map(([k, v]) => [k, compileFilter(k, v)]).filter(([, f]) => f);
       return rows.filter((x) => !x.error
-        && (!d.sector || x.sector === d.sector)
-        && (!d.industry || x.industry === d.industry)
-        && (!d.advice || filterValue(x, 'av:Balanced') === d.advice)
+        // Each may be a "|" list (the multi-choice pickers); size was missing.
+        && (!d.sector || selHas(d.sector, x.sector))
+        && (!d.industry || selHas(d.industry, x.industry))
+        && (!d.size || selHas(d.size, x.capBand))
+        && (!d.advice || selHas(d.advice, filterValue(x, 'av:Balanced')))
         && Filters.adviceMoveIs(x, mv)
         && preds.every(([k, f]) => f(filterValue(x, k))));
     }

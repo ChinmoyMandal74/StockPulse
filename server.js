@@ -5840,11 +5840,11 @@ function cleanScreens(input) {
     // `size` joins these because it gained a bar picker of its own: a screen
     // that could not carry it would silently drop the band when saved, and
     // applying a screen would leave a stale one in force.
-    // Sector, industry and size may hold several values joined by "|" (the
+    // Sector, industry, size and the Signal may hold several values joined by "|" (the
     // screener's multi-choice pickers), so they get the room a list needs:
     // at 80 a third industry name would be cut mid-word and match nothing.
     for (const k of ['sector', 'industry', 'advice', 'size', 'sp']) {
-      const v = str(d[k], k === 'advice' || k === 'sp' ? 80 : 600);
+      const v = str(d[k], k === 'sp' ? 80 : 600);
       if (v && v !== 'All') def[k] = v;
     }
     // The advice move. `changed: true` is the pre-2026-09-23 Changed chip and

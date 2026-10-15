@@ -352,14 +352,14 @@
       const fn = compileFilter(key, src);
       if (fn) tests.push([key, fn]);
     }
-    // Sector, industry and size may each hold several values joined by "|"
+    // Sector, industry, size and the Signal may each hold several values joined by "|"
     // (the screener's multi-choice pickers, 2026-10-15); a single value reads
     // as before. Size was stored on screens and never applied here until then.
     const anyOf = (s) => { const set = new Set(String(s).split('|')); return (v) => set.has(v); };
     if (d.sector && d.sector !== 'All') tests.push(['sector', anyOf(d.sector)]);
     if (d.industry && d.industry !== 'All') tests.push(['industry', anyOf(d.industry)]);
     if (d.size && d.size !== 'All') tests.push(['capBand', anyOf(d.size)]);
-    if (d.advice && d.advice !== 'All') tests.push(['av:Balanced', (v) => v === d.advice]);
+    if (d.advice && d.advice !== 'All') tests.push(['av:Balanced', anyOf(d.advice)]);
     let out = list.filter((x) => tests.every(([key, fn]) => fn(filterValue(x, key, ctx))));
     // A screen's index cut. It was stored and never applied here, so a screen
     // the server ran (the phone, a promo card) ignored it.
