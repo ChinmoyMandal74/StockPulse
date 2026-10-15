@@ -352,8 +352,13 @@
       const fn = compileFilter(key, src);
       if (fn) tests.push([key, fn]);
     }
-    if (d.sector && d.sector !== 'All') tests.push(['sector', (v) => v === d.sector]);
-    if (d.industry && d.industry !== 'All') tests.push(['industry', (v) => v === d.industry]);
+    // Sector, industry and size may each hold several values joined by "|"
+    // (the screener's multi-choice pickers, 2026-10-15); a single value reads
+    // as before. Size was stored on screens and never applied here until then.
+    const anyOf = (s) => { const set = new Set(String(s).split('|')); return (v) => set.has(v); };
+    if (d.sector && d.sector !== 'All') tests.push(['sector', anyOf(d.sector)]);
+    if (d.industry && d.industry !== 'All') tests.push(['industry', anyOf(d.industry)]);
+    if (d.size && d.size !== 'All') tests.push(['capBand', anyOf(d.size)]);
     if (d.advice && d.advice !== 'All') tests.push(['av:Balanced', (v) => v === d.advice]);
     let out = list.filter((x) => tests.every(([key, fn]) => fn(filterValue(x, key, ctx))));
     // A screen's index cut. It was stored and never applied here, so a screen

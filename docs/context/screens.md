@@ -65,3 +65,14 @@ A screen hides columns with `#viewStyle` nth-child rules, so **every `<td>` stil
 - Live afterwards, with the session minted in Node and handed to the browser: **Day gainers** 32 rows (`No` / `Hold`), **Most active** 30 rows (`No` / `Buy` — SPY tops it, and a fund is not a constituent of the index it tracks), **Strong Buys** 13 rows (`Yes` / `Strong Buy`).
   - **`/login` opens on whichever tab it likes**, and the first attempt filled the REGISTER form's password field, clicked its submit and sat on `/login` for three minutes looking like a slow site. `/api/stocks` was answering in 4.7s throughout. **Mint the cookie outside the browser and `addCookies`** — the trick the Google flow already records.
 
+
+## Sector, Industry and Size take several values (2026-10-15, owner's request)
+
+The three bar pickers are tick lists: a click ticks or unticks and the menu stays open; **All** clears. The state is still one string each (`sectorFilter`, `industryFilter`, `sizeFilter`), the values joined by `|`, the filter row's own "a|b means either". So a single value, `'All'`, the filter cell and every saved screen read exactly as before, and a screen's `sector` / `industry` / `size` may now hold a list.
+
+- **Every test goes through `selHas(sel, v)`** in index.html; `selList`, `selJoin`, `selToggle`, `selShort` and `selWords` are beside it. `selJoin` keeps a fixed order (the size ladder, else the alphabet), so ticking in another order is not an edit to a saved screen.
+- **Unticking a sector drops only the industries it held** (`setSectorFilter`); the rest stay.
+- **The menu stays open by stopping the click** (`wireMulti`): the menu is redrawn under the pointer, and the page's outside-click rule would read the detached row as a click outside.
+- The filter row's single dropdown shows a list as one "N chosen" option. Clicking a Sector or Industry cell in the table still narrows to that one value, and clears it on a second click.
+- **`Filters.screenRows` reads the lists, and now applies `size`**, which screens carried but the server-side runner (phone, promo cards) had never applied. The screen sanitiser allows 600 characters for these three, not 80, so a list of long industry names is not cut mid-word.
+- Verified in headless Chrome on the real page: the menu stays open over two ticks and closes on an outside click; buttons read "2 sectors", "2 sizes", "2 industries"; every drawn row matches; unticking Utilities dropped "Utilities - Diversified" and kept "Oil & Gas Drilling"; All clears; the open menu measures 270×460 with the ticked box filled.

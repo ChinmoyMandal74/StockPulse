@@ -128,6 +128,12 @@
     .picker[data-open="1"] .picker-menu { opacity: 1; visibility: visible; transform: none; }
     .picker-inner { background: rgba(10, 12, 17, 0.9); border-radius: 15px; padding: 5px; box-shadow: var(--inset); }
     .pick-row { display: flex; align-items: center; gap: 2px; }
+    /* The tick box of a multi-choice menu (Sector, Industry, Size). */
+    .pick.pick-multi .tick { flex: 0 0 auto; width: 15px; height: 15px; border-radius: 4px; display: inline-flex;
+      align-items: center; justify-content: center; border: 1px solid var(--hair-2); }
+    .pick.pick-multi.on .tick { border-color: color-mix(in srgb, var(--tint, #7c9cff) 70%, transparent);
+      background: color-mix(in srgb, var(--tint, #7c9cff) 22%, transparent); }
+    .pick.pick-multi .tick .ic { width: 11px; height: 11px; }
     .pick-row .pick { flex: 1 1 auto; min-width: 0; }
     /* The jump arrow reuses the back-arrow glyph, turned round. */
     .jump {
@@ -2871,6 +2877,29 @@
     // not No, which is the rule the column itself keeps.
     let spFilter = 'All';
     let sizeFilter = 'All';
+    // SECTOR, INDUSTRY AND SIZE TAKE SEVERAL VALUES (the owner, 2026-10-15).
+    // Still one string each, the values joined by "|" -- the filter row's own
+    // "a|b means either" -- so a single value, 'All', a saved screen and the
+    // filter cell all read exactly as they did. Kept in a fixed order (the
+    // size ladder, else the alphabet), so ticking in another order is not an
+    // edit to a saved screen. Every test of the three goes through selHas.
+    const selList = (v) => (!v || v === 'All' ? [] : String(v).split('|').filter(Boolean));
+    const selJoin = (a, order) => {
+      const u = [...new Set(a)];
+      u.sort(order ? (x, y) => order.indexOf(x) - order.indexOf(y) : (x, y) => x.localeCompare(y));
+      return u.length ? u.join('|') : 'All';
+    };
+    const selHas = (sel, v) => sel === 'All' || selList(sel).includes(v);
+    const selToggle = (sel, v, order) => {
+      const a = selList(sel);
+      return selJoin(a.includes(v) ? a.filter((x) => x !== v) : a.concat(v), order);
+    };
+    // What a trigger shows: the one value, or how many.
+    const selShort = (sel, plural) => {
+      const a = selList(sel);
+      return !a.length ? 'All' : a.length === 1 ? a[0] : a.length + ' ' + plural;
+    };
+    const selWords = (sel) => selList(sel).join(' or ');
     // 'table' or 'tiles'. Saved per account: which shape you read in is a
     // preference, not a property of the data.
     let layout = 'table';
@@ -2965,10 +2994,10 @@
           rows = stocks.filter((s) => (s.portfolios || []).includes(activeTab));
         }
       }
-      if (sectorFilter !== 'All') rows = rows.filter((s) => s.sector === sectorFilter);
-      if (industryFilter !== 'All') rows = rows.filter((s) => s.industry === industryFilter);
+      if (sectorFilter !== 'All') rows = rows.filter((s) => selHas(sectorFilter, s.sector));
+      if (industryFilter !== 'All') rows = rows.filter((s) => selHas(industryFilter, s.industry));
       if (spFilter !== 'All') rows = rows.filter((s) => Filters.indexCutIs(s, spFilter));
-      if (sizeFilter !== 'All') rows = rows.filter((s) => s.capBand === sizeFilter);
+      if (sizeFilter !== 'All') rows = rows.filter((s) => selHas(sizeFilter, s.capBand));
       if (adviceFilter !== 'All') rows = rows.filter((s) => filterValue(s, 'av:Balanced') === adviceFilter);
       return rows;
     }
@@ -3024,8 +3053,10 @@
     // one piece of state, so the two can never disagree.
     function setSectorFilter(v) {
       sectorFilter = v;
-      if (industryFilter !== 'All' && !scopedStocks().some((x) => x.industry === industryFilter)) {
-        industryFilter = 'All';
+      // Drop only the industries the new sectors do not hold; the rest stay.
+      if (industryFilter !== 'All') {
+        const pool = tabStocks().filter((x) => selHas(sectorFilter, x.sector));
+        industryFilter = selJoin(selList(industryFilter).filter((i) => pool.some((x) => x.industry === i)));
       }
     }
     // Deliberately just the assignment, and the asymmetry is the point: an
@@ -3182,10 +3213,9 @@
           return;
         }
         const pool = k === 'industry'
-          ? inTab.filter((s) => sectorFilter === 'All' || s.sector === sectorFilter)
+          ? inTab.filter((s) => selHas(sectorFilter, s.sector))
           : k === 'av:Balanced'
-            ? inTab.filter((s) => (sectorFilter === 'All' || s.sector === sectorFilter)
-              && (industryFilter === 'All' || s.industry === industryFilter))
+            ? inTab.filter((s) => selHas(sectorFilter, s.sector) && selHas(industryFilter, s.industry))
             : inTab;
         const counts = new Map();
         let blank = 0;
@@ -3205,8 +3235,10 @@
         names.sort(order ? (a, b) => order.indexOf(a) - order.indexOf(b) : (a, b) => String(a).localeCompare(String(b)));
         if (cur && cur !== BLANK && !counts.has(cur)) names.push(cur);
         const opt = (v, label) => `<option value="${we(v)}"${v === cur ? ' selected' : ''}>${we(label)}</option>`;
+        // Several chosen in the bar's picker: one option standing for them.
         const html = opt('', 'All') +
-          names.map((n) => opt(n, `${n} (${counts.get(n) || 0})`)).join('') +
+          names.map((n) => opt(n, BOUND_KEYS.has(k) && n.includes('|')
+            ? selList(n).length + ' chosen' : `${n} (${counts.get(n) || 0})`)).join('') +
           (!BOUND_KEYS.has(k) && (blank || cur === BLANK) ? opt(BLANK, `${BLANK} (${blank})`) : '');
         if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
         el.value = cur;
@@ -3301,27 +3333,42 @@
       const counts = {};
       inTab.forEach((s) => { if (s.sector) counts[s.sector] = (counts[s.sector] || 0) + 1; });
       const names = Object.keys(counts).sort();
-      if (sectorFilter !== 'All' && !counts[sectorFilter]) names.push(sectorFilter);
-      const row = (val, label, n) =>
-        '<div class="pick-row">' +
-        `<button class="pick ${sectorFilter === val ? 'on' : ''}" data-sec="${we(val)}" role="option" ` +
-        `aria-selected="${sectorFilter === val}"><span class="nm">${we(label)}</span>` +
-        `<span class="count">${n}</span></button>` + groupJump('sector', val, label) + '</div>';
+      for (const v of selList(sectorFilter)) if (!counts[v]) names.push(v);
       $('secMenu').innerHTML = '<div class="picker-inner">' +
-        row('All', 'All sectors', inTab.length) +
-        names.map((n) => row(n, n, counts[n] || 0)).join('') +
+        multiRow('sec', 'All', 'All sectors', inTab.length, sectorFilter === 'All', '') +
+        names.map((n) => multiRow('sec', n, n, counts[n] || 0, selHas(sectorFilter, n) && sectorFilter !== 'All',
+          groupJump('sector', n, n))).join('') +
+        '<div class="pick-sep"></div><div class="pick-hint">Tick as many as you like; All clears them.</div>' +
         '</div>';
-      $('secMenu').querySelectorAll('[data-sec]').forEach((b) => {
-        b.addEventListener('click', () => {
-          // setSectorFilter drops an industry that the new sector does not
-          // hold — one left over from the previous choice would filter the
-          // table down to nothing and look like a bug — and only when it
-          // really is out of scope, so clearing the sector keeps an industry
-          // that still applies. Shared with the filter cell and the table
-          // cell, so the three cannot drift.
-          setSectorFilter(b.dataset.sec);
-          window.track && track('picker', 'sector:' + sectorFilter);
-          closePickers();
+      wireMulti($('secMenu'), 'sec', (v) => {
+        // setSectorFilter drops an industry that the new sectors do not hold
+        // — one left over would filter the table down to nothing and look
+        // like a bug — and only those, so an industry that still applies
+        // stays. Shared with the filter cell and the table cell.
+        setSectorFilter(v === 'All' ? 'All' : selToggle(sectorFilter, v));
+        window.track && track('picker', 'sector:' + sectorFilter);
+        renderSectorMenu();
+      });
+    }
+
+    // A row of a multi-choice menu: a tick box, the name, the count, and the
+    // group-page arrow. "All" is the one row that is a choice of its own.
+    function multiRow(kind, val, label, n, on, after, hint) {
+      return '<div class="pick-row">' +
+        `<button class="pick pick-multi ${on ? 'on' : ''}" data-${kind}="${we(val)}" role="option" ` +
+        `aria-selected="${on}"${hint ? ` title="${we(hint)}"` : ''}>` +
+        `<span class="tick" aria-hidden="true">${on ? '<svg class="ic ic-sm"><use href="#i-check" /></svg>' : ''}</span>` +
+        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>` + (after || '') + '</div>';
+    }
+    // Ticking keeps the menu open, so several can be chosen in one visit.
+    // The click stops here: the menu is redrawn under it, and the page's
+    // outside-click rule would otherwise read the detached row as a click
+    // outside and close the menu.
+    function wireMulti(menu, kind, apply) {
+      menu.querySelectorAll(`[data-${kind}]`).forEach((b) => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          apply(b.dataset[kind]);
           render();
         });
       });
@@ -3343,16 +3390,14 @@
     // taxonomy nests, so offering "Banks - Diversified" while Technology is
     // selected would offer a guaranteed-empty table.
     function renderIndustryMenu() {
-      const inScope = tabStocks().filter((s) => sectorFilter === 'All' || s.sector === sectorFilter);
+      const inScope = tabStocks().filter((s) => selHas(sectorFilter, s.sector));
       const counts = {};
       inScope.forEach((s) => { if (s.industry) counts[s.industry] = (counts[s.industry] || 0) + 1; });
       const names = Object.keys(counts).sort();
-      if (industryFilter !== 'All' && !counts[industryFilter]) names.push(industryFilter);
-      const row = (val, label, n) =>
-        '<div class="pick-row">' +
-        `<button class="pick ${industryFilter === val ? 'on' : ''}" data-ind="${we(val)}" role="option" ` +
-        `aria-selected="${industryFilter === val}"><span class="nm">${we(label)}</span>` +
-        `<span class="count">${n}</span></button>` + groupJump('industry', val, label) + '</div>';
+      for (const v of selList(industryFilter)) if (!counts[v]) names.push(v);
+      const row = (val, label, n) => multiRow('ind', val, label, n,
+        val === 'All' ? industryFilter === 'All' : industryFilter !== 'All' && selHas(industryFilter, val),
+        val === 'All' ? '' : groupJump('industry', val, label));
       // The field arrives one profile at a time, as each company's cache
       // expires and is re-pulled — so for a while most rows have no industry,
       // and a menu whose counts do not add up to the total should say why
@@ -3367,23 +3412,20 @@
       $('indMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All industries', inScope.length) +
         names.map((n) => row(n, n, counts[n] || 0)).join('') +
-        (note ? `<div class="pick-sep"></div><div class="pick-hint">${we(note)}</div>` : '') +
+        '<div class="pick-sep"></div><div class="pick-hint">Tick as many as you like; All clears them.' +
+        (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
-      $('indMenu').querySelectorAll('[data-ind]').forEach((b) => {
-        b.addEventListener('click', () => {
-          setIndustryFilter(b.dataset.ind);
-          window.track && track('picker', 'industry:' + industryFilter);
-          closePickers();
-          render();
-        });
+      wireMulti($('indMenu'), 'ind', (v) => {
+        setIndustryFilter(v === 'All' ? 'All' : selToggle(industryFilter, v));
+        window.track && track('picker', 'industry:' + industryFilter);
+        renderIndustryMenu();
       });
     }
 
     // Verdicts present in the tab, sector and industry in force, in ladder
     // order from Very Strong down, with counts.
     function renderAdviceMenu() {
-      const inScope = tabStocks().filter((s) => (sectorFilter === 'All' || s.sector === sectorFilter)
-        && (industryFilter === 'All' || s.industry === industryFilter));
+      const inScope = tabStocks().filter((s) => selHas(sectorFilter, s.sector) && selHas(industryFilter, s.industry));
       const counts = {};
       let blank = 0;
       inScope.forEach((s) => {
@@ -3488,12 +3530,9 @@
       // a short control move under the pointer as the table narrowed, and
       // "0 Micro in view" is itself an answer worth reading.
       const names = Filters.CAP_ORDER;
-      const row = (val, label, n, hint) =>
-        '<div class="pick-row">' +
-        `<button class="pick ${sizeFilter === val ? 'on' : ''}" data-size="${we(val)}" role="option" ` +
-        `aria-selected="${sizeFilter === val}"${hint ? ` title="${we(hint)}"` : ''}>` +
-        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>` +
-        groupJump('size', val, label) + '</div>';
+      const row = (val, label, n, hint) => multiRow('size', val, label, n,
+        val === 'All' ? sizeFilter === 'All' : sizeFilter !== 'All' && selHas(sizeFilter, val),
+        val === 'All' ? '' : groupJump('size', val, label), hint);
       const note = blank
         ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no market cap — a fund reports assets ` +
           'under management instead, so it sits in no band.'
@@ -3501,16 +3540,13 @@
       $('sizeMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All sizes', inScope.length) +
         names.map((n) => row(n, n, counts[n] || 0, Filters.CAP_RANGE[n])).join('') +
-        '<div class="pick-sep"></div><div class="pick-hint">Market-cap bands. The $50B line inside ' +
+        '<div class="pick-sep"></div><div class="pick-hint">Market-cap bands; tick as many as you like. The $50B line inside ' +
         'Large is this site&rsquo;s own cut, not a standard.' + (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
-      $('sizeMenu').querySelectorAll('[data-size]').forEach((b) => {
-        b.addEventListener('click', () => {
-          sizeFilter = b.dataset.size;
-          window.track && track('picker', 'size:' + sizeFilter);
-          closePickers();
-          render();
-        });
+      wireMulti($('sizeMenu'), 'size', (v) => {
+        sizeFilter = v === 'All' ? 'All' : selToggle(sizeFilter, v, Filters.CAP_ORDER);
+        window.track && track('picker', 'size:' + sizeFilter);
+        renderSizeMenu(tabStocks().filter((s) => selHas(sectorFilter, s.sector) && selHas(industryFilter, s.industry)));
       });
     }
 
@@ -3519,12 +3555,12 @@
       $('sizeBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>' +
         '<span class="picker-label">Size</span>' +
-        `<span class="count">${on ? we(sizeFilter) : 'All'}</span>` +
+        `<span class="count">${we(selShort(sizeFilter, 'sizes'))}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('sizeBtn').classList.toggle('on', on);
       $('sizeBtn').title = on
-        ? `Showing ${sizeFilter} caps only (${Filters.CAP_RANGE[sizeFilter]}) — open to change or clear`
-        : 'Filter the table to one market-cap band';
+        ? `Showing ${selList(sizeFilter).map((b) => b + ' (' + Filters.CAP_RANGE[b] + ')').join(' or ')} caps only — open to change or clear`
+        : 'Filter the table to one or more market-cap bands';
     }
 
     function renderAdviceTrigger() {
@@ -3545,12 +3581,12 @@
       $('indBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>' +
         '<span class="picker-label">Industry</span>' +
-        `<span class="count">${on ? we(industryFilter) : 'All'}</span>` +
+        `<span class="count">${we(selShort(industryFilter, 'industries'))}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('indBtn').classList.toggle('on', on);
       $('indBtn').title = on
-        ? `Showing ${industryFilter} only — open to change or clear`
-        : 'Filter the table to one industry — the finer cut inside the sector, from the same profile data. Not GICS.';
+        ? `Showing ${selWords(industryFilter)} only — open to change or clear`
+        : 'Filter the table to one or more industries — the finer cut inside the sector, from the same profile data. Not GICS.';
     }
 
     function renderSectorTrigger() {
@@ -3558,12 +3594,12 @@
       $('secBtn').innerHTML =
         '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>' +
         '<span class="picker-label">Sector</span>' +
-        `<span class="count">${on ? we(sectorFilter) : 'All'}</span>` +
+        `<span class="count">${we(selShort(sectorFilter, 'sectors'))}</span>` +
         '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
       $('secBtn').classList.toggle('on', on);
       $('secBtn').title = on
-        ? `Showing ${sectorFilter} only — open to change or clear`
-        : 'Filter the table to one sector';
+        ? `Showing ${selWords(sectorFilter)} only — open to change or clear`
+        : 'Filter the table to one or more sectors';
     }
 
     // Which way the Balanced verdict went since the previous close. This was a
@@ -3967,8 +4003,8 @@
         const tabName = activeTab === 'All' ? 'the screen' : `"${isMyTab(activeTab) ? myTabName(activeTab) : activeTab}"`;
         // Name the narrowest filter in force: it is the one that emptied the
         // table, and the one to clear first.
-        const narrowest = industryFilter !== 'All' ? industryFilter
-          : sectorFilter !== 'All' ? sectorFilter : 'All';
+        const narrowest = industryFilter !== 'All' ? selWords(industryFilter)
+          : sectorFilter !== 'All' ? selWords(sectorFilter) : 'All';
         const spWhere = ({ in: ' in the S&P 500', ndx: ' in the Nasdaq 100', either: ' in either index',
           ndxonly: ' in the Nasdaq 100 and not the S&P 500', neither: ' in neither index', out: ' outside the S&P 500' })[spFilter] || '';
         const where = (adviceFilter !== 'All' ? `“${adviceFilter}” in ` : '') +
@@ -6430,8 +6466,7 @@
         if (opening && p.root === 'secPicker') renderSectorMenu();
         if (opening && p.root === 'indPicker') renderIndustryMenu();
         const narrowed = () => tabStocks().filter((s) =>
-          (sectorFilter === 'All' || s.sector === sectorFilter)
-          && (industryFilter === 'All' || s.industry === industryFilter));
+          selHas(sectorFilter, s.sector) && selHas(industryFilter, s.industry));
         if (opening && p.root === 'spPicker') renderSpMenu(narrowed());
         if (opening && p.root === 'sizePicker') renderSizeMenu(narrowed());
         if (opening && p.root === 'advPicker') renderAdviceMenu();
