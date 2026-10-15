@@ -38,6 +38,30 @@
        owner's request, after the one on /admin). Its chips are BUILT FROM THE
        PAGE rather than written down -- see paintJumps(). ------------------- */
     .jumps { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 20px; }
+    /* ---- At a glance (2026-10-15): the page summed up topic by topic, built
+       by glance.js. An arrow says where the stock SITS, never good or bad:
+       green and red only on the two price cards, where they mean the price
+       went up or down; every other arrow is neutral. Amber is "old". ---- */
+    .gl-sec > .core { padding: 18px 20px 20px; }
+    .gl-sec .sec-h { margin-bottom: 14px; }
+    .gl-sec .gl-note { font-size: 12px; color: var(--faint); }
+    .gl-sec .gl-tog { margin-left: auto; }
+    .gl-sec.gl-closed .gl-grid { display: none; }
+    .gl-sec.gl-closed .sec-h { margin-bottom: 0; }
+    .gl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+    .gl-card { display: flex; flex-direction: column; gap: 7px; padding: 13px 15px; border-radius: 14px;
+      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025); color: inherit; text-decoration: none;
+      transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
+    .gl-card:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--hair-2); }
+    .gl-card .gl-h { display: flex; align-items: center; gap: 9px; }
+    .gl-card .gl-t { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+    .gl-card .gl-a { width: 16px; text-align: center; font-size: 12px; line-height: 1; color: var(--text); }
+    .gl-card .gl-a.gl-none { color: var(--faint); }
+    .gl-card.gl-up .gl-a { color: var(--green); }
+    .gl-card.gl-down .gl-a { color: var(--red); }
+    .gl-card .gl-x { font-size: 13px; line-height: 1.55; color: var(--text); }
+    .gl-card .gl-stale { font-size: 11.5px; color: var(--amber); }
+    @media (max-width: 760px) { .gl-grid { grid-template-columns: 1fr; } }
     .jump {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
       border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
@@ -1240,6 +1264,7 @@
   </main>
 
   <script src="/rowcard.js"></script>
+  <script src="/glance.js"></script>
   <script src="/peertrend.js"></script>
   <script src="/perfchart.js"></script>
   <script src="/action.js"></script>
@@ -3288,6 +3313,14 @@
 
         <nav class="jumps" id="jumps" aria-label="Sections on this page"></nav>
 
+        ${payload.glance && payload.glance.cards && payload.glance.cards.length ? `
+        <section class="bezel card gl-sec" id="glance"><div class="core">
+          <div class="sec-h"><h2>At a glance</h2>
+            <span class="gl-note">Where ${esc(stock.symbol)} stands on each topic. An arrow says up or down, high or low against the group named; it is not a rating. Click a card for the detail.</span>
+            <button class="rng gl-tog" id="glTog" type="button" aria-expanded="true">Hide</button></div>
+          ${Glance.render(payload.glance)}
+        </div></section>` : ''}
+
         <section class="bezel card" id="price" data-jump="Price" data-icon="i-chart"><div class="core">
           <div class="sec-h"><h2>Price</h2>
             <span class="ranges">${RANGES.map((r) =>
@@ -3583,6 +3616,33 @@
       paintMonths();
       paintJumps();
       watchJumps();
+      // At a glance: Hide / Show, remembered in this browser. A card whose
+      // section is not on screen (a fund files no statements; some sections
+      // appear only once their own fetch lands) does nothing rather than
+      // jumping to a hidden place.
+      {
+        const sec = document.getElementById('glance'), tog = document.getElementById('glTog');
+        if (sec && tog) {
+          let open = true;
+          try { open = localStorage.getItem('glanceOpen') !== '0'; } catch (e) { /* storage blocked */ }
+          const set = () => {
+            sec.classList.toggle('gl-closed', !open);
+            tog.textContent = open ? 'Hide' : 'Show';
+            tog.setAttribute('aria-expanded', String(open));
+          };
+          set();
+          tog.addEventListener('click', () => {
+            open = !open; set();
+            try { localStorage.setItem('glanceOpen', open ? '1' : '0'); } catch (e) { /* storage blocked */ }
+          });
+          sec.addEventListener('click', (e) => {
+            const a = e.target.closest('[data-jump-to]');
+            if (!a) return;
+            const t = document.getElementById(a.dataset.jumpTo);
+            if (!t || t.hidden) e.preventDefault();
+          });
+        }
+      }
 
       // ---- symbol picker ------------------------------------------------------
       // The masthead symbol opens the whole universe, alphabetically, with a

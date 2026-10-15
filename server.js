@@ -46,6 +46,9 @@ const store = require('./db');
 // browser would: the mobile page gets the twenty matching rows, formatted,
 // instead of the 1.3MB table. Both are the same modules the pages load.
 const Filters = require('./private/filters.js');
+// The stock page's At a glance cards: built here, where every company's
+// figures are in memory for the comparisons; drawn by the page.
+const Glance = require('./private/glance.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -9610,6 +9613,9 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     // claim is "here is the rest of the industry" — a worse advertisement than
     // no table at all, and one more route that has to remember to narrow.
     peers: guest ? null : peersFor(stock, stocks, peerLinks),
+    // At a glance (2026-10-15): the topic cards, compared against the whole
+    // snapshot. Never fails the page; a null simply draws no section.
+    glance: (() => { try { return Glance.build(stock, stocks); } catch (e) { return null; } })(),
     updatedAt: snap.updatedAt || null,
   });
 }));

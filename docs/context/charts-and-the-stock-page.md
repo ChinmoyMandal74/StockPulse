@@ -85,3 +85,14 @@ The stock page's chart toolbar had a "Save chart" menu since 2026-09-22: it expo
 - **Removed for the admin too.** The promo studio makes the same card (Compare, Chart) and still downloads for the admin.
 - In its place the toolbar has a "Charts" link to the studio for that stock, hidden from guests.
 - The `stock` card template in `cards.js` was left alone: saved posts and the phone may still name it.
+
+## At a glance: the page summed up topic by topic (2026-10-15, owner's request)
+
+The owner: *"the individual stock page has grown very big ... a highlight section ... short term price action, long term price, fundamentals growth and profitability, short position etc"*, then *"No need of light .. arrows ok"*.
+
+- **A section between the jump bar and the chart**, ten cards: Short-term price, Long-term price, Growth, Profitability, Valuation, Balance sheet, Short position, Insiders and owners, Earnings, Signal. Each is an arrow, a title and one or two sentences with the numbers; clicking jumps to the full section (`data-jump-to`; a section not on screen is not jumped to). **Hide / Show** is remembered in the browser (`localStorage.glanceOpen`).
+- **`private/glance.js` is the one implementation** (pure; `build(stock, stocks)`, `render(g)`, `standing`). The server builds it in `/api/stock` (`glance` in the response), because a comparison needs every company's figures and the page is sent one row; the page draws it. The phone page can reuse it unchanged.
+- **AN ARROW DESCRIBES, IT NEVER RATES.** Up or down for a price or a flow, high or low against a named group for a level. Green and red only on the two price cards (price direction, the site's rule); every other arrow is the text colour. Amber only for a short report over 30 days old. No overall score, nothing adds the arrows up, nothing reaches the Signal; the Signal card shows the verdict and its rule as they are.
+- **The comparison group** is the company's industry where at least five companies in it carry the figure, else every company tracked, and the sentence names which ("higher than three quarters of Semiconductors", "in the middle half of ..."). Funds are never in a group. A forward P/E is compared only among positive ones; a loss reads "No P/E".
+- **Null is not zero.** A card with no figures is not drawn. Net cash is left out for Financial Services. "No open-market insider trades" is said only when the insider file was read for the row (`insiderSince`); otherwise the line is absent.
+- Verified: `glance-test.js`, 20 checks (arrows, the group and its fallback, funds out, the bank, a loss, an empty row, stale flag, escaping, no trading words); the fund and bank guards proved by switching them off. Drawn in headless Chrome for MU, RGTI and JPM at desktop and phone width from the real snapshot file, Hide collapsing the grid and storing the choice.
