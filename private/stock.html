@@ -1308,6 +1308,18 @@
       { id: '1m',  label: '1M',  days: 21,   word: 'past month' },
       { id: '3m',  label: '3M',  days: 63,   word: 'past three months' },
       { id: '6m',  label: '6M',  days: 126,  word: 'past six months' },
+      // YEAR TO DATE (2026-10-16, the owner). A calendar window, not a count:
+      // it opens on the last close of last year, the promo cards' YTD, so the
+      // line reads as this year's move. `days` is only how much to FETCH (the
+      // weekdays since 31 December, with slack); paintChart cuts the window
+      // at the year boundary in the stock's own dates.
+      { id: 'ytd', label: 'YTD', ytd: true, word: 'this year',
+        get days() {
+          const now = new Date(), start = new Date(now.getFullYear() - 1, 11, 31, 12);
+          let n = 0;
+          for (const t = new Date(start); t <= now; t.setDate(t.getDate() + 1)) if (t.getDay() % 6) n++;
+          return n + 10;
+        } },
       { id: '1y',  label: '1Y',  days: RowCard.HISTORY_DAYS, word: 'past year' },
       { id: '5y',  label: '5Y',  days: 1260, word: 'past five years' },
       { id: 'max', label: 'Max', days: 5200, word: 'whole archive' },
@@ -3116,7 +3128,18 @@
         }
         // Averaged over everything fetched, then sliced to the window asked
         // for, so each line is drawn from the first visible bar.
-        const from = Math.max(0, all.length - range.days);
+        let from = Math.max(0, all.length - range.days);
+        if (range.ytd) {
+          // The last session before 1 January of the year of the newest bar
+          // (the data's year, not the reader's clock), so the first point
+          // is last year's close. Before the year's first session there is
+          // nothing to draw but that close and the one before it.
+          const ds = data.dates || [];
+          const jan1 = String(ds[ds.length - 1] || '').slice(0, 4) + '-01-01';
+          let i0 = -1;
+          for (let i = ds.length - 1; i >= 0; i--) if (String(ds[i]) < jan1) { i0 = i; break; }
+          from = Math.min(Math.max(0, i0), Math.max(0, all.length - 2));
+        }
         const closes = all.slice(from);
         const series = MAS.map((m) => ({
           ma: m, values: RowCard.sma(all, m.len).slice(from),
