@@ -1514,6 +1514,19 @@
       return win[0];
     }
 
+    // WHICH STOCKS A CARD'S BASKET NEEDS (2026-10-15, the owner on the Stock
+    // spotlight: "This takes a long time"). Every basket was the whole
+    // universe -- about 1,300 stocks of daily closes, half a million rows at a
+    // year's window -- and the spotlight draws ONE of them. A card that
+    // needs one names it here and the hosts ask the server for that stock and
+    // the benchmarks alone; null keeps the whole screen, which every other
+    // basket card (chart, sparklines, the group spotlights, lines) really uses.
+    function basketSymbols(tpl, opts) {
+      const o = opts || {};
+      if (tpl === 'spotlight' && o.spotSym) return [String(o.spotSym).toUpperCase()];
+      return null;
+    }
+
     function chartHistoryNeed(opts) {
       const o = opts || {};
       if (o.chtMode !== 'stock') return null;
@@ -12942,6 +12955,7 @@
     // The Scatter card: the Bars catalogue under axis names, and its counts.
     scatterMeasures: () => BAR_METRICS.map((m) => [m.key, sctName(m), m.group]),
     scatterCounts: () => SCT_COUNTS.map((c) => c.slice()),
+    basketSymbols,
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)

@@ -11096,7 +11096,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // narrow it.
   const bDays = Cards.basketDays(post.tpl, post.opts || {});
   if (bDays) {
-    try { basket = await basketPayload(req, 'All', bDays); } catch { basket = null; }
+    try { basket = await basketPayload(req, 'All', bDays, Cards.basketSymbols(post.tpl, post.opts || {})); } catch { basket = null; }
   }
   // A one-stock chart with a moving average needs that symbol's closes from
   // BEFORE the window — the basket only carries the window itself. Cards says
@@ -14583,7 +14583,10 @@ async function groupIndex() {
 // the phone's saved-posts endpoint can build the same cards server-side
 // without a second copy of the axis rules. Returns the route's own payload,
 // or { error, status } for the two not-founds.
-async function basketPayload(req, rawName, days) {
+// `only`: the few symbols a one-stock card draws (Cards.basketSymbols). The
+// bars are read for those and the benchmarks rather than the whole universe;
+// the shape of the answer is the same.
+async function basketPayload(req, rawName, days, only) {
   const portfolios = await readPortfolios();
   const all = await readUniverse();
   let symbols;
@@ -14621,7 +14624,15 @@ async function basketPayload(req, rawName, days) {
 
   const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
     .toISOString().slice(0, 10);
-  const bars = await store.readBarsFor(all, since);
+  const uniSet = new Set(all);
+  const asked = Array.isArray(only) ? [...new Set(only.filter((s) => uniSet.has(s)))].slice(0, 10) : [];
+  // Nothing asked for is on the screen: answer with the whole screen, as before.
+  const narrow = asked.length ? asked : null;
+  if (narrow) symbols = symbols.filter((s) => narrow.includes(s));
+  // The universe's dates come from every stock; a narrowed read takes them
+  // from the stock and the benchmarks, which trade on the same sessions.
+  const readSyms = narrow ? [...new Set(narrow.concat(PAGE_BENCHMARKS.map((b) => b[0])))].filter((s) => uniSet.has(s)) : all;
+  const bars = await store.readBarsFor(readSyms, since);
 
   // The date axis is every session anyone traded, oldest first, trimmed to
   // the asked-for window — US names dominate, so this is the US calendar.
@@ -14631,7 +14642,7 @@ async function basketPayload(req, rawName, days) {
   // The test is data-driven (half of the busiest day's coverage), so it needs
   // no calendar and no hardcoded holidays.
   const perDate = new Map();
-  for (const sym of all) for (const b of bars[sym] || []) perDate.set(b.d, (perDate.get(b.d) || 0) + 1);
+  for (const sym of readSyms) for (const b of bars[sym] || []) perDate.set(b.d, (perDate.get(b.d) || 0) + 1);
   const busiest = Math.max(0, ...perDate.values());
   const dates = [...perDate.keys()]
     .filter((d) => perDate.get(d) >= busiest * 0.5)
@@ -14669,7 +14680,8 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   // Floor of 5, a trading week: the promo studio's shortest chart window.
   const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
-  const out = await basketPayload(req, String(req.query.name || '').trim(), days);
+  const only = String(req.query.only || '').toUpperCase().split(',').map((s) => s.trim()).filter((s) => /^[A-Z0-9.\-]{1,15}$/.test(s));
+  const out = await basketPayload(req, String(req.query.name || '').trim(), days, only.length ? only : null);
   if (out.error) return res.status(out.status).json({ error: out.error });
   res.json(out);
 }));

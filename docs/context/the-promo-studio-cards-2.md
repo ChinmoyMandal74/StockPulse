@@ -580,3 +580,12 @@ The owner: "under compare like we have Lines any measure, there should be a scat
 - **Colour.** Size and index ladders avoid green and red (price direction). Index is three-state: a company neither file has been read for is grey, never "Neither". A fund on a price measure is keyed "Funds".
 - **Labels.** The five largest and the five furthest from the median among unpinned dots, dropped where they would collide.
 - Verified on the real page with today's snapshot (stamped with size bands and stand-in index flags, which `/api/stocks` adds and the canned file lacks): every dot linked, hover label shown, PNG export 688 KB, all three artboards. Built in Node as the server builds a saved post, with bogus options and an empty cut.
+
+## The Stock spotlight reads one stock, not the screen (2026-10-15)
+
+The owner, on the spotlight sitting at "Reading the archive / Drawing the chart...": *"This takes a long time"*. Every basket card fetched `/api/basket?name=All`, which reads **every stock's daily bars** for the window (`readBarsFor(all, since)`: about 1,300 stocks, roughly half a million rows at a year's window) and the spotlight then draws one of them.
+
+- **`Cards.basketSymbols(tpl, opts)`** names the stocks a card needs: the spotlight answers `[spotSym]`; every other basket card (Chart, Sparklines, the group spotlights, Lines) answers `null`, the whole screen, which they really use.
+- **`/api/basket?...&only=SYM`** (and `basketPayload(..., only)`, which the saved-post renderer also passes) reads the named stocks and the three benchmarks only, takes the date axis from them, and answers in the same shape. An `only` naming nothing on the screen falls back to the whole screen. At most ten.
+- The studio's basket cache is keyed by days **and** the stocks, so switching the spotlight's stock never draws the previous one.
+- Verified on the real server with an in-memory database of 60 real stocks and 500 days: same date axis, the stock's line and the benchmark lines identical to the full basket's, 1,148 bar rows read against 18,081 (16x fewer at 60 stocks; at the real universe the full read is about 20 times larger again), and the unknown-symbol fallback.

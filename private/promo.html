@@ -2124,13 +2124,17 @@
     const chartCache = {};
     let chartPending = null;
     function getBasket(days) {
-      if (chartCache[days]) return chartCache[days];
-      if (chartPending === days) return null;
-      chartPending = days;
-      fetch(`/api/basket?name=All&days=${days}`, { cache: 'no-store' })
+      // A one-stock card asks for that stock alone (Cards.basketSymbols); the
+      // cache is keyed by both, so switching stocks never draws the last one.
+      const only = (Cards.basketSymbols && Cards.basketSymbols(tpl, controlOpts())) || null;
+      const key = days + (only ? '|' + only.join(',') : '');
+      if (chartCache[key]) return chartCache[key];
+      if (chartPending === key) return null;
+      chartPending = key;
+      fetch(`/api/basket?name=All&days=${days}` + (only ? '&only=' + encodeURIComponent(only.join(',')) : ''), { cache: 'no-store' })
         .then((r) => r.json())
         .then((d) => {
-          chartCache[days] = d; chartPending = null;
+          chartCache[key] = d; chartPending = null;
           // WHICH TEMPLATES CARE IS ASKED OF THE MODULE. Listing them here is
           // how the spotlight shipped drawing nothing: the card asked for a
           // basket, the fetch landed, and no repaint followed — so it kept
