@@ -1846,6 +1846,13 @@
     // inks) and leaves the chart's space empty, so the studio can paint the
     // card's frame once and animate the lines over it. Unset, nothing changes.
     let raceCap = null;
+    // THE CHART FILLS ITS CARD (2026-10-16, the owner, over a Race chart with a
+    // gap above the kicker and another above the footer). The body centres its
+    // content, so a fixed chart height left the spare room split in two. The
+    // studio measures what is spare after drawing and asks again with
+    // `ctx.fill` pixels more (or fewer, when a long title overflows); a host
+    // that cannot measure passes nothing and gets the fixed height.
+    let cardFill = 0;
     function chartScopeSymbols() {
       const sc = scopeOf('chtScope', 'chtSector');
       return { syms: sc.rows.map((x) => x.symbol), label: sc.label };
@@ -2084,7 +2091,7 @@
 
       // The race (tplRace sets racTall) takes the 9:16 card's spare room: the
       // video is mostly Reels, and the plot is what moves.
-      const chartH = size.id === 'story' ? (O.racTall ? 1240 : 1020) : size.id === 'square' ? 470 : 590;
+      const chartH = Math.max(280, (size.id === 'story' ? (O.racTall ? 1240 : 1020) : size.id === 'square' ? 470 : 590) + cardFill);
       if (raceCap) {
         raceCap.model = { dates: d.dates.slice(), win: win[2] || '', winLabel,
           lines: lines.map((l) => ({ sym: l.sym || '', color: l.color, S: l.S })),
@@ -13210,6 +13217,7 @@
       filers = (c.filers && typeof c.filers === 'object') ? c.filers : {};
       size = c.size || { id: 'portrait', w: 1080, h: 1350 };
       O = c.opts || {};
+      cardFill = Number.isFinite(Number(c.fill)) ? Math.round(Number(c.fill)) : 0;
       pal = themeOf(id, O);
       getBasket = c.getBasket || (() => null);
       getHistory = c.getHistory || (() => null);

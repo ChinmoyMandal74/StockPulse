@@ -13,6 +13,9 @@ The Chart card in leaders mode, played as a video. Each stock's line is drawn da
 - **Lines:** `racCount` is 3, 5, 7 or 10; the default is 5.
 - **Scope:** the usual scope, sector, industry, size, screen and index lists (`SCOPE_PREFIX.race = 'rac'`). A theme such as Mag 7 is picked under "Within".
 
+## The chart fills the card (2026-10-16)
+The owner pointed out a gap above the kicker and another above the footer on the 4:5 card. `.s-body` centres its content, and the chart had a fixed height (590px at 4:5, 470px square), so the room it did not fill was split in two. That was 74px and 73px on the race card, and 87px and 86px on the leaders chart. On the square card with ten lines the content overflowed by about 30px at both ends. The studio's `fillGap()` measures the spare height after a draw, counting the kicker's collapsed top margin, keeps 32px spare, and draws once more with `ctx.fill` (`cardFill` in `cards.js`) added to the chart height, which never goes below 280px. Measured: 39px above the kicker and 38px above the footer at 4:5 and square, for both the Race and Chart cards. The video frame (no legend) measures its own. The 9:16 card is left alone: it already stretches its body (`.sz-story .s-body > div`). `/api/m/post` passes no fill, so a saved post on the phone keeps the fixed height.
+
 ## How the video is made (`promo.html`, `raceRun`)
 1. `Cards.raceFrame(ctx)` builds the card with the chart's space left empty (`.race-plot`). It returns the model: dates, lines (symbol, colour, rebased series) and inks. The hook is `raceCap` in `cards.js`. When it is unset, `tplChart` behaves exactly as before.
 2. That frame is rasterised **once** with `CardShot.shoot` into an ImageBitmap, so the chrome, title, note and footer are the card's own pixels.

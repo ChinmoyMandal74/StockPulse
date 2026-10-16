@@ -2695,7 +2695,10 @@
     // What a link asked for that no control holds: the stock and column of a
     // drill-down card. Empty for every other card.
     let linkOpts = {};
+    // The chart cards' spare room, measured after a draw (see fillGap).
+    let cardFill = 0;
     const cardCtx = () => ({
+      fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
       getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
@@ -2725,7 +2728,8 @@
     }
     async function raceRun(record) {
       if (raceBusy) return;
-      const fr = Cards.raceFrame(cardCtx());
+      cardFill = 0;
+      let fr = Cards.raceFrame(cardCtx());
       if (!fr.model || !fr.model.lines.length || fr.model.dates.length < 3) {
         raceMsg('The prices for this list are still loading — try again in a moment.', 'warn');
         return;
@@ -2738,6 +2742,9 @@
       try {
         // 1. The frame, once: the card with the chart's space empty.
         stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' + fr.html + '</div>';
+        // The frame has no legend, so it has its own spare room to fill.
+        const spare = fillGap(stage);
+        if (spare) { cardFill = spare; fr = Cards.raceFrame(cardCtx()); cardFill = 0; stage.querySelector('.s-in').innerHTML = fr.html; }
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
         const plotEl = stage.querySelector('.race-plot');
         const sr = stage.getBoundingClientRect(), pr = plotEl.getBoundingClientRect();
@@ -3098,6 +3105,30 @@
       });
     }());
 
+    // THE SPARE ROOM IN A CHART CARD (2026-10-16). The card body centres what
+    // it holds, so whatever the chart does not fill shows as a gap above the
+    // kicker and another above the footer. Measured in the card's own pixels
+    // (offsetHeight ignores the stage's scale); negative when a long title or
+    // a third row of legend pushes past the footer. Only the Chart and Race
+    // cards size their chart from it (Cards' `ctx.fill`).
+    const FILL_TPLS = new Set(['chart', 'race']), FILL_KEEP = 32;
+    function fillGap(stage) {
+      // The 9:16 card stretches its body to full height already
+      // (`.sz-story .s-body > div`), so there is nothing spare to measure.
+      if (!FILL_TPLS.has(tpl) || size.id === 'story') return 0;
+      const body = stage.querySelector('.s-in > .s-body');
+      const inner = body && body.firstElementChild;
+      if (!inner || !inner.querySelector('svg, .race-plot')) return 0;
+      // The kicker's top margin collapses out of `inner`, so offsetHeight
+      // misses it: counted here, or the chart grows into it and the kicker
+      // meets the masthead. FILL_KEEP is left spare, half above and half below,
+      // so the note never sits on the footer's rule.
+      const m = (el, side) => (el ? parseFloat(getComputedStyle(el)['margin' + side]) || 0 : 0);
+      const used = inner.offsetHeight + m(inner.firstElementChild, 'Top') + m(inner.lastElementChild, 'Bottom');
+      const gap = body.clientHeight - used - FILL_KEEP;
+      return Math.abs(gap) > 3 ? gap : 0;
+    }
+
     function render() {
       syncStockPickers();
       syncIndustries(false);
@@ -3119,10 +3150,14 @@
       if (themeCls) stage.classList.add(...themeCls.split(' '));
       stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
       stage.classList.add('sz-' + size.id);
+      cardFill = 0;
       stage.innerHTML = '<div class="s-aura"></div>' +
         // A member's card carries the watermark; the admin's, which is the one
         // that gets posted, does not. Outside .s-in so it spans the artboard.
         `<div class="s-in">${buildCard()}</div>` + (memberMode ? Cards.watermark() : '');
+      // Once more at the height that fills the card, when there is room.
+      const spare = fillGap(stage);
+      if (spare) { cardFill = spare; stage.querySelector('.s-in').innerHTML = buildCard(); cardFill = 0; }
       linkStockNames(stage);
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
