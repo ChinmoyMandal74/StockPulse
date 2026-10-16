@@ -1496,7 +1496,7 @@
     // shipped for an hour reading a basket that never arrived, because its
     // fetch landed and nothing repainted. Asked here instead, the way
     // chartHistoryNeed already is, so a fourth costs one line in one place.
-    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin', thmspot: 'tspWin' };
+    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin', thmspot: 'tspWin', race: 'racWin' };
     function basketDays(tpl, opts) {
       // The Lines card reads the basket only for a DAILY price window; which
       // that is depends on its measure as well as its window, so it answers
@@ -1511,6 +1511,7 @@
       // second card that may be given the calendar window -- and only that
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
+        : tpl === 'race' ? (v === 'y1' ? CHART_WINDOWS.y1 : CHART_WINDOWS.ytd)
         : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
@@ -1835,6 +1836,11 @@
         `${esc(it.label)}</span>`).join('')}</div>`;
     }
 
+    // THE RACE CHART'S HOOK (2026-10-16). When set, tplChart hands back what it
+    // would draw (the dates, each line with its symbol and colour, the axis
+    // inks) and leaves the chart's space empty, so the studio can paint the
+    // card's frame once and animate the lines over it. Unset, nothing changes.
+    let raceCap = null;
     function chartScopeSymbols() {
       const sc = scopeOf('chtScope', 'chtSector');
       return { syms: sc.rows.map((x) => x.symbol), label: sc.label };
@@ -2028,7 +2034,7 @@
           .slice(0, n);
         if (!ranked.length) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
         const cp = (i) => pal.ink(CHART_PALETTE[i % CHART_PALETTE.length]);
-        lines = ranked.map((r, i) => ({ color: cp(i), S: r.S, width: 3 }));
+        lines = ranked.map((r, i) => ({ color: cp(i), S: r.S, width: 3, sym: r.sym }));
         legend = ranked.map((r, i) => ({ color: cp(i), label: `${r.sym} ${pct(r.end)}` }));
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
@@ -2056,13 +2062,45 @@
       // posted image has no picker beside it to say where the line begins.
       if (win[2] === 'ytd') note += ` The window opens on the last close of last year, so the line reads as this year's move.`;
 
+      // The race (tplRace sets racTall) takes the 9:16 card's spare room: the
+      // video is mostly Reels, and the plot is what moves.
+      const chartH = size.id === 'story' ? (O.racTall ? 1240 : 1020) : size.id === 'square' ? 470 : 590;
+      if (raceCap) {
+        raceCap.model = { dates: d.dates.slice(), win: win[2] || '', winLabel,
+          lines: lines.map((l) => ({ sym: l.sym || '', color: l.color, S: l.S })),
+          ink: { text: pal.ink('#e9ecf2'), axis: pal.axis, grid: pal.grid, zero: pal.zero } };
+        return chromeTop() +
+          `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
+          `<h2 class="s-title">${title}</h2>` +
+          `<div class="race-plot" style="height:${chartH}px"></div>` +
+          `<p class="s-sub wide" style="--fs:17px;margin-top:18px">${note}</p>` +
+          '</div></div>' + chromeFoot();
+      }
+
       return chromeTop() +
         `<div class="s-body"><div><span class="s-kick">${kick}</span>` +
         `<h2 class="s-title">${title}</h2>` +
-        lineChart(d.dates, lines, { h: size.id === 'story' ? 1020 : size.id === 'square' ? 470 : 590 }) +
+        lineChart(d.dates, lines, { h: chartH }) +
         chartLegend(legend) +
         `<p class="s-sub wide" style="--fs:17px;margin-top:18px">${note}</p>` +
         '</div></div>' + chromeFoot();
+    }
+
+    // ---- Race chart (2026-10-16, the owner: "Create a new Template called Race
+    // chart ... a copy of this chart ... always for Admin only, 25 seconds, 1Year
+    // or YTD"). THE CHART CARD'S LEADERS, NOT A COPY OF ITS CODE: this runs
+    // tplChart in leaders mode with the race's own controls, so the still card
+    // is exactly that chart and the video animates exactly those lines.
+    function tplRace() {
+      const saved = O;
+      O = Object.assign({}, O, {
+        chtMode: 'leaders', chtWin: O.racWin === 'y1' ? 'y1' : 'ytd',
+        chtLines: [3, 5, 7, 10].includes(Number(O.racCount)) ? Number(O.racCount) : 5,
+        chtScope: O.racScope || 'All', chtSector: O.racSector || 'All', chtIndustry: O.racIndustry || 'All',
+        chtCap: O.racCap || 'All', chtScreen: O.racScreen || '', chtSp500: O.racSp500 || 'All',
+        racTall: true,
+      });
+      try { return tplChart(); } finally { O = saved; }
     }
 
     function tplAnnounce() {
@@ -10624,7 +10662,7 @@
   }
 
   const BUILDERS = {
-    movers: tplMovers, chart: tplChart, advboard: tplAdvBoard,
+    movers: tplMovers, chart: tplChart, race: tplRace, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
@@ -13132,6 +13170,13 @@
       id: t.id, name: t.name,
       slides: t.slides.map((sl) => ({ kind: sl.kind, label: sl.label || HOW_SLIDE_LABEL[sl.kind] || sl.kind })),
     })),
+    // The Race chart's frame: the card with the chart's space left empty, and
+    // the lines to animate into it (tplChart's raceCap hook).
+    raceFrame(ctx) {
+      raceCap = {};
+      try { const html = this.build('race', ctx); return { html, model: raceCap.model || null }; }
+      finally { raceCap = null; }
+    },
     build(id, ctx) {
       const c = ctx || {};
       stocks = c.stocks || [];

@@ -10884,6 +10884,11 @@ async function savedPosts() {
   postsCache = { at: Date.now(), list };
   return list;
 }
+// What a reader may see of them: a saved Race chart is the owner's alone.
+async function postsFor(req) {
+  const list = await savedPosts();
+  return (await isAdmin(req)) ? list : list.filter((p) => p.tpl !== 'race');
+}
 
 // NOT /api/posts — the blog owns that, registered higher up, and Express
 // takes the first match: this one answered the blog's empty list instead.
@@ -10967,7 +10972,7 @@ app.get('/api/filers', requireMember, route(async (req, res) => {
 
 app.get('/api/promo-posts', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ posts: await savedPosts(), max: POSTS_MAX });
+  res.json({ posts: await postsFor(req), max: POSTS_MAX });
 }));
 
 app.put('/api/promo-posts', requireAdmin, route(async (req, res) => {
@@ -11057,7 +11062,7 @@ app.put('/api/pivot-presets', requireAdmin, route(async (req, res) => {
 // whole-universe rankings these carry.
 app.get('/api/m/posts', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const posts = await savedPosts();
+  const posts = await postsFor(req);
   res.json({ posts: posts.map((p) => ({ id: p.id, name: p.name, tpl: p.tpl, size: POST_SIZES[p.size] })) });
 }));
 
@@ -11067,6 +11072,9 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const id = String(req.query.id || '');
   const post = (await savedPosts()).find((p) => p.id === id);
   if (!post) return res.status(404).json({ error: 'No such post.' });
+  // The Race chart is the owner's ("always for Admin only", 2026-10-16): a
+  // saved one is not drawn for anyone else, here or in the studio.
+  if (post.tpl === 'race' && !(await isAdmin(req))) return res.status(404).json({ error: 'No such post.' });
 
   const snap = await readSnapshot();
   const stocks = ((snap && snap.stocks) || []);

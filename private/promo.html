@@ -283,6 +283,41 @@
         <select id="movSp500"></select>
       </div>
 
+      <!-- Race chart (2026-10-16, admin only): the Chart card's leaders in a
+           list, as a 25-second video. Year to date or the past year. -->
+      <div id="racBox">
+        <label>Window</label>
+        <select id="racWin">
+          <option value="ytd" selected>Year to date</option>
+          <option value="y1">Past year</option>
+        </select>
+        <label>How many lines</label>
+        <select id="racCount">
+          <option value="3">Top 3</option>
+          <option value="5" selected>Top 5</option>
+          <option value="7">Top 7</option>
+          <option value="10">Top 10</option>
+        </select>
+        <label>Within</label>
+        <select id="racScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="racSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="racIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="racCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="racScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="racSp500"></select>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" id="racPlay" type="button">Play</button>
+          <button class="btn" id="racRec" type="button">Record 25-second video</button>
+        </div>
+        <p class="hint" id="racMsg">The card shows the finish. Play runs the race in the
+          stage; Record saves it as a video (MP4 in Chrome) at the size chosen below,
+          9:16 for a Reel. It records in real time, so keep the tab in front.</p>
+      </div>
       <div id="chtBox">
         <label>Chart</label>
         <select id="chtMode">
@@ -1921,6 +1956,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
+      { id: 'race', name: 'Race chart', note: 'The leaders in a list as a 25-second video: each line drawn day by day, the labels re-sorting as they overtake' },
       { id: 'scatter', name: 'Scatter', note: 'Any two measures against each other, a dot per company — point at one for its name, click to open it' },
       { id: 'evo2', name: 'Evolution Two Stocks', note: 'Two companies, what each business did and what the market paid for it — from the filings, on one axis' },
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
@@ -2082,6 +2118,7 @@
       { name: 'Holders', views: HB_VIEWS, last: 'holderbook' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
+      { name: 'Race chart', views: [['race', 'Leaders race']], last: 'race' },
       { name: 'Coverage', views: COV_VIEWS, last: 'covsize' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
@@ -2121,8 +2158,9 @@
       for (const part of ['Scope', 'Sector', 'Cap', 'Screen', 'Sp500', 'Industry']) scopeSyncFrom(prefix + part);
     }
     // Which scoped controls belong to which template, for an opened post.
-    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct' };
-    const OWNER_ONLY_TPLS = new Set(['announce']);
+    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac' };
+    // The Race chart is the owner's too (2026-10-16: "always for Admin only").
+    const OWNER_ONLY_TPLS = new Set(['announce', 'race']);
     let canAnnounce = false;
     // ---- member mode ---------------------------------------------------------
     //
@@ -2629,6 +2667,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
+      'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -2653,18 +2692,175 @@
     // What a link asked for that no control holds: the stock and column of a
     // drill-down card. Empty for every other card.
     let linkOpts = {};
-    const buildCard = () => Cards.build(tpl, {
+    const cardCtx = () => ({
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
       getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
+    const buildCard = () => Cards.build(tpl, cardCtx());
+
+    // ---- the Race chart's video (2026-10-16, admin only) ---------------------
+    // The card's frame is drawn ONCE (Cards.raceFrame leaves the chart's space
+    // empty and hands back the lines); every frame after that is the lines,
+    // axis and labels painted onto a canvas over it, and the canvas is
+    // recorded as it plays: 25 seconds, then a short hold on the finish. The
+    // browser records in real time, so the tab must stay in front.
+    const RACE_MS = 25000, RACE_HOLD = 2000, RACE_FPS = 30;
+    let raceBusy = false;
+    const raceMsg = (t, cls) => { const m = $('racMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+    function raceMime() {
+      if (!window.MediaRecorder) return '';
+      for (const m of ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']) {
+        if (MediaRecorder.isTypeSupported(m)) return m;
+      }
+      return '';
+    }
+    function raceDay(iso) {
+      const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
+      return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    async function raceRun(record) {
+      if (raceBusy) return;
+      const fr = Cards.raceFrame(cardCtx());
+      if (!fr.model || !fr.model.lines.length || fr.model.dates.length < 3) {
+        raceMsg('The prices for this list are still loading — try again in a moment.', 'warn');
+        return;
+      }
+      const mime = record ? raceMime() : '';
+      if (record && !mime) { raceMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      raceBusy = true;
+      $('racPlay').disabled = $('racRec').disabled = true;
+      const stage = $('stage');
+      try {
+        // 1. The frame, once: the card with the chart's space empty.
+        stage.innerHTML = '<div class="s-aura"></div><div class="s-in">' + fr.html + '</div>';
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const plotEl = stage.querySelector('.race-plot');
+        const sr = stage.getBoundingClientRect(), pr = plotEl.getBoundingClientRect();
+        const k = 1080 / sr.width;
+        const box = { x: (pr.left - sr.left) * k, y: (pr.top - sr.top) * k, w: pr.width * k, h: pr.height * k };
+        raceMsg('Drawing the frame…');
+        const fontCss = await CardShot.fontCss().catch(() => '');
+        const bgBlob = await CardShot.shoot(stage, { w: 1080, h: size.h, fontCss, mime: 'image/png' });
+        const bg = await createImageBitmap(bgBlob);
+        // 2. The canvas, in the stage while it plays.
+        const cv = document.createElement('canvas');
+        cv.width = 1080; cv.height = size.h;
+        cv.style.display = 'block';
+        stage.innerHTML = '';
+        stage.appendChild(cv);
+        const g = cv.getContext('2d');
+        const M = fr.model, n = M.dates.length, INK = M.ink;
+        const L = M.lines.map((l) => ({ sym: l.sym, color: l.color, P: l.S.map((v) => (v == null ? null : (v - 1) * 100)) }));
+        // The plot: the axis labels on the left, the moving labels on the right.
+        const PL = 74, PR = 236, PT = 12, PB = 44;
+        const px = box.x + PL, py = box.y + PT, pw = box.w - PL - PR, ph = box.h - PT - PB;
+        const X = (j) => px + (j / (n - 1)) * pw;
+        let yLo = -1, yHi = 1;
+        const nice = (span) => { const raw = span / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; };
+        const pct = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%';
+        function draw(p) {
+          const kk = p * (n - 1), i0 = Math.floor(kk), f = kk - i0;
+          const at = (P, j) => { const a = P[Math.min(j, n - 1)], b = P[Math.min(j + 1, n - 1)]; if (a == null) return null; if (b == null || f === 0) return a; return a + (b - a) * f; };
+          // The scale follows what has been drawn so far, eased, never clipping.
+          let lo = 0, hi = 0;
+          for (const l of L) for (let j = 0; j <= i0; j++) { const v = l.P[j]; if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; } }
+          for (const l of L) { const v = at(l.P, i0); if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+          const pad = Math.max(2, (hi - lo) * 0.1);
+          yLo += (lo - pad - yLo) * 0.12; yHi += (hi + pad - yHi) * 0.12;
+          yLo = Math.min(yLo, lo - 0.5); yHi = Math.max(yHi, hi + 0.5);
+          const Y = (v) => py + (1 - (v - yLo) / (yHi - yLo)) * ph;
+          g.drawImage(bg, 0, 0, 1080, size.h);
+          // Grid and axis labels.
+          const st = nice(yHi - yLo);
+          g.font = '500 20px "Geist Mono", monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+          for (let v = Math.ceil(yLo / st) * st; v <= yHi + 1e-9; v += st) {
+            const y = Y(v);
+            g.strokeStyle = Math.abs(v) < st / 1000 ? INK.zero : INK.grid; g.lineWidth = 1;
+            g.setLineDash(Math.abs(v) < st / 1000 ? [6, 6] : []);
+            g.beginPath(); g.moveTo(px, y); g.lineTo(px + pw, y); g.stroke();
+            g.fillStyle = INK.axis; g.fillText((Math.abs(v) < st / 1000 ? '0' : Math.round(v)) + '%', px - 12, y);
+          }
+          g.setLineDash([]);
+          // The dates: where it began, and a large counter for where it is now.
+          g.textAlign = 'left'; g.textBaseline = 'alphabetic'; g.fillStyle = INK.axis; g.font = '500 20px "Geist Mono", monospace';
+          g.fillText(String(M.dates[0]).slice(0, 10), px, py + ph + 32);
+          // The counter sits low on the right, out of the way of lines that rise.
+          g.font = '700 52px Geist, sans-serif'; g.globalAlpha = 0.3; g.fillStyle = INK.text; g.textAlign = 'right';
+          g.fillText(raceDay(M.dates[Math.min(n - 1, Math.round(kk))]), px + pw - 8, py + ph - 22);
+          g.textAlign = 'left';
+          g.globalAlpha = 1;
+          // The lines, up to now.
+          const tips = [];
+          for (const l of L) {
+            g.strokeStyle = l.color; g.lineWidth = 3.5; g.lineJoin = 'round'; g.lineCap = 'round';
+            g.beginPath(); let pen = false;
+            for (let j = 0; j <= i0; j++) { const v = l.P[j]; if (v == null) { pen = false; continue; } const x = X(j), y = Y(v); if (pen) g.lineTo(x, y); else { g.moveTo(x, y); pen = true; } }
+            const vt = at(l.P, i0);
+            if (vt != null) { const xt = X(Math.min(kk, n - 1)), yt = Y(vt); if (pen) g.lineTo(xt, yt); tips.push({ l, x: xt, y: yt, v: vt }); }
+            g.stroke();
+          }
+          // The labels at the tips, re-sorted every frame, pushed apart.
+          tips.sort((a, b) => a.y - b.y);
+          const GAP = 34; const ys = tips.map((t) => t.y);
+          for (let i = 1; i < ys.length; i++) if (ys[i] - ys[i - 1] < GAP) ys[i] = ys[i - 1] + GAP;
+          const over = ys.length ? Math.max(0, ys[ys.length - 1] - (py + ph)) : 0;
+          for (let i = 0; i < ys.length; i++) ys[i] = Math.max(py + 12, ys[i] - over);
+          for (let i = ys.length - 2; i >= 0; i--) if (ys[i + 1] - ys[i] < GAP) ys[i] = ys[i + 1] - GAP;
+          g.font = '700 26px "Geist Mono", monospace'; g.textAlign = 'left'; g.textBaseline = 'middle';
+          tips.forEach((t, i) => {
+            g.fillStyle = t.l.color;
+            g.beginPath(); g.arc(t.x, t.y, 7, 0, Math.PI * 2); g.fill();
+            g.fillText(t.l.sym + ' ' + pct(t.v), px + pw + 22, ys[i]);
+          });
+        }
+        // 3. Play, recording if asked.
+        let rec = null; const chunks = [];
+        if (record) {
+          const stream = cv.captureStream(RACE_FPS);
+          rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 });
+          rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+          rec.start(250);
+        }
+        raceMsg(record ? 'Recording — keep this tab in front for ' + Math.round((RACE_MS + RACE_HOLD) / 1000) + ' seconds.' : 'Playing…');
+        await new Promise((resolve) => {
+          const t0 = performance.now();
+          const step = (now) => {
+            const t = now - t0;
+            draw(Math.min(1, t / RACE_MS));
+            if (t < RACE_MS + RACE_HOLD) requestAnimationFrame(step); else resolve();
+          };
+          requestAnimationFrame(step);
+        });
+        if (rec) {
+          await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+          const type = mime.split(';')[0];
+          const blob = new Blob(chunks, { type });
+          const ext = type === 'video/mp4' ? 'mp4' : 'webm';
+          const name = ['race', (controlOpts().racScope || 'all').replace(/[^a-z0-9]+/gi, '-').toLowerCase(), controlOpts().racWin === 'y1' ? '1y' : 'ytd', size.id].join('-') + '.' + ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          raceMsg('Saved ' + name + ' (' + (blob.size / 1e6).toFixed(1) + ' MB' + (ext === 'webm' ? '; this browser records WebM, which Instagram does not take — use Chrome for MP4' : '') + ').', ext === 'webm' ? 'warn' : '');
+        } else raceMsg('Played. Record to save it as a video.');
+      } catch (e) {
+        raceMsg('Could not make the video: ' + (e && e.message ? e.message : e), 'warn');
+      } finally {
+        raceBusy = false;
+        $('racPlay').disabled = $('racRec').disabled = false;
+        render();
+      }
+    }
+    $('racPlay').addEventListener('click', () => raceRun(false));
+    $('racRec').addEventListener('click', () => raceRun(true));
 
     // Each Industry picker offers only what its Sector picker's choice holds
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin', 'sct'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin', 'sct', 'rac'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -2961,6 +3157,7 @@
       for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
+      $('racBox').style.display = tpl === 'race' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
@@ -3332,6 +3529,8 @@
       $('sctX').value = 'v200'; $('sctY').value = 'm1';
       for (const [v, label] of Cards.scatterCounts()) $('sctCount').appendChild(new Option(label, v, v === '100', v === '100'));
     }());
+    ['racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'race') render(); }));
     ['sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector',
       'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'scatter') render(); }));
@@ -4104,6 +4303,7 @@
         $('trkScope').innerHTML = $('movScope').innerHTML;
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('sctScope').innerHTML = $('movScope').innerHTML;
+        $('racScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -4172,7 +4372,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'sctSector', 'indSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'sctSector', 'racSector', 'indSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4186,7 +4386,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'sctCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'sctCap', 'racCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4202,7 +4402,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'sctScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'sctScreen', 'racScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4218,7 +4418,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500', 'ssnSp500',
-          'shrtSp500', 'barSp500', 'linSp500', 'sctSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
+          'shrtSp500', 'barSp500', 'linSp500', 'sctSp500', 'racSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
           'omkSp500', 'oscSp500', 'oinSp500', 'trkSp500', 'tsnSp500', 'tspSp500', 'othSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
