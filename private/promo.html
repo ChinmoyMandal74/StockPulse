@@ -1914,7 +1914,9 @@
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
     ];
-    let tpl = 'movers';
+    // Opens on Market > Snapshot (owner, 2026-10-15). A link naming a template
+    // (/promo?tpl=spotlight&sym=MU) still wins: it is read after this.
+    let tpl = 'day';
     let size = SIZES[0];
     let stocks = [];
     let loadedAt = null;
@@ -3004,7 +3006,20 @@
     // The ground is shared, so it is wired ONCE and gated on nothing. Adding
     // it to one of the ten per-template lists would leave it dead on the
     // other twelve cards.
-    $('cardTheme').addEventListener('change', render);
+    // THE GROUND FOLLOWS THE SITE (owner, 2026-10-15: "default the color to
+    // light or dark depending on theme"). Light when the site is light,
+    // otherwise dark, on load and when the Appearance is switched with the
+    // page open, until a ground is chosen by hand: from then on that choice
+    // stands for the visit. A saved post that is opened sets its own.
+    const siteGround = () => (window.TickrTheme && window.TickrTheme.current() === 'light' ? 'light' : 'dark');
+    let groundChosen = false;
+    $('cardTheme').value = siteGround();
+    $('cardTheme').addEventListener('change', (e) => { if (e.isTrusted) groundChosen = true; render(); });
+    document.addEventListener('themechange', () => {
+      if (groundChosen) return;
+      $('cardTheme').value = siteGround();
+      render();
+    });
 
     $('tplSub').addEventListener('change', (e) => {
       if (!groupOf(e.target.value)) return;
@@ -3505,6 +3520,9 @@
     // happened), then every control value.
     function openPost(p) {
       if (!p) return;
+      // A saved post carries its own ground, which a later Appearance switch
+      // must not repaint.
+      groundChosen = true;
       tpl = p.tpl;
       size = SIZES.find((x) => x.id === p.size) || SIZES[0];
       paintControls();
@@ -3916,16 +3934,17 @@
           // The page is "Visuals" for everyone (the owner, 2026-10-12: "rename
           // Charts to Visuals for everyone including me"); only the line under
           // the heading differs, since a member is not making a post.
-          // A member has no ground to choose, so the card is the site's own.
-          $('cardTheme').value = 'dark';
+          // A member has no ground to choose, so the card is the site's own:
+          // light or dark with the site's Appearance (siteGround, below).
+          $('cardTheme').value = siteGround();
           $('pgSub').textContent = 'Pick a view, then a stock, a sector or a ranking. Every card is drawn from the latest data on file; the date on a card is the date of its data.';
-          if (MEMBER_HIDDEN.has(tpl)) tpl = 'movers';
+          if (MEMBER_HIDDEN.has(tpl)) tpl = 'day';
         }
         $('postsBox').hidden = !me.admin;
         $('blogBox').hidden = !me.admin;
         $('igBox').hidden = !me.admin;
         if (me.admin) { loadPosts(); loadIg(); }
-        if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'movers';
+        if (!canAnnounce && OWNER_ONLY_TPLS.has(tpl)) tpl = 'day';
         // FIVE REQUESTS AT ONCE, NOT ONE AFTER ANOTHER (2026-10-13, the owner:
         // "promo first time load is also slow"). They were awaited in turn, so
         // the page waited for the sum of them before drawing anything, and none
