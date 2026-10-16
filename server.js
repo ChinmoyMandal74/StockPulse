@@ -13679,12 +13679,52 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
 
 // One company's filings as the page and the card both read them. A function
 // declaration, so the saved-post route above can call it.
+// A LARGE HOLDER'S OWN PAGE (2026-10-16, the owner: "Under large holder, The
+// holder name is not clickable"). A 13D/13G names its holder but the stored
+// row has no id for it, so the name is matched against the 13F managers on
+// file (holder_books, kind M): the same name once "The", punctuation, the
+// SEC's /XX/ tags and the legal suffix are set aside ("THE GOLDMAN SACHS
+// GROUP, INC." is "GOLDMAN SACHS GROUP INC"). EXACTLY ONE match links; none,
+// or two, leaves the name as text, so a link is never a guess. "Orbis
+// Investment Management Limited" stays text: the Orbis on file is "Orbis
+// Allan Gray Ltd", another entity. One indexed prefix read per name, kept
+// six hours per instance.
+const HOLDER_SUFFIX = new Set(['inc', 'incorporated', 'corp', 'corporation', 'co', 'company', 'ltd', 'limited', 'lp', 'llc', 'llp', 'plc', 'sa', 'ag', 'nv', 'se', 'lllp']);
+function holderKey(name) {
+  const w = String(name || '').toLowerCase().replace(/\/[a-z]{2,4}\/?/g, ' ').replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+  if (w[0] === 'the') w.shift();
+  while (w.length > 1 && HOLDER_SUFFIX.has(w[w.length - 1])) w.pop();
+  return w.join(' ');
+}
+const holderIdMemo = new Map();
+async function holderIdFor(name) {
+  const key = holderKey(name);
+  if (key.length < 3) return null;
+  const hit = holderIdMemo.get(key);
+  if (hit && Date.now() - hit.at < 6 * 3600000) return hit.id;
+  // The prefix the name index can ride: its first two words as written, or
+  // the first alone when the second is the legal suffix ("NVIDIA Corporation"
+  // is filed as "NVIDIA CORP").
+  const raw = String(name).toLowerCase().replace(/^the\s+/, '').trim().split(/\s+/);
+  const two = raw.length > 1 && !HOLDER_SUFFIX.has(raw[1].replace(/[^a-z0-9]/g, ''));
+  const rows = await store.listHolderBooks('M', raw.slice(0, two ? 2 : 1).join(' '), 30);
+  const same = rows.filter((x) => holderKey(x.name) === key);
+  const id = same.length === 1 ? same[0].id : null;
+  if (holderIdMemo.size > 2000) holderIdMemo.clear();
+  holderIdMemo.set(key, { id, at: Date.now() });
+  return id;
+}
+
 async function holdersPayload(symbol) {
   const [rows, ids] = await Promise.all([store.readSecHolders(symbol, 40), filerIds().catch(() => ({}))]);
   const cik = ids[symbol] || null;
+  // Display only, and never fatal: a failed lookup is a name without a link.
+  const names = [...new Set(rows.map((e) => e.holder).filter(Boolean))];
+  const linked = new Map(await Promise.all(names.map((n) => holderIdFor(n).catch(() => null).then((id) => [n, id]))));
   return { symbol, days: Holders13.KEEP_DAYS, filings: rows.map((e) => ({
     filed: e.filed, form: e.form, kind: e.kind, active: e.kind === 'D', amended: /\/A$/.test(e.form),
-    holder: e.holder, pct: e.pct, pctText: Holders13.pctWord(e.pct), shares: e.shares, persons: e.persons,
+    holder: e.holder, holderId: linked.get(e.holder) || null, pct: e.pct, pctText: Holders13.pctWord(e.pct), shares: e.shares, persons: e.persons,
     eventDate: e.eventDate, url: Holders13.pageUrl(cik, e.accn),
   })) };
 }

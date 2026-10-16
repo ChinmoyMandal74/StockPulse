@@ -5075,6 +5075,7 @@
       async function loadHolders() {
         const card = document.getElementById('hold');
         if (!card) return;
+        await holderReady;
         try {
           const r = await fetch('/api/holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
@@ -5086,7 +5087,7 @@
           const sh = (v) => (v == null ? '\u2014' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v).toLocaleString('en-US'));
           document.getElementById('holdWin').textContent = list.length + (list.length === 1 ? ' filing' : ' filings') + ' since ' + day(list[list.length - 1].filed);
           document.getElementById('holdBody').innerHTML = '<table><thead><tr><th>Filed</th><th>Holder</th><th class="n">Stake</th><th class="n">Shares</th><th>Form</th><th></th></tr></thead><tbody>'
-            + list.map((e) => '<tr><td class="d">' + esc(day(e.filed)) + '</td><td>' + esc(e.holder || '\u2014')
+            + list.map((e) => '<tr><td class="d">' + esc(day(e.filed)) + '</td><td>' + (e.holder ? holderLink('M', e.holderId, e.holder) : '\u2014')
               + (e.persons > 1 ? ' <span class="am">with ' + (e.persons - 1) + ' other' + (e.persons === 2 ? '' : 's') + '</span>' : '') + '</td>'
               + '<td class="n">' + esc(e.pctText || '\u2014') + '</td><td class="n">' + esc(e.pct === 0 ? '\u2014' : sh(e.shares)) + '</td>'
               + '<td class="k">' + (e.active ? '<b>13D</b> \u00b7 may seek influence' : '13G \u00b7 passive') + (e.amended ? '<span class="am">amended</span>' : '') + '</td>'
