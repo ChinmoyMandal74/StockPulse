@@ -52,6 +52,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
 | `holderbook.js`, `private/holder.html`, `holders.html` | What one 13F manager or one fund holds among the tracked stocks, turned round from the two quarterly loads: the arithmetic and the two member pages (`/holders`, `/holder/<M or F>/<id>`) |
 | `summary.js` | The Company summary: one stock written up by an AI model from a fact sheet and saved as a blog draft. The fact sheet, the instructions, the checks on what came back, and the post body |
+| `earndate.js`, `earndate-load.js` | The next report date when the provider gives none (nearly always): the same quarter last year plus 52 weeks, else the last report plus 91. **It feeds the Signal's Earnings soon rule.** The re-estimate script needs no API calls |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |

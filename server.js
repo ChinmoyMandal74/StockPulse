@@ -51,6 +51,8 @@ const Filters = require('./private/filters.js');
 const Glance = require('./private/glance.js');
 // Paper positions: the ledger arithmetic (paper.js) behind /paper.
 const Paper = require('./paper.js');
+// The next report date when the provider gives none (fetchProfile, earndate-load.js).
+const EarnDate = require('./earndate.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -3919,7 +3921,8 @@ async function fetchProfile(symbol) {
       /* leave fundamentals null */
     }
     // Earnings: last reported date + surprise, and the next date (confirmed if the
-    // feed lists a future date, else estimated ~91 days after the last report).
+    // feed lists a future date, else estimated by earndate.js: the same quarter
+    // last year plus 52 weeks, or the last report plus 91 days).
     try {
       // 40 asked, ~26 quarters returned (measured on MSFT, 2026-09-18:
       // 2020-04 to 2026-07) — for the SAME 20 credits as the 8 we used to ask
@@ -3953,10 +3956,13 @@ async function fetchProfile(symbol) {
         out.nextEarningsDate = upcoming.date;
         out.nextEarningsEstimated = false;
       } else if (reported) {
-        const d = new Date(reported.date);
-        d.setDate(d.getDate() + 91);
-        out.nextEarningsDate = d.toISOString().slice(0, 10);
-        out.nextEarningsEstimated = true;
+        // Ours, not the provider's: the same quarter last year plus 52
+        // weeks, else the last report plus 91 days (earndate.js).
+        const est = EarnDate.estimateNext(arr.filter((x) => x.eps_actual != null).map((x) => x.date), reported.date);
+        if (est) {
+          out.nextEarningsDate = est.date;
+          out.nextEarningsEstimated = true;
+        }
       }
     } catch {
       /* leave earnings null */

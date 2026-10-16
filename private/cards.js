@@ -9995,7 +9995,7 @@
         ? 'The ' + top.length + ' largest by market value of the ' + due.length + ' companies in this cut due to report between ' + span + '. '
         : (due.length === 1 ? 'The one company' : 'All ' + due.length + ' companies') + ' in this cut due to report between ' + span + '. ')
       + (unseen ? unseen + (unseen === 1 ? ' other day has' : ' other days have') + ' only smaller companies reporting. ' : '')
-      + (withEst ? 'A date marked est. is the last report plus ninety-one days, not a confirmed one. ' : guessNote)
+      + (withEst ? 'A date marked est. is estimated from the date of the same quarter last year, not a confirmed one. ' : guessNote)
       + 'Dates come from the provider\u2019s calendar and companies do move them. '
       + 'The last column is how far the previous quarter\u2019s earnings per share landed from the consensus estimate; '
       + 'it says nothing about the quarter to come. A calendar, not a forecast.';
