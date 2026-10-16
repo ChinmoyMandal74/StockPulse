@@ -2038,6 +2038,37 @@ the gated pages.
 
 ---
 
+## 42. An AI pass for the news headlines the rules cannot place — 2026-10-16
+
+*Area: Data · Status: Open · Note: rules only shipped first by the owner's choice ("rules only for the time being, AI later")*
+
+The headlines are sorted by type with rules on their words
+(`private/newstype.js`: Earnings, Analyst ratings, Guidance, Dividends and
+buybacks, Deals, Leadership and jobs, Legal and regulatory, Products and
+partnerships, Ownership, Commentary, Market moves, Other). On 375 real
+headlines across fifteen stocks on 2026-10-16 the rules placed 78%; **84
+(22%) were left as Other**, mostly unusual wording ("Mapping the Market:
+Micron shares appear set for further losses") and headlines about a CEO's
+remarks that are not a change of people.
+
+**The idea.** Send only what the rules leave as Other to a small model
+(Claude Haiku), headline only, with the fixed list of types and "Other" as
+an allowed answer; store the answer with the headline so it is asked once.
+
+**What it would cost.** A few hundred short calls a day across the
+universe at most, since the rules take the rest: likely cents a day.
+
+**What must hold.**
+- The fixed list, never a type the model invents; "Other" when unsure.
+- Asked once per headline and stored (a column on `news`, with a backfill
+  through a targeted write, not `writeNews`), not on every page view.
+- Display only, never read by the Signal; the rules still decide first, so
+  the same headline cannot change type from one page view to the next.
+- The model's choice is labelled as such where it is shown, so a reader can
+  tell a rule's answer from a model's.
+
+---
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

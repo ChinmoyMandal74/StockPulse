@@ -1668,6 +1668,7 @@
   <script src="/action.js"></script>
   <script src="/filters.js"></script>
   <script src="/rowcard.js"></script>
+  <script src="/newstype.js"></script>
   <script src="/drillpop.js"></script>
   <script src="/track.js"></script>
   <script src="/refresh-loop.js"></script>
@@ -6340,7 +6341,9 @@
       };
       const list = items.slice(0, 10).map((x) => {
         const href = /^https?:\/\//i.test(x.url || '') ? x.url : null;
-        const meta = [x.source, ago(x.published_at)].filter(Boolean).join(' · ');
+        // The type of story first (newstype.js, rules on the headline).
+        const kind = window.NewsType ? window.NewsType.LABEL[window.NewsType.classify(x.headline)] : '';
+        const meta = [kind, x.source, ago(x.published_at)].filter(Boolean).join(' · ');
         const body = `<div class="np-h">${we(x.headline)}</div><div class="np-m">${we(meta)}</div>`;
         return href ? `<a class="np-item" href="${we(href)}" target="_blank" rel="noopener">${body}</a>`
           : `<div class="np-item">${body}</div>`;

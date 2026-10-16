@@ -51,3 +51,13 @@ Per-stock headlines — **headline / source / url / timestamp only, never bodies
 - **First real reading, 2026-09-15: 36 of 271 stocks have been fetched and hold no headlines** (MS, RBRK, SKHY, BABA, CMCSA among them). The Google query is the quoted legal name + "stock", and a quoted "SK hynix Inc. American Depositary Receipt" matches nothing — the short name is the likely fix.
 - Verified end to end locally: a stale stock page (EBAY, 13h) logged one batch — 25 fetched, 4 new, 25 stored, 668ms — and a second open inside the TTL logged nothing; route walk (anon/guest 302 and 403, admin 200, unknown batch 404); headless page over synthetic history.
 
+
+### News by type (2026-10-16)
+
+The owner, after TradingView's news broken down by type: *"rules only for the time being, AI later"* (the AI pass is backlog entry 42).
+
+- **`private/newstype.js`** (shared, pure): `TYPES` (Earnings, Analyst ratings, Guidance, Dividends and buybacks, Deals, Leadership and jobs, Legal and regulatory, Products and partnerships, Ownership, Commentary, Market moves, Other), `LABEL`, `classify(headline)`. Ordered rules, **first match wins**: ratings before moves (a move caused by a downgrade is a rating), earnings before guidance, ownership before deals ("shares acquired by" a fund is a 13F notice), commentary before moves. A named research desk counts as an analyst view only with a verb of judgement or a target/rating change, so a desk that is the subject of its own news does not. Nothing matched is Other, never a guess.
+- **Worked out when drawn, not stored**: free, no schema change, every stored headline typed at once, and a better rule re-sorts them all. Display only; nothing reads it for the Signal.
+- **Stock page**: chips above the headlines (All, then each type present, with counts) filter what is loaded; Show more still loads the next page. Each headline carries its type. **Screener news panel**: the type leads the source and age.
+- Measured on 375 real headlines across fifteen stocks (Google News RSS, 2026-10-16): Commentary 134, Market moves 57, Analyst ratings 26, Earnings 25, Dividends and buybacks 20, Ownership 14, Products 7, Leadership 4, Deals 3, Guidance 1, Legal 0, **Other 84 (22%)**. Two types were added to the starting list from that sample: Commentary (the largest group left in Other) and Ownership.
+- `newstype-test.js`: 40 checks, including every headline that taught a rule. On the stock page with real Micron headlines: chips All 10 / Analyst ratings 1 / Commentary 6 / Other 3, and choosing Commentary showed the 6.
