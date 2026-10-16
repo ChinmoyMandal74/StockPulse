@@ -700,6 +700,22 @@ const SCHEMA = [
      url          text not null
    )`,
   `create index if not exists idx_news_symbol on news (symbol, published_at)`,
+  // THE NEWS ARCHIVE (2026-10-16, the owner: "Instead of deleting can you
+  // move it an archive table"). A headline that leaves `news` -- older than
+  // the keep window, or beyond a stock's newest N -- is copied here first, in
+  // the same write, so nothing the feed served is lost. Nothing reads it yet.
+  // `insert or ignore` on the same url-hash id, so a headline archived twice
+  // (dropped, served again, dropped again) is kept once.
+  `create table if not exists news_archive (
+     id           text primary key,
+     symbol       text not null,
+     published_at text not null,
+     source       text,
+     headline     text not null,
+     url          text not null,
+     archived_at  integer not null
+   )`,
+  `create index if not exists idx_news_archive_symbol on news_archive (symbol, published_at)`,
   // The ticker asks for everything published in the last 12 hours across the
   // universe; without this it scanned the table (query-plan test, 2026-09-15).
   `create index if not exists idx_news_published on news (published_at)`,
@@ -5428,7 +5444,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'options_state', 'options_oi',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -6682,7 +6698,8 @@ async function clearVisitors() {
 // weeks a stored set would otherwise drift past it.
 async function writeNews(symbol, items, keepDays = 21, keepMax = 25) {
   await init();
-  const cutoff = new Date(Date.now() - keepDays * 86400000).toISOString();
+  const now = Date.now();
+  const cutoff = new Date(now - keepDays * 86400000).toISOString();
   const idOf = (x) => crypto.createHash('sha256').update(x.url).digest('hex').slice(0, 32);
   const stmts = [
     { sql: 'select id from news where symbol = ?', args: [symbol] },
@@ -6690,9 +6707,18 @@ async function writeNews(symbol, items, keepDays = 21, keepMax = 25) {
       sql: 'insert or replace into news (id, symbol, published_at, source, headline, url) values (?, ?, ?, ?, ?, ?)',
       args: [idOf(x), symbol, x.published_at, x.source || null, x.headline, x.url],
     })),
+    // MOVED, NOT DELETED: each trim first copies what it is about to remove
+    // into news_archive. One batch, so a headline is never in neither table.
+    { sql: `insert or ignore into news_archive (id, symbol, published_at, source, headline, url, archived_at)
+              select id, symbol, published_at, source, headline, url, ? from news where symbol = ? and published_at < ?`,
+      args: [now, symbol, cutoff] },
     { sql: 'delete from news where symbol = ? and published_at < ?', args: [symbol, cutoff] },
     // Newest N. Seeks on idx_news_symbol (symbol, published_at) rather than
     // walking the table — the rule this database is metered by.
+    { sql: `insert or ignore into news_archive (id, symbol, published_at, source, headline, url, archived_at)
+              select id, symbol, published_at, source, headline, url, ? from news where symbol = ? and id not in (
+                select id from news where symbol = ? order by published_at desc limit ?)`,
+      args: [now, symbol, symbol, keepMax] },
     { sql: `delete from news where symbol = ? and id not in (
               select id from news where symbol = ? order by published_at desc limit ?)`,
       args: [symbol, symbol, keepMax] },

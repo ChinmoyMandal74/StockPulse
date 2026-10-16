@@ -61,3 +61,13 @@ The owner, after TradingView's news broken down by type: *"rules only for the ti
 - **Stock page**: chips above the headlines (All, then each type present, with counts) filter what is loaded; Show more still loads the next page. Each headline carries its type. **Screener news panel**: the type leads the source and age.
 - Measured on 375 real headlines across fifteen stocks (Google News RSS, 2026-10-16): Commentary 134, Market moves 57, Analyst ratings 26, Earnings 25, Dividends and buybacks 20, Ownership 14, Products 7, Leadership 4, Deals 3, Guidance 1, Legal 0, **Other 84 (22%)**. Two types were added to the starting list from that sample: Commentary (the largest group left in Other) and Ownership.
 - `newstype-test.js`: 40 checks, including every headline that taught a rule. On the stock page with real Micron headlines: chips All 10 / Analyst ratings 1 / Commentary 6 / Other 3, and choosing Commentary showed the 6.
+
+### Trimmed headlines are archived, not deleted (2026-10-16)
+
+The owner: *"Instead of deleting can you move it an archive table"*.
+
+- **`news_archive`** (same columns as `news` plus `archived_at`, indexed `(symbol, published_at)`). `writeNews` copies what each trim is about to remove (older than `KEEP_DAYS`, 21; beyond the newest `KEEP_MAX`, 150) into it with `insert or ignore`, then deletes, **in the same batch**, so a headline is never in neither table and one archived twice is kept once.
+- **Nothing reads it yet.** It is the record; the pages still show `news`.
+- **In `SYMBOL_TABLES`** (the project rule for a per-symbol table): removing a stock from the universe removes its archived headlines too. **On the query-plan test's big-table list**, since it only grows: roughly the rate headlines leave the window, a few thousand a day across the universe.
+- **The move still happens only when a stock is fetched**, as the delete did: a stock the news job stops reaching keeps its old headlines in `news`. A nightly move across every stock was offered and not yet asked for.
+- Verified on the real `db.js` over an in-memory database: 11 checks (the newest N kept, the old and the overflow archived, none lost, none in both, `archived_at` stamped, a re-served headline archived once, stocks kept apart, a removed stock's archive gone).

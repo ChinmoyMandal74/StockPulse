@@ -42,7 +42,9 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   'options_oi',
   // About 22,000 rows, each with a few KB of JSON: every manager and every
   // fund. Read one holder at a time, or a page of the directory off an index.
-  'holder_books'];
+  'holder_books',
+  // Headlines moved out of `news` rather than deleted (2026-10-16): it only grows.
+  'news_archive'];
 
 // Statements that scan on purpose, each with the reason it is allowed to.
 // A new entry here is a decision, which is the point of naming them.
