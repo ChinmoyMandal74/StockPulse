@@ -298,3 +298,47 @@ Typical (median) distance 10.4%; the price crossed the average 8.6 times a year 
 | +2 or above | −0.15% / −0.34% | 47% | +0.63% / −0.37% | 48% |
 
 Over two months the picture is the same: every band within 0.6 points of the average stock on the mean, beat rates 45% to 49%. The medians are below zero throughout because a few large winners lift the average stock's mean.
+
+## 17. Bollinger bands: closes outside the band, and the squeeze — 2026-10-16
+
+*Family: Mean reversion · Verdict: No edge · Horizon: 1 to 2 months · Data: Daily prices · Sample: 173,216 events in 1,246 stocks, 2007–2026*
+
+### The idea
+Three things technical analysts read from the 20-day Bollinger band. A close below the lower band is stretched and due to recover. A close above the upper band in an uptrend is a stock "walking the band", strength that carries on. And a squeeze, the band at its narrowest in months, comes before a bigger move than usual.
+
+### What was done
+The band is the 20-day average plus and minus two standard deviations of the same 20 closes, the arithmetic the stock chart and the promo card draw. Three events: a close below the lower band, a close above the upper band, and the band's width at its lowest in 126 sessions. Each counted at most once a month per stock, and each split by whether the stock was above or below its 200-day average. Entry at the next session's close, held one and two months, against the average stock over the same sessions, before and after 2020. A t-figure from the monthly means, because events in the same month are not independent. Events next to a one-day price move of more than double or half (usually an unadjusted split) were left out, 402 of them. A script check that each event fires on a made-up shape, and not on its opposite, ran before the sweep.
+
+### Outcome
+None of the three did better or worse than the average stock by enough to matter. Every cell sat within about 0.3 points of it over a month, and 45% to 49% of events beat it. Closes below the lower band did no better than the average stock, in an uptrend or a downtrend. Closes above the upper band in an uptrend did very slightly worse, not better. And a squeeze was not followed by a bigger move: the next month's move was the same size, relative to the average stock's, as any stock-month's.
+
+### What follows
+The band stays on the stock chart and as a promo card, as a picture of recent volatility and where today's price sits in it, and nothing reads more into it. The one cell past a t of 2 (closes above the upper band while below the 200-day average, −0.28% before 2020, t −2.1) is one in twenty-four, about what chance gives; its sign held from 2020 (−0.18%) but at t −0.5.
+
+### Caveats
+The archive is today's list of stocks, without most of those that fell and were delisted, which flatters closes below the lower band if anything. The 20 days and two standard deviations are the convention, not fitted; other settings were not tried, and trying many would invite a false finding. The test is of the band alone, as a trader would use it with other evidence it was not.
+
+### Numbers
+
+| Event | Events | 1 month vs the average stock, mean / median | Beat it | t | 2 months, mean / median | t |
+|---|---|---|---|---|---|---|
+| Lower band, above the 200-day, before 2020 | 19,668 | +0.18% / −0.13% | 49% | −0.7 | +0.09% / −0.43% | −1.2 |
+| Lower band, above the 200-day, from 2020 | 13,018 | +0.05% / −0.62% | 47% | −0.1 | +0.01% / −1.25% | −0.1 |
+| Lower band, below the 200-day, before 2020 | 18,215 | +0.06% / −0.32% | 48% | 0.3 | +0.12% / −0.42% | 0.3 |
+| Lower band, below the 200-day, from 2020 | 14,272 | +0.18% / −0.61% | 47% | 1.5 | +0.26% / −1.23% | 1.6 |
+| Upper band, above the 200-day, before 2020 | 31,023 | −0.24% / −0.41% | 47% | −1.7 | −0.23% / −0.59% | −1.5 |
+| Upper band, above the 200-day, from 2020 | 19,825 | −0.03% / −0.62% | 47% | 0.5 | −0.12% / −1.32% | −0.2 |
+| Upper band, below the 200-day, before 2020 | 11,242 | −0.28% / −0.66% | 46% | −2.1 | −0.38% / −1.07% | −1.5 |
+| Upper band, below the 200-day, from 2020 | 9,044 | −0.18% / −0.96% | 45% | −0.5 | −0.44% / −2.00% | −1.0 |
+| Squeeze, above the 200-day, before 2020 | 13,036 | −0.07% / −0.28% | 48% | −1.8 | −0.05% / −0.52% | −1.0 |
+| Squeeze, above the 200-day, from 2020 | 7,945 | −0.11% / −0.71% | 46% | −0.3 | +0.01% / −1.15% | 0.4 |
+| Squeeze, below the 200-day, before 2020 | 4,816 | +0.23% / −0.32% | 48% | 0.5 | +0.58% / −0.47% | 1.4 |
+| Squeeze, below the 200-day, from 2020 | 4,049 | −0.08% / −0.94% | 45% | 0.0 | +0.29% / −1.16% | 0.3 |
+
+| Size of the next month's move, either way, against the average stock's that month | Median ratio | Moved more than the average stock |
+|---|---|---|
+| After a squeeze, before 2020 (18,118) | 0.74 | 36% |
+| After a squeeze, from 2020 (12,098) | 0.72 | 35% |
+| Every stock-month, for scale | 0.74 | 37% |
+
+The medians sit below zero throughout because a few large winners lift the average stock's mean. A mean with a small positive sign beside a negative t is a month-weighting effect: a few crowded months carry many events.
