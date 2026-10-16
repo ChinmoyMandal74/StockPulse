@@ -1400,7 +1400,12 @@
     const CHART_WINDOWS = { w1: [5, 'past week'], m1: [21, 'past month'],
                             m3: [63, 'past three months'], m6: [126, 'past six months'],
                             ytd: [260, 'this year', 'ytd'],
-                            y1: [253, 'past year'] };
+                            y1: [253, 'past year'],
+                            // The Race chart's alone (2026-10-16). Five years of
+                            // the whole universe is ~1.5M rows, so this window
+                            // never asks for the whole screen: tplChart names its
+                            // stocks first (see `only` there).
+                            y5: [1260, 'past five years'] };
 
     // WHERE A WINDOW STARTS IN A DATE AXIS. A bar count is already the whole
     // axis the host fetched, so it starts at 0; a calendar window has to be
@@ -1511,7 +1516,7 @@
       // second card that may be given the calendar window -- and only that
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
-        : tpl === 'race' ? (v === 'y1' ? CHART_WINDOWS.y1 : CHART_WINDOWS.ytd)
+        : tpl === 'race' ? (v === 'y1' ? CHART_WINDOWS.y1 : v === 'y5' ? CHART_WINDOWS.y5 : CHART_WINDOWS.ytd)
         : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
@@ -1903,7 +1908,21 @@
       const win = CHART_WINDOWS[winKey] || CHART_WINDOWS.m6;
       const [days, winLabel] = win;
       const mode = O.chtMode;
-      let d = getBasket(days);
+      // FIVE YEARS NAMES ITS STOCKS FIRST. The leaders are picked from each
+      // stock's stored five-year change (fiveYearPct, which a stock listed for
+      // less than five years does not have), and only those few are read from
+      // the archive: the host asks `/api/basket?only=`. Every other window
+      // reads the whole screen, as before.
+      let only = null;
+      if (winKey === 'y5') {
+        if (mode !== 'leaders') return chromeTop() + '<div class="s-body"><div><p class="s-empty">Five years is drawn for the leaders only.</p></div></div>' + chromeFoot();
+        const bySym = new Map(stocks.map((r) => [r.symbol, r]));
+        const fy = (s) => { const r = bySym.get(s); const v = r ? r.fiveYearPct : null; return v == null || v === '' || !isFinite(Number(v)) ? null : Number(v); };
+        only = chartScopeSymbols().syms.filter((s) => fy(s) != null)
+          .sort((a, b) => fy(b) - fy(a)).slice(0, Math.min(10, Number(O.chtLines) || 5));
+        if (!only.length) return chromeTop() + '<div class="s-body"><div><p class="s-empty">Nothing here has five years of history.</p></div></div>' + chromeFoot();
+      }
+      let d = only ? getBasket(days, only) : getBasket(days);
       if (!d || !d.dates || !d.dates.length) {
         return chromeTop() +
           '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
@@ -2039,6 +2058,7 @@
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
         note = 'Each line is one stock, rebased to the start of the window. Ranked on the window, not a forecast.';
+        if (only) note += ' Drawn from the stocks with the largest five-year change; one listed for less than five years has none and is not in it.';
       } else {
         const scope = chartScopeSymbols();
         const basket = mean(scope.syms);
@@ -2094,7 +2114,7 @@
     function tplRace() {
       const saved = O;
       O = Object.assign({}, O, {
-        chtMode: 'leaders', chtWin: O.racWin === 'y1' ? 'y1' : 'ytd',
+        chtMode: 'leaders', chtWin: O.racWin === 'y1' || O.racWin === 'y5' ? O.racWin : 'ytd',
         chtLines: [3, 5, 7, 10].includes(Number(O.racCount)) ? Number(O.racCount) : 5,
         chtScope: O.racScope || 'All', chtSector: O.racSector || 'All', chtIndustry: O.racIndustry || 'All',
         chtCap: O.racCap || 'All', chtScreen: O.racScreen || '', chtSp500: O.racSp500 || 'All',

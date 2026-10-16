@@ -290,6 +290,7 @@
         <select id="racWin">
           <option value="ytd" selected>Year to date</option>
           <option value="y1">Past year</option>
+          <option value="y5">Past five years</option>
         </select>
         <label>How many lines</label>
         <select id="racCount">
@@ -2185,10 +2186,12 @@
     // repaint, the module only asks for the data.
     const chartCache = {};
     let chartPending = null;
-    function getBasket(days) {
+    function getBasket(days, asked) {
       // A one-stock card asks for that stock alone (Cards.basketSymbols); the
       // cache is keyed by both, so switching stocks never draws the last one.
-      const only = (Cards.basketSymbols && Cards.basketSymbols(tpl, controlOpts())) || null;
+      // The race over five years names its own few (`asked`, from the card).
+      const only = (Array.isArray(asked) && asked.length ? asked : null)
+        || (Cards.basketSymbols && Cards.basketSymbols(tpl, controlOpts())) || null;
       const key = days + (only ? '|' + only.join(',') : '');
       if (chartCache[key]) return chartCache[key];
       if (chartPending === key) return null;
@@ -2838,7 +2841,7 @@
           const type = mime.split(';')[0];
           const blob = new Blob(chunks, { type });
           const ext = type === 'video/mp4' ? 'mp4' : 'webm';
-          const name = ['race', (controlOpts().racScope || 'all').replace(/[^a-z0-9]+/gi, '-').toLowerCase(), controlOpts().racWin === 'y1' ? '1y' : 'ytd', size.id].join('-') + '.' + ext;
+          const name = ['race', (controlOpts().racScope || 'all').replace(/[^a-z0-9]+/gi, '-').toLowerCase(), ({ y1: '1y', y5: '5y' })[controlOpts().racWin] || 'ytd', size.id].join('-') + '.' + ext;
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob); a.download = name;
           document.body.appendChild(a); a.click(); a.remove();

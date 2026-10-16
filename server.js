@@ -11104,7 +11104,14 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // narrow it.
   const bDays = Cards.basketDays(post.tpl, post.opts || {});
   if (bDays) {
-    try { basket = await basketPayload(req, 'All', bDays, Cards.basketSymbols(post.tpl, post.opts || {})); } catch { basket = null; }
+    // A card that names its own stocks (the race over five years) says so
+    // when built without a basket: one dry build, then the narrowed read.
+    let asked = null;
+    if (post.tpl === 'race') try {
+      Cards.build(post.tpl, { stocks, myLists, screens, size: { id: 'portrait', w: 1080, h: 1350 }, opts: post.opts,
+        getBasket: (dd, o) => { if (Array.isArray(o) && o.length) asked = o; return null; } });
+    } catch { asked = null; }
+    try { basket = await basketPayload(req, 'All', bDays, asked || Cards.basketSymbols(post.tpl, post.opts || {})); } catch { basket = null; }
   }
   // A one-stock chart with a moving average needs that symbol's closes from
   // BEFORE the window — the basket only carries the window itself. Cards says
@@ -14706,8 +14713,11 @@ async function basketPayload(req, rawName, days, only) {
 app.get('/api/basket', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   // Floor of 5, a trading week: the promo studio's shortest chart window.
-  const days = Math.min(400, Math.max(5, Number(req.query.days) || 253));
   const only = String(req.query.only || '').toUpperCase().split(',').map((s) => s.trim()).filter((s) => /^[A-Z0-9.\-]{1,15}$/.test(s));
+  // Past 400 sessions only for a named few (the Race chart's five years,
+  // 2026-10-16): basketPayload keeps at most ten of them plus the benchmarks,
+  // so 1,300 sessions is ~16k rows. The whole screen stays capped at 400.
+  const days = Math.min(only.length ? 1300 : 400, Math.max(5, Number(req.query.days) || 253));
   const out = await basketPayload(req, String(req.query.name || '').trim(), days, only.length ? only : null);
   if (out.error) return res.status(out.status).json({ error: out.error });
   res.json(out);

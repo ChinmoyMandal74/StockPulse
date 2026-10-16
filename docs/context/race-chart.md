@@ -8,7 +8,8 @@ The Chart card in leaders mode, played as a video. Each stock's line is drawn da
 ## One chart, not a copy
 `tplRace()` in `cards.js` maps its own controls (`rac*`) onto the Chart card's (`cht*`, with `chtMode: 'leaders'`) and calls `tplChart()`. The still card is therefore exactly the leaders chart, and the video animates exactly those lines with the same ranking and colours. The race passes one extra flag, `racTall`, which makes the plot taller on the 9:16 card (1240px against 1020).
 
-- **Window:** `racWin` is `ytd` (the default) or `y1`. `basketDays` gives the race `CHART_WINDOWS.ytd` or `.y1`. YTD opens on last year's last close, as the Chart card does.
+- **Window:** `racWin` is `ytd` (the default), `y1` or `y5`. `basketDays` gives the race `CHART_WINDOWS.ytd` or `.y1`. YTD opens on last year's last close, as the Chart card does.
+- **Past five years** (`y5`, added the same day at the owner's request) cannot read the whole screen: five years of every stock's bars is about 1.5M billed rows, and `/api/basket` caps a whole-screen read at 400 sessions. So `tplChart` names its stocks first. It takes the top N in scope by the snapshot's `fiveYearPct` and calls `getBasket(1260, only)`. The studio fetches `/api/basket?only=` for those few, and the route allows up to 1,300 sessions only when `only` is given, about 16k rows. A stock listed for less than five years has no `fiveYearPct` and is not in the race; the card's note says so. `/api/m/post` finds the list with one dry build of the card (race posts only), then reads the narrowed basket. `CHART_WINDOWS.y5` exists for this alone; the Chart card does not offer it.
 - **Lines:** `racCount` is 3, 5, 7 or 10; the default is 5.
 - **Scope:** the usual scope, sector, industry, size, screen and index lists (`SCOPE_PREFIX.race = 'rac'`). A theme such as Mag 7 is picked under "Within".
 
