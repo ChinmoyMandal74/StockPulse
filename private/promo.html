@@ -1066,6 +1066,22 @@
           listed, and nobody under 5% is. A fund has no card. Names are
           as filed with the SEC.</p>
       </div>
+      <!-- Bollinger bands (2026-10-16): one stock in its 20-day band. -->
+      <div id="bndBox">
+        <label>Stock or index fund</label>
+        <select id="bndSym"></select>
+        <label>Window</label>
+        <select id="bndWin">
+          <option value="m3">3 months</option>
+          <option value="m6" selected>6 months</option>
+          <option value="y1">1 year</option>
+        </select>
+        <p class="hint">The close in dollars, with the 20-day average
+          (dashed) and the band two standard deviations either side,
+          as on the stock page's Bands option. A measure of recent
+          volatility; the card counts the closes outside the band and
+          does not call them anything.</p>
+      </div>
       <div id="ddBox">
         <label>Stock or index fund</label>
         <select id="ddSym"></select>
@@ -1885,6 +1901,8 @@
   <script src="/action.js"></script>
   <script src="/peertrend.js"></script>
   <script src="/perfchart.js"></script>
+  <!-- RowCard.bands, for the Bollinger bands card: the same arithmetic as the stock chart. -->
+  <script src="/rowcard.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script>
@@ -1921,6 +1939,7 @@
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
+      { id: 'bands', name: 'Bollinger bands', note: 'One stock in its 20-day band: the close, the average and two standard deviations either side, with where it sits and how wide the band is' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
       { id: 'margins', name: 'Margins', note: 'An index’s profit as a share of its revenue — its combined margin over four years from the filings, and each sector now against a year ago' },
       { id: 'earnahead', name: 'Earnings ahead', note: 'Who reports and when — the largest companies due in the coming days, under the day each one reports' },
@@ -2003,6 +2022,7 @@
       ['months', 'Month by month', 'monSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
+      ['bands', 'Bollinger bands', 'bndSym'],
       ['holders', 'Large holders', 'lhSym'],
       ['revmix', 'Revenue mix', 'rmSym'],
       ['fundholders', 'Fund holders', 'fhSym'],
@@ -2231,7 +2251,7 @@
         .then((d) => {
           histCache[key] = d; delete histPending[key];
           // The Drawdowns card reads the same channel, at its own depth.
-          if (tpl === 'chart' || tpl === 'drawdown') render();
+          if (tpl === 'chart' || tpl === 'drawdown' || tpl === 'bands') render();
         })
         .catch(() => { delete histPending[key]; });
       return null;
@@ -2654,7 +2674,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3111,7 +3131,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
@@ -3204,6 +3224,7 @@
       $('ssnBox').style.display = tpl === 'secsnap' ? 'block' : 'none';
       $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
+      $('bndBox').style.display = tpl === 'bands' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
@@ -3774,6 +3795,8 @@
     $('corSp500').addEventListener('change', () => { if (tpl === 'corrections') render(); });
     ['ddSym', 'ddYears', 'ddMin'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'drawdown') render(); }));
+    ['bndSym', 'bndWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'bands') render(); }));
     // Earnings ahead: its own listener list, and its windows from the module.
     ['eaWin', 'eaCount', 'eaEst', 'eaSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'earnahead') render(); }));
@@ -4402,6 +4425,8 @@
           if ([...$('lhSym').options].some((o) => o.value === keep)) $('lhSym').value = keep; }
         { const keep = $('ddSym').value; $('ddSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('ddSym').options].some((o) => o.value === keep)) $('ddSym').value = keep; }
+        { const keep = $('bndSym').value; $('bndSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('bndSym').options].some((o) => o.value === keep)) $('bndSym').value = keep; }
         // Two pickers from the one list, each keeping its choice across a
         // reload of the rows. The second opens on the SECOND company: a
         // pair that starts as one stock twice is not a comparison.

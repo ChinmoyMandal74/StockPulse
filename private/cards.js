@@ -9865,6 +9865,122 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Bollinger bands: one stock in its 20-day band ------------------------
+  //
+  // (2026-10-16, the owner: "a new promo card on this bollinger band on the
+  // stock spotlight template".) The stock page's Bands option as a card: the
+  // close over a window, in dollars, with the 20-day average (dashed) and the
+  // band two standard deviations either side of it, shaded. The arithmetic
+  // is RowCard.bands, the one function behind the chart's band and the
+  // screener's 200D z-score, so the three cannot disagree.
+  //
+  // WHAT IT SAYS, AND WHAT IT DOES NOT. The band is a measure of recent
+  // volatility. A close outside it moved further than usual for the month,
+  // and in a strong trend a price can run along one edge for weeks; the
+  // card counts those closes and says so, and never calls one overbought,
+  // oversold or a turn. Research entry 16 found no edge in distance from an
+  // average.
+  //
+  // BLUE, as on the chart: the band is a second series, neither the price
+  // nor a direction. The price line alone is green or red, by its own move
+  // over the window, the spotlight's rule for one line about one stock.
+  const BND_WINS = { m3: [63, 'the past three months'], m6: [126, 'the past six months'], y1: [252, 'the past year'] };
+  const BND_N = 20, BND_K = 2;
+  function bandsNeed(tpl, opts) {
+    if (tpl !== 'bands') return null;
+    const o = opts || {};
+    const w = BND_WINS[o.bndWin] ? o.bndWin : 'm6';
+    // The band needs 20 closes before the first one drawn, and a little
+    // slack for a missing session.
+    return { symbol: o.bndSym || null, days: BND_WINS[w][0] + BND_N + 20, win: w };
+  }
+  function tplBands() {
+    const need = bandsNeed('bands', O);
+    const row = need.symbol ? stocks.find((x) => x && x.symbol === need.symbol) : null;
+    const label = row ? (IS_BENCH.has(row.symbol) ? (BENCH.find((b) => b[0] === row.symbol) || [])[1] : nameOf(row)) : (need.symbol || '');
+    const empty = (msg) => chromeTop() + '<div class="s-body"><div class="s-empty">' + esc(msg) + '</div></div>' + chromeFoot();
+    if (!need.symbol) return empty('Pick a stock or an index.');
+    const RB = typeof RowCard !== 'undefined' && RowCard && RowCard.bands;
+    if (!RB) return empty('This page cannot draw the bands.');
+    const hist = getHistory(need.symbol, need.days);
+    if (!hist) return empty('Reading the price archive…');
+    const D = [], C = [];
+    for (let i = 0; i < (hist.closes || []).length; i++) {
+      const c = Number(hist.closes[i]);
+      if (hist.closes[i] != null && c > 0 && isFinite(c) && hist.dates && hist.dates[i]) { D.push(String(hist.dates[i]).slice(0, 10)); C.push(c); }
+    }
+    const b = RB(C, BND_N, BND_K);
+    const [W, winLabel] = BND_WINS[need.win];
+    let from = Math.max(0, C.length - W);
+    while (from < C.length && b.mid[from] == null) from++;
+    const n = C.length - from;
+    if (n < 20) return empty('There is not enough price history for ' + label + ' to draw this.');
+    const P = C.slice(from), U = b.upper.slice(from), L = b.lower.slice(from), M = b.mid.slice(from), Z = b.z.slice(from);
+    const dates = D.slice(from);
+
+    // ---- the plot: dollars, the band under the price --------------------
+    const Wd = 952, Ht = Math.max(240, (({ portrait: 520, square: 330, story: 900 })[size.id] || 520) + cardFill);
+    const PL = 96, PR = 18, PT = 18, PB = 44;
+    let lo = Math.min(...P, ...L.filter((v) => v != null)), hi = Math.max(...P, ...U.filter((v) => v != null));
+    const pad = (hi - lo) * 0.06 || hi * 0.02 || 1; lo -= pad; hi += pad;
+    const x = (i) => PL + (n === 1 ? 0 : (i / (n - 1)) * (Wd - PL - PR));
+    const y = (v) => PT + (1 - (v - lo) / (hi - lo)) * (Ht - PT - PB);
+    const pathOf = (A) => { let s = '', pen = false; A.forEach((v, i) => { if (v == null) { pen = false; return; } s += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; }); return s; };
+    let back = '';
+    for (let i = n - 1; i >= 0; i--) back += 'L' + x(i).toFixed(1) + ' ' + y(L[i]).toFixed(1);
+    const blue = pal.ink('#60a5fa');
+    const move = (P[n - 1] / P[0] - 1) * 100;
+    const lineCol = move >= 0 ? pal.up : pal.down;
+    // Four price levels on round numbers, labelled in dollars on the left.
+    const step = (() => { const raw = (hi - lo) / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; })();
+    const money2 = (v) => '$' + (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v >= 100 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2));
+    let grid = '';
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      const yy = y(v).toFixed(1);
+      grid += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (Wd - PR) + '" y2="' + yy + '" stroke="' + pal.grid + '" stroke-width="1"/>'
+        + '<text x="' + (PL - 14) + '" y="' + (Number(yy) + 7) + '" text-anchor="end" font-size="19" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(money2(v)) + '</text>';
+    }
+    const dateAt = (i, anchor) => '<text x="' + x(i).toFixed(1) + '" y="' + (Ht - 12) + '" text-anchor="' + anchor + '" font-size="19" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(ddDay(dates[i], true)) + '</text>';
+    const svg = '<svg viewBox="0 0 ' + Wd + ' ' + Ht + '" width="100%" height="' + Ht + '" style="display:block;overflow:visible">'
+      + grid
+      + '<path d="' + pathOf(U) + back + 'Z" fill="' + blue + '" fill-opacity="0.15" stroke="none"/>'
+      + '<path d="' + pathOf(U) + '" fill="none" stroke="' + blue + '" stroke-opacity="0.75" stroke-width="2"/>'
+      + '<path d="' + pathOf(L) + '" fill="none" stroke="' + blue + '" stroke-opacity="0.75" stroke-width="2"/>'
+      + '<path d="' + pathOf(M) + '" fill="none" stroke="' + blue + '" stroke-opacity="0.6" stroke-width="1.6" stroke-dasharray="7 6"/>'
+      + '<path d="' + pathOf(P) + '" fill="none" stroke="' + lineCol + '" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'
+      + '<circle cx="' + x(n - 1).toFixed(1) + '" cy="' + y(P[n - 1]).toFixed(1) + '" r="6" fill="' + lineCol + '"/>'
+      + dateAt(0, 'start') + dateAt(n - 1, 'end')
+      + '</svg>';
+
+    // ---- the figures: where it sits, and how wide the band is ------------
+    const zNow = Z[n - 1];
+    const width = (i) => (M[i] ? (U[i] - L[i]) / M[i] * 100 : null);
+    const wNow = width(n - 1);
+    const widths = M.map((_, i) => width(i)).filter((v) => v != null);
+    const narrower = wNow == null ? null : Math.round(100 * widths.filter((v) => v < wNow).length / widths.length);
+    let above = 0, below = 0;
+    for (let i = 0; i < n; i++) { if (U[i] != null && P[i] > U[i]) above++; else if (L[i] != null && P[i] < L[i]) below++; }
+    const sd = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + ' s.d.');
+    const fig = (k, v, xx) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(xx || ' ') + '</span></div>';
+    const figs = fig('Last close', sd(zNow), zNow == null ? '' : (zNow >= 0 ? 'above' : 'below') + ' the 20-day average')
+      + fig('Band width', wNow == null ? '—' : wNow.toFixed(1) + '%', 'top to bottom, of the average')
+      + fig('Narrower days', narrower == null ? '—' : narrower + '%', 'of the window had a tighter band')
+      + fig('Closes outside', String(above + below), above + ' above · ' + below + ' below, of ' + n);
+
+    const head = '<span class="s-kick">' + esc((row && !IS_BENCH.has(row.symbol) && label !== row.symbol ? row.symbol + ' · ' : '')
+      + '20-day ± 2 s.d. · ' + winLabel) + '</span>'
+      + '<h2 class="s-title">' + esc(label) + '<br><span class="dim">in its Bollinger bands</span></h2>';
+    const note = 'The shaded band is the 20-day average (dashed) plus and minus two standard deviations of the same 20 closes: '
+      + 'wide when the price has been moving a lot, narrow when it has been quiet. A close outside it moved further than usual for the month; '
+      + 'in a strong trend a price can run along one edge for weeks. Split-adjusted closes, no dividends. What happened, not what happens next.';
+    return chromeTop()
+      + '<div class="s-body"><div>' + head
+      + '<div style="margin-top:22px">' + svg + '</div>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px;margin-top:14px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Earnings ahead: who reports, day by day ------------------------------
   //
   // (2026-10-10, owner: "I don't think there is a promo for upcoming earning
@@ -10732,6 +10848,7 @@
     optthm: () => optGroupCard('optthm'),
     optind: () => optGroupCard('optind'),
     drawdown: tplDrawdown,
+    bands: tplBands,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
@@ -13105,7 +13222,7 @@
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
-    drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    bandsNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
     drawdownYears: () => Object.keys(DD_YEARS),
     // The drawdown rules alone, for a host that draws the block outside a
     // card: the stock page takes these and none of the artboard's.
