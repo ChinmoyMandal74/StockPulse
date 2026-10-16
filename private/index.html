@@ -848,6 +848,9 @@
 
     /* the hover target */
     td.name { cursor: help; }
+    /* A cell that opts out of the hover card and carries no tooltip has
+       nothing to reveal, so it gets the plain arrow. */
+    td.name.nocard:not([title]) { cursor: default; }
 
     /* ==========================================================================
        Change-password dialog
@@ -1529,7 +1532,7 @@
         <th class="grp-info" data-key="price">Price</th>
         <th class="left grp-info" data-key="sector">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
-        <th class="left grp-info" data-key="exchange" title="Where the stock actually trades, with its MIC and trading currency on the cell. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive. NOTE: the currency here is the TRADING one — an ADR trades in USD while its financials are in the home currency, so this does not tell you what the money columns are denominated in.">Exchange</th>
+        <th class="left grp-info" data-key="exchange" title="Where the stock actually trades. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Signal engine reads it.">Instrument</th>
         <th class="left grp-info" data-key="filer" title="How the company files its accounts with the SEC. &quot;Foreign&quot; means a foreign company filing under international standards (IFRS), which only a foreign issuer may do; the code beside it is the currency it reports in. A company reporting in another currency is shown in dollars on its stock page, at the exchange rate for each period. &quot;US GAAP&quot; is how nearly every company here files, and says how it reports rather than where it is from: a foreign company may choose US GAAP too. Every stock here is US-listed either way. Blank for a fund, which files no statements.">Filer</th>
         <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Signal engine reads this.">Index</th>
@@ -2209,12 +2212,11 @@
     // rather than taking two more columns — they are the detail you want once,
     // not the thing you scan a table for.
     function exchangeCell(s) {
-      if (!s.exchange) {
-        return `<td class="name left grp-info na" title="Not recorded yet \u2014 it fills in the next time this stock's profile is pulled.">\u2014</td>`;
-      }
-      const bits = [s.micCode ? `MIC ${s.micCode}` : null,
-                    s.currency ? `trades in ${s.currency}` : null].filter(Boolean);
-      return `<td class="name left grp-info"${attr(bits.join(' \u00b7 '))}>${we(s.exchange)}</td>`;
+      if (!s.exchange) return '<td class="name left grp-info nocard na">—</td>';
+      // NO HOVER (owner, 2026-10-16: "remove the hover over exchange column"):
+      // neither the stock's hover card (`.nocard`, the Instrument cell's
+      // opt-out) nor the MIC-and-currency tooltip it used to carry.
+      return `<td class="name left grp-info nocard">${we(s.exchange)}</td>`;
     }
 
     // What the instrument IS \u2014 "Common Stock", "Preferred Stock", "American
