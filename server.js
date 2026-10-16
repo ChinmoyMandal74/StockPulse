@@ -11389,6 +11389,9 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.noteOff === true) out.noteOff = true;
   // Table or tiles: which shape the screener draws the same rows in.
   if (incoming.layout === 'tiles') out.layout = 'tiles';
+  // The site theme (2026-10-15). Dark is stored too: a choice of dark on one
+  // machine has to reach another that was set to light.
+  if (['dark', 'light', 'auto'].includes(incoming.theme)) out.theme = incoming.theme;
   // How many tiles a row holds: 'auto' (fill the width) or a fixed 2-6.
   if (/^(auto|[2-6])$/.test(String(incoming.tileCols || ''))) out.tileCols = String(incoming.tileCols);
   // Which column view the screener opens in: 'standard' or a view's id.

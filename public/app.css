@@ -48,7 +48,7 @@ select option, select optgroup {
   --hair-2: rgba(255, 255, 255, 0.13);
   --inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
 
-  /* ink — contrast measured against --surface (#0a0c11), the card interior.
+  /* ink — contrast measured against --surface (var(--surface)), the card interior.
      Both greys clear WCAG AA (4.5:1). The previous values were 6.4:1 and
      3.1:1, and the failing one was painting column headers, hover-card field
      names and every em-dash placeholder. */
@@ -65,6 +65,23 @@ select option, select optgroup {
      second series beside one already using that. */
   --cyan: #22d3ee;
   --accent-2: #a78bfa;
+
+  /* THEME TOKENS (2026-10-15, the light theme). Every translucent white,
+     black and signal colour a stylesheet used to write out is now a
+     color-mix() of one of these, so on dark each resolves to exactly the
+     colour it was, and :root[data-theme="light"] below swaps the set.
+     --wash is the colour a hover or a hairline is mixed from (white on
+     dark, ink on light); --shade is a shadow's; --strong is the loudest
+     ink, which was a bare #fff. */
+  --wash: #ffffff;
+  --shade: #000000;
+  --strong: #ffffff;
+  --glass: #090b0f;
+  --pink: #f472b6;
+  --orange: #fb923c;
+  --teal: #5eead4;
+  --ok-ink: #b6ded0;           /* text on the green refresh bar */
+  --warn-ink: #ddd0a8;         /* text on the amber as-of bar */
 
   /* aliases kept so long-standing rules and inline styles keep resolving */
   --bg: var(--void);
@@ -87,6 +104,51 @@ select option, select optgroup {
   --sans: 'Geist', ui-sans-serif, system-ui, 'Segoe UI Variable Text', sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', monospace;
 }
+
+/* ==========================================================================
+   The light theme (2026-10-15). Applied only where a page opts in with
+   <html data-themeable> and theme.js has set data-theme="light": a page not
+   yet converted keeps its dark look rather than going half-light. The
+   signal colours keep their MEANINGS (green up, red down, amber notice)
+   in the promo studio's light shades, each 4.5:1 or better on white.
+   ========================================================================== */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --void: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --shell: rgba(13, 16, 23, 0.03);
+  --hair: rgba(13, 16, 23, 0.09);
+  --hair-2: rgba(13, 16, 23, 0.17);
+  --inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --text: #12161f;             /* 17.9:1 on white */
+  --muted: #4f5968;            /*  7.0:1 */
+  --faint: #687282;            /*  4.9:1 */
+  --green: #157a51;
+  --red: #c81e37;
+  --amber: #9d5a07;
+  --accent: #2e5fe8;
+  --cyan: #0d6c80;
+  --accent-2: #6d3fd4;
+  --panel: #eef3ff;
+  --wash: #0d1017;
+  --shade: #5b6b86;
+  --strong: #05070b;
+  --glass: #ffffff;
+  --pink: #b81b66;
+  --orange: #b44902;
+  --teal: #0f766e;
+  --ok-ink: #0f5c3d;
+  --warn-ink: #6b4304;
+}
+/* What the tokens cannot reach. */
+:root[data-theme="light"] select option, :root[data-theme="light"] select optgroup { background-color: #ffffff; color: #12161f; }
+:root[data-theme="light"] .grain { opacity: 0.25; }
+:root[data-theme="light"] .brand .w2, :root[data-theme="light"] h1 .w2 { background-image: linear-gradient(100deg, #5d6474 10%, #9aa4b6 92%); }
+:root[data-theme="light"] .btn-primary { background: linear-gradient(180deg, #1b2130, #0d1017); color: #ffffff;
+  box-shadow: 0 14px 34px -16px rgba(13, 16, 23, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+:root[data-theme="light"] .btn-primary:hover { background: linear-gradient(180deg, #2a3142, #141822); color: #ffffff; }
+:root[data-theme="light"] .btn-primary .nub { background: rgba(255, 255, 255, 0.14); }
 
 /* ==========================================================================
    Base
@@ -112,9 +174,9 @@ body {
 .aura {
   position: fixed; inset: -10%; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(46vw 40vw at 6% -8%, rgba(52, 211, 153, 0.13), transparent 62%),
-    radial-gradient(52vw 44vw at 98% 2%, rgba(124, 156, 255, 0.14), transparent 64%),
-    radial-gradient(58vw 48vw at 48% 112%, rgba(167, 139, 250, 0.10), transparent 62%);
+    radial-gradient(46vw 40vw at 6% -8%, color-mix(in srgb, var(--green) 13%, transparent), transparent 62%),
+    radial-gradient(52vw 44vw at 98% 2%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 64%),
+    radial-gradient(58vw 48vw at 48% 112%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%);
   animation: drift 44s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
   will-change: transform;
 }
@@ -149,7 +211,7 @@ body {
   border: 1px solid var(--hair);
   border-radius: var(--r-shell);
   padding: 6px;
-  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 30px 80px -40px color-mix(in srgb, var(--shade) 95%, transparent);
 }
 .bezel > .core {
   background: var(--surface);
@@ -166,7 +228,7 @@ button, select, input, a.btn { font-family: var(--sans); }
 .btn {
   position: relative; display: inline-flex; align-items: center; gap: 8px;
   padding: 9px 15px; border-radius: 999px;
-  border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
   color: var(--text); font-family: var(--sans);
   font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em;
   line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none;
@@ -174,22 +236,22 @@ button, select, input, a.btn { font-family: var(--sans); }
   transition: background 0.55s var(--ease), border-color 0.55s var(--ease),
               color 0.55s var(--ease), transform 0.4s var(--ease), box-shadow 0.55s var(--ease);
 }
-.btn:hover { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); color: #fff; }
+.btn:hover { background: color-mix(in srgb, var(--wash) 8.5%, transparent); border-color: var(--hair-2); color: var(--strong); }
 .btn:active { transform: scale(0.975); }
 .btn:disabled { opacity: 0.35; cursor: default; transform: none; }
-.btn:disabled:hover { background: rgba(255, 255, 255, 0.04); border-color: var(--hair); color: var(--text); }
-.btn:focus-visible { outline: none; box-shadow: var(--inset), 0 0 0 3px rgba(124, 156, 255, 0.35); }
+.btn:disabled:hover { background: color-mix(in srgb, var(--wash) 4%, transparent); border-color: var(--hair); color: var(--text); }
+.btn:focus-visible { outline: none; box-shadow: var(--inset), 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 .btn.icon { padding: 0; width: 34px; height: 34px; justify-content: center; gap: 0; }
 .btn.quiet { background: none; border-color: transparent; color: var(--muted); }
-.btn.quiet:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
-.btn.danger:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4); background: rgba(251, 113, 133, 0.1); }
+.btn.quiet:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); }
+.btn.danger:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: color-mix(in srgb, var(--red) 10%, transparent); }
 
 /* primary CTA: the trailing icon sits in its own circle, flush to the inner padding */
 .btn-primary {
   padding: 5px 5px 5px 16px; gap: 10px;
   background: linear-gradient(180deg, #ffffff, #dee3ed);
   color: #07090d; border-color: transparent; font-weight: 600;
-  box-shadow: 0 14px 34px -14px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px -14px color-mix(in srgb, var(--wash) 30%, transparent), inset 0 1px 0 color-mix(in srgb, var(--wash) 90%, transparent);
 }
 .btn-primary:hover { background: linear-gradient(180deg, #ffffff, #e9edf5); color: #07090d; }
 .btn-primary .nub {
@@ -256,7 +318,7 @@ tbody tr:hover { background: var(--panel); }
 .table-wrap { overflow: auto; }
 .table-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
 .table-wrap::-webkit-scrollbar-track { background: transparent; }
-.table-wrap::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 999px;
+.table-wrap::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--wash) 10%, transparent); border-radius: 999px;
                                        border: 3px solid transparent; background-clip: content-box; }
 
 /* ==========================================================================
@@ -269,12 +331,12 @@ tbody tr:hover { background: var(--panel); }
   position: fixed; display: none; z-index: var(--z-tip);
   width: 660px; max-width: calc(100vw - 24px);
   padding: 6px; border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+  background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
   backdrop-filter: blur(26px) saturate(160%); -webkit-backdrop-filter: blur(26px) saturate(160%);
-  box-shadow: 0 40px 80px -28px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 40px 80px -28px color-mix(in srgb, var(--shade) 95%, transparent);
   font-size: 11.5px; color: var(--text);
 }
-.rc-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px;
+.rc-core { background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 15px;
                     padding: 14px 16px; box-shadow: var(--inset); }
 .rc-head { display: flex; align-items: baseline; gap: 10px;
                     padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hair); }
@@ -285,7 +347,7 @@ tbody tr:hover { background: var(--panel); }
 /* price history — drawn from the bar archive, fetched on hover and cached */
 .rc-chart {
   position: relative; height: 104px; margin: 0 0 12px;
-  border-radius: 10px; background: rgba(255, 255, 255, 0.022);
+  border-radius: 10px; background: color-mix(in srgb, var(--wash) 2.2%, transparent);
   border: 1px solid var(--hair); overflow: hidden;
 }
 .rc-chart svg { display: block; width: 100%; height: 100%; }
@@ -308,9 +370,9 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-chart .rsi-gl { stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .rc-chart .rsi-gl.hi { stroke: var(--red); opacity: 0.55; }
 .rc-chart .rsi-gl.lo { stroke: var(--green); opacity: 0.55; }
-.rc-chart .rsi-gl.mid { stroke: rgba(255, 255, 255, 0.05); stroke-dasharray: 1 4; }
+.rc-chart .rsi-gl.mid { stroke: color-mix(in srgb, var(--wash) 5%, transparent); stroke-dasharray: 1 4; }
 /* the indicator sits on its own ground, a shade off the chart's */
-.rc-chart .pane-bg { fill: rgba(255, 255, 255, 0.05); stroke: none; }
+.rc-chart .pane-bg { fill: color-mix(in srgb, var(--wash) 5%, transparent); stroke: none; }
 
 /* Awesome Oscillator bars: green where the bar is higher than the one before
    it, red where it is lower -- NOT above and below zero. The zero line is the
@@ -318,7 +380,7 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-chart .aob { stroke: none; opacity: 0.8; }
 .rc-chart .aob.au { fill: var(--green); }
 .rc-chart .aob.ad { fill: var(--red); }
-.rc-chart .ao-zero { stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rc-chart .ao-zero { stroke: color-mix(in srgb, var(--wash) 28%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
 
 /* volume bars sit in their own band under the price; green on an up session,
    red on a down one, dimmed so they never compete with the price line */
@@ -342,14 +404,14 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-chart.down .dot { fill: var(--red); stroke: none; }
 /* price gridlines — present enough to read a level against, faint enough that
    the line stays the subject */
-.rc-chart .grid { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1;
+.rc-chart .grid { stroke: color-mix(in srgb, var(--wash) 5.5%, transparent); stroke-width: 1;
                   vector-effect: non-scaling-stroke; }
 .rc-chart .cap {
   position: absolute; font-family: var(--mono); font-size: 9.5px; color: var(--faint);
   font-variant-numeric: tabular-nums; pointer-events: none;
   /* the labels sit on top of the area fill, so they need their own ground —
      the same legibility problem the greys had, in miniature */
-  text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+  text-shadow: 0 0 4px color-mix(in srgb, var(--surface) 95%, transparent), 0 0 2px color-mix(in srgb, var(--surface) 95%, transparent);
 }
 .rc-chart .cap.hi { top: 6px; right: 8px; }
 .rc-chart .cap.lo { bottom: 6px; right: 8px; }
@@ -383,13 +445,13 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-acts { margin-left: auto; display: flex; gap: 6px; flex: none; }
 .rc-act {
   padding: 6px 11px; border-radius: 999px; cursor: pointer; line-height: 1;
-  border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
   color: var(--muted); font-family: var(--sans); font-size: 11px; white-space: nowrap;
   transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
 }
-.rc-act:hover { background: rgba(255, 255, 255, 0.09); color: var(--text); }
-.rc-act.danger:hover { color: var(--red); border-color: rgba(251, 113, 133, 0.4);
-                                background: rgba(251, 113, 133, 0.12); }
+.rc-act:hover { background: color-mix(in srgb, var(--wash) 9%, transparent); color: var(--text); }
+.rc-act.danger:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent);
+                                background: color-mix(in srgb, var(--red) 12%, transparent); }
 
 /* ==========================================================================
    Scroll-in reveal
@@ -416,19 +478,19 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 #tip {
   position: fixed; display: none; z-index: var(--z-tip); width: 268px;
   padding: 6px; border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+  background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
   backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-  box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 34px 70px -24px color-mix(in srgb, var(--shade) 95%, transparent);
   font-size: 12px; color: var(--text);
 }
-#tip .tipcore { background: rgba(10, 12, 17, 0.9); border-radius: 15px; padding: 13px 15px; box-shadow: var(--inset); }
+#tip .tipcore { background: color-mix(in srgb, var(--surface) 90%, transparent); border-radius: 15px; padding: 13px 15px; box-shadow: var(--inset); }
 #tip .tip-head { font-weight: 600; font-size: 12.5px; letter-spacing: -0.015em; margin-bottom: 10px; }
 #tip .tip-head span { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; }
 #tip .tip-row { display: flex; align-items: center; gap: 9px; margin: 5px 0; }
 #tip .tip-row .lbl { flex: 1; color: var(--muted); white-space: nowrap; font-size: 11.5px; }
 #tip .tip-row .lbl em { color: var(--faint); font-style: normal; font-family: var(--mono); font-size: 10px; }
 #tip .tip-row.off .lbl, #tip .tip-row.off .val { color: var(--faint); }
-#tip .tip-bar { width: 58px; height: 4px; background: rgba(255, 255, 255, 0.08);
+#tip .tip-bar { width: 58px; height: 4px; background: color-mix(in srgb, var(--wash) 8%, transparent);
                 border-radius: 999px; overflow: hidden; flex: none; }
 #tip .tip-bar i { display: block; height: 100%; border-radius: 999px;
                   background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
@@ -445,12 +507,12 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
    above was invisible in a column of values, which is what the owner
    reported. Accent at rest, the same signal the Google Finance pill already
    uses on that page, so a reader has one thing to learn rather than two. */
-.rc-link.go { color: var(--accent); border-bottom-color: rgba(124, 156, 255, 0.35); }
+.rc-link.go { color: var(--accent); border-bottom-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .rc-link.go:hover { border-bottom-color: var(--accent); }
 
 .rc-row.has-tip { cursor: help; border-radius: 6px; margin: 0 -6px; padding: 0 6px;
                   transition: background 0.35s var(--ease); }
-.rc-row.has-tip:hover { background: rgba(255, 255, 255, 0.045); }
+.rc-row.has-tip:hover { background: color-mix(in srgb, var(--wash) 4.5%, transparent); }
 
 /* ---- the stock card -------------------------------------------------------
    RowCard.stockCard() draws this, and two surfaces use it: the screener's
@@ -482,8 +544,8 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
                 stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .sc-chart .ch-area { fill: currentColor; opacity: 0.11; }
 .sc-chart .dot { fill: currentColor; stroke: none; }
-.sc-chart .grid { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.sc-chart .base { stroke: rgba(255, 255, 255, 0.13); stroke-width: 1; stroke-dasharray: 3 3;
+.sc-chart .grid { stroke: color-mix(in srgb, var(--wash) 5.5%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sc-chart .base { stroke: color-mix(in srgb, var(--wash) 13%, transparent); stroke-width: 1; stroke-dasharray: 3 3;
                   vector-effect: non-scaling-stroke; }
 .sc-chart.up { color: var(--green); } .sc-chart.dn { color: var(--red); }
 .sc-yt { position: absolute; right: 0; width: 34px; transform: translateY(-50%);
@@ -530,7 +592,7 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
    /pivot. It is also a plain HTML form on purpose — neither blog page loads
    any JavaScript, and a subscribe box is no reason to start. */
 .subbox { margin-top: 48px; border: 1px solid var(--hair); border-radius: 14px;
-          padding: 20px 22px; background: rgba(255, 255, 255, 0.015); }
+          padding: 20px 22px; background: color-mix(in srgb, var(--wash) 1.5%, transparent); }
 .subbox h2 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.01em; }
 .subbox p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; line-height: 1.6; max-width: 56ch; }
 .subbox form { display: flex; gap: 8px; flex-wrap: wrap; }

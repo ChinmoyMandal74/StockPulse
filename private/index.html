@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <!-- Before anything paints: sets data-theme, so a light choice never flashes dark. -->
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -44,14 +46,14 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       padding: 3px 11px 3px 9px; border-radius: 999px;
       color: var(--text); font-weight: 500;
-      border: 1px solid rgba(52, 211, 153, 0.34);
-      background: rgba(52, 211, 153, 0.13);
+      border: 1px solid color-mix(in srgb, var(--green) 34%, transparent);
+      background: color-mix(in srgb, var(--green) 13%, transparent);
       transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
     }
     .status .pill::before {
       content: ''; display: inline-block; vertical-align: middle;
       width: 6px; height: 6px; border-radius: 50%; margin: -1px 8px 0 0;
-      background: var(--green); box-shadow: 0 0 10px rgba(52, 211, 153, 0.9);
+      background: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 90%, transparent);
       animation: pulse 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
     }
     /* AMBER IS NOT DECORATION HERE. It already means "notice this, it is old"
@@ -61,10 +63,10 @@
        within a day. Green while the numbers are current, amber once they are
        not, and the box is what makes both legible. */
     .status.stale .pill {
-      border-color: rgba(251, 191, 36, 0.55); background: rgba(251, 191, 36, 0.17);
+      border-color: color-mix(in srgb, var(--amber) 55%, transparent); background: color-mix(in srgb, var(--amber) 17%, transparent);
     }
     .status.stale .pill::before {
-      background: var(--amber); box-shadow: 0 0 10px rgba(251, 191, 36, 0.9);
+      background: var(--amber); box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 90%, transparent);
       animation: none;   /* nothing is arriving — a pulse would say otherwise */
     }
     .status:empty { display: none; }
@@ -88,8 +90,8 @@
       overflow: visible;   /* the dropdowns escape the card */
       padding: 7px 12px;
       background:
-        radial-gradient(70% 240% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
-        radial-gradient(60% 220% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
+        radial-gradient(70% 240% at 0% 0%, color-mix(in srgb, var(--green) 7%, transparent), transparent 60%),
+        radial-gradient(60% 220% at 100% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
         var(--surface);
     }
     .brand {
@@ -100,6 +102,7 @@
       background: linear-gradient(100deg, #9aa4b6 10%, #5d6474 92%);
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
+    :root[data-theme="light"] .brand .w2 { background-image: linear-gradient(100deg, #5d6474 10%, #9aa4b6 92%); }
     .bar-sep { width: 1px; height: 20px; background: var(--hair); flex: none; }
 
     /* ==========================================================================
@@ -112,27 +115,33 @@
     .picker-btn { padding: 8px 9px 8px 11px; gap: 8px; }
     .picker-btn .picker-label { font-weight: 600; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
     .picker-btn .chev { opacity: 0.5; transition: transform 0.5s var(--ease), opacity 0.5s var(--ease); }
-    .picker[data-open="1"] .picker-btn { background: rgba(255, 255, 255, 0.085); border-color: var(--hair-2); }
+    .picker[data-open="1"] .picker-btn { background: color-mix(in srgb, var(--wash) 8.5%, transparent); border-color: var(--hair-2); }
     .picker[data-open="1"] .chev { transform: rotate(180deg); opacity: 1; }
     .picker-menu {
       position: absolute; top: calc(100% + 8px); left: 0; z-index: 30;
       min-width: 236px; max-width: calc(100vw - 24px); max-height: 62vh; overflow-y: auto;
       padding: 6px; border-radius: 20px;
-      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
       backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+      box-shadow: 0 34px 70px -24px color-mix(in srgb, var(--shade) 95%, transparent);
       opacity: 0; visibility: hidden; transform: translateY(-6px) scale(0.98);
       transform-origin: top left;
       transition: opacity 0.45s var(--ease), transform 0.45s var(--ease), visibility 0.45s var(--ease);
     }
     .picker[data-open="1"] .picker-menu { opacity: 1; visibility: visible; transform: none; }
-    .picker-inner { background: rgba(10, 12, 17, 0.9); border-radius: 15px; padding: 5px; box-shadow: var(--inset); }
+    .picker-inner { background: color-mix(in srgb, var(--surface) 90%, transparent); border-radius: 15px; padding: 5px; box-shadow: var(--inset); }
     .pick-row { display: flex; align-items: center; gap: 2px; }
+    /* The theme switch in the account menu. */
+    .theme-row { justify-content: space-between; }
+    .theme-row .theme-seg { display: inline-flex; padding: 2px; border-radius: 999px; border: 1px solid var(--hair-2); }
+    .theme-row .theme-seg button { border: 0; background: none; color: var(--muted); font: 600 11.5px var(--sans);
+      padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+    .theme-row .theme-seg button.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
     /* The tick box of a multi-choice menu (Sector, Industry, Size). */
     .pick.pick-multi .tick { flex: 0 0 auto; width: 15px; height: 15px; border-radius: 4px; display: inline-flex;
       align-items: center; justify-content: center; border: 1px solid var(--hair-2); }
-    .pick.pick-multi.on .tick { border-color: color-mix(in srgb, var(--tint, #7c9cff) 70%, transparent);
-      background: color-mix(in srgb, var(--tint, #7c9cff) 22%, transparent); }
+    .pick.pick-multi.on .tick { border-color: color-mix(in srgb, var(--tint, var(--accent)) 70%, transparent);
+      background: color-mix(in srgb, var(--tint, var(--accent)) 22%, transparent); }
     .pick.pick-multi .tick .ic { width: 11px; height: 11px; }
     .pick-row .pick { flex: 1 1 auto; min-width: 0; }
     /* The jump arrow reuses the back-arrow glyph, turned round. */
@@ -143,7 +152,7 @@
       transition: background 0.4s var(--ease), color 0.4s var(--ease);
     }
     .jump svg { transform: rotate(180deg); }
-    .jump:hover { background: rgba(255, 255, 255, 0.07); color: var(--text); }
+    .jump:hover { background: color-mix(in srgb, var(--wash) 7%, transparent); color: var(--text); }
     .jump:disabled { opacity: 0.25; cursor: default; }
     .jump:disabled:hover { background: none; color: var(--faint); }
     /* The favourite star on a screen row. SCOPED to the menu: `.fav` loose
@@ -155,7 +164,7 @@
     #scrMenu .jump.fav svg { transform: none; }
     #scrMenu .jump.fav.on { color: var(--amber); }
     #scrMenu .jump.fav.on svg { fill: currentColor; }
-    #scrMenu .jump.fav.on:hover { background: rgba(251, 191, 36, 0.12); color: var(--amber); }
+    #scrMenu .jump.fav.on:hover { background: color-mix(in srgb, var(--amber) 12%, transparent); color: var(--amber); }
     /* Action: two hues, not six. Most of the table sits on Hold, and the
        chevron already made the argument — light every row and the
        column stops carrying information. Weight separates the extremes. */
@@ -213,30 +222,30 @@
       font-size: 12.5px; font-weight: 500; line-height: 1;
       transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
     }
-    .pick:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+    .pick:hover { background: color-mix(in srgb, var(--wash) 6%, transparent); color: var(--text); }
     .pick.on {
-      color: #fff;
-      background: color-mix(in srgb, var(--tint, #7c9cff) 15%, transparent);
-      border-color: color-mix(in srgb, var(--tint, #7c9cff) 34%, transparent);
+      color: var(--strong);
+      background: color-mix(in srgb, var(--tint, var(--accent)) 15%, transparent);
+      border-color: color-mix(in srgb, var(--tint, var(--accent)) 34%, transparent);
     }
     .pick .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pick.on .count { color: color-mix(in srgb, var(--tint, #7c9cff) 65%, #ffffff); }
+    .pick.on .count { color: color-mix(in srgb, var(--tint, var(--accent)) 65%, var(--strong)); }
     .pick .chk { opacity: 0; color: currentColor; transition: opacity 0.4s var(--ease); }
     .pick.on .chk { opacity: 1; }
     .pick:disabled { opacity: 0.35; cursor: default; }
     .pick:disabled:hover { background: none; color: var(--muted); }
-    .pick-danger:hover { color: var(--red); background: rgba(251, 113, 133, 0.1); }
+    .pick-danger:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
     .pick-sep { height: 1px; margin: 5px 9px; background: var(--hair); }
     /* add-ticker panel, inside a picker menu */
     .pick-mini {
       flex: 1; padding: 7px 10px; border-radius: 10px; cursor: pointer;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
       color: var(--muted); font-family: var(--sans); font-size: 11.5px; line-height: 1;
       transition: background 0.4s var(--ease), color 0.4s var(--ease);
     }
-    .pick-mini:hover { background: rgba(255, 255, 255, 0.075); color: var(--text); }
+    .pick-mini:hover { background: color-mix(in srgb, var(--wash) 7.5%, transparent); color: var(--text); }
     .pick-new { color: var(--green); }
-    .pick-new:hover { background: rgba(52, 211, 153, 0.1); color: var(--green); }
+    .pick-new:hover { background: color-mix(in srgb, var(--green) 10%, transparent); color: var(--green); }
 
     /* ==========================================================================
        Control deck
@@ -248,11 +257,11 @@
     .field {
       display: inline-flex; align-items: center; gap: 2px;
       padding: 4px 4px 4px 6px; border-radius: 999px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
       box-shadow: var(--inset);
       transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
     }
-    .field:focus-within { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    .field:focus-within { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .field .sep { color: var(--faint); font-size: 11px; padding: 0 5px; }
     .field .lead { color: var(--faint); display: inline-flex; padding: 0 2px 0 4px; }
     .field input[type="text"] {
@@ -277,7 +286,7 @@
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b94a4' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9.5 12 15.5 18 9.5'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 4px center; background-size: 13px;
     }
-    .field select option { background: #0d1017; color: var(--text); }
+    .field select option { background: var(--surface-2); color: var(--text); }
 
     /* ==========================================================================
        Notices
@@ -296,9 +305,9 @@
        cell. A message the owner sends because something is WRONG should not
        look like the read-only note beside it. */
     #announceBar > .core { border: 1px solid transparent; }
-    #announceBar.info > .core { border-color: rgba(124, 156, 255, 0.4); background: rgba(124, 156, 255, 0.1); }
-    #announceBar.warn > .core { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.11); }
-    #announceBar.down > .core { border-color: rgba(251, 113, 133, 0.5); background: rgba(251, 113, 133, 0.12); }
+    #announceBar.info > .core { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    #announceBar.warn > .core { border-color: color-mix(in srgb, var(--amber) 45%, transparent); background: color-mix(in srgb, var(--amber) 11%, transparent); }
+    #announceBar.down > .core { border-color: color-mix(in srgb, var(--red) 50%, transparent); background: color-mix(in srgb, var(--red) 12%, transparent); }
     #announceBar.info .ic { color: var(--accent); }
     #announceBar.warn .ic { color: var(--amber); }
     #announceBar.down .ic { color: var(--red); }
@@ -337,11 +346,11 @@
        changes, and the toggle sits beside View because that is the other
        control that decides how the selection is drawn. */
     .lay { display: inline-flex; padding: 2px; gap: 2px; border-radius: 999px;
-           border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); }
+           border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent); }
     .lay button { border: 0; background: none; color: var(--faint); cursor: pointer;
                   font: 500 12px var(--sans); padding: 6px 12px; border-radius: 999px; }
     .lay button:hover { color: var(--text); }
-    .lay button.on { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+    .lay button.on { background: color-mix(in srgb, var(--wash) 8%, transparent); color: var(--text); }
     body.tiling .table-bezel { display: none; }
     #tileWrap { flex: 1; min-height: 0; overflow: auto; }
     body:not(.tiling) #tileWrap { display: none; }
@@ -357,8 +366,8 @@
     .laycols { display: none; }
     body.tiling .laycols { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--faint); }
     .laycols select { padding: 5px 8px; border-radius: 9px; border: 1px solid var(--hair);
-                      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 12px var(--sans); cursor: pointer; }
-    .laycols select option { background: #0d1017; color: var(--text); }
+                      background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 12px var(--sans); cursor: pointer; }
+    .laycols select option { background: var(--surface-2); color: var(--text); }
     /* Below this the screen decides, whatever was chosen: four across on a
        laptop is four, on a phone it is one. */
     @media (max-width: 1100px) {
@@ -391,7 +400,7 @@
     td.news .nw-n { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 99px;
                     font-family: var(--mono); font-size: 9.5px; line-height: 15px; color: var(--faint);
                     border: 1px solid var(--hair); }
-    td.news.nw-fresh .nw-n { color: var(--accent); border-color: rgba(124, 156, 255, 0.4); }
+    td.news.nw-fresh .nw-n { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
     td.news .nw-none { color: var(--faint); opacity: 0.5; }
     td.news:hover .nw-age, td.news:hover .nw-none { color: var(--text); }
     /* The find box. `.ic` inside it is the app's own sprite glyph, sized
@@ -399,9 +408,9 @@
        pills does not read as a search. */
     .find { position: relative; display: inline-flex; align-items: center; gap: 7px;
             padding: 0 11px 0 10px; height: 34px; border-radius: 999px;
-            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
             transition: border-color 0.2s var(--ease), background 0.2s var(--ease); }
-    .find:focus-within { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.07); }
+    .find:focus-within { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 7%, transparent); }
     .find .ic { width: 15px; height: 15px; color: var(--faint); flex: none; }
     .find:focus-within .ic { color: var(--muted); }
     /* A FIXED width, and it does not grow on focus. The bar is a flex row
@@ -414,13 +423,13 @@
     #findInput::-webkit-search-cancel-button { display: none; }
     #findMenu { position: fixed; z-index: var(--z-tip); width: min(320px, calc(100vw - 24px));
                 max-height: min(52vh, 420px); overflow: auto; border-radius: 14px;
-                border: 1px solid var(--hair-2); background: rgba(10, 12, 17, 0.97);
-                backdrop-filter: blur(24px); box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.95);
+                border: 1px solid var(--hair-2); background: color-mix(in srgb, var(--surface) 97%, transparent);
+                backdrop-filter: blur(24px); box-shadow: 0 30px 80px -24px color-mix(in srgb, var(--shade) 95%, transparent);
                 padding: 6px; }
     #findMenu .fi { display: flex; align-items: baseline; gap: 9px; width: 100%;
                     padding: 7px 9px; border-radius: 9px; cursor: pointer;
                     text-decoration: none; color: inherit; }
-    #findMenu .fi:hover, #findMenu .fi.on { background: rgba(255, 255, 255, 0.07); }
+    #findMenu .fi:hover, #findMenu .fi.on { background: color-mix(in srgb, var(--wash) 7%, transparent); }
     #findMenu .fi-s { font: 600 12px var(--mono); color: var(--text); flex: none;
                       min-width: 52px; }
     #findMenu .fi-n { font-size: 12px; color: var(--muted); white-space: nowrap;
@@ -428,17 +437,17 @@
     #findMenu .fi-none { font-size: 12.5px; color: var(--muted); padding: 8px 9px; }
     #newsPop { position: fixed; z-index: var(--z-tip); width: min(420px, calc(100vw - 24px));
                max-height: min(60vh, 520px); overflow: auto; border-radius: 16px; border: 1px solid var(--hair-2);
-               background: rgba(10, 12, 17, 0.97); backdrop-filter: blur(24px);
-               box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.95); padding: 14px 16px; }
+               background: color-mix(in srgb, var(--surface) 97%, transparent); backdrop-filter: blur(24px);
+               box-shadow: 0 30px 80px -24px color-mix(in srgb, var(--shade) 95%, transparent); padding: 14px 16px; }
     #newsPop h4 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
     #newsPop .np-sub { font-size: 11px; color: var(--faint); margin-bottom: 10px; }
     #newsPop a.np-item { display: block; text-decoration: none; color: inherit; padding: 9px 0;
-                         border-top: 1px solid rgba(255, 255, 255, 0.055); }
+                         border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     #newsPop a.np-item:hover .np-h { color: var(--accent); }
     #newsPop .np-h { font-size: 12.5px; line-height: 1.45; color: var(--text); }
     #newsPop .np-m { margin-top: 3px; font-size: 10.5px; color: var(--faint); font-family: var(--mono); }
     #newsPop .np-empty { font-size: 12.5px; color: var(--muted); padding: 8px 0 2px; line-height: 1.5; }
-    #newsPop .np-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    #newsPop .np-foot { margin-top: 10px; padding-top: 9px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
                         display: flex; gap: 12px; font-size: 11.5px; }
     #newsPop .np-foot a { color: var(--muted); text-decoration: none; }
     #newsPop .np-foot a:hover { color: var(--text); text-decoration: underline; }
@@ -455,12 +464,12 @@
     .tl-trend { font-size: 11.5px; color: var(--muted); }
     .tl-why { margin-top: 4px; font-size: 11.5px; line-height: 1.45; color: var(--faint);
               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .tl-rets { margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    .tl-rets { margin-top: 12px; padding-top: 11px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
                display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .tl-ret { text-align: right; }
     .tl-ret .k { font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
     .tl-ret .v { margin-top: 3px; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-    .tl-fields { margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    .tl-fields { margin-top: 12px; padding-top: 11px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
                  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; }
     .tl-f { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
     .tl-f .k { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -484,7 +493,7 @@
     .tk-label { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 600;
       letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
     .tk-label em { font-style: normal; font-weight: 500; letter-spacing: 0.04em; color: var(--faint); text-transform: none; }
-    .tk-dot { width: 6px; height: 6px; border-radius: 50%; background: #f472b6; box-shadow: 0 0 8px #f472b6; }
+    .tk-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 8px var(--pink); }
     .tk-view { flex: 1; min-width: 0; overflow: hidden; position: relative; height: 100%;
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
               mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
@@ -504,7 +513,7 @@
     .tk-meta { color: var(--faint); font-size: 11px; }
     .tk-btn { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid transparent; background: none;
       color: var(--faint); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
-    .tk-btn:hover { color: var(--text); border-color: var(--hair); background: rgba(255, 255, 255, 0.05); }
+    .tk-btn:hover { color: var(--text); border-color: var(--hair); background: color-mix(in srgb, var(--wash) 5%, transparent); }
     /* Reduced motion: no crawl — one headline at a time, swapped every few
        seconds with a fade (opacity is not motion). */
     .ticker.still .tk-track { position: static; animation: none; transition: opacity 0.4s var(--ease); }
@@ -519,26 +528,26 @@
       font-size: 11.5px; color: var(--muted); }
     #fltBar .fchip code { font-family: var(--mono); color: var(--text); }
     #fltBar .fchip.hid { border-style: dashed; }
-    #fltBar .fchip.bad { border-color: rgba(251, 113, 133, 0.5); color: var(--red); }
+    #fltBar .fchip.bad { border-color: color-mix(in srgb, var(--red) 50%, transparent); color: var(--red); }
     #fltBar .fchip button { border: 0; background: none; color: var(--faint); cursor: pointer;
       padding: 0 3px; line-height: 1; display: inline-flex; }
     #fltBar .fchip button:hover { color: var(--text); }
     #fltBar .fact { margin-left: auto; display: inline-flex; gap: 6px; }
     #fltBar .fact button { padding: 5px 11px; border-radius: 999px; cursor: pointer; line-height: 1;
-      border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair-2); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--text); font: inherit; font-size: 11.5px; }
-    #fltBar .fact button:hover { background: rgba(255, 255, 255, 0.09); }
+    #fltBar .fact button:hover { background: color-mix(in srgb, var(--wash) 9%, transparent); }
     #refreshBar > .core {
       background:
-        linear-gradient(100deg, rgba(52, 211, 153, 0.10), rgba(52, 211, 153, 0.02) 60%),
+        linear-gradient(100deg, color-mix(in srgb, var(--green) 10%, transparent), color-mix(in srgb, var(--green) 2%, transparent) 60%),
         var(--surface);
-      color: #b6ded0;
+      color: var(--ok-ink);
     }
     #refreshBar .ic { color: var(--green); }
     #refreshBar b { color: var(--green); font-weight: 600; }
     #refreshBar .pctpill {
       margin-left: auto; flex: none; padding: 4px 11px; border-radius: 999px;
-      border: 1px solid rgba(52, 211, 153, 0.32); background: rgba(52, 211, 153, 0.12);
+      border: 1px solid color-mix(in srgb, var(--green) 32%, transparent); background: color-mix(in srgb, var(--green) 12%, transparent);
       color: var(--green); font-family: var(--mono); font-size: 11.5px;
       font-variant-numeric: tabular-nums;
     }
@@ -559,20 +568,20 @@
     @media (prefers-reduced-motion: reduce) { .ic.spin { animation: none; } }
     #fwdViewBar > .core {
       background:
-        linear-gradient(100deg, rgba(251, 191, 36, 0.10), rgba(251, 191, 36, 0.02) 60%),
+        linear-gradient(100deg, color-mix(in srgb, var(--amber) 10%, transparent), color-mix(in srgb, var(--amber) 2%, transparent) 60%),
         var(--surface);
-      color: #ddd0a8;
+      color: var(--warn-ink);
     }
     #fwdViewBar .ic { color: var(--amber); }
     #fwdViewBar b { color: var(--amber); font-weight: 600; }
     #fwdViewBar button {
       margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
       padding: 7px 14px; border-radius: 999px; cursor: pointer; line-height: 1;
-      border: 1px solid rgba(251, 191, 36, 0.32); background: rgba(251, 191, 36, 0.12);
+      border: 1px solid color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 12%, transparent);
       color: var(--amber); font-size: 12px; font-weight: 500;
       transition: background 0.5s var(--ease), transform 0.35s var(--ease);
     }
-    #fwdViewBar button:hover { background: rgba(251, 191, 36, 0.2); }
+    #fwdViewBar button:hover { background: color-mix(in srgb, var(--amber) 20%, transparent); }
     #fwdViewBar button:active { transform: scale(0.97); }
 
     .error { margin-top: 8px; color: var(--red); font-size: 12.5px;
@@ -592,12 +601,12 @@
     }
     .table-bezel > .core { flex: 1 1 auto; min-height: 0; display: flex; }
     .table-wrap { flex: 1 1 auto; min-height: 0; width: 100%;
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin; }
+      scrollbar-color: color-mix(in srgb, var(--wash) 16%, transparent) transparent; scrollbar-width: thin; }
     .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
     .table-wrap::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.14);
+      background: color-mix(in srgb, var(--wash) 14%, transparent);
       border: 3px solid var(--surface); background-clip: padding-box; }
-    .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); background-clip: padding-box; }
+    .table-wrap::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--wash) 26%, transparent); background-clip: padding-box; }
     .table-wrap::-webkit-scrollbar-corner { background: transparent; }
     /* Freeze the two header rows while scrolling vertically. */
     thead th { position: sticky; z-index: 4; background: var(--surface); }
@@ -613,22 +622,22 @@
     /* size=1 and min-width 0: an input must never be what widens a column */
     .flt { display: block; width: 100%; min-width: 0; box-sizing: border-box; margin: 0;
       font: 400 11px/1.2 var(--mono); letter-spacing: 0; text-transform: none; color: var(--text);
-      background: rgba(255, 255, 255, 0.035); border: 1px solid var(--hair); border-radius: 6px;
+      background: color-mix(in srgb, var(--wash) 3.5%, transparent); border: 1px solid var(--hair); border-radius: 6px;
       padding: 3px 5px; outline: none; }
     select.flt { font-family: var(--sans); padding: 2px 1px; cursor: pointer; }
-    select.flt option { background: #0d1017; color: var(--text); }
+    select.flt option { background: var(--surface-2); color: var(--text); }
     .flt::placeholder { color: var(--faint); opacity: 0.55; }
-    .flt:focus { border-color: rgba(124, 156, 255, 0.55); }
-    .flt.on { border-color: rgba(124, 156, 255, 0.55); background: rgba(124, 156, 255, 0.12); }
-    .flt.bad { border-color: rgba(251, 113, 133, 0.6); background: rgba(251, 113, 133, 0.08); }
-    #fltBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
-                 background: rgba(124, 156, 255, 0.09); }
+    .flt:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .flt.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .flt.bad { border-color: color-mix(in srgb, var(--red) 60%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent); }
+    #fltBtn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+                 background: color-mix(in srgb, var(--accent) 9%, transparent); }
     thead th[rowspan], thead tr:nth-child(2) th { border-bottom: 1px solid var(--hair-2); }
     /* Freeze the left columns (Symbol … Name) while scrolling horizontally. */
     .frz { position: sticky; background: var(--surface); z-index: 3; }
     thead .frz { z-index: 6; }
     .frz0 { left: 0; }
-    .frz1 { left: var(--l1, 0); box-shadow: 16px 0 24px -20px rgba(0, 0, 0, 1); }
+    .frz1 { left: var(--l1, 0); box-shadow: 16px 0 24px -20px color-mix(in srgb, var(--shade) 100%, transparent); }
     /* Fixed rather than content-sized. Left to itself the column grew to 406px
        to fit one 66-character fund name, and since it is frozen that width was
        taken out of the viewport on every screen and for every row. Half that,
@@ -642,7 +651,7 @@
 
     th, td {
       text-align: right; padding: 7px 11px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+      border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); }
     td { white-space: nowrap; font-family: var(--mono); font-size: 12px; letter-spacing: -0.02em; }
     td.left, td.name { font-family: var(--sans); font-size: 12.5px; letter-spacing: -0.01em; }
     th { white-space: normal; vertical-align: bottom; line-height: 1.3;
@@ -660,7 +669,7 @@
        with the portfolio badges in the Symbol cell. */
     #alertBtn .albadge { display: inline-flex; align-items: center; justify-content: center;
       min-width: 16px; height: 16px; margin-left: 6px; padding: 0 4px; border-radius: 999px;
-      background: var(--accent); color: #0a0c11; font: 600 10px/1 var(--mono); }
+      background: var(--accent); color: var(--surface); font: 600 10px/1 var(--mono); }
     .lenschip {
       display: inline-flex; align-items: center; gap: 7px; flex: none;
       padding: 7px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 500;
@@ -679,8 +688,8 @@
        verdict must not look like the shared Balanced one. */
     /* Non-Balanced advice columns carry the tint — the shared measurement
        stays plain, the what-if columns say what they are. */
-    td.avx { background: rgba(94, 234, 212, 0.05); }
-    tbody tr:hover td.avx { background: rgba(94, 234, 212, 0.09); }
+    td.avx { background: color-mix(in srgb, var(--teal) 5%, transparent); }
+    tbody tr:hover td.avx { background: color-mix(in srgb, var(--teal) 9%, transparent); }
     /* The optional profile columns hide by body class, header and cells
        together, so no header rebuild is ever needed. */
     /* the custom-weight sliders */
@@ -747,7 +756,7 @@
       transition: opacity 0.45s var(--ease), color 0.45s var(--ease), background 0.45s var(--ease);
     }
     tbody tr:hover .remove, .remove:focus-visible { opacity: 1; }
-    .remove:hover { color: var(--red); background: rgba(251, 113, 133, 0.12); }
+    .remove:hover { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
     /* A locked benchmark: still there, visibly not a button. The hover rule
        above is undone by name, or a disabled × would still light up red. */
     .remove:disabled { cursor: not-allowed; color: var(--faint); }
@@ -761,15 +770,15 @@
             cursor: pointer; vertical-align: -5px;
             transition: color 0.3s var(--ease), background 0.3s var(--ease); }
     .mypf svg { width: 12px; height: 12px; }
-    .mypf:hover { color: var(--text); background: rgba(255, 255, 255, 0.07); }
+    .mypf:hover { color: var(--text); background: color-mix(in srgb, var(--wash) 7%, transparent); }
     .mypf.on { color: var(--amber); }
     .mypf.on svg { fill: currentColor; }
     .badge.mine { border-style: dashed; color: var(--muted); border-color: var(--hair-2); }
     #myPop { position: fixed; z-index: 45; min-width: 230px; max-width: 300px;
              padding: 6px; border-radius: 16px; border: 1px solid var(--hair-2);
-             background: rgba(9, 11, 15, 0.88);
+             background: color-mix(in srgb, var(--glass) 88%, transparent);
              backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-             box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+             box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
     #myPop .pop-title { padding: 8px 12px 6px; font-size: 10px; font-weight: 500;
              text-transform: uppercase; letter-spacing: 0.18em; color: var(--faint); }
     #myPop .pick { width: 100%; }
@@ -779,14 +788,14 @@
     #myPop .pop-head { padding: 10px 12px 2px; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
     #myPop .pop-q {
       width: calc(100% - 20px); margin: 8px 10px 6px; padding: 6px 9px; border-radius: 8px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04); color: var(--text);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text);
       font-family: var(--sans); font-size: 12px; outline: none; box-sizing: border-box; }
     #myPop .pop-q:focus { border-color: var(--hair-2); }
     #myPop .tdot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-right: 7px; }
     .state .bo { margin-left: 5px; font-size: 7px; vertical-align: 2px; color: var(--faint); }
     .state .bo.on { color: var(--amber); }
     .ap-risk { margin: 12px 14px 2px; padding: 10px 12px; border-radius: 12px;
-               border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025);
+               border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 2.5%, transparent);
                font-size: 12px; line-height: 1.55; color: var(--muted); }
     .ap-risk b { color: var(--text); }
     .ap-risk-note { display: block; margin-top: 5px; font-size: 10.5px; color: var(--faint); }
@@ -794,8 +803,8 @@
        click that removes everything else. Amber when armed, because the rows
        it leaves are the ones the rules just moved. */
     /* a picker that is filtering says so, the way the weight lens does */
-    #secBtn.on, #indBtn.on, #advBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45);
-                 background: rgba(124, 156, 255, 0.09); }
+    #secBtn.on, #indBtn.on, #advBtn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+                 background: color-mix(in srgb, var(--accent) 9%, transparent); }
     /* Industry names run long — "Farm & Heavy Construction Machinery" is one
        of ours — so the trigger truncates rather than stretching the bar past
        the width where it wraps onto a second line. */
@@ -848,9 +857,9 @@
     dialog.modal {
       width: min(400px, calc(100vw - 32px)); padding: 6px; border: 1px solid var(--hair);
       border-radius: var(--r-shell); background: var(--shell); color: var(--text);
-      box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95);
+      box-shadow: 0 40px 90px -40px color-mix(in srgb, var(--shade) 95%, transparent);
     }
-    dialog.modal::backdrop { background: rgba(5, 5, 5, 0.7); backdrop-filter: blur(6px); }
+    dialog.modal::backdrop { background: color-mix(in srgb, var(--void) 70%, transparent); backdrop-filter: blur(6px); }
     dialog.modal .core { padding: 24px 24px 22px; }
     dialog.modal h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
     dialog.modal .sub { margin: 8px 0 18px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
@@ -859,11 +868,11 @@
     dialog.modal .row-f { margin-bottom: 13px; }
     dialog.modal input {
       width: 100%; padding: 10px 13px; border-radius: 12px; outline: none;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
       color: var(--text); font-family: var(--sans); font-size: 13.5px; box-shadow: var(--inset);
       transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
     }
-    dialog.modal input:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    dialog.modal input:focus { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 5.5%, transparent); }
     dialog.modal .actions { display: flex; gap: 8px; margin-top: 18px; }
     dialog.modal .actions .btn { flex: 1; justify-content: center; }
     dialog.modal .note { display: none; margin-top: 14px; font-size: 12px; line-height: 1.5; }
@@ -876,7 +885,7 @@
     .pick-hint.vw-h { text-transform: uppercase; letter-spacing: 0.16em; font-size: 9.5px; color: var(--faint); padding-top: 6px; }
     .vw-lockbox { cursor: default; opacity: 0.8; }
     #sortNote { white-space: nowrap; }
-    #scrBtn.on { color: var(--accent); border-color: rgba(124, 156, 255, 0.45); background: rgba(124, 156, 255, 0.09); }
+    #scrBtn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
     #scrBtn .count { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                      display: inline-block; vertical-align: -3px; }
     #scrMenu .picker-inner { max-height: min(70vh, 640px); overflow: auto; }
@@ -887,10 +896,10 @@
     dialog.modal#tileDialog { width: min(640px, calc(100vw - 32px)); }   /* the view editor's width, so the field grid matches it column for column */
     #tileDialog .td-row { display: flex; align-items: center; gap: 10px; margin: 10px 0 12px; font-size: 13px; }
     #tileDialog .td-row select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--hair);
-      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 13px var(--sans); cursor: pointer; }
-    #tileDialog .td-row select option { background: #0d1017; }
+      background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 13px var(--sans); cursor: pointer; }
+    #tileDialog .td-row select option { background: var(--surface-2); }
     #tileDialog .td-toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px;
-      padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+      padding-bottom: 14px; border-bottom: 1px solid color-mix(in srgb, var(--wash) 6%, transparent); }
     #tileDialog .td-toggles label { display: flex; align-items: center; gap: 8px; margin: 0;
       font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none;
       color: var(--text); cursor: pointer; }
@@ -908,7 +917,7 @@
     .vd-list { max-height: min(46vh, 440px); overflow: auto; padding-right: 4px;
       border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
     .vd-group { padding: 10px 0 6px; }
-    .vd-group + .vd-group { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+    .vd-group + .vd-group { border-top: 1px solid color-mix(in srgb, var(--wash) 4%, transparent); }
     dialog.modal label.vd-gh, dialog.modal label.vd-col { display: flex; align-items: center; gap: 8px; margin: 0;
       text-transform: none; letter-spacing: 0; cursor: pointer; }
     dialog.modal label.vd-gh { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
@@ -924,9 +933,9 @@
       .page { padding: 10px 16px; }
       .menu-btn {
         display: inline-flex; position: fixed; top: 14px; right: 16px; z-index: var(--z-nav);
-        background: rgba(9, 11, 15, 0.74); border-color: var(--hair);
+        background: color-mix(in srgb, var(--glass) 74%, transparent); border-color: var(--hair);
         backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
-        box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.9), var(--inset);
+        box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
       }
       .bar > .core { padding: 6px 8px; gap: 8px; }
       .brand { font-size: 14px; padding-left: 4px; }
@@ -935,7 +944,7 @@
       .deck {
         display: block; position: fixed; inset: 0; z-index: var(--z-sheet); margin: 0;
         padding: 68px 18px 40px; overflow-y: auto;
-        background: rgba(5, 5, 5, 0.84);
+        background: color-mix(in srgb, var(--void) 84%, transparent);
         backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%);
         opacity: 0; visibility: hidden;
         transition: opacity 0.6s var(--ease), visibility 0.6s var(--ease);
@@ -961,11 +970,11 @@
     #actionPanel {
       position: fixed; z-index: 44; width: 376px; max-width: calc(100vw - 20px);
       max-height: min(78vh, 660px); overflow-y: auto; padding: 6px; border-radius: 20px;
-      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
       backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
-      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+      box-shadow: 0 34px 70px -24px color-mix(in srgb, var(--shade) 95%, transparent);
     }
-    #actionPanel .ap-core { background: rgba(10, 12, 17, 0.92); border-radius: 15px; padding: 12px; }
+    #actionPanel .ap-core { background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 15px; padding: 12px; }
     .ap-head { display: flex; align-items: baseline; gap: 8px; }
     .ap-sym { font-family: var(--mono); font-weight: 700; font-size: 15px; letter-spacing: 0.04em; }
     .ap-verdict { margin-left: auto; font-size: 12.5px; font-weight: 700; }
@@ -973,7 +982,7 @@
       font-size: 13px; padding: 0 0 0 4px; font-family: var(--sans); }
     .ap-x:hover { color: var(--text); }
     .ap-est { display: flex; align-items: center; gap: 5px; margin: 8px 0 0; }
-    .ap-est .seg { width: 16px; height: 5px; border-radius: 2px; background: rgba(255, 255, 255, 0.09); }
+    .ap-est .seg { width: 16px; height: 5px; border-radius: 2px; background: color-mix(in srgb, var(--wash) 9%, transparent); }
     .ap-est .seg.on { background: var(--accent); }
     .ap-est span { font-size: 10.5px; color: var(--faint); margin-left: 3px; }
     .ap-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px; }
@@ -982,14 +991,14 @@
     .ap-chip b { color: var(--text); font-weight: 600; }
     .ap-sec { margin-top: 11px; font-size: 10px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
     .ap-rung { border: 1px solid transparent; border-radius: 12px; padding: 6px 9px 7px; margin-top: 5px; }
-    .ap-rung.fired { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.045); }
+    .ap-rung.fired { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 4.5%, transparent); }
     .ap-rung.unchecked { opacity: 0.38; }
     .ap-rung-head { display: flex; align-items: center; gap: 7px; font-size: 12px; }
-    .ap-rung-head .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); flex: none; }
-    .ap-rung.fired .dot.good { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.6); }
+    .ap-rung-head .dot { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--wash) 14%, transparent); flex: none; }
+    .ap-rung.fired .dot.good { background: var(--green); box-shadow: 0 0 8px color-mix(in srgb, var(--green) 60%, transparent); }
     .ap-rung.fired .dot.mid { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
     .ap-rung.fired .dot.hold { background: var(--muted); }
-    .ap-rung.fired .dot.bad { background: var(--red); box-shadow: 0 0 8px rgba(251, 113, 133, 0.6); }
+    .ap-rung.fired .dot.bad { background: var(--red); box-shadow: 0 0 8px color-mix(in srgb, var(--red) 60%, transparent); }
     .ap-rung-head .fl { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ap-rung-head .ac { flex: none; font-size: 11px; font-weight: 600; color: var(--muted); }
     .ap-act-buy { color: var(--green); }
@@ -1004,10 +1013,10 @@
     .ap-cond .val { font-family: var(--mono); font-size: 10.5px; color: var(--text); text-align: right;
       font-variant-numeric: tabular-nums; }
     .ap-gauge { grid-column: 2 / 4; position: relative; height: 6px; border-radius: 3px;
-      background: rgba(255, 255, 255, 0.06); margin: 1px 0 2px; }
-    .ap-gauge .zone { position: absolute; top: 0; bottom: 0; background: rgba(124, 156, 255, 0.28); border-radius: 3px; }
+      background: color-mix(in srgb, var(--wash) 6%, transparent); margin: 1px 0 2px; }
+    .ap-gauge .zone { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 28%, transparent); border-radius: 3px; }
     .ap-gauge .pt { position: absolute; top: 50%; width: 7px; height: 7px; border-radius: 50%;
-      transform: translate(-50%, -50%); background: var(--text); box-shadow: 0 0 0 2px rgba(5, 5, 5, 0.8); }
+      transform: translate(-50%, -50%); background: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--void) 80%, transparent); }
     .ap-any { border-left: 2px solid var(--hair); margin-left: 6px; padding-left: 8px; }
     .ap-note { font-size: 10px; color: var(--faint); margin-top: 8px; line-height: 1.5; }
     .ap-note a { color: var(--accent); text-decoration: none; }
@@ -1019,7 +1028,7 @@
     .ap-tab { flex: 1; font-size: 11px; padding: 4px 0; border-radius: 9px; border: 1px solid var(--hair);
       background: none; color: var(--muted); cursor: pointer; font-family: var(--sans);
       transition: background 0.4s var(--ease), color 0.4s var(--ease); }
-    .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
   </style>
 </head>
 <body>
@@ -1289,6 +1298,13 @@
                   <span class="nm">Help</span>
                 </a>
                 <!-- Members: every backtest, written up. Hidden on the guest preview, which the route refuses. -->
+                <!-- Theme (2026-10-15). admin-only until the stock page is converted. -->
+                <div class="pick theme-row admin-only" id="themeRow" style="cursor:default">
+                  <span class="nm">Theme</span>
+                  <span class="theme-seg" role="group" aria-label="Theme">
+                    <button type="button" data-theme-pick="dark">Dark</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="auto" title="Follow this computer's own light or dark setting">Auto</button>
+                  </span>
+                </div>
                 <!-- Members: paper positions, a simulation with pretend money. -->
                 <a class="pick" href="/paper" id="paperLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
@@ -1689,7 +1705,7 @@
     // Relative now, where a volume figure measured against the stock's own
     // 20-day average already belonged.
     const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'own'];
-    const GROUP_COLORS = {
+    const GROUP_COLORS_DARK = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
       info: '#7c9cff', rank: '#a3e635', act: '#5eead4', chart: '#a8a29e',
@@ -1697,6 +1713,19 @@
       rel:  '#22d3ee', react: '#f472b6', trend: '#fbbf24',
       size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
     };
+    // THE LIGHT THEME (2026-10-15). These tints are pastels tuned for black; on
+    // white each takes the darker shade the promo studio's light cards use
+    // (Cards LIGHT_INK), so a group keeps its hue and stays readable. ink()
+    // is read at draw time, and a theme change redraws, so nothing caches a
+    // colour from the other theme. GROUP_COLORS answers through it, which is
+    // what every reader, the hover card included, already asks.
+    const LIGHT_TINT = {
+      '#7c9cff': '#2e5fe8', '#a3e635': '#4a770e', '#5eead4': '#0f766e', '#a8a29e': '#57534e',
+      '#34d399': '#157a51', '#a78bfa': '#6d3fd4', '#fb923c': '#b44902', '#22d3ee': '#0d6c80',
+      '#f472b6': '#b81b66', '#fbbf24': '#9d5a07', '#94a3b8': '#475569', '#fb7185': '#c81e37', '#f0abfc': '#a21caf',
+    };
+    const ink = (c) => (document.documentElement.getAttribute('data-theme') === 'light' && LIGHT_TINT[c]) || c;
+    const GROUP_COLORS = new Proxy(GROUP_COLORS_DARK, { get: (o, k) => (typeof k === 'string' && o[k] ? ink(o[k]) : o[k]) });
     // Labels live here so adding a group later is: append to GROUPS, give it a
     // colour and a label, and tag the <th>/<td> cells with .grp-<id>.
     const GROUP_LABELS = {
@@ -1725,7 +1754,7 @@
         h ^= t.charCodeAt(i);
         h = Math.imul(h, 0x01000193) >>> 0;
       }
-      return PALETTE[h % PALETTE.length];
+      return ink(PALETTE[h % PALETTE.length]);
     };
 
     const $ = (id) => document.getElementById(id);
@@ -2751,7 +2780,7 @@
         const set = new Set(myPortfolios[name] || []);
         return stocks.filter((s) => set.has(s.symbol)).length;
       };
-      const activeColor = activeTab === 'All' ? ALL_TINT : isMyTab(activeTab) ? MY_TINT : colorFor(activeTab);
+      const activeColor = activeTab === 'All' ? ink(ALL_TINT) : isMyTab(activeTab) ? ink(MY_TINT) : colorFor(activeTab);
       const activeCount = activeTab === 'All' ? countAll
         : isMyTab(activeTab) ? countMine(myTabName(activeTab)) : countFor(activeTab);
       const activeLabel = isMyTab(activeTab) ? myTabName(activeTab) : activeTab;
@@ -2781,7 +2810,7 @@
           : '') +
         '</div>';
 
-      const parts = [item('All', ALL_TINT, countAll)];
+      const parts = [item('All', ink(ALL_TINT), countAll)];
       for (const name of portfolios) parts.push(item(name, colorFor(name), countFor(name), true));
       // The personal section: the member's own lists under the shared ones,
       // each with rename and delete beside it (siblings in a .pick-row — a
@@ -2793,8 +2822,8 @@
           const t = MY_PREFIX + name;
           parts.push('<div class="pick-row">' +
             `<button class="pick ${activeTab === t ? 'on' : ''}" data-tab="${we(t)}" role="option" ` +
-            `aria-selected="${activeTab === t}" style="--tint:${MY_TINT}">` +
-            dot(MY_TINT) + `<span class="nm">${we(name)}</span><span class="count">${countMine(name)}</span></button>` +
+            `aria-selected="${activeTab === t}" style="--tint:${ink(MY_TINT)}">` +
+            dot(ink(MY_TINT)) + `<span class="nm">${we(name)}</span><span class="count">${countMine(name)}</span></button>` +
             `<a class="jump" href="/theme/${encodeURIComponent(MY_PREFIX + name)}" target="_blank" rel="noopener" ` +
             `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
             '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
@@ -4543,6 +4572,11 @@
         if (res) paintAnnounce(res.announcement || null);
         if (tileRange && !cardRanges.some((r) => r.id === tileRange)) tileRange = null;
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
+        // The account's theme wins over this browser's, so a choice made on
+        // another machine arrives here.
+        if (res && res.prefs && /^(dark|light|auto)$/.test(String(res.prefs.theme || '')) && window.TickrTheme
+          && window.TickrTheme.choice() !== res.prefs.theme) window.TickrTheme.set(res.prefs.theme);
+        paintThemeRow();
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;
         // Starred screens. Shape-filtered on the way in as well as on the way
         // out: the server stores ids without checking them against the screens
@@ -4569,6 +4603,25 @@
       prefsReady = true;
     }
 
+    // The theme switch: three buttons, the current choice lit. A change saves
+    // to the account and redraws, since script-drawn colours (group banners,
+    // theme badges) are chosen at draw time.
+    function paintThemeRow() {
+      const c = window.TickrTheme ? window.TickrTheme.choice() : 'dark';
+      document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('on', b.dataset.themePick === c));
+    }
+    document.querySelectorAll('[data-theme-pick]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!window.TickrTheme) return;
+      window.TickrTheme.set(b.dataset.themePick);
+      paintThemeRow();
+      window.track && track('picker', 'theme:' + b.dataset.themePick);
+      savePrefs();
+    }));
+    // The group banners are coloured by applyGroups, not by render, so both run.
+    document.addEventListener('themechange', () => { try { applyGroups(); render(); } catch (e) { /* the next render will */ } });
+    paintThemeRow();
+
     function savePrefs() {
       // Until the load has landed, `collapsed` still holds defaults; writing it
       // back would overwrite the very thing being fetched.
@@ -4585,7 +4638,8 @@
             // A prefs PUT replaces the whole row, so every field this page owns
             // has to ride on every write or the others erase it. This page is
             // the only writer left, which is the only reason that is safe.
-            favScreens: [...favScreens] },
+            favScreens: [...favScreens],
+            theme: window.TickrTheme ? window.TickrTheme.choice() : 'dark' },
         }).catch(() => {});
       }, 600);
     }

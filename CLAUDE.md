@@ -136,7 +136,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - Use the Write/Edit tools, not heredocs or `sed -i`, for anything with backslashes or backticks. No backticks inside `Cards.STYLE` or SQL comments in `db.js` (both are template literals). `python3` does not exist here. `| tail` hides exit codes — judge a build by its artefact.
 
 ## Conventions
-- No build step: vanilla JS, plain CSS. The design system is `public/app.css`; each page keeps only its own layout in one inline `<style>` block. Dark only. No emoji, icon fonts or company logos.
+- No build step: vanilla JS, plain CSS. The design system is `public/app.css`; each page keeps only its own layout in one inline `<style>` block. Dark and light themes through the tokens: never write a colour into a stylesheet, use a token or a color-mix() of one (see `themes`); a page joins the light theme only when converted and marked `data-themeable`. No emoji, icon fonts or company logos.
 - One implementation per concept, in a shared module loaded by page, server and phone. Never a second copy in a page.
 - Scope every new CSS selector; unscoped classes (`.warn`, `.card`, `.sub`) have captured later markup nine times.
 - Green and red mean price up and down only. Amber means "notice this, it is stale or wrong". Other series use accent, blue or orange.
@@ -151,7 +151,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Accounts and mail** — `auth-model` · `request-access` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `paper-positions` · `saved-column-layout`
 
-**Screener front end** — `frontend-layout` · `design-system` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
+**Screener front end** — `frontend-layout` · `design-system` · `themes` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 
 **Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
 
