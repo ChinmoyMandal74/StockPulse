@@ -6732,6 +6732,25 @@ async function writeNews(symbol, items, keepDays = 21, keepMax = 25) {
   return { added, stored };
 }
 
+// EVERY STOCK'S OLD HEADLINES, MOVED AT ONCE (2026-10-16, the owner: "add
+// for all stocks in nightly"). writeNews moves a stock's old headlines only
+// when that stock is fetched, so one the news job stops reaching kept them;
+// this runs on the nightly job and moves everything past the keep window
+// into news_archive. One batch: copy, then delete. Both seek on
+// idx_news_published rather than walking the table.
+async function archiveOldNews(keepDays = 21) {
+  await init();
+  const now = Date.now();
+  const cutoff = new Date(now - keepDays * 86400000).toISOString();
+  const res = await db.batch([
+    { sql: `insert or ignore into news_archive (id, symbol, published_at, source, headline, url, archived_at)
+              select id, symbol, published_at, source, headline, url, ? from news where published_at < ?`,
+      args: [now, cutoff] },
+    { sql: 'delete from news where published_at < ?', args: [cutoff] },
+  ], 'write');
+  return { cutoff, moved: Number((res[1] && res[1].rowsAffected) || 0) };
+}
+
 // ---- the news job's log ---------------------------------------------------------
 
 // A batch is a dozen fetches with a 6-second timeout each, so one still
@@ -7223,6 +7242,7 @@ module.exports = {
   readNewsRun,
   newsHoldings,
   pruneNewsRuns,
+  archiveOldNews,
   startRun,
   recordSkippedRun,
   noteRound,

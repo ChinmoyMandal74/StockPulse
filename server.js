@@ -14014,6 +14014,15 @@ app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
   });
 }));
 
+// The nightly job's sweep: every stock's headlines past the keep window move
+// to news_archive (db.archiveOldNews). Cron or admin.
+app.post('/api/news/archive-old', route(async (req, res) => {
+  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const t0 = Date.now();
+  const r = await store.archiveOldNews(News.KEEP_DAYS);
+  res.json({ ok: true, ...r, keepDays: News.KEEP_DAYS, ms: Date.now() - t0 });
+}));
+
 app.post('/api/news/refresh', requireAdmin, route(async (req, res) => {
   if (NEWS_OFF) return res.status(400).json({ error: 'The news provider is switched off.' });
   const size = Math.max(1, Math.min(40, Number(req.query.n) || NEWS_TOPUP_PER_REFRESH));

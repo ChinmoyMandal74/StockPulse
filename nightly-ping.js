@@ -550,13 +550,22 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (!r.ok || !j) { say(`figures    HTTP ${r.status}`); return; }
         say(j.built ? `figures    ${j.margins} margins and ${j.figures - j.margins} earnings-growth figures from ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `figures    not built -- ${j.reason || j.error || 'no reason given'}`);
       }
+      // Every stock's headlines past the keep window move to news_archive
+      // (db.archiveOldNews), so a stock the news job stopped reaching does
+      // not keep old ones on show. One call.
+      async function newsArchive() {
+        const r = await fetch(`${base}/api/news/archive-old`, { method: 'POST', signal: AbortSignal.timeout(120000), headers: { Authorization: 'Bearer ' + secret } });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j) { say(`news arch. HTTP ${r.status}`); return; }
+        say(`news arch. ${j.moved} headline${j.moved === 1 ? '' : 's'} older than ${j.keepDays} days moved to the archive, ${Math.round((j.ms || 0) / 1000)}s`);
+      }
       async function groupMonths() {
         const r = await fetch(`${base}/api/group-months/rebuild`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
         const j = await r.json().catch(() => null);
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
         try {
           await fn();
         } catch (e) {
