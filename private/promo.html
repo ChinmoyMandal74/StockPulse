@@ -978,6 +978,24 @@
           reports are months old and not all as of the same date; the
           card says the range. Updated once a quarter.</p>
       </div>
+      <!-- What one holder holds (2026-10-15): a 13F manager or a fund. The
+           list is the 200 largest by what they hold in tracked stocks, the
+           holder directory's own; a holder page's Visuals link opens any. -->
+      <div id="hbkBox">
+        <label>Holder</label>
+        <select id="hbkKind">
+          <option value="M" selected>Institutional manager (13F)</option>
+          <option value="F">Fund (N-PORT)</option>
+        </select>
+        <label>Which one</label>
+        <select id="hbkId"><option value="">Reading the list…</option></select>
+        <p class="hint">What one manager or one fund held among the stocks
+          tracked here, from its latest quarterly filing: the largest
+          positions, the sector split, and what is new and gone since the
+          period before. Only the tracked stocks, so the total is never the
+          size of the manager or the fund. Open any holder's page and use
+          its Visuals link to draw that one.</p>
+      </div>
       <div id="rmBox">
         <label>Stock</label>
         <select id="rmSym"></select>
@@ -1863,6 +1881,7 @@
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
+      { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
@@ -2035,6 +2054,10 @@
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
     // template for Theme"). One view to begin with; others can join it.
+    // Holders (2026-10-15): a manager's or a fund's book, as its page draws it.
+    const HB_VIEWS = [
+      ['holderbook', 'What one holder holds'],
+    ];
     const THM_VIEWS = [
       ['thmrank', 'Ranking'],
       ['thmsnap', 'Snapshot'],
@@ -2056,6 +2079,7 @@
       { name: 'Industry', views: IND_VIEWS, last: 'industries' },
       { name: 'Theme', views: THM_VIEWS, last: 'thmrank' },
       { name: SPOT_NAME, views: SPOT_VIEWS, last: 'spotlight' },
+      { name: 'Holders', views: HB_VIEWS, last: 'holderbook' },
       { name: 'Rankings', views: RANK_VIEWS, last: 'movers' },
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
       { name: 'Coverage', views: COV_VIEWS, last: 'covsize' },
@@ -2275,6 +2299,56 @@
         })
         .catch(() => { delete fhPending[symbol]; });
       return null;
+    }
+    // One holder's book, for the What one holder holds card: the holder page's
+    // own answer (/api/holder), cached per holder.
+    const hbkCache = {};
+    let hbkLinked = '';
+    const hbkPending = {};
+    function getHolderBook(kind, id) {
+      if (!id) return null;
+      const key = kind + ':' + id;
+      if (hbkCache[key]) return hbkCache[key];
+      if (hbkPending[key]) return null;
+      hbkPending[key] = true;
+      fetch(`/api/holder?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          hbkCache[key] = d && typeof d === 'object' && 'holder' in d ? d : { holder: null };
+          // A linked holder outside the 200 shows its own name once its book is here.
+          const opt = [...$('hbkId').options].find((o) => o.value === String(id));
+          if (opt && /^Holder /.test(opt.textContent) && hbkCache[key].holder) opt.textContent = hbkCache[key].holder.name;
+          delete hbkPending[key];
+          if (Cards.holderBookNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete hbkPending[key]; });
+      return null;
+    }
+    // The holder picker: the directory's 200 largest of the kind chosen. A
+    // holder asked for by a link but outside them is added at the top, under
+    // its own name once its book arrives.
+    const hbkDir = {};
+    async function fillHolderList(want) {
+      const kind = $('hbkKind').value === 'F' ? 'F' : 'M';
+      const sel = $('hbkId');
+      const keep = want || sel.value;
+      try {
+        if (!hbkDir[kind]) {
+          const r = await fetch('/api/holder-directory?kind=' + kind, { cache: 'no-store' });
+          const d = await r.json();
+          hbkDir[kind] = (d && d.holders) || [];
+        }
+      } catch (e) { hbkDir[kind] = hbkDir[kind] || []; }
+      const money = (v) => (v >= 1e12 ? '$' + (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? '$' + (v / 1e9).toFixed(1) + 'B' : '$' + Math.round(v / 1e6) + 'M');
+      const list = hbkDir[kind];
+      let html = list.map((h) => `<option value="${esc(h.id)}">${esc(h.name)}${h.value > 0 ? ' \u00b7 ' + esc(money(h.value)) : ''}</option>`).join('');
+      if (keep && !list.some((h) => String(h.id) === String(keep))) {
+        const got = hbkCache[kind + ':' + keep];
+        html = `<option value="${esc(keep)}">${esc((got && got.holder && got.holder.name) || 'Holder ' + keep)}</option>` + html;
+      }
+      sel.innerHTML = html || '<option value="">None on file</option>';
+      sel.value = keep && [...sel.options].some((o) => o.value === String(keep)) ? String(keep) : (sel.options[0] ? sel.options[0].value : '');
+      if (tpl === 'holderbook') render();
     }
     // One company's revenue breakdown, for the Revenue mix card.
     const rmCache = {};
@@ -2544,7 +2618,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2582,7 +2656,7 @@
     const buildCard = () => Cards.build(tpl, {
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
 
@@ -2863,6 +2937,7 @@
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
+      $('hbkBox').style.display = tpl === 'holderbook' ? 'block' : 'none';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
       $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
@@ -3402,6 +3477,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'indmargin') render(); }));
     // Fund holders: one control.
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
+    $('hbkKind').addEventListener('change', () => fillHolderList(''));
+    $('hbkId').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
     for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));
@@ -4068,6 +4145,12 @@
           const qp = new URLSearchParams(location.search);
           const qt = String(qp.get('tpl') || ''), qs = String(qp.get('sym') || '').toUpperCase();
           if (qt && visibleTpls().some((t) => t.id === qt)) tpl = qt;
+          if (qt === 'holderbook') {
+            const hk = String(qp.get('hkind') || 'M').toUpperCase(), hi = String(qp.get('hid') || '');
+            $('hbkKind').value = hk === 'F' ? 'F' : 'M';
+            if (/^[A-Za-z0-9]{1,24}$/.test(hi)) { getHolderBook($('hbkKind').value, hi); hbkLinked = hi; }
+          }
+          fillHolderList(hbkLinked);
           // THE DRILL-DOWN CARD (2026-10-13): reached only by this link, from
           // the panel a screener cell opens. It has no controls, so the side
           // bar goes and the card has the page (body.bare).

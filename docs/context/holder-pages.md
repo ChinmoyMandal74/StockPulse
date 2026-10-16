@@ -42,3 +42,13 @@ Tests were a scratchpad Node suite (32 checks). Neither page was rendered in a b
 ## A route name that was already taken (2026-10-12)
 
 The directory first shipped as `GET /api/holders`, which is the address of the 13D and 13G filings about one stock (`large-holder-filings.md`). Express gives a request to the first route registered for a path, and the new one sat above the old, so for about an hour the stock page's Large holders section and the promo Large holders card were handed the directory instead. Found while opening the pages to members, by grepping the route list. Renamed `/api/holder-directory`. **Before adding a route, grep `server.js` for the path**; `node --check` and booting both pass with a duplicate.
+
+## What one holder holds: a holder page as a card (2026-10-15)
+
+The owner, on `/holder/M/1045810` (NVIDIA): *"Can you make a new promo template for this"*.
+
+- **Template `holderbook`**, in a new **Holders** group. Controls `hbkKind` (M, a 13F manager; F, a fund) and `hbkId`, filled from `/api/holder-directory` (the 200 largest of the kind). `hbk`, not `hb`: a saved post's option keys must open with three to six lowercase letters (`POST_OPT_KEY`).
+- **The data is the page's own**: `holderPayload(kind, id)` in server.js, which `/api/holder` now calls, through the `getHolderBook` channel. The studio fetches `/api/holder`; the saved-post renderer asks `Cards.holderBookNeed` and calls `holderPayload`.
+- The card: kind and quarter, the name, four figures (in tracked stocks, stocks held, new, gone) on the capital-returns card's `cr-figs` grid, the sector split as one bar with its key, and the largest positions as bars (value, share of what is shown, `NEW` for a new position). Rows: 9 portrait, 5 square, 13 story. **Only the tracked stocks**, said in the subtitle and the note; a fund's note adds that its holdings are reported again inside its manager's 13F.
+- **The holder page links to it**: a Visuals button opens `/promo?tpl=holderbook&hkind=M&hid=<id>`. A holder outside the 200 is added to the picker under its own name once its book arrives.
+- Verified: built in Node at all three sizes from NVIDIA's figures; drawn in the studio from the holder page's link in dark and light.

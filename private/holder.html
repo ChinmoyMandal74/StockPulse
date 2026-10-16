@@ -102,6 +102,8 @@
       <span class="divider"></span>
       <a class="btn" href="/holders" id="backBtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>All holders</a>
       <a class="btn" href="/">Screener</a>
+      <!-- This holder as a card in Visuals (2026-10-15). -->
+      <a class="btn" id="visLink" href="/promo?tpl=holderbook" target="_blank" rel="noopener" title="Draw this holder as a card in Visuals">Visuals ▸</a>
     </nav>
   </div>
 
@@ -145,6 +147,7 @@
     const KIND = String(parts[1] || '').toUpperCase();
     const ID = decodeURIComponent(parts[2] || '');
     const isFund = KIND === 'F';
+    { const v = document.getElementById('visLink'); if (v) v.href = '/promo?tpl=holderbook&hkind=' + encodeURIComponent(KIND) + '&hid=' + encodeURIComponent(ID); }
 
     const money = (v) => (v == null ? '—' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1e3) + 'K'));
     const shares = (v) => (v == null ? '—' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v)));

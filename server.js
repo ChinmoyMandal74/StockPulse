@@ -11193,6 +11193,10 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   let fholders = null;
   const fhNeed = Cards.fundHoldersNeed(post.tpl, post.opts || {});
   if (fhNeed && fhNeed.symbol) { try { fholders = await fundHoldersPayload(String(fhNeed.symbol).toUpperCase()); } catch { fholders = null; } }
+  // The What one holder holds card, likewise.
+  let hbook = null;
+  const hbNeed = Cards.holderBookNeed(post.tpl, post.opts || {});
+  if (hbNeed && hbNeed.id && /^[A-Za-z0-9]{1,24}$/.test(String(hbNeed.id))) { try { hbook = await holderPayload(hbNeed.kind, String(hbNeed.id)); } catch { hbook = null; } }
 
   // The Revenue mix card, likewise.
   let rmix = null;
@@ -11250,6 +11254,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getHolders: () => lholders,
       getSegments: () => rmix,
       getFundHolders: () => fholders,
+      getHolderBook: () => hbook,
       getCapReturns: () => capret,
       getOptions: () => optoi,
       getInsider: () => insd,
@@ -13485,20 +13490,25 @@ app.get('/api/holder-directory', requireMember, route(async (req, res) => {
   res.json({ kind, q, holders: list.map((h) => ({ id: h.id, name: h.name, family: h.family, label: h.label, asOf: h.asOf,
     positions: h.positions, value: h.value, nav: h.nav, added: h.added, exited: h.exited })) });
 }));
+// One holder's book as the page and the card both draw it. Also asked by the
+// saved-post renderer for the What one holder holds card (2026-10-15).
+async function holderPayload(kind, id) {
+  const book = await store.readHolderBook(kind, id);
+  if (!book) return { kind, id, holder: null };
+  const snap = await readSnapshot();
+  const by = new Map();
+  for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol && !r.error) by.set(String(r.symbol).toUpperCase(), r);
+  const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0 } : null; });
+  return { kind, id, holder: { name: book.name, family: book.family, label: book.label, asOf: book.asOf, nav: book.nav,
+    positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited,
+    positions: v.positions, gone: v.gone, sectors: v.sectors } };
+}
 app.get('/api/holder', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const kind = String(req.query.kind || '').toUpperCase();
   const id = String(req.query.id || '').trim();
   if (!HOLDER_KINDS[kind] || !/^[A-Za-z0-9]{1,24}$/.test(id)) return res.status(400).json({ error: 'Bad holder.' });
-  const book = await store.readHolderBook(kind, id);
-  if (!book) return res.json({ kind, id, holder: null });
-  const snap = await readSnapshot();
-  const by = new Map();
-  for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol && !r.error) by.set(String(r.symbol).toUpperCase(), r);
-  const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0 } : null; });
-  res.json({ kind, id, holder: { name: book.name, family: book.family, label: book.label, asOf: book.asOf, nav: book.nav,
-    positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited,
-    positions: v.positions, gone: v.gone, sectors: v.sectors } });
+  res.json(await holderPayload(kind, id));
 }));
 
 // ---- options open interest ---------------------------------------------------------

@@ -54,6 +54,7 @@
   let getHolders = () => null;
   let getSegments = () => null;
   let getFundHolders = () => null;
+  let getHolderBook = () => null;
   let getCapReturns = () => null;
   let getOptions = () => null;
   let getInsider = () => null;
@@ -8809,6 +8810,88 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- What one holder holds: a 13F manager or a fund, as a card ------------
+  //
+  // (2026-10-15, the owner, on a holder page: "Can you make a new promo
+  // template for this".) The holder page as a picture: who, which filing, four
+  // figures, the sector split and the largest positions. The data is the page's
+  // own (/api/holder, holderbook.js view), through the getHolderBook channel
+  // both hosts answer. ONLY THE TRACKED STOCKS, said on the card: the total is
+  // never the size of the manager or the fund.
+  const HB_ROWS = { portrait: 9, square: 5, story: 13 };
+  const HB_SEC_TINT = ['#7c9cff', '#fb923c', '#a78bfa', '#22d3ee', '#f472b6', '#a3e635', '#fbbf24', '#94a3b8'];
+  function holderBookNeed(tpl, opts) {
+    if (tpl !== 'holderbook') return null;
+    const o = opts || {};
+    return { kind: o.hbkKind === 'F' ? 'F' : 'M', id: o.hbkId || null };
+  }
+  function tplHolderBook() {
+    const need = holderBookNeed('holderbook', O);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!need.id) return shell('What one holder holds', 'Choose', 'a holder', 'Pick a manager or a fund in the panel.');
+    const data = getHolderBook(need.kind, need.id);
+    if (!data) return shell('Reading the filings', 'Finding', 'the positions\u2026');
+    const H = data.holder;
+    if (!H || !Array.isArray(H.positions) || !H.positions.length) {
+      return shell('Nothing on file', 'No positions', 'in the stocks tracked here', 'This holder\u2019s latest filing lists none of the stocks this site tracks.');
+    }
+    const isFund = need.kind === 'F';
+    const n = String(H.name || need.id);
+    const money = (v) => (v == null ? '\u2014' : '$' + fmtMoney(v));
+    const pc = (v) => (v == null ? '\u2014' : v > 0 && v < 0.01 ? '<0.01%' : v.toFixed(v >= 10 ? 1 : 2) + '%');
+    const cnt = (v) => (v == null ? '\u2014' : Number(v).toLocaleString('en-US'));
+    const figs = '<div class="cr-figs">'
+      + [['In tracked stocks', money(H.value), 'not its whole portfolio'],
+        ['Stocks held', cnt(H.positionsAll), 'of the ones tracked here'],
+        ['New', cnt(H.added), 'held now, not the period before'],
+        ['Gone', cnt(H.exited), 'held then, not now']]
+        .map(([k, v, x]) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x) + '</span></div>').join('')
+      + '</div>';
+    // The sector split of what is shown, as one bar with its key.
+    const secs = (H.sectors || []).filter((s) => s.pct > 0);
+    const segs = secs.map((s, i) => '<i style="flex:' + s.pct.toFixed(3) + ' 0 0;background:' + pal.ink(HB_SEC_TINT[i % HB_SEC_TINT.length]) + '"></i>').join('');
+    const keys = secs.slice(0, 5).map((s, i) => '<span><i style="background:' + pal.ink(HB_SEC_TINT[i % HB_SEC_TINT.length]) + '"></i>'
+      + esc(s.name) + ' <b>' + esc(pc(s.pct)) + '</b></span>').join('') + (secs.length > 5 ? '<span>+' + (secs.length - 5) + ' more</span>' : '');
+    const sector = secs.length ? '<div class="hb-sec"><div class="hb-bar">' + segs + '</div><div class="hb-key">' + keys + '</div></div>' : '';
+    // The largest positions.
+    const top = H.positions.slice().sort((a, b) => (b.value || 0) - (a.value || 0)).slice(0, HB_ROWS[size.id] || 9);
+    const SZ = ({
+      portrait: top.length <= 5 ? { f: 28, b: 26 } : { f: 23, b: 18 },
+      square: { f: 21, b: 14 },
+      story: top.length <= 8 ? { f: 34, b: 32 } : { f: 29, b: 24 },
+    })[size.id] || { f: 23, b: 18 };
+    const scale = Math.max(1e-9, ...top.map((p) => p.value || 0));
+    const vw = Math.ceil(Math.max(5, ...top.map((p) => money(p.value).length)) * SZ.f * 0.62) + 6;
+    const ww = Math.max(Math.ceil(Math.max(5, ...top.map((p) => (p.isNew ? 'NEW' : pc(p.ofBook)).length)) * SZ.f * 0.62) + 6, Math.ceil(SZ.f * 4.2));
+    const cols = 'minmax(0,40%) minmax(0,1fr) ' + vw + 'px ' + ww + 'px';
+    const rows = top.map((p) => '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+      + '<span class="bx-n"><b>' + esc(p.symbol) + '</b> ' + esc(p.name || '') + '</span>'
+      + '<span class="bx-t" style="height:' + SZ.b + 'px">' + (p.value > 0 ? '<span class="bx-f" style="left:0;width:' + Math.max(0.6, p.value / scale * 100).toFixed(2) + '%"></span>' : '') + '</span>'
+      + '<span class="bx-v">' + esc(money(p.value)) + '</span>'
+      + '<span class="bx-v rm-pct">' + (p.isNew ? '<span class="hb-new">NEW</span>' : esc(pc(p.ofBook))) + '</span></div>').join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Stock</span>'
+      + '<span style="grid-column:2 / 4">Value</span><span class="sb-hr">Share</span></div>';
+    const filing = isFund ? 'its latest portfolio report to the SEC (Form N-PORT)' : 'its quarterly Form 13F';
+    const note = 'The largest ' + top.length + ' of ' + cnt(H.positionsAll) + ' positions in the stocks tracked here, from ' + filing
+      + (H.asOf ? ', as of ' + H.asOf : '') + '. Value is the shares times one quarter-end price per stock; \u201cshare\u201d is of what is shown, not of the '
+      + (isFund ? 'fund' : 'manager') + '. Only stocks tracked on this site are counted, so the total is not the size of the ' + (isFund ? 'fund' : 'manager') + '. '
+      + (isFund ? 'A fund\u2019s holdings are reported again inside its manager\u2019s 13F. ' : '')
+      + 'A record of what was reported, months old by the time it is public; not a view on any stock.';
+    const kick = (isFund ? 'Fund' : 'Institutional manager') + (H.label ? ' \u00b7 ' + H.label : H.asOf ? ' \u00b7 as of ' + H.asOf : '');
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">in the stocks tracked here</span></h2>'
+      + figs + sector
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Revenue mix: where one company's revenue comes from ------------------
   //
   // (2026-10-11, the owner: "can you build revenue segments".) One company's
@@ -10557,6 +10640,7 @@
     holders: tplHolders,
     revmix: tplRevMix,
     fundholders: tplFundHolders,
+    holderbook: tplHolderBook,
     capreturn: tplCapReturn,
     optoi: tplOptions,
     insiders: tplInsiders,
@@ -10869,6 +10953,15 @@
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
     /* Capital returns: four figures above the yearly bars, and a bar in two parts. */
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
+    /* What one holder holds: the sector split as one bar, and the NEW tag. */
+    .hb-sec { margin: 18px 0 8px; }
+    .hb-bar { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; }
+    .hb-bar i { display: block; min-width: 2px; }
+    .hb-key { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 10px; font-size: 16px; color: var(--muted); }
+    .hb-key span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .hb-key i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+    .hb-key b { font: 500 15px var(--mono); color: var(--text); }
+    .hb-new { font: 600 0.8em var(--mono); letter-spacing: 0.08em; color: var(--accent); }
     .cr-fig { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .cr-fig .k { font: 500 15px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
     .cr-fig .v { font: 600 36px var(--mono); color: var(--text); white-space: nowrap; }
@@ -12940,6 +13033,7 @@
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
+    holderBookNeed,
     capReturnNeed,
     optionsNeed,
     insiderNeed, insiderWindows: () => IN_WINS.map((p) => p.slice()),
@@ -13061,6 +13155,7 @@
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);
+      getHolderBook = c.getHolderBook || (() => null);
       getCapReturns = c.getCapReturns || (() => null);
       getOptions = c.getOptions || (() => null);
       getInsider = c.getInsider || (() => null);
