@@ -2990,45 +2990,81 @@
     // THE PICTURE IS UNCHANGED: a link takes its colour from the text around it
     // and has no underline, so the downloaded PNG is what it was. Only the
     // pointer and an underline on hover say it can be clicked.
-    let nameIndex = null, nameIndexFor = null;
+    //
+    // A TICKER THAT LEADS A FIGURE TOO (2026-10-16, the owner: "make the
+    // tickers clickable on all promo cards", over a legend reading "MU
+    // +226.2%"). The pass now reads TEXT PIECES rather than whole elements --
+    // that chip holds a coloured dot as well, which the element test skipped
+    // -- and a piece that is a ticker followed by a number ("MU +226.2%",
+    // "NVDA $181", "AMD 12.4x") links the ticker. Only a symbol, in capitals,
+    // at the very start; a company name inside a sentence is still left alone.
+    let nameIndex = null, nameIndexFor = null, symSet = null;
     function stockNameIndex() {
       if (nameIndex && nameIndexFor === stocks) return nameIndex;
       const by = new Map();
+      symSet = new Set();
       const add = (k, s) => { k = String(k || '').trim(); if (k.length < 2) return; by.set(k, by.has(k) && by.get(k) !== s ? null : s); };
       for (const r of stocks) {
         if (!r || !r.symbol || r.instrumentType === 'ETF') continue;
+        symSet.add(r.symbol);
         add(r.symbol, r.symbol); add(r.shortName, r.symbol); add(r.name, r.symbol);
       }
       nameIndex = by; nameIndexFor = stocks;
       return by;
     }
     const SVG_NS = 'http://www.w3.org/2000/svg';
+    const LEAD_TICKER = /^([A-Z][A-Z0-9.\-]{0,9})(\s+[+\-\u2212\u2013]?[$\d][\s\S]*)$/;
     function linkStockNames(root) {
       try {
         const by = stockNameIndex();
         const keys = [...by.keys()];
-        for (const el of root.querySelectorAll('.s-in *')) {
-          if (el.children.length || el.closest('a') || el.closest('.s-top')) continue;
-          const t = (el.textContent || '').trim();
+        const mk = (sym) => {
+          const href = '/stock/' + encodeURIComponent(sym);
+          const a = document.createElement('a');
+          a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 's-nl';
+          return a;
+        };
+        const wrapSvg = (el, sym) => {
+          const a = document.createElementNS(SVG_NS, 'a');
+          a.setAttribute('href', '/stock/' + encodeURIComponent(sym)); a.setAttribute('target', '_blank'); a.setAttribute('class', 's-nl');
+          el.parentNode.insertBefore(a, el); a.appendChild(el);
+        };
+        const pieces = [];
+        for (const box of root.querySelectorAll('.s-in')) {
+          const w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode()) pieces.push(n);
+        }
+        for (const node of pieces) {
+          const el = node.parentNode;
+          if (!el || el.closest('a') || el.closest('.s-top') || el.closest('style, script')) continue;
+          const raw = node.nodeValue || '';
+          const t = raw.trim();
           if (t.length < 2 || t.length > 60) continue;
-          let sym = by.get(t);
+          let sym = by.get(t), lead = null;
           if (sym === undefined && /(\u2026|\.\.\.)$/.test(t)) {
             const stem = t.replace(/(\u2026|\.\.\.)$/, '').trim();
             const m = stem.length >= 4 ? keys.filter((k) => k.startsWith(stem) && by.get(k)) : [];
             const syms = [...new Set(m.map((k) => by.get(k)))];
             sym = syms.length === 1 ? syms[0] : undefined;
           }
+          if (!sym) {
+            const m = LEAD_TICKER.exec(t);
+            if (m && symSet.has(m[1])) { sym = m[1]; lead = m[1]; }
+          }
           if (!sym) continue;
-          const href = '/stock/' + encodeURIComponent(sym);
-          if (el.namespaceURI === SVG_NS) {
-            const a = document.createElementNS(SVG_NS, 'a');
-            a.setAttribute('href', href); a.setAttribute('target', '_blank'); a.setAttribute('class', 's-nl');
-            el.parentNode.insertBefore(a, el); a.appendChild(el);
+          const svg = el.namespaceURI === SVG_NS;
+          // In a drawing the whole label is wrapped: an SVG text cannot be
+          // split into a link and the rest without moving its letters.
+          if (svg) { if (el.childNodes.length === 1) wrapSvg(el, sym); continue; }
+          const a = mk(sym);
+          if (lead) {
+            // Only the ticker is the link; the figure after it stays as it was.
+            const at = raw.indexOf(lead);
+            const rest = node.splitText(at + lead.length);
+            const head = at > 0 ? node.splitText(at) : node;
+            el.insertBefore(a, rest); a.appendChild(head);
           } else {
-            const a = document.createElement('a');
-            a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.className = 's-nl';
-            while (el.firstChild) a.appendChild(el.firstChild);
-            el.appendChild(a);
+            el.insertBefore(a, node); a.appendChild(node);
           }
         }
       } catch (e) { /* the card as drawn */ }
