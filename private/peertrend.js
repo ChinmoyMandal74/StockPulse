@@ -83,8 +83,13 @@
   const SHARE_MIN_QUARTERS = 4;
   // Bands are identities, not directions: never green or red. The company
   // itself takes the accent; the peers take these in turn.
-  const SHARE_SELF = '#7c9cff';
-  const SHARE_INKS = ['#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#818cf8', '#fdba74', '#94a3b8'];
+  // Tokens with today's colours as the fallback (2026-10-15, the light theme):
+  // every one of these lands in a style attribute, so a page that switches
+  // theme recolours them with no redraw, and a page without the tokens draws
+  // exactly what it did. The card rasteriser reads computed styles.
+  const SHARE_SELF = 'var(--accent, #7c9cff)';
+  const SHARE_INKS = ['var(--orange, #fb923c)', 'var(--accent-2, #a78bfa)', 'var(--sky, #38bdf8)', 'var(--pink, #f472b6)',
+    'var(--slate, #cbd5e1)', 'var(--indigo, #818cf8)', 'var(--peach, #fdba74)', 'var(--steel, #94a3b8)'];
   const fmtShare = (s) => (ok(s) ? (s > 0 && s < 0.5 ? '<1' : String(Math.round(s))) + '%' : '\u2014');
   const viewsFor = (metricKey) => VIEWS.filter(([k]) => k !== 'share' || SHARE_METRICS.has(metricKey));
   const metricOf = (k, cat) => (cat || METRICS).find((m) => m[0] === k) || (cat || METRICS)[0];
@@ -378,7 +383,7 @@
         for (let j = l.pts.length - 1; j >= 0; j--) foot += 'L' + X(l.pts[j].i).toFixed(1) + ' ' + Y(l.pts[j].yb).toFixed(1);
         const col = (o.colors && o.colors[l.symbol]) || l.color;
         // Inline, because this markup also travels through the PNG export.
-        out += '<path class="pt-band" style="fill:' + col + ';fill-opacity:' + (l.self ? '0.95' : '0.78') + ';stroke:#0b0e14;stroke-width:1" d="' + top + foot + 'Z">'
+        out += '<path class="pt-band" style="fill:' + col + ';fill-opacity:' + (l.self ? '0.95' : '0.78') + ';stroke:var(--surface, #0b0e14);stroke-width:1" d="' + top + foot + 'Z">'
           + '<title>' + esc(l.name + ' \u00b7 ' + fmtShare(l.last.share) + ' of the group in ' + qLabel(model.quarters[l.last.i]) + ' \u00b7 ' + fmt(unit, l.last.v)) + '</title></path>';
       }
       // The names beside the middle of each band's right-hand edge, spread so

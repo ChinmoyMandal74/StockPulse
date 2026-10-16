@@ -477,9 +477,15 @@
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
+  // Tokens with today's colours as the fallback (2026-10-15, the light theme):
+  // every reader puts these in a style attribute (the card's section heads,
+  // /compare's group rows, the phone's field picker), so a light page recolours
+  // them with no redraw and a page without the tokens draws what it did.
   const GROUP_COLORS = {
-    info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
-    rel: '#22d3ee', react: '#f472b6', trend: '#fbbf24', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc',
+    info: 'var(--accent, #7c9cff)', rank: 'var(--lime, #a3e635)', act: 'var(--teal, #5eead4)',
+    short: 'var(--green, #34d399)', long: 'var(--accent-2, #a78bfa)', fwd: 'var(--orange, #fb923c)',
+    rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)',
+    size: 'var(--steel, #94a3b8)', fund: 'var(--red, #fb7185)', own: 'var(--orchid, #f0abfc)',
   };
   // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
   // band). The group ID is unchanged, so every saved key that names it still

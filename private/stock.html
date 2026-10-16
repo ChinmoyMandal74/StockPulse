@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Stock — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <!-- Before anything paints: sets data-theme, so a light choice never flashes dark. -->
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -22,16 +24,16 @@
     .page { position: relative; z-index: 1; max-width: none; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 6% -6%, rgba(52, 211, 153, 0.12), transparent 62%),
-        radial-gradient(50vw 44vw at 96% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+        radial-gradient(46vw 40vw at 6% -6%, color-mix(in srgb, var(--green) 12%, transparent), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
 
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
                    padding: 10px 20px 0; pointer-events: none; }
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
-      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
     }
 
     /* ---- the jump bar: every card is one click from the top (2026-10-04,
@@ -50,9 +52,9 @@
     .gl-sec.gl-closed .sec-h { margin-bottom: 0; }
     .gl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
     .gl-card { display: flex; flex-direction: column; gap: 7px; padding: 13px 15px; border-radius: 14px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.025); color: inherit; text-decoration: none;
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 2.5%, transparent); color: inherit; text-decoration: none;
       transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
-    .gl-card:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--hair-2); }
+    .gl-card:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); border-color: var(--hair-2); }
     .gl-card .gl-h { display: flex; align-items: center; gap: 9px; }
     .gl-card .gl-t { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
     .gl-card .gl-a { width: 16px; text-align: center; font-size: 12px; line-height: 1; color: var(--text); }
@@ -64,11 +66,11 @@
     @media (max-width: 760px) { .gl-grid { grid-template-columns: 1fr; } }
     .jump {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent); color: var(--muted);
       font-size: 12.5px; font-weight: 500; text-decoration: none; cursor: pointer;
       transition: color .25s var(--ease), border-color .25s var(--ease), background .25s var(--ease);
     }
-    .jump:hover { color: var(--text); border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .jump:hover { color: var(--text); border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
     .jump .ic { color: var(--faint); }
     .jump:hover .ic { color: var(--accent); }
     /* THE ISLAND IS STICKY AT THE TOP, so a bare anchor jump parks the heading
@@ -106,7 +108,7 @@
       font: inherit; color: inherit; letter-spacing: inherit;
       transition: background 0.35s var(--ease);
     }
-    #symBtn:hover, #symBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #symBtn:hover, #symBtn[aria-expanded="true"] { background: color-mix(in srgb, var(--wash) 5%, transparent); }
     #symBtn .caret { width: 15px; height: 15px; color: var(--faint); flex: none;
                      transition: transform 0.4s var(--ease), color 0.35s var(--ease); }
     #symBtn:hover .caret { color: var(--muted); }
@@ -116,16 +118,16 @@
       position: absolute; top: calc(100% + 8px); left: 0; z-index: var(--z-nav);
       display: none; width: 320px; max-width: calc(100vw - 32px);
       padding: 6px; border-radius: 18px;
-      background: rgba(255, 255, 255, 0.03); border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.95);
+      box-shadow: 0 34px 70px -24px color-mix(in srgb, var(--shade) 95%, transparent);
     }
     #symMenu.open { display: block; }
-    #symMenu .menucore { background: rgba(10, 12, 17, 0.92); border-radius: 13px;
+    #symMenu .menucore { background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 13px;
                          padding: 8px; box-shadow: var(--inset); }
     #symFilter {
       width: 100%; padding: 8px 11px; margin-bottom: 6px; border-radius: 10px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--text); font-family: var(--sans); font-size: 13px; outline: none;
       transition: border-color 0.35s var(--ease);
     }
@@ -141,7 +143,7 @@
                        min-width: 62px; flex: none; }
     #symList .opt .n { font-size: 12px; color: var(--faint); overflow: hidden;
                        text-overflow: ellipsis; white-space: nowrap; }
-    #symList .opt:hover, #symList .opt.active { background: rgba(255, 255, 255, 0.07); }
+    #symList .opt:hover, #symList .opt.active { background: color-mix(in srgb, var(--wash) 7%, transparent); }
     #symList .opt.here .s { color: var(--accent); }
     #symList .none { padding: 12px 10px; font-size: 12px; color: var(--faint); }
     /* Deliberately louder than the chips beside it and quieter than the price:
@@ -179,10 +181,10 @@
       display: inline-flex; align-items: center; gap: 7px; align-self: center;
       padding: 6px 13px; border-radius: 999px; text-decoration: none; white-space: nowrap;
       font-size: 12.5px; font-weight: 600; color: var(--text);
-      border: 1px solid var(--hair-2); background: rgba(255, 255, 255, 0.075);
+      border: 1px solid var(--hair-2); background: color-mix(in srgb, var(--wash) 7.5%, transparent);
       transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
     }
-    .olink:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.28); }
+    .olink:hover { background: color-mix(in srgb, var(--wash) 14%, transparent); border-color: color-mix(in srgb, var(--wash) 28%, transparent); }
     /* The out-arrow stays quieter than the word — it is a repeated glyph on
        both pills and saying "elsewhere" twice at full strength is noise. */
     .olink .ic { width: 14px; height: 14px; color: var(--muted); }
@@ -212,9 +214,9 @@
     .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
             font-size: 12px; color: var(--faint); }
     .chip.has-tip { cursor: help; border-color: var(--hair-2); }
-    .chip.has-tip:hover { background: rgba(255, 255, 255, 0.06); }
+    .chip.has-tip:hover { background: color-mix(in srgb, var(--wash) 6%, transparent); }
     .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair);
-            background: rgba(255, 255, 255, 0.03); color: var(--muted); }
+            background: color-mix(in srgb, var(--wash) 3%, transparent); color: var(--muted); }
     /* A chip that goes somewhere, and it has to LOOK like one — the first
        cut kept the chip's muted grey "because a row of tinted pills would
        shout", and the owner reported the obvious consequence: the links
@@ -225,11 +227,11 @@
        `text-decoration: none` is not optional — nothing else here resets
        it, and the peer table's `vs` pill arrived underlined for that. */
     a.chip.go { text-decoration: none; cursor: pointer; color: var(--accent);
-                border-color: rgba(124, 156, 255, 0.34);
-                background: rgba(124, 156, 255, 0.07);
+                border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+                background: color-mix(in srgb, var(--accent) 7%, transparent);
                 transition: background 0.35s var(--ease), border-color 0.35s var(--ease); }
-    a.chip.go:hover { border-color: rgba(124, 156, 255, 0.6);
-                      background: rgba(124, 156, 255, 0.17); }
+    a.chip.go:hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+                      background: color-mix(in srgb, var(--accent) 17%, transparent); }
 
     /* Full card width, as asked. The usual 70-80ch reading limit is dropped
        here on purpose: this is four or five sentences read once, not prose you
@@ -261,11 +263,11 @@
     .rng {
       padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 12.5px;
       font-family: var(--sans); border: 1px solid var(--hair); color: var(--muted);
-      background: rgba(255, 255, 255, 0.03);
+      background: color-mix(in srgb, var(--wash) 3%, transparent);
       transition: background 0.4s var(--ease), color 0.4s var(--ease), border-color 0.4s var(--ease);
     }
-    .rng:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
-    .rng.on { background: rgba(124, 156, 255, 0.14); border-color: rgba(124, 156, 255, 0.4); color: var(--text); }
+    .rng:hover { background: color-mix(in srgb, var(--wash) 8%, transparent); color: var(--text); }
+    .rng.on { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--text); }
 
     /* the shared chart, at page scale — taller, with a gutter on the right for
        the price axis and room underneath for the dates. The svg fills the
@@ -312,14 +314,14 @@
     #chart .ao-lbl {
       position: absolute; right: 56px; transform: translateY(-50%);
       font-family: var(--mono); font-size: 10.5px; color: var(--faint); pointer-events: none;
-      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+      text-shadow: 0 0 4px color-mix(in srgb, var(--surface) 95%, transparent), 0 0 2px color-mix(in srgb, var(--surface) 95%, transparent);
     }
     /* Worded thresholds, sitting just clear of the lines they name — above the
        overbought line, below the oversold one, as a terminal draws them. */
     #chart .rsi-zone {
       position: absolute; left: 50%; pointer-events: none;
       font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500;
-      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+      text-shadow: 0 0 4px color-mix(in srgb, var(--surface) 95%, transparent), 0 0 2px color-mix(in srgb, var(--surface) 95%, transparent);
     }
     #chart .rsi-zone.hi { color: var(--red); transform: translate(-50%, -118%); }
     #chart .rsi-zone.lo { color: var(--green); transform: translate(-50%, 18%); }
@@ -328,10 +330,10 @@
       position: absolute; right: 56px; transform: translateY(-50%);
       font-family: var(--mono); font-size: 10.5px; color: var(--faint);
       pointer-events: none;
-      text-shadow: 0 0 4px rgba(10, 12, 17, 0.95), 0 0 2px rgba(10, 12, 17, 0.95);
+      text-shadow: 0 0 4px color-mix(in srgb, var(--surface) 95%, transparent), 0 0 2px color-mix(in srgb, var(--surface) 95%, transparent);
     }
-    .rsi-toggle.on { background: rgba(167, 139, 250, 0.14);
-                     border-color: rgba(167, 139, 250, 0.4); color: var(--accent-2); }
+    .rsi-toggle.on { background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+                     border-color: color-mix(in srgb, var(--accent-2) 40%, transparent); color: var(--accent-2); }
     /* legend: a swatch per average, in that average's own colour */
     #chart .cap.ma { left: 9px; top: 32px; font-size: 11.5px; color: var(--faint);
                      display: flex; gap: 12px; }
@@ -341,10 +343,10 @@
     #chart .cap.ma i.ma200 { background: var(--amber); }
 
     .ma-toggle:first-of-type { margin-left: 10px; }
-    .ma-toggle.ma50.on { background: rgba(124, 156, 255, 0.14);
-                         border-color: rgba(124, 156, 255, 0.4); color: var(--accent); }
-    .ma-toggle.ma200.on { background: rgba(251, 191, 36, 0.14);
-                          border-color: rgba(251, 191, 36, 0.4); color: var(--amber); }
+    .ma-toggle.ma50.on { background: color-mix(in srgb, var(--accent) 14%, transparent);
+                         border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+    .ma-toggle.ma200.on { background: color-mix(in srgb, var(--amber) 14%, transparent);
+                          border-color: color-mix(in srgb, var(--amber) 40%, transparent); color: var(--amber); }
 
     /* price axis, in the right gutter */
     #chart .yaxis { position: absolute; top: 0; right: 0; bottom: 18px; width: 52px;
@@ -364,7 +366,7 @@
     /* crosshair */
     #chart .xhair {
       position: absolute; top: 0; bottom: 18px; width: 0; pointer-events: none;
-      border-left: 1px dashed rgba(255, 255, 255, 0.45);
+      border-left: 1px dashed color-mix(in srgb, var(--wash) 45%, transparent);
     }
     #chart .xdot {
       position: absolute; width: 7px; height: 7px; border-radius: 50%;
@@ -414,7 +416,7 @@
        this", and the share counts either side of it are not comparable. The
        whole fortnight is tinted rather than a line drawn, because it is the
        period that is untrustworthy, not an instant. */
-    #sintStrip .srug i.split { background: rgba(251, 191, 36, 0.16); }
+    #sintStrip .srug i.split { background: color-mix(in srgb, var(--amber) 16%, transparent); }
     #sintStrip .srugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
                            line-height: 1.5; }
     /* The fundamental strip, FIRST of the three layers under the plot (the
@@ -433,7 +435,7 @@
                                stroke-linejoin: round; vector-effect: non-scaling-stroke; }
     /* Drawn only where the DATA spans zero, which for a net-income line is the
        reading itself. A reference, so it takes no signal colour. */
-    #fundStrip .frug line.fz { stroke: rgba(255, 255, 255, 0.32); stroke-width: 1;
+    #fundStrip .frug line.fz { stroke: color-mix(in srgb, var(--wash) 32%, transparent); stroke-width: 1;
                                stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
     #fundStrip .frug i { position: absolute; top: 0; height: 100%; display: block; }
     #fundStrip .frugnote { color: var(--faint); font-size: 10.5px; margin: 3px 0 0;
@@ -472,12 +474,12 @@
        strip lines up with the plot and the crosshair. */
     #trendStrip { margin: 8px 52px 0 0; }
     .tstrip { position: relative; height: 11px; border-radius: 4px; overflow: hidden;
-      background: rgba(255, 255, 255, 0.04); }
+      background: color-mix(in srgb, var(--wash) 4%, transparent); }
     .tstrip i { position: absolute; top: 0; bottom: 0; }
     .ts-breakdown { background: var(--red); }
     .ts-downtrend { background: color-mix(in srgb, var(--red) 55%, var(--surface)); }
     .ts-below-200d { background: color-mix(in srgb, var(--red) 26%, var(--surface)); }
-    .ts-near-200d { background: rgba(255, 255, 255, 0.10); }
+    .ts-near-200d { background: color-mix(in srgb, var(--wash) 10%, transparent); }
     .ts-above-200d { background: color-mix(in srgb, var(--green) 30%, var(--surface)); }
     .ts-strong-uptrend { background: var(--green); }
     .tlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px;
@@ -525,43 +527,43 @@
     /* The index overlays. Dashed and thinner than the price, because they are
        context: on a 1Y view the eye should still find the stock first. */
     #chart .ov.bm-ln { stroke-width: 1.1; stroke-dasharray: 3 3; opacity: 0.8; }
-    #chart .ov.bm-spy { stroke: #94a3b8; }
-    #chart .ov.bm-qqq { stroke: #f0abfc; }
-    #chart .ov.bm-iwm { stroke: #22d3ee; }
-    #chart .ov.bm-dia { stroke: #fb923c; }
+    #chart .ov.bm-spy { stroke: var(--steel); }
+    #chart .ov.bm-qqq { stroke: var(--orchid); }
+    #chart .ov.bm-iwm { stroke: var(--cyan); }
+    #chart .ov.bm-dia { stroke: var(--orange); }
     #chart .cap.ma i.bm { height: 0; border-top: 2px dashed currentColor; border-radius: 0;
                           background: none; width: 12px; }
-    #chart .cap.ma i.bm.bm-spy { color: #94a3b8; }
-    #chart .cap.ma i.bm.bm-qqq { color: #f0abfc; }
-    #chart .cap.ma i.bm.bm-iwm { color: #22d3ee; }
-    #chart .cap.ma i.bm.bm-dia { color: #fb923c; }
+    #chart .cap.ma i.bm.bm-spy { color: var(--steel); }
+    #chart .cap.ma i.bm.bm-qqq { color: var(--orchid); }
+    #chart .cap.ma i.bm.bm-iwm { color: var(--cyan); }
+    #chart .cap.ma i.bm.bm-dia { color: var(--orange); }
     /* The chosen comparison stock. Its own colour, because it is not one of the
        four indices and should not read as one. */
-    #chart .ov.bm-cmp { stroke: #a3e635; }
-    #chart .cap.ma i.bm.bm-cmp { color: #a3e635; }
+    #chart .ov.bm-cmp { stroke: var(--lime); }
+    #chart .cap.ma i.bm.bm-cmp { color: var(--lime); }
     .bm-toggle:first-of-type { margin-left: 10px; }
     .bm-toggle.on { color: var(--text); }
-    .bm-toggle.bm-spy.on { background: rgba(148, 163, 184, 0.20); }
-    .bm-toggle.bm-qqq.on { background: rgba(240, 171, 252, 0.16); }
-    .bm-toggle.bm-iwm.on { background: rgba(34, 211, 238, 0.16); }
-    .bm-toggle.bm-dia.on { background: rgba(251, 146, 60, 0.16); }
+    .bm-toggle.bm-spy.on { background: color-mix(in srgb, var(--steel) 20%, transparent); }
+    .bm-toggle.bm-qqq.on { background: color-mix(in srgb, var(--orchid) 16%, transparent); }
+    .bm-toggle.bm-iwm.on { background: color-mix(in srgb, var(--cyan) 16%, transparent); }
+    .bm-toggle.bm-dia.on { background: color-mix(in srgb, var(--orange) 16%, transparent); }
     /* The compare picker sits with the overlay toggles and is styled as one, so
        the row reads as a single family of "what else is on this chart". */
     select.cmp-pick { appearance: none; -webkit-appearance: none; margin-left: 6px;
       padding: 4px 22px 4px 9px; border-radius: 8px; cursor: pointer;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--muted); font: 500 11px var(--sans); max-width: 190px;
       background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 7px center; }
-    select.cmp-pick.on { color: #a3e635; border-color: rgba(163, 230, 53, 0.4);
-      background-color: rgba(163, 230, 53, 0.12); }
+    select.cmp-pick.on { color: var(--lime); border-color: color-mix(in srgb, var(--lime) 40%, transparent);
+      background-color: color-mix(in srgb, var(--lime) 12%, transparent); }
     select.cmp-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .th-toggle.on { background: rgba(233, 236, 242, 0.12); color: var(--text);
+    .th-toggle.on { background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--text);
       border-color: var(--hair-2); }
 
     #chart .readout {
       position: absolute; left: 9px; top: 8px; padding: 5px 10px; border-radius: 8px;
-      background: rgba(13, 16, 23, 0.92); border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--surface-2) 92%, transparent); border: 1px solid var(--hair);
       font-family: var(--mono); font-size: 12.5px; white-space: nowrap;
       pointer-events: none; display: flex; gap: 7px; align-items: baseline;
     }
@@ -655,8 +657,8 @@
        without this a horizontal line and a vertical one draw at different
        weights. */
     #around svg * { vector-effect: non-scaling-stroke; }
-    #around .qline { fill: rgba(124,156,255,.13); stroke: none; }
-    #around .one { fill: none; stroke: rgba(255,255,255,.13); stroke-width: 1; }
+    #around .qline { fill: color-mix(in srgb, var(--accent) 13%, transparent); stroke: none; }
+    #around .one { fill: none; stroke: color-mix(in srgb, var(--wash) 13%, transparent); stroke-width: 1; }
     #around .med { fill: none; stroke: var(--accent); stroke-width: 2.25; }
     #around .zero { stroke: var(--hair-2); stroke-width: 1; }
     #around .evt { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
@@ -683,7 +685,7 @@
     #months .mbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 12px; }
     #months .seg { display: inline-flex; gap: 6px; }
     #months .seg .rng.on { color: var(--text); border-color: var(--hair-2);
-                           background: rgba(255, 255, 255, 0.075); }
+                           background: color-mix(in srgb, var(--wash) 7.5%, transparent); }
     #months .mkey { margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
                     font-size: 11px; color: var(--faint); font-family: var(--mono); }
     #months .mkey i { width: 14px; height: 10px; border-radius: 2px; display: block; }
@@ -704,7 +706,7 @@
        only, so the figure stays readable on every cell. */
     #months tbody td.up { background: color-mix(in srgb, var(--green) var(--a), transparent); }
     #months tbody td.dn { background: color-mix(in srgb, var(--red) var(--a), transparent); }
-    #months tbody td.flat { background: rgba(255, 255, 255, 0.04); }
+    #months tbody td.flat { background: color-mix(in srgb, var(--wash) 4%, transparent); }
     #months tbody td.na { background: transparent; }
     #months tbody td.part { outline: 1px dotted var(--muted); outline-offset: -1px; }
     #months .yr { width: 62px; }
@@ -716,7 +718,7 @@
        Bars and a line, drawn by PerfChart at its true pixel size. Scoped to
        #perf throughout. The three series colours are identities, never
        green and red: those mean up and down on every chart on this page. */
-    #perf { --pc-rev: #7c9cff; --pc-ni: #22d3ee; --pc-pm: #fb923c; }
+    #perf { --pc-rev: var(--accent); --pc-ni: var(--cyan); --pc-pm: var(--orange); }
     #perf .summary { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.6; }
     #perf .summary b { color: var(--text); font-weight: 600; }
     #perf .pchart { overflow: hidden; }
@@ -750,7 +752,7 @@
     #ptrend .pbar { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 10px; }
     #ptrend .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
     #ptrend .seg .rng.on { color: var(--text); border-color: var(--hair-2);
-                           background: rgba(255, 255, 255, 0.075); }
+                           background: color-mix(in srgb, var(--wash) 7.5%, transparent); }
     #ptrend .pchart { overflow: hidden; }
     #ptrend .pt-svg { display: block; max-width: 100%; }
     #ptrend .pt-grid { stroke: var(--hair); stroke-width: 1; }
@@ -802,7 +804,7 @@
     #earn .dzero { position: absolute; left: 0; right: 0; height: 0;
                    border-top: 1px dashed var(--hair-2); }
     #earn .dq { flex: 1 1 0; min-width: 0; position: relative; display: block; }
-    #earn .dq:hover { background: rgba(255, 255, 255, 0.035); }
+    #earn .dq:hover { background: color-mix(in srgb, var(--wash) 3.5%, transparent); }
     #earn .dq.hit { color: var(--green); }
     #earn .dq.miss { color: var(--red); }
     #earn .dq.none { color: var(--faint); }
@@ -821,7 +823,7 @@
                      font-family: var(--mono); }
     #earn table { width: 100%; border-collapse: collapse; }
     #earn th, #earn td { text-align: right; padding: 6px 0 6px 14px; font-size: 12.5px;
-                         border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+                         border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); white-space: nowrap; }
     #earn th { color: var(--faint); font-weight: 500; font-size: 10.5px;
                text-transform: uppercase; letter-spacing: 0.1em; }
     #earn td { font-family: var(--mono); color: var(--text); }
@@ -850,7 +852,7 @@
     #peers .ptab { overflow-x: auto; }
     #peers table { width: 100%; border-collapse: collapse; }
     #peers th, #peers td { text-align: right; padding: 7px 0 7px 14px; font-size: 12.5px;
-                           border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+                           border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); white-space: nowrap; }
     #peers th { color: var(--faint); font-weight: 500; font-size: 10.5px;
                 text-transform: uppercase; letter-spacing: 0.1em; }
     #peers td { font-family: var(--mono); color: var(--text); }
@@ -872,7 +874,7 @@
        "notice this", the accent is a link), and "this is the stock you are
        looking at" is not a reading about the data. Same treatment as a
        hovered row, held on. */
-    #peers tr.me td { background: rgba(255, 255, 255, 0.05); }
+    #peers tr.me td { background: color-mix(in srgb, var(--wash) 5%, transparent); }
     #peers tr.me td:first-child { border-top-left-radius: 9px; border-bottom-left-radius: 9px; }
     #peers tr.me td:last-child { border-top-right-radius: 9px; border-bottom-right-radius: 9px; }
     /* The same box as `.namelink`, because it stands in the same place: a
@@ -932,7 +934,7 @@
     #sec .stab { overflow-x: auto; }
     #sec table { width: 100%; border-collapse: collapse; }
     #sec th, #sec td { text-align: right; padding: 7px 0 7px 14px; font-size: 12.5px;
-                       border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+                       border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); white-space: nowrap; }
     #sec th { color: var(--faint); font-weight: 500; font-size: 10.5px;
               text-transform: uppercase; letter-spacing: 0.1em; }
     #sec td { font-family: var(--mono); color: var(--text); }
@@ -942,8 +944,8 @@
     /* A value this app COMPUTED rather than read off a filing — a quarter
        that was never filed as one. Dotted underline, the language a footnote
        already has here, plus the reason on the cell's title. */
-    #sec td.dv { border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-                 text-decoration: underline dotted rgba(251, 191, 36, 0.55);
+    #sec td.dv { border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent);
+                 text-decoration: underline dotted color-mix(in srgb, var(--amber) 55%, transparent);
                  text-underline-offset: 3px; cursor: help; }
     #sec td.per { font-family: var(--sans); font-weight: 600; }
     #sec td.per .fp { color: var(--faint); font-weight: 400; margin-left: 7px;
@@ -974,7 +976,7 @@
     /* What the rules concluded — the last step in the chain. */
     #sec .fundv { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
                   margin: 14px 0 0; padding: 11px 13px; border: 1px solid var(--hair);
-                  border-radius: var(--r-core); background: rgba(255, 255, 255, 0.02); }
+                  border-radius: var(--r-core); background: color-mix(in srgb, var(--wash) 2%, transparent); }
     #sec .fundv .k { color: var(--faint); font-size: 10.5px; text-transform: uppercase;
                      letter-spacing: 0.1em; }
     #sec .fundv .v { font-family: var(--mono); font-size: 16px; color: var(--text); }
@@ -988,7 +990,7 @@
     /* The summed year, set apart from the quarters so it reads as a total
        rather than as another period — and it is what the comparison above
        is computed from, so it has to be findable. */
-    #sec tr.ttmrow td { background: rgba(255, 255, 255, 0.035);
+    #sec tr.ttmrow td { background: color-mix(in srgb, var(--wash) 3.5%, transparent);
                         border-bottom: 1px solid var(--hair-2); }
     #sec tr.ttmrow td.per { font-family: var(--sans); font-weight: 600; }
     #sec tr.ttmrow td.per .fp { margin-left: 6px; }
@@ -1002,7 +1004,7 @@
     #ins .stab { overflow-x: auto; }
     #ins table { width: 100%; border-collapse: collapse; }
     #ins th, #ins td { text-align: right; padding: 7px 0 7px 14px; font-size: 12.5px;
-                       border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+                       border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); white-space: nowrap; }
     #ins th { color: var(--faint); font-weight: 500; font-size: 10.5px;
               text-transform: uppercase; letter-spacing: 0.1em; }
     #ins td { font-family: var(--mono); color: var(--text); }
@@ -1132,6 +1134,8 @@
     #seg .sg-ms { flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; gap: 1px; border-radius: 4px; overflow: hidden; }
     #seg .sg-ms span { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
       font: 600 10px var(--mono); color: rgba(8, 12, 24, 0.8); }
+    /* On light the segments take darker shades, so their figures turn white. */
+    :root[data-theme="light"] #seg .sg-ms span { color: rgba(255, 255, 255, 0.92); }
     #seg .sg-ms.sg-gap { border: 1px dashed var(--faint); align-items: center; justify-content: center; flex-direction: column; }
     #seg .sg-ms.sg-gap span { font: 500 9px var(--mono); color: var(--faint); text-align: center; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 3px; }
     #seg .sg-mx { text-align: center; font: 500 10px var(--mono); color: var(--faint); padding-top: 5px; white-space: nowrap; }
@@ -4666,7 +4670,7 @@
           // whose officers sell every week is not sixty rows to read.
           const D = j.digest;
           if (D && D.windows && D.windows.some((w) => w.trades)) {
-            const A = 'var(--accent)', B = '#fb923c';
+            const A = 'var(--accent)', B = 'var(--orange)';
             const mny = (v) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + secMoney(Math.abs(v)));
             const lab = { 90: '3 months', 180: '6 months', 365: '12 months' };
             const ppl = (s) => (s.trades ? mny(s.value) + ' <span class="q" style="color:var(--faint)">\u00b7 ' + s.people + (s.people === 1 ? ' person' : ' people') + ', ' + s.trades + (s.trades === 1 ? ' trade' : ' trades') + '</span>' : '\u2014');
@@ -4816,7 +4820,7 @@
           const sg = (v) => (v == null ? '' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '\u2212') + Math.abs(v).toFixed(1) + '%');
           const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>' + (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
-          const A = 'var(--accent)', B = '#fb923c';
+          const A = 'var(--accent)', B = 'var(--orange)';
           const strike = (v) => '$' + (Number(v) % 1 ? Number(v).toFixed(2) : Number(v).toFixed(0));
           document.getElementById('optWin').textContent = 'at the close of ' + day(P.asOf);
           const exps = (P.expiries || []).filter((e) => e.call + e.put > 0);
@@ -4857,7 +4861,7 @@
           const sh = (v) => (v == null ? '\u2014' : v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : (v / 1e6).toFixed(0) + 'M');
           const day = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const fig = (k, v, x) => '<div class="fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span>' + (x ? '<span class="x">' + esc(x) + '</span>' : '') + '</div>';
-          const A = 'var(--accent)', B = '#a78bfa';
+          const A = 'var(--accent)', B = 'var(--accent-2)';
           document.getElementById('capretWin').textContent = (R.basis === 'TTM' ? '12 months to ' : 'fiscal year to ') + day(L.end);
           const years = R.years.filter((y) => y.buybacks != null || y.dividends != null || y.stockComp != null || y.fcf != null);
           const top = Math.max(1e-9, ...years.map((y) => y.returned || 0));
@@ -4970,7 +4974,7 @@
               // How the proportions moved: one column a period, each a whole.
               // A part is not a price, so no green or red.
               + (K.mix && K.mix.ends && K.mix.ends.length >= 3 ? (() => {
-                const M = K.mix, INK = ['#7c9cff', '#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#8b93a7'];
+                const M = K.mix, INK = ['var(--accent)', 'var(--orange)', 'var(--accent-2)', 'var(--sky)', 'var(--pink)', 'var(--slate)', 'var(--dim)'];
                 const ink = (p, i) => (p.other ? INK[INK.length - 1] : INK[i % (INK.length - 1)]);
                 const sh = (v) => (v > 0 && v < 0.5 ? '<1' : String(Math.round(v))) + '%';
                 const last = M.ends.length - 1;

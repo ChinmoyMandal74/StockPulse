@@ -80,6 +80,16 @@ select option, select optgroup {
   --pink: #f472b6;
   --orange: #fb923c;
   --teal: #5eead4;
+  /* The rest of the series palette, for charts that draw several lines or
+     bands at once (peer charts, revenue mix). */
+  --lime: #a3e635;
+  --orchid: #f0abfc;
+  --steel: #94a3b8;
+  --sky: #38bdf8;
+  --slate: #cbd5e1;
+  --dim: #8b93a7;
+  --indigo: #818cf8;
+  --peach: #fdba74;
   --ok-ink: #b6ded0;           /* text on the green refresh bar */
   --warn-ink: #ddd0a8;         /* text on the amber as-of bar */
 
@@ -138,6 +148,14 @@ select option, select optgroup {
   --pink: #b81b66;
   --orange: #b44902;
   --teal: #0f766e;
+  --lime: #4a770e;
+  --orchid: #a21caf;
+  --steel: #475569;
+  --sky: #0369a1;
+  --slate: #64748b;
+  --dim: #5b6675;
+  --indigo: #4338ca;
+  --peach: #c2410c;
   --ok-ink: #0f5c3d;
   --warn-ink: #6b4304;
 }
