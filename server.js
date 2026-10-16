@@ -11357,6 +11357,20 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   res.json({ prefs, siteHidden, tile, ranges, alerts, announcement });
 }));
 
+// The theme alone (2026-10-15), for a page that does not own the rest of the
+// prefs row: the phone. PUT /api/prefs replaces the whole row and only the
+// screener may call it, so this reads the row, changes one field and writes
+// it back. A guest has no row and keeps the choice in the browser.
+app.post('/api/prefs/theme', requireAuth, route(async (req, res) => {
+  if (await isGuest(req)) return res.status(403).json({ error: 'Not on the guest preview.' });
+  const theme = req.body && req.body.theme;
+  if (!['dark', 'light', 'auto'].includes(theme)) return res.status(400).json({ error: 'Choose dark, light or auto.' });
+  const key = await prefsKey(req);
+  const prefs = (await store.readPrefs(key)) || {};
+  await store.writePrefs(key, { ...prefs, theme });
+  res.json({ ok: true, theme });
+}));
+
 app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (await isGuest(req)) return res.status(403).json({ error: 'Not on the guest preview.' });
   const incoming = req.body && req.body.prefs;

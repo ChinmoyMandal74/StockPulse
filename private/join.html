@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Finish setting up — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <meta name="robots" content="noindex" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,16 +20,16 @@
       display: flex; align-items: center; justify-content: center; padding: 24px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%); }
+        radial-gradient(46vw 40vw at 12% 4%, color-mix(in srgb, var(--green) 13%, transparent), transparent 62%),
+        radial-gradient(50vw 44vw at 92% 96%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 64%); }
     .grain { z-index: 60; }
     .bezel { position: relative; z-index: 1; width: 100%; max-width: 420px; border-radius: 26px;
-             box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95); }
+             box-shadow: 0 40px 90px -40px color-mix(in srgb, var(--shade) 95%, transparent); }
     .bezel > .core {
       overflow: visible;
       background:
-        radial-gradient(90% 60% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
-        radial-gradient(80% 60% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
+        radial-gradient(90% 60% at 0% 0%, color-mix(in srgb, var(--green) 7%, transparent), transparent 60%),
+        radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
         var(--surface);
       border-radius: 20px; box-shadow: var(--inset); padding: 30px 28px;
     }
@@ -43,10 +44,10 @@
     .jfield label { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: 0.1em;
                     text-transform: uppercase; color: var(--faint); }
     .jfield input {
-      width: 100%; padding: 11px 13px; border-radius: 12px; background: rgba(255, 255, 255, 0.04);
+      width: 100%; padding: 11px 13px; border-radius: 12px; background: color-mix(in srgb, var(--wash) 4%, transparent);
       border: 1px solid var(--hair); color: var(--text); font-family: var(--sans); font-size: 14px;
     }
-    .jfield input:focus { outline: none; border-color: var(--hair-2); background: rgba(255, 255, 255, 0.06); }
+    .jfield input:focus { outline: none; border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
     .jbtn {
       width: 100%; padding: 12px; border-radius: 12px; cursor: pointer; border: 0;
       background: var(--text); color: #05070c; font-family: var(--sans); font-size: 14px; font-weight: 600;
@@ -76,11 +77,11 @@
       appearance: none; -webkit-appearance: none;
       width: 16px; height: 16px; flex: 0 0 auto; margin: 1px 0 0; padding: 0;
       border: 1px solid var(--hair-2); border-radius: 5px;
-      background: rgba(255, 255, 255, 0.03); box-shadow: var(--inset);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); box-shadow: var(--inset);
       cursor: pointer;
       transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
     }
-    .chk input[type="checkbox"]:hover { background: rgba(255, 255, 255, 0.075); }
+    .chk input[type="checkbox"]:hover { background: color-mix(in srgb, var(--wash) 7.5%, transparent); }
     .chk input[type="checkbox"]:checked {
       border-color: var(--accent);
       background: var(--accent) center/11px no-repeat
@@ -92,6 +93,9 @@
     .chk .chkfine { display: block; margin-top: 3px; font-size: 11px;
                     color: var(--faint); }
     .chk a { color: var(--text); }
+      /* light theme: what the tokens cannot reach */
+    :root[data-theme="light"] .brand .w2 { background-image: linear-gradient(100deg, #5d6474 10%, #9aa4b6 92%); }
+    :root[data-theme="light"] .jbtn { color: #ffffff; }
   </style>
 </head>
 <body>

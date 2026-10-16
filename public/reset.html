@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Reset password — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <meta name="robots" content="noindex" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,13 +17,13 @@
            padding: 24px; overflow-x: clip; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%); }
+        radial-gradient(46vw 40vw at 12% 4%, color-mix(in srgb, var(--green) 13%, transparent), transparent 62%),
+        radial-gradient(50vw 44vw at 92% 96%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 64%); }
 
     .bezel { position: relative; z-index: 1; width: 100%; max-width: 420px;
-             box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95); }
+             box-shadow: 0 40px 90px -40px color-mix(in srgb, var(--shade) 95%, transparent); }
     .bezel > .core { padding: 30px 28px 26px;
-      background: radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,0.035), transparent 70%), var(--surface); }
+      background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--wash) 3.5%, transparent), transparent 70%), var(--surface); }
 
     h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.03em; }
     .lede { margin: 8px 0 20px; font-size: 12.5px; }
@@ -31,11 +32,11 @@
             letter-spacing: 0.14em; color: var(--faint); margin: 0 0 6px; }
     input {
       width: 100%; padding: 11px 13px; border-radius: 12px; margin-bottom: 14px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
       color: var(--text); font-size: 13.5px; outline: none;
       transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
     }
-    input:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    input:focus { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .btn { width: 100%; justify-content: center; margin-top: 4px; }
 
     .msg { margin-top: 14px; font-size: 12.5px; line-height: 1.6; }

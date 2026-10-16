@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Help — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -15,16 +16,16 @@
     .page { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 0 24px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 8% 0%, rgba(124, 156, 255, 0.10), transparent 62%),
-        radial-gradient(50vw 44vw at 96% 6%, rgba(167, 139, 250, 0.10), transparent 64%); }
+        radial-gradient(46vw 40vw at 8% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 44vw at 96% 6%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 64%); }
 
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
                    justify-content: center; padding: 10px 20px 0; pointer-events: none; }
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
-      padding: 6px 7px 6px 16px; border-radius: 999px; background: rgba(9, 11, 15, 0.72);
+      padding: 6px 7px 6px 16px; border-radius: 999px; background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
     }
 
     h1 { margin: 22px 0 0; font-size: clamp(26px, 3.4vw, 34px); font-weight: 600;
@@ -40,7 +41,7 @@
       text-decoration: none; color: var(--muted); transition: background 0.3s var(--ease),
                                                               color 0.3s var(--ease);
     }
-    .toc a:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .toc a:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); }
     .toc .no { font-family: var(--mono); font-size: 10.5px; color: var(--faint);
                min-width: 15px; flex: none; }
     .toc .tt { font-size: 13px; font-weight: 500; color: var(--text); }
@@ -64,7 +65,7 @@
     li b { color: var(--text); font-weight: 600; }
     .kbd { font-family: var(--mono); font-size: 11px; color: var(--text);
            border: 1px solid var(--hair-2); border-radius: 5px; padding: 1px 6px;
-           background: rgba(255, 255, 255, 0.05); }
+           background: color-mix(in srgb, var(--wash) 5%, transparent); }
     .top { display: inline-block; margin-top: 14px; font-size: 11.5px; color: var(--faint);
            text-decoration: none; }
     .top:hover { color: var(--muted); }
@@ -81,7 +82,7 @@
     strong { color: var(--text); font-weight: 600; }
     em { color: var(--text); font-style: normal; }
     code { font-family: var(--mono); font-size: 12px; color: var(--text);
-           background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+           background: color-mix(in srgb, var(--wash) 5%, transparent); padding: 1px 5px; border-radius: 5px; }
 
     /* the factor list */
     .factor { padding: 14px 0; border-top: 1px solid var(--hair); }
@@ -95,7 +96,7 @@
 
     table { width: 100%; border-collapse: collapse; margin: 10px 0 2px; }
     th, td { text-align: left; padding: 7px 10px 7px 0; font-size: 12.5px;
-             border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+             border-bottom: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); }
     th { color: var(--faint); font-weight: 500; font-size: 10.5px;
          text-transform: uppercase; letter-spacing: 0.12em; }
     td { color: var(--muted); }
@@ -103,7 +104,7 @@
     td:first-child { color: var(--text); }
 
     .note { margin-top: 14px; padding: 11px 14px; border-radius: 11px;
-            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.022);
+            border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 2.2%, transparent);
             font-size: 12.5px; line-height: 1.6; color: var(--faint); }
     .note b { color: var(--muted); font-weight: 500; }
   </style>
@@ -790,6 +791,13 @@
       <p>Which column groups you have collapsed, which view you were last in and how you had the table
         set up are stored <em>against your account rather than your browser</em> — so they follow you to another
         machine, and are not shared with whoever else uses this computer.</p>
+
+      <h3>Light or dark</h3>
+      <p><b>Appearance</b>, in the menu at the top right of the screener (and the half-filled circle at the top of
+        the phone page), switches the site between <b>Dark</b>, <b>Light</b> and <b>Auto</b>, which follows your
+        computer or phone. The choice is saved to your account, so it follows you between machines. Colours keep
+        their meaning in both: green and red are a price going up or down, amber says a figure is old. The admin
+        pages stay dark, and the post cards in Visuals keep their own ground, which you choose on the card.</p>
 
       <h3>Your own themes</h3>
       <p>You can keep <strong>personal themes</strong> — your own named lists built from the

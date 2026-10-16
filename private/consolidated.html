@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Consolidated — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -61,7 +62,7 @@
     #tbl td { text-align: right; font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
     #tbl td:first-child, #tbl td.cs-sec { text-align: left; font-family: var(--sans); }
     #tbl td.cs-sec { color: var(--muted); }
-    #tbl tbody tr:hover td { background: rgba(255,255,255,.022); }
+    #tbl tbody tr:hover td { background: color-mix(in srgb, var(--wash) 2.2%, transparent); }
     /* The benchmark rows are a different KIND of row, not a better one. */
     #tbl tr.cs-bench td { color: var(--muted); border-top: 1px solid var(--hair-2); }
     #tbl tr.cs-bench td:first-child { color: var(--accent); }

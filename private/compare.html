@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Compare — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -81,7 +82,7 @@
     .rng { font: 500 11px var(--sans); padding: 4px 9px; border-radius: 8px; cursor: pointer;
            border: 1px solid var(--hair); background: transparent; color: var(--muted); }
     .rng:hover { color: var(--text); border-color: var(--hair-2); }
-    .rng.on { color: var(--text); border-color: var(--accent); background: rgba(124, 156, 255, 0.12); }
+    .rng.on { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
     /* Scoped under .cmp so the two fixed line colours cannot reach any other
        chart on the site. A and B are the accent pair on purpose and NEVER
        green/red: those mean up and down here, and two lines coloured by their
@@ -151,7 +152,7 @@
        measures getBoundingClientRect(). */
     .cbars { flex: 1 1 auto; min-width: 60px; max-width: 150px; display: block; position: relative; }
     .cbars .cb { display: block; position: relative; height: 4px; border-radius: 2px;
-                 background: rgba(255, 255, 255, 0.055); margin: 2px 0; overflow: hidden; }
+                 background: color-mix(in srgb, var(--wash) 5.5%, transparent); margin: 2px 0; overflow: hidden; }
     .cbars .cb i { display: block; position: absolute; top: 0; bottom: 0; border-radius: 2px;
                    min-width: 1px; }
     .cbars .cb i.a { background: var(--accent); }
@@ -167,7 +168,7 @@
     table.led tr.grp th { position: sticky; top: 33px; z-index: 1; background: var(--surface-2);
                           text-align: left; font: 600 10px var(--sans); text-transform: uppercase;
                           letter-spacing: 0.16em; padding: 7px 14px; }
-    table.led tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    table.led tr:hover td { background: color-mix(in srgb, var(--wash) 2.2%, transparent); }
     .na { color: var(--faint); }
 
     .empty { margin: 40px 0; padding: 26px; text-align: center; color: var(--muted); font-size: 13px; }

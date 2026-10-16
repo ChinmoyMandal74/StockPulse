@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Paper positions — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -18,8 +19,8 @@
     .page > * { min-width: 0; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 4% -8%, rgba(52, 211, 153, 0.07), transparent 62%),
-        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--green) 7%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
     .bezel { border-radius: 26px; }
     .bezel > .core { border-radius: 20px; }
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
@@ -27,22 +28,22 @@
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px;
       width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
-      background: rgba(9, 11, 15, 0.72);
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
     }
     .mark .glyph {
       width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
       align-items: center; justify-content: center; color: var(--green);
-      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
-      border: 1px solid rgba(52, 211, 153, 0.24);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
     }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
-      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
       font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
     }
-    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #7c9cff; box-shadow: 0 0 8px #7c9cff; }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
     h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
     .lede { margin: 16px 0 0; max-width: 72ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
     .masthead { margin: 34px 0 22px; }
@@ -64,7 +65,7 @@
     .pp-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .pp-form input, .pp-form select, .pp-close-row input {
       padding: 9px 12px; border-radius: 10px; border: 1px solid var(--hair);
-      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 13px var(--sans); min-width: 0; }
+      background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 13px var(--sans); min-width: 0; }
     .pp-form #sym { flex: 1 1 260px; }
     .pp-form #amt { flex: 0 1 150px; }
     .pp-form input:focus-visible, .pp-form select:focus-visible, .pp-close-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -81,7 +82,7 @@
     table.pp { width: 100%; border-collapse: collapse; font-size: 12.5px; }
     table.pp th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 500; text-transform: uppercase;
       letter-spacing: 0.14em; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
-    table.pp td { padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); white-space: nowrap;
+    table.pp td { padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); white-space: nowrap;
       font-variant-numeric: tabular-nums; }
     table.pp td.num, table.pp th.num { text-align: right; }
     table.pp td.mono { font-family: var(--mono); }
@@ -90,7 +91,7 @@
     .pp-name { color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
     .pp-asof { display: block; font-size: 11px; color: var(--faint); }
     .pp-stale { color: var(--amber); }
-    .pp-close-row td { background: rgba(255, 255, 255, 0.03); }
+    .pp-close-row td { background: color-mix(in srgb, var(--wash) 3%, transparent); }
     .pp-close-row .pp-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; white-space: normal; }
     .pp-close-row input { width: 140px; }
     .pp-empty { padding: 14px 2px; font-size: 13px; color: var(--muted); }
@@ -151,7 +152,7 @@
     <section class="bezel pp-card" id="chartCard" hidden><div class="core">
       <div class="pp-h"><h2>Account value</h2><span class="pp-note">At each close since the account started, beside the S&amp;P 500 (SPY) bought with the same $100,000 on the same day. Price only: no dividends.</span></div>
       <div id="chart"></div>
-      <div class="pp-legend"><span><i style="background:#7c9cff"></i>This account</span><span><i style="background:#9aa3b2"></i>S&amp;P 500 (SPY)</span></div>
+      <div class="pp-legend"><span><i style="background:var(--accent)"></i>This account</span><span><i style="background:var(--muted)"></i>S&amp;P 500 (SPY)</span></div>
     </div></section>
 
     <section class="bezel pp-card"><div class="core">
@@ -229,10 +230,10 @@
         if (hi - lo < 1) { lo -= 1; hi += 1; }
         const X = (i) => P + i / (h.length - 1) * (W - 2 * P);
         const Y = (v) => P + (1 - (v - lo) / (hi - lo)) * (H - 2 * P);
-        const line = (k, c, w) => `<polyline fill="none" stroke="${c}" stroke-width="${w}" vector-effect="non-scaling-stroke" points="${h.map((x, i) => X(i).toFixed(1) + ',' + Y(x[k]).toFixed(1)).join(' ')}"/>`;
-        const start = `<line x1="0" x2="${W}" y1="${Y(d.startCash).toFixed(1)}" y2="${Y(d.startCash).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+        const line = (k, c, w) => `<polyline fill="none" style="stroke:${c}" stroke-width="${w}" vector-effect="non-scaling-stroke" points="${h.map((x, i) => X(i).toFixed(1) + ',' + Y(x[k]).toFixed(1)).join(' ')}"/>`;
+        const start = `<line x1="0" x2="${W}" y1="${Y(d.startCash).toFixed(1)}" y2="${Y(d.startCash).toFixed(1)}" style="stroke:color-mix(in srgb, var(--wash) 12%, transparent)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
         $('chart').innerHTML = `<svg class="pp-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Account value against the S&amp;P 500">`
-          + start + line('bench', '#9aa3b2', 1.5) + line('value', '#7c9cff', 2) + '</svg>';
+          + start + line('bench', 'var(--muted)', 1.5) + line('value', 'var(--accent)', 2) + '</svg>';
       } else $('chartCard').hidden = true;
 
       // Open positions.

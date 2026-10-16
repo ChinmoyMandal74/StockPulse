@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Pivot view — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -88,7 +89,7 @@
                   font-variant-numeric: tabular-nums; color: var(--text); }
     table.pv td.zero { color: var(--faint); }
     table.pv .tot, table.pv tfoot td, table.pv tfoot th {
-      font-weight: 600; background-color: rgba(255, 255, 255, 0.028); }
+      font-weight: 600; background-color: color-mix(in srgb, var(--wash) 2.8%, transparent); }
     table.pv tfoot th, table.pv tfoot td { position: sticky; bottom: 0; z-index: 2;
                                            background: var(--surface-2); border-top: 1px solid var(--hair-2); }
     table.pv tfoot th { left: 0; z-index: 3; }
@@ -96,7 +97,7 @@
        background-image, which is where a cell's heat tint lives, so hovering
        a row would wipe the shading off every cell in it. */
     table.pv tbody tr:hover th, table.pv tbody tr:hover td {
-      background-color: rgba(255, 255, 255, 0.022); }
+      background-color: color-mix(in srgb, var(--wash) 2.2%, transparent); }
     /* A cell with stocks in it is a button; an empty one is not. */
     table.pv td.cell { cursor: pointer; }
     /* THE HEAT IS A background-IMAGE, and that is what makes it compose.
@@ -127,7 +128,7 @@
        child table to the grid above it — so it is marked harder than the old
        inline drill needed to be: a filled ground AND an accent outline drawn
        inside the cell, since a border would move every column by a pixel. */
-    table.pv td.cell.sel { color: var(--accent); background-color: rgba(124, 156, 255, 0.16);
+    table.pv td.cell.sel { color: var(--accent); background-color: color-mix(in srgb, var(--accent) 16%, transparent);
                            box-shadow: inset 0 0 0 1px var(--accent); }
     table.pv td.blankdim, table.pv th.blankdim { color: var(--faint); font-style: italic; }
     /* A drillable total. Marked the same way a lit cell is, because it selects
@@ -145,7 +146,7 @@
        whatever opaque colour is already there, which is the same reasoning the
        heat shading records a few rules above. */
     table.pv td.drill.sel { color: var(--accent);
-      background-image: linear-gradient(rgba(124, 156, 255, 0.16), rgba(124, 156, 255, 0.16));
+      background-image: linear-gradient(color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 16%, transparent));
       box-shadow: inset 0 0 0 1px var(--accent); }
 
     /* The ladder dot. Small, and it sits in front of the word rather than
@@ -178,10 +179,10 @@
        glance rather than inferred from the order. The tint runs the width of
        the row, which is what groups the numbers with their heading. */
     table.pv tbody tr.kid th, table.pv tbody tr.kid td {
-      background-color: rgba(124, 156, 255, 0.05); }
+      background-color: color-mix(in srgb, var(--accent) 5%, transparent); }
     table.pv tbody tr.kid th { padding-left: 30px; color: var(--muted); font-weight: 400; }
     table.pv tbody tr.kid:hover th, table.pv tbody tr.kid:hover td {
-      background-color: rgba(124, 156, 255, 0.085); }
+      background-color: color-mix(in srgb, var(--accent) 8.5%, transparent); }
 
     /* The one control on this grid that nothing announces until the pointer
        has already arrived (owner, 2026-09-27). The cell tooltips say "click to
@@ -234,7 +235,7 @@
     table.ch td { text-align: right; font-family: var(--mono);
                   font-variant-numeric: tabular-nums; color: var(--text); }
     table.ch td.l { text-align: left; font-family: var(--sans); }
-    table.ch tbody tr:hover td { background: rgba(255, 255, 255, 0.022); }
+    table.ch tbody tr:hover td { background: color-mix(in srgb, var(--wash) 2.2%, transparent); }
     /* THE TICKER IS THE WAY OUT OF THIS TABLE, so it has to read as one before
        the pointer arrives. It was --text, byte-identical to the plain numeric
        cells beside it — a working link that nothing announced, which is the
@@ -260,6 +261,8 @@
       .pick select { min-width: 150px; }
       .gridwrap, body.picked .gridwrap, .detailwrap { max-height: none; }
     }
+      /* light theme: what the tokens cannot reach */
+    :root[data-theme="light"] table.ch .symlink:hover, :root[data-theme="light"] table.ch .symlink:focus-visible { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -385,8 +388,8 @@
     // `ADV_TINT` in cards.js paints verdicts with, so the two surfaces agree.
     // A word with no entry simply gets no dot — which is what keeps this from
     // silently mis-colouring a vocabulary that changes under it.
-    const GOOD = '#34d399', OK = '#a3e635', WARM = '#fbbf24',
-          COOL = '#9aa3b2', WARN = '#fb923c', BAD = '#fb7185';
+    const GOOD = 'var(--green)', OK = 'var(--lime)', WARM = 'var(--amber)',
+          COOL = 'var(--muted)', WARN = 'var(--orange)', BAD = 'var(--red)';
     const LADDER_TINT = {
       'Very Strong': GOOD, 'Strong': OK, 'Strong – Elevated Risk': WARM,
       'Neutral': COOL, 'Weak': WARN, 'Very Weak': BAD,

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -11,6 +11,7 @@
   <link rel="canonical" href="https://www.tickrlab.com/about" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -25,26 +26,26 @@
     .page { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 28px 0; }
     .aura {
       background:
-        radial-gradient(54vw 44vw at 6% -14%, rgba(52, 211, 153, 0.10), transparent 62%),
-        radial-gradient(48vw 40vw at 98% 0%, rgba(124, 156, 255, 0.10), transparent 64%); }
+        radial-gradient(54vw 44vw at 6% -14%, color-mix(in srgb, var(--green) 10%, transparent), transparent 62%),
+        radial-gradient(48vw 40vw at 98% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 64%); }
 
     /* ---- nav ------------------------------------------------------------ */
     .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
                 padding: 16px 20px 0; pointer-events: none; }
     .nav { pointer-events: auto; display: flex; align-items: center; gap: 6px; width: min(1120px, 100%);
-           padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+           padding: 8px 10px 8px 18px; border-radius: 999px; background: color-mix(in srgb, var(--glass) 74%, transparent);
            backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
     .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto;
                  text-decoration: none; color: var(--text); font-weight: 600; letter-spacing: -0.02em; }
     .nav .mark span.l { color: var(--muted); font-weight: 400; }
     .nav .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center;
                   justify-content: center; color: var(--green);
-                  background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
-                  border: 1px solid rgba(52, 211, 153, 0.24); }
+                  background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+                  border: 1px solid color-mix(in srgb, var(--green) 24%, transparent); }
     .nav a.link { color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;
                   padding: 8px 12px; border-radius: 10px; }
-    .nav a.link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+    .nav a.link:hover { color: var(--text); background: color-mix(in srgb, var(--wash) 5%, transparent); }
     .nav a.link[aria-current] { color: var(--text); }
 
     /* ---- masthead ------------------------------------------------------- */
@@ -63,7 +64,7 @@
     /* ---- headline figures ----------------------------------------------- */
     .band { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 52px 0 0;
             border-top: 1px solid var(--hair-2); border-bottom: 1px solid var(--hair-2); }
-    .band > div { padding: 24px 26px 24px 0; border-right: 1px solid rgba(255, 255, 255, 0.055); }
+    .band > div { padding: 24px 26px 24px 0; border-right: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .band > div:last-child { border-right: 0; }
     .band > div:not(:first-child) { padding-left: 26px; }
     .fig { font-family: var(--mono); font-size: clamp(26px, 3.4vw, 40px); font-weight: 500;
@@ -75,7 +76,7 @@
 
     /* ---- numbered sections ---------------------------------------------- */
     section { display: grid; grid-template-columns: 172px 1fr; gap: 0 56px;
-              padding: 58px 0; border-top: 1px solid rgba(255, 255, 255, 0.055); }
+              padding: 58px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .rail { position: sticky; top: 92px; align-self: start; }
     .rail .no { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; color: var(--green); }
     .rail .nm { margin-top: 9px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.17em;
@@ -89,7 +90,7 @@
 
     /* ---- capability grid ------------------------------------------------- */
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin-top: 34px;
-            background: rgba(255, 255, 255, 0.055); border: 1px solid rgba(255, 255, 255, 0.055); }
+            background: color-mix(in srgb, var(--wash) 5.5%, transparent); border: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .grid > div { background: var(--void); padding: 22px 24px; }
     .grid h3 { margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
     .grid .n { font-family: var(--mono); font-size: 10.5px; color: var(--green); letter-spacing: 0.1em; }
@@ -98,12 +99,12 @@
     /* ---- the derivation chain -------------------------------------------- */
     .chain { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 32px; }
     .chain > div { border: 1px solid var(--hair); border-radius: 12px; padding: 16px 15px;
-                   background: rgba(255, 255, 255, 0.018); }
+                   background: color-mix(in srgb, var(--wash) 1.8%, transparent); }
     .chain .s { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
                 text-transform: uppercase; color: var(--faint); }
     .chain .q { margin-top: 10px; font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.35; }
     .chain .e { margin-top: 7px; font-size: 12px; color: var(--muted); line-height: 1.5; }
-    .chain > div.last { border-color: rgba(52, 211, 153, 0.30); background: rgba(52, 211, 153, 0.055); }
+    .chain > div.last { border-color: color-mix(in srgb, var(--green) 30%, transparent); background: color-mix(in srgb, var(--green) 5.5%, transparent); }
     .chain > div.last .q { color: var(--green); }
 
     /* ---- exhibits --------------------------------------------------------- */
@@ -125,7 +126,7 @@
     table.exh-t col.c-stocks { width: 92px; }
     table.exh-t col.c-depth { width: 132px; }
     table.exh-t col.c-reach { width: 38%; }
-    table.exh-t td { padding: 14px 12px 14px 0; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    table.exh-t td { padding: 14px 12px 14px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
                      font-size: 13.5px; vertical-align: top; }
     table.exh-t td.k { color: var(--text); font-weight: 500; white-space: nowrap; }
     table.exh-t td.k small { display: block; font-weight: 400; font-size: 12px; color: var(--faint);
@@ -136,26 +137,26 @@
     .exh-ft { margin-top: 14px; font-size: 12px; line-height: 1.6; color: var(--faint); max-width: 74ch; }
 
     /* ---- limits ----------------------------------------------------------- */
-    .limits { margin-top: 30px; border-left: 2px solid rgba(251, 191, 36, 0.45); padding-left: 22px; }
-    .limits > div { padding: 15px 0; border-top: 1px solid rgba(255, 255, 255, 0.055); }
+    .limits { margin-top: 30px; border-left: 2px solid color-mix(in srgb, var(--amber) 45%, transparent); padding-left: 22px; }
+    .limits > div { padding: 15px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .limits > div:first-child { border-top: 0; padding-top: 0; }
     .limits h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: var(--amber); }
     .limits p { margin: 7px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--muted); max-width: 70ch; }
 
     /* ---- pull quote ------------------------------------------------------- */
-    .pull { margin-top: 34px; padding: 28px 32px; border: 1px solid rgba(52, 211, 153, 0.22);
-            border-radius: 16px; background: rgba(52, 211, 153, 0.045); }
+    .pull { margin-top: 34px; padding: 28px 32px; border: 1px solid color-mix(in srgb, var(--green) 22%, transparent);
+            border-radius: 16px; background: color-mix(in srgb, var(--green) 4.5%, transparent); }
     .pull p { margin: 0; max-width: 56ch; font-size: clamp(16px, 2vw, 20px); line-height: 1.5;
               letter-spacing: -0.02em; color: var(--text); font-weight: 300; }
 
     /* ---- close ------------------------------------------------------------ */
-    .close { padding: 62px 0 70px; border-top: 1px solid rgba(255, 255, 255, 0.055); }
+    .close { padding: 62px 0 70px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .close h2 { max-width: 24ch; }
     .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
     .cta .btn { padding: 12px 20px; font-size: 14px; }
     .cta .btn-primary { background: var(--green); color: #04150e; border-color: transparent; font-weight: 600; }
     .cta .btn-primary:hover { filter: brightness(1.08); }
-    footer { padding: 26px 0 44px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    footer { padding: 26px 0 44px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
              display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center;
              font-size: 12px; color: var(--faint); }
     footer a { color: var(--muted); text-decoration: none; }
@@ -169,7 +170,7 @@
     @media (max-width: 980px) {
       .band { grid-template-columns: repeat(2, 1fr); }
       .band > div:nth-child(2) { border-right: 0; }
-      .band > div:nth-child(-n+2) { border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+      .band > div:nth-child(-n+2) { border-bottom: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
       .chain { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 860px) {
@@ -187,7 +188,7 @@
       table.exh-t col { width: auto; }
       table.exh-t, table.exh-t tbody, table.exh-t tr, table.exh-t td { display: block; width: auto; }
       table.exh-t thead { display: none; }
-      table.exh-t tr { padding: 17px 0; border-top: 1px solid rgba(255, 255, 255, 0.055); }
+      table.exh-t tr { padding: 17px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
       table.exh-t tr:first-child { border-top: 0; padding-top: 6px; }
       table.exh-t td { border-top: 0; padding: 0; text-align: left !important; }
       table.exh-t td.k { margin-bottom: 10px; }
@@ -200,11 +201,13 @@
 
     @media (max-width: 560px) {
       .band { grid-template-columns: 1fr; }
-      .band > div { border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.055); padding-left: 0 !important; }
+      .band > div { border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); padding-left: 0 !important; }
       .band > div:last-child { border-bottom: 0; }
       .chain { grid-template-columns: 1fr; }
       table.exh-t td.k small { max-width: none; }
     }
+      /* light theme: what the tokens cannot reach */
+    :root[data-theme="light"] .cta .btn-primary { color: #ffffff; }
   </style>
 </head>
 <body>

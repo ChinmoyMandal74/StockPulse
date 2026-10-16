@@ -11813,6 +11813,15 @@
        which is the one thing that follows the chosen size. */
     .s-art { width: 1080px; position: relative; overflow: hidden;
              --card-ground: #050505; background: var(--card-ground);
+             /* THE CARD OWNS ITS COLOURS (2026-10-15, the site's light theme).
+                The dark card used to borrow these ten from the page; on a page
+                switched to light it would have drawn dark ink on its black
+                ground, in the studio and in the exported picture. They are the
+                page's dark values, so nothing changes on a dark page, and the
+                card themes (th-light, th-navy, th-sky) still set their own. */
+             --text: #e9ecf2; --muted: #9aa3b2; --faint: #7d8797;
+             --hair: rgba(255, 255, 255, 0.07); --hair-2: rgba(255, 255, 255, 0.13);
+             --accent: #7c9cff; --green: #34d399; --red: #fb7185; --amber: #fbbf24; --bg: #050505;
              transform-origin: top left; font-family: var(--sans); color: var(--text); }
     .s-art .s-aura { position: absolute; inset: 0; pointer-events: none;
       background:

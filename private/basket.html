@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Theme — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -16,8 +17,8 @@
     .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 6% -8%, rgba(52, 211, 153, 0.12), transparent 62%),
-        radial-gradient(50vw 42vw at 96% 4%, rgba(124, 156, 255, 0.11), transparent 64%); }
+        radial-gradient(46vw 40vw at 6% -8%, color-mix(in srgb, var(--green) 12%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 96% 4%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 64%); }
     .bezel { border-radius: 26px; }
     .bezel > .core { border-radius: 20px; }
 
@@ -25,10 +26,10 @@
                    justify-content: center; padding: 16px 20px 0; pointer-events: none; }
     .island { pointer-events: auto; display: flex; align-items: center; gap: 8px;
       width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
-      background: rgba(9, 11, 15, 0.72);
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
       border: 1px solid var(--hair);
-      box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+      box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
 
     .head { display: flex; align-items: baseline; gap: 12px 16px; flex-wrap: wrap; margin: 26px 0 4px; }
     h1 { margin: 0; font-size: clamp(26px, 3.4vw, 36px); font-weight: 600; letter-spacing: -0.035em; }
@@ -38,7 +39,7 @@
              margin: 0; padding: 2px 8px 2px 2px; border: 0; background: none; border-radius: 10px;
              font: inherit; color: inherit; letter-spacing: inherit;
              transition: background 0.35s var(--ease); }
-    #pfBtn:hover, #pfBtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.05); }
+    #pfBtn:hover, #pfBtn[aria-expanded="true"] { background: color-mix(in srgb, var(--wash) 5%, transparent); }
     #pfBtn .caret { width: 16px; height: 16px; color: var(--faint); flex: none;
                     stroke: currentColor; fill: none; stroke-width: 1.6;
                     stroke-linecap: round; stroke-linejoin: round;
@@ -47,20 +48,20 @@
     #pfMenu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 46; display: none;
               min-width: 250px; max-height: 55vh; overflow-y: auto; padding: 6px;
               border-radius: 16px; border: 1px solid var(--hair-2);
-              background: rgba(9, 11, 15, 0.9);
+              background: color-mix(in srgb, var(--glass) 90%, transparent);
               backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-              box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+              box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
     #pfMenu.open { display: block; }
     #pfMenu a { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
                 border-radius: 10px; font: 500 13px var(--sans); color: var(--muted);
                 text-decoration: none; }
-    #pfMenu a:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
-    #pfMenu a.on { color: var(--text); background: rgba(52, 211, 153, 0.08); }
+    #pfMenu a:hover { background: color-mix(in srgb, var(--wash) 6%, transparent); color: var(--text); }
+    #pfMenu a.on { color: var(--text); background: color-mix(in srgb, var(--green) 8%, transparent); }
     #pfMenu a .n { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
     #pfMenu .sep { height: 1px; margin: 5px 8px; background: var(--hair); }
     #pfMenu .pdot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
     .chip { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px;
-            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
             font-size: 11.5px; color: var(--muted); }
     .lede { margin: 8px 0 20px; font-size: 12.5px; }
 
@@ -78,8 +79,8 @@
     /* the curve */
     .ranges { display: flex; gap: 6px; margin: 10px 0 4px; }
     .rng { padding: 5px 13px; border-radius: 999px; cursor: pointer; font: 500 11.5px var(--sans);
-           border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03); color: var(--muted); }
-    .rng.on { color: var(--text); border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.08); }
+           border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent); color: var(--muted); }
+    .rng.on { color: var(--text); border-color: color-mix(in srgb, var(--green) 45%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
     #chartBox { position: relative; margin-top: 8px; }
     #chartBox svg { display: block; width: 100%; height: auto; }
     .lgd { display: flex; gap: 18px; margin-top: 10px; font: 500 12px var(--sans); color: var(--muted); }
@@ -98,7 +99,7 @@
     /* returns table */
     table { width: 100%; border-collapse: collapse; margin-top: 6px; }
     th, td { text-align: right; padding: 9px 12px; font-size: 13px;
-             border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
+             border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); }
     th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint);
          font-weight: 500; }
     th:first-child, td:first-child { text-align: left; }
@@ -111,10 +112,10 @@
     .comp { display: grid; grid-template-columns: minmax(90px, 1.5fr) 3fr 42px 62px;
             align-items: center; gap: 12px; padding: 5px 8px; border-radius: 9px;
             font: 500 12.5px var(--sans); color: var(--muted); text-decoration: none; }
-    .comp:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .comp:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); }
     .comp .cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .comp .cb { display: block; height: 8px; border-radius: 999px;
-                background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+                background: color-mix(in srgb, var(--wash) 5%, transparent); overflow: hidden; }
     .comp .cb > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
     .comp .cc, .comp .cm { font-family: var(--mono); font-size: 11.5px; text-align: right; color: var(--faint); }
 
@@ -126,7 +127,7 @@
     .ldr { display: grid; grid-template-columns: 58px 1fr 62px; align-items: baseline; gap: 10px;
            padding: 5px 8px; border-radius: 9px; text-decoration: none;
            font: 500 12.5px var(--sans); color: var(--muted); }
-    .ldr:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+    .ldr:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); }
     .ldr .ls { font-family: var(--mono); font-size: 12px; color: var(--text); }
     .ldr .ln { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ldr .lv { font-family: var(--mono); text-align: right; }
@@ -143,7 +144,7 @@
     /* ---- how much they move together ---------------------------------- */
     .cnums { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
     .cn { border: 1px solid var(--hair); border-radius: 12px; padding: 12px 14px;
-          background: rgba(255, 255, 255, 0.02); min-width: 0; }
+          background: color-mix(in srgb, var(--wash) 2%, transparent); min-width: 0; }
     .cn .k { font-size: 10px; font-weight: 500; text-transform: uppercase;
              letter-spacing: 0.18em; color: var(--faint); }
     .cn .v { margin: 7px 0 0; font-family: var(--mono); font-size: 25px; font-weight: 600;
@@ -162,7 +163,7 @@
     table.cmx td { font-family: var(--mono); font-size: 11px; text-align: center;
                    padding: 6px 7px; border-radius: 5px; color: var(--text);
                    font-variant-numeric: tabular-nums; white-space: nowrap; }
-    table.cmx td.cdiag { color: var(--faint); background: rgba(255, 255, 255, 0.015); }
+    table.cmx td.cdiag { color: var(--faint); background: color-mix(in srgb, var(--wash) 1.5%, transparent); }
     table.cmx td[data-neg] { box-shadow: inset 0 0 0 1px var(--hair-2); color: var(--muted); }
     .rowtbl { min-width: 620px; }
     .rowtbl td.nm { font-family: var(--sans); color: var(--muted); text-align: left;
@@ -188,7 +189,7 @@
 
     /* the group picker's search box and its section headings */
     .pffind { width: calc(100% - 12px); margin: 2px 6px 6px; padding: 7px 10px; border-radius: 10px;
-              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+              border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
               font: 500 12.5px var(--sans); color: var(--text); }
     .pffind:focus { outline: none; border-color: var(--hair-2); }
     #pfMenu .mh { padding: 6px 12px 2px; font: 500 10px var(--sans); text-transform: uppercase;
@@ -199,7 +200,7 @@
     .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
     .chipS { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px;
              border-radius: 999px; cursor: pointer; border: 1px solid var(--hair);
-             background: rgba(255, 255, 255, 0.03); font: 500 11.5px var(--mono);
+             background: color-mix(in srgb, var(--wash) 3%, transparent); font: 500 11.5px var(--mono);
              color: var(--muted); transition: opacity 0.3s var(--ease); }
     .chipS .cd { width: 8px; height: 8px; border-radius: 50%; background: var(--c);
                  box-sizing: border-box; }
@@ -208,14 +209,14 @@
     .chipS.off .cd { background: transparent; border: 1.5px solid var(--c); }
     .chipS:hover { border-color: var(--hair-2); color: var(--text); }
     .chipU { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px;
-             cursor: pointer; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+             cursor: pointer; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
              font: 500 11px var(--sans); color: var(--faint); }
     .chipU:hover { color: var(--text); border-color: var(--hair-2); }
     .stkToggle { padding: 5px 13px; border-radius: 999px; cursor: pointer; margin-left: auto;
                  font: 500 11.5px var(--sans); border: 1px solid var(--hair);
-                 background: rgba(255, 255, 255, 0.03); color: var(--muted); }
-    .stkToggle.on { color: var(--text); border-color: rgba(167, 139, 250, 0.45);
-                    background: rgba(167, 139, 250, 0.09); }
+                 background: color-mix(in srgb, var(--wash) 3%, transparent); color: var(--muted); }
+    .stkToggle.on { color: var(--text); border-color: color-mix(in srgb, var(--accent-2) 45%, transparent);
+                    background: color-mix(in srgb, var(--accent-2) 9%, transparent); }
 
     .empty, .error { padding: 32px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
@@ -295,17 +296,21 @@
       return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     };
 
-    const PALETTE = ['#22d3ee', '#a78bfa', '#fbbf24', '#fb923c', '#f472b6', '#a3e635',
-                     '#60a5fa', '#fb7185', '#2dd4bf', '#e879f9', '#facc15', '#94a3b8'];
+    // Tokens with today's colours as the fallback (2026-10-15, the light theme).
+    // Every one is drawn through a style, never an SVG attribute, which cannot
+    // read a token: so a theme switch recolours the chart with no redraw.
+    const PALETTE = ['var(--cyan, #22d3ee)', 'var(--accent-2, #a78bfa)', 'var(--amber, #fbbf24)', 'var(--orange, #fb923c)',
+                     'var(--pink, #f472b6)', 'var(--lime, #a3e635)', 'var(--blue, #60a5fa)', 'var(--red, #fb7185)',
+                     'var(--aqua, #2dd4bf)', 'var(--fuchsia, #e879f9)', 'var(--yellow, #facc15)', 'var(--steel, #94a3b8)'];
     const stockColor = (i) => PALETTE[i % PALETTE.length];
 
     // The benchmark lines, in draw order. Accent, orange and violet rather than
     // green and red: those two already mean up and down on every chart here,
     // and an index coloured by its own direction would be making a different
     // claim from the one the chart is for.
-    const BENCH_TINT = { SPY: '#7c9cff', QQQ: '#fb923c', DIA: '#a78bfa' };
+    const BENCH_TINT = { SPY: 'var(--accent, #7c9cff)', QQQ: 'var(--orange, #fb923c)', DIA: 'var(--accent-2, #a78bfa)' };
     const benchLines = () => ((curve && curve.bench) || [])
-      .map((b) => ({ ...b, color: BENCH_TINT[b.sym] || '#7d8797' }));
+      .map((b) => ({ ...b, color: BENCH_TINT[b.sym] || 'var(--faint, #7d8797)' }));
 
     // ---- the one chart: basket + benchmarks + every stock as a thin line ----
     function chartSvg(dates, a, marks, overlays) {
@@ -335,38 +340,38 @@
       let grid = '';
       for (let g = 0; g <= 4; g++) {
         const v = lo + (g / 4) * (hi - lo);
-        grid += `<line x1="${PL}" y1="${y(v)}" x2="${W - PR}" y2="${y(v)}" stroke="rgba(255,255,255,0.06)"/>` +
-          `<text x="${PL - 10}" y="${y(v) + 4}" text-anchor="end" font-size="13" fill="#7d8797" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
+        grid += `<line x1="${PL}" y1="${y(v)}" x2="${W - PR}" y2="${y(v)}" style="stroke:color-mix(in srgb, var(--wash) 6%, transparent)"/>` +
+          `<text x="${PL - 10}" y="${y(v) + 4}" text-anchor="end" font-size="13" style="fill:var(--faint)" font-family="Geist Mono, monospace">${v.toFixed(0)}%</text>`;
       }
-      if (lo < 0 && hi > 0) grid += `<line x1="${PL}" y1="${y(0)}" x2="${W - PR}" y2="${y(0)}" stroke="rgba(255,255,255,0.14)"/>`;
+      if (lo < 0 && hi > 0) grid += `<line x1="${PL}" y1="${y(0)}" x2="${W - PR}" y2="${y(0)}" style="stroke:color-mix(in srgb, var(--wash) 14%, transparent)"/>`;
       const d0 = dates[0] || '', d1 = dates[dates.length - 1] || '';
       const endTag = (S, color) => {
         let last = null;
         for (let i = S.length - 1; i >= 0 && last == null; i--) last = S[i];
         if (last == null) return '';
-        return `<text x="${W - PR}" y="${Math.max(14, Math.min(H - PB - 4, y(last) - 6))}" text-anchor="end" font-size="14" font-weight="600" fill="${color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
+        return `<text x="${W - PR}" y="${Math.max(14, Math.min(H - PB - 4, y(last) - 6))}" text-anchor="end" font-size="14" font-weight="600" style="fill:${color}" font-family="Geist Mono, monospace">${(last >= 0 ? '+' : '') + last.toFixed(1)}%</text>`;
       };
       const overlayPaths = O.map((o) =>
-        `<path data-line="${esc(o.sym)}" d="${path(o.S)}" fill="none" stroke="${o.color}" stroke-width="1.3" opacity="0.5"/>`).join('');
+        `<path data-line="${esc(o.sym)}" d="${path(o.S)}" fill="none" style="stroke:${o.color}" stroke-width="1.3" opacity="0.5"/>`).join('');
       return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="This group against the S&amp;P 500 and the Dow">` + grid +
         overlayPaths +
-        M.map((m) => `<path d="${path(m.S)}" fill="none" stroke="${m.color}" stroke-width="2" opacity="0.65"/>`).join('') +
-        `<path d="${path(A)}" fill="none" stroke="#34d399" stroke-width="2.6"/>` +
-        endTag(A, '#34d399') + M.map((m) => endTag(m.S, m.color)).join('') +
-        `<text x="${PL}" y="${H - 8}" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
-        `<text x="${W - PR}" y="${H - 8}" text-anchor="end" font-size="12" fill="#7d8797" font-family="Geist Mono, monospace">${esc(d1)}</text></svg>`;
+        M.map((m) => `<path d="${path(m.S)}" fill="none" style="stroke:${m.color}" stroke-width="2" opacity="0.65"/>`).join('') +
+        `<path d="${path(A)}" fill="none" style="stroke:var(--green)" stroke-width="2.6"/>` +
+        endTag(A, 'var(--green)') + M.map((m) => endTag(m.S, m.color)).join('') +
+        `<text x="${PL}" y="${H - 8}" font-size="12" style="fill:var(--faint)" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
+        `<text x="${W - PR}" y="${H - 8}" text-anchor="end" font-size="12" style="fill:var(--faint)" font-family="Geist Mono, monospace">${esc(d1)}</text></svg>`;
     }
 
-    const TREND_TINT = { 'Strong uptrend': '#34d399', 'Above 200D': '#a3e635', 'Below 200D': '#fbbf24',
-                         'Downtrend': '#fb923c', 'Breakdown': '#fb7185', 'No data': '#7d8797' };
+    const TREND_TINT = { 'Strong uptrend': 'var(--green)', 'Above 200D': 'var(--lime)', 'Below 200D': 'var(--amber)',
+                         'Downtrend': 'var(--orange)', 'Breakdown': 'var(--red)', 'No data': 'var(--faint)' };
     function stanceHtml() {
       const order = ActionRules.TREND_ORDER;
       const counts = order.map((t) => rows.filter((s) => s.actionTrend === t).length);
       const total = counts.reduce((x, y) => x + y, 0) || 1;
       const stack = order.map((t, i) => counts[i]
-        ? `<div style="width:${counts[i] / total * 100}%;background:${TREND_TINT[t] || '#7d8797'}"></div>` : '').join('');
+        ? `<div style="width:${counts[i] / total * 100}%;background:${TREND_TINT[t] || 'var(--faint)'}"></div>` : '').join('');
       const tags = order.map((t, i) => counts[i]
-        ? `<span style="color:${TREND_TINT[t] || '#7d8797'}">${esc(t)} <b>${counts[i]}</b></span>` : '').join('');
+        ? `<span style="color:${TREND_TINT[t] || 'var(--faint)'}">${esc(t)} <b>${counts[i]}</b></span>` : '').join('');
       const above = rows.filter((s) => s.vs200ma != null && s.vs200ma > 0).length;
       const advice = {};
       rows.forEach((s) => { if (s.action) advice[s.action] = (advice[s.action] || 0) + 1; });
@@ -695,7 +700,7 @@
           `${showStocks ? 'Hide' : 'Show'} the ${items.length} stocks</button>` : '') +
         '</div>' +
         `<div id="chartBox">${body}</div>` +
-        `<div class="lgd"><span style="--c:#34d399">This group</span>${benchLines()
+        `<div class="lgd"><span style="--c:var(--green)">This group</span>${benchLines()
           .map((b) => `<span style="--c:${b.color}">${esc(b.label)}</span>`).join('')}</div>` +
         chips +
         (cap ? `<p class="note" style="margin-top:10px">${cap}</p>` : '') +
@@ -817,7 +822,7 @@
     }
 
     const corrShade = (c) => (c == null || c <= 0 ? 'transparent'
-      : 'rgba(124, 156, 255, ' + (0.07 + Math.min(1, c) * 0.42).toFixed(3) + ')');
+      : 'color-mix(in srgb, var(--accent) ' + ((0.07 + Math.min(1, c) * 0.42) * 100).toFixed(1) + '%, transparent)');
     // THE SIGN COMES FROM THE ROUNDED VALUE, not the raw one. An exactly
     // orthogonal pair lands on -1e-17 and printed "−0.00" while being
     // marked as a diversifying cell -- a minus sign in front of a zero, and
@@ -943,11 +948,11 @@
         '<input id="pfFind" class="pffind" type="search" placeholder="Filter…" aria-label="Filter the list" />' +
         `<div class="mh">Themes</div>${themeRows}` +
         section('Sectors', listOf('sector').map(([n, k]) =>
-          dimRow('/sector/' + encodeURIComponent(n), n, SCOPE === 'sector' && VALUE === n, String(k), '#22d3ee')).join('')) +
+          dimRow('/sector/' + encodeURIComponent(n), n, SCOPE === 'sector' && VALUE === n, String(k), 'var(--cyan)')).join('')) +
         section('Size', sizeList.map(([n, k]) =>
-          dimRow('/size/' + encodeURIComponent(n), n, SCOPE === 'size' && VALUE === n, String(k), '#94a3b8')).join('')) +
+          dimRow('/size/' + encodeURIComponent(n), n, SCOPE === 'size' && VALUE === n, String(k), 'var(--steel)')).join('')) +
         section('Industries', listOf('industry').map(([n, k]) =>
-          dimRow('/industry/' + encodeURIComponent(n), n, SCOPE === 'industry' && VALUE === n, String(k), '#a78bfa')).join('')) +
+          dimRow('/industry/' + encodeURIComponent(n), n, SCOPE === 'industry' && VALUE === n, String(k), 'var(--accent-2)')).join('')) +
         '<div class="pfnone" hidden>Nothing matches.</div>';
       const kindWord = SCOPE === 'theme'
         ? (curve && curve.mine ? '· personal theme' : '· theme')

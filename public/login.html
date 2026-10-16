@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Sign in — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -15,17 +16,17 @@
       display: flex; align-items: center; justify-content: center; padding: 24px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 12% 4%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(50vw 44vw at 92% 96%, rgba(124, 156, 255, 0.13), transparent 64%); }
+        radial-gradient(46vw 40vw at 12% 4%, color-mix(in srgb, var(--green) 13%, transparent), transparent 62%),
+        radial-gradient(50vw 44vw at 92% 96%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 64%); }
     .grain { z-index: 60; }
 
     .bezel {
-      position: relative; z-index: 1; width: 100%; max-width: 420px; border-radius: 26px; box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.95); }
+      position: relative; z-index: 1; width: 100%; max-width: 420px; border-radius: 26px; box-shadow: 0 40px 90px -40px color-mix(in srgb, var(--shade) 95%, transparent); }
     .bezel > .core {
       overflow: visible;
       background:
-        radial-gradient(90% 60% at 0% 0%, rgba(52, 211, 153, 0.07), transparent 60%),
-        radial-gradient(80% 60% at 100% 100%, rgba(124, 156, 255, 0.07), transparent 62%),
+        radial-gradient(90% 60% at 0% 0%, color-mix(in srgb, var(--green) 7%, transparent), transparent 60%),
+        radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
         var(--surface);
       border-radius: 20px; box-shadow: var(--inset); padding: 30px 28px;
     }
@@ -41,7 +42,7 @@
     .lede { margin: 12px 0 0; }
 
     .tabs { display: flex; gap: 4px; margin: 22px 0 18px; padding: 4px;
-            border: 1px solid var(--hair); border-radius: 999px; background: rgba(255, 255, 255, 0.03); }
+            border: 1px solid var(--hair); border-radius: 999px; background: color-mix(in srgb, var(--wash) 3%, transparent); }
     .tab {
       flex: 1; padding: 8px 12px; border: 0; border-radius: 999px; cursor: pointer;
       background: none; color: var(--muted); font-family: var(--sans);
@@ -49,19 +50,19 @@
       transition: background 0.5s var(--ease), color 0.5s var(--ease);
     }
     .tab:hover { color: var(--text); }
-    .tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.085); color: #fff; box-shadow: var(--inset); }
+    .tab[aria-selected="true"] { background: color-mix(in srgb, var(--wash) 8.5%, transparent); color: var(--strong); box-shadow: var(--inset); }
 
     label { display: block; margin: 0 0 6px; font-size: 10px; font-weight: 500;
             text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
     .field { margin-bottom: 14px; }
     input {
       width: 100%; padding: 11px 14px; border-radius: 12px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
       color: var(--text); font-family: var(--sans); font-size: 13.5px;
       box-shadow: var(--inset); outline: none;
       transition: border-color 0.5s var(--ease), background 0.5s var(--ease);
     }
-    input:focus { border-color: var(--hair-2); background: rgba(255, 255, 255, 0.055); }
+    input:focus { border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 5.5%, transparent); }
     input::placeholder { color: var(--faint); }
     .hint { margin: 6px 0 0; font-size: 11px; color: var(--faint); }
 
@@ -89,11 +90,11 @@
       appearance: none; -webkit-appearance: none;
       width: 16px; height: 16px; flex: 0 0 auto; margin: 1px 0 0; padding: 0;
       border: 1px solid var(--hair-2); border-radius: 5px;
-      background: rgba(255, 255, 255, 0.03); box-shadow: var(--inset);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); box-shadow: var(--inset);
       cursor: pointer;
       transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
     }
-    .chk input[type="checkbox"]:hover { background: rgba(255, 255, 255, 0.075); }
+    .chk input[type="checkbox"]:hover { background: color-mix(in srgb, var(--wash) 7.5%, transparent); }
     .chk input[type="checkbox"]:checked {
       border-color: var(--accent);
       background: var(--accent) center/11px no-repeat
@@ -110,7 +111,7 @@
       width: 100%; justify-content: center; margin-top: 6px; padding: 12px 16px;
       border: 1px solid transparent;
       background: linear-gradient(180deg, #ffffff, #dee3ed); color: #07090d; font-size: 13.5px; font-weight: 600;
-      box-shadow: 0 14px 34px -14px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      box-shadow: 0 14px 34px -14px color-mix(in srgb, var(--wash) 30%, transparent), inset 0 1px 0 color-mix(in srgb, var(--wash) 90%, transparent);
       transition: transform 0.4s var(--ease), background 0.5s var(--ease); }
     .btn:hover { background: linear-gradient(180deg, #ffffff, #e9edf5); }
     .btn:active { transform: scale(0.985); }
@@ -139,7 +140,7 @@
     .gbtn {
       width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
       padding: 11px 14px; border-radius: 12px; cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.16); background: #fff; color: #1f1f1f;
+      border: 1px solid color-mix(in srgb, var(--wash) 16%, transparent); background: #fff; color: #1f1f1f;
       font-family: var(--sans); font-size: 14px; font-weight: 600;
       transition: opacity 0.4s var(--ease);
     }
@@ -157,6 +158,8 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
     }
+      /* light theme: what the tokens cannot reach */
+    :root[data-theme="light"] .brand .w2 { background-image: linear-gradient(100deg, #5d6474 10%, #9aa4b6 92%); }
   </style>
 </head>
 <body>

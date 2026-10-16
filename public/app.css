@@ -90,6 +90,13 @@ select option, select optgroup {
   --dim: #8b93a7;
   --indigo: #818cf8;
   --peach: #fdba74;
+  --blue: #60a5fa;
+  --aqua: #2dd4bf;
+  --fuchsia: #e879f9;
+  --yellow: #facc15;
+  --lilac: #c4b5fd;
+  --ice: #7dd3fc;
+  --rose: #f9a8d4;
   --ok-ink: #b6ded0;           /* text on the green refresh bar */
   --warn-ink: #ddd0a8;         /* text on the amber as-of bar */
 
@@ -156,6 +163,13 @@ select option, select optgroup {
   --dim: #5b6675;
   --indigo: #4338ca;
   --peach: #c2410c;
+  --blue: #1d4ed8;
+  --aqua: #0f766e;
+  --fuchsia: #a21caf;
+  --yellow: #a16207;
+  --lilac: #6d28d9;
+  --ice: #0369a1;
+  --rose: #be185d;
   --ok-ink: #0f5c3d;
   --warn-ink: #6b4304;
 }

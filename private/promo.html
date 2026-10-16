@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Visuals — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -19,7 +20,7 @@
     .studio { position: relative; z-index: 1; display: flex; height: 100dvh; }
 
     .panel { width: 320px; flex: none; padding: 18px; overflow-y: auto;
-             border-right: 1px solid var(--hair); background: rgba(9, 11, 15, 0.6); }
+             border-right: 1px solid var(--hair); background: color-mix(in srgb, var(--glass) 60%, transparent); }
     .panel h1 { margin: 4px 0 2px; font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
     .panel .sub { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin: 0 0 16px; }
     .panel label { display: block; font-size: 10px; font-weight: 500; text-transform: uppercase;
@@ -30,13 +31,13 @@
     .tplnote { margin: 6px 2px 0; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
     .sizes { display: flex; gap: 6px; }
     .sizes button { flex: 1; padding: 7px 0; border-radius: 10px; cursor: pointer;
-                    border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
                     color: var(--muted); font: 500 11px var(--sans); }
-    .sizes button.on { color: var(--text); border-color: rgba(124, 156, 255, 0.4);
-                       background: rgba(124, 156, 255, 0.08); }
+    .sizes button.on { color: var(--text); border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+                       background: color-mix(in srgb, var(--accent) 8%, transparent); }
     .panel input[type="text"], .panel textarea {
       width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 10px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--text); font: 400 12.5px var(--sans); resize: vertical; }
     .panel textarea { min-height: 84px; }
     /* Post to Instagram: the pictures waiting to go, in posting order. */
@@ -46,14 +47,14 @@
     .ig-tray:empty { display: none; }
     .ig-item { position: relative; width: 46px; }
     .ig-item img { display: block; width: 46px; border-radius: 5px; border: 1px solid var(--hair); }
-    .ig-item b { position: absolute; left: 3px; top: 2px; font: 600 9px var(--sans); color: #fff;
+    .ig-item b { position: absolute; left: 3px; top: 2px; font: 600 9px var(--sans); color: var(--strong);
                  text-shadow: 0 0 3px #000; }
     .ig-item button { position: absolute; right: -5px; top: -5px; width: 16px; height: 16px; padding: 0;
                       border-radius: 50%; border: 1px solid var(--hair); background: #1b2030;
                       color: var(--muted); font: 600 10px/1 var(--sans); cursor: pointer; }
     #igCaption { margin-top: 10px; min-height: 110px; }
-    .ig-ask { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px solid rgba(124, 156, 255, 0.4);
-              background: rgba(124, 156, 255, 0.08); font-size: 11.5px; color: var(--text); line-height: 1.5; }
+    .ig-ask { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+              background: color-mix(in srgb, var(--accent) 8%, transparent); font-size: 11.5px; color: var(--text); line-height: 1.5; }
     .ig-ask .row { display: flex; gap: 6px; margin-top: 8px; }
     .ig-ask .btn { margin-top: 0; }
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -65,7 +66,7 @@
     .panel select {
       width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none;
       padding: 9px 30px 9px 11px; border-radius: 10px; cursor: pointer;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--text); font: 500 12.5px var(--sans);
       background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 12px center;
@@ -77,7 +78,7 @@
     .panel .sp-wrap select { display: none; }
     .panel .sp-in {
       width: 100%; box-sizing: border-box; padding: 9px 30px 9px 11px; border-radius: 10px;
-      border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent);
       color: var(--text); font: 500 12.5px var(--sans); text-overflow: ellipsis;
       background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa3b2' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 12px center;
@@ -86,19 +87,19 @@
     .panel .sp-list {
       position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 264px; overflow-y: auto;
       border-radius: 10px; border: 1px solid var(--hair-2, var(--hair)); background: #0d1016;
-      box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.9);
+      box-shadow: 0 18px 44px -14px color-mix(in srgb, var(--shade) 90%, transparent);
     }
     .panel .sp-opt { display: flex; gap: 9px; align-items: baseline; padding: 7px 11px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
     .panel .sp-opt b { font: 600 12px var(--mono); color: var(--text); min-width: 52px; }
     .panel .sp-opt span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-    .panel .sp-opt.on, .panel .sp-opt:hover { background: rgba(124, 156, 255, 0.14); }
+    .panel .sp-opt.on, .panel .sp-opt:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
     .panel .sp-none { padding: 9px 11px; font-size: 12px; color: var(--faint); }
     .hint { font-size: 10.5px; color: var(--faint); line-height: 1.55; margin-top: 14px; }
     .freshline { margin: 10px 0 0; padding: 7px 10px; border-radius: 9px; font-size: 11px;
                  line-height: 1.5; border: 1px solid var(--hair); background: var(--surface);
                  color: var(--muted); }
     .freshline b { color: var(--text); font-weight: 600; }
-    .freshline.stale { border-color: rgba(251, 191, 36, 0.32); background: rgba(251, 191, 36, 0.08);
+    .freshline.stale { border-color: color-mix(in srgb, var(--amber) 32%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent);
                        color: var(--amber); }
     .freshline.stale b { color: var(--amber); }
     .postlist { display: grid; gap: 4px; margin-bottom: 8px; }
@@ -111,11 +112,11 @@
     /* Both actions read as buttons. The delete was a bare x beside the word
        Replace, which read as decoration rather than as the other choice. */
     .postlist .px { flex: none; padding: 4px 8px; border-radius: 7px; font-size: 11px;
-                    border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent);
                     color: var(--muted); }
     .postlist .px:hover { color: var(--text); border-color: var(--hair-2); }
-    .postlist .px.danger { color: var(--red); border-color: rgba(251, 113, 133, 0.28); }
-    .postlist .px.danger:hover { background: rgba(251, 113, 133, 0.12); }
+    .postlist .px.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 28%, transparent); }
+    .postlist .px.danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
     #postName { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 10px;
                 border: 1px solid var(--hair); background: var(--surface); color: var(--text);
                 font: 400 12px var(--sans); }
@@ -133,7 +134,7 @@
        remaining work of separating the card from the deck, stays. */
     .deck { flex: 1; display: grid; place-items: center; overflow: auto; padding: 28px;
             background: #10141c; }
-    #stage { box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9); }
+    #stage { box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--shade) 90%, transparent); }
 
     /* ---- the artboard -------------------------------------------------- */
     #stageWrap { flex: none; }
@@ -158,7 +159,7 @@
     #dotTip { position: fixed; z-index: 50; pointer-events: none; display: none;
       padding: 4px 9px; border-radius: 6px; font: 600 13px/1.3 Geist, sans-serif;
       color: var(--text); background: var(--surface-2, #1b1f27); border: 1px solid var(--border, #2a2f3a);
-      box-shadow: 0 4px 14px rgba(0,0,0,0.35); white-space: nowrap; }
+      box-shadow: 0 4px 14px color-mix(in srgb, var(--shade) 35%, transparent); white-space: nowrap; }
     /* A CARD OPENED BY A LINK (body.bare): no side bar, since the card has
        nothing to choose. A strip across the top carries the way back and,
        for the admin, the shape and the download. */
@@ -179,6 +180,10 @@
 
     /* every card style now lives in cards.js, beside the markup it dresses */
     .err { color: var(--red); padding: 40px; font-size: 14px; }
+      /* light theme: what the tokens cannot reach */
+    :root[data-theme="light"] .deck { background: var(--surface-2); }
+    :root[data-theme="light"] .panel .sp-list { background: var(--surface); }
+    :root[data-theme="light"] .ig-item button { background: var(--surface-2); }
   </style>
 </head>
 <body>

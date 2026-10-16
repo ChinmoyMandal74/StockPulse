@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -11,6 +11,7 @@
   <link rel="canonical" href="https://www.tickrlab.com/privacy" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -22,22 +23,22 @@
     body { min-height: 100dvh; overflow-x: clip; }
     .page { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 0 28px 0; }
     .aura { background:
-      radial-gradient(48vw 40vw at 4% -10%, rgba(124, 156, 255, 0.08), transparent 62%),
-      radial-gradient(44vw 38vw at 98% 2%, rgba(52, 211, 153, 0.07), transparent 64%); }
+      radial-gradient(48vw 40vw at 4% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 62%),
+      radial-gradient(44vw 38vw at 98% 2%, color-mix(in srgb, var(--green) 7%, transparent), transparent 64%); }
 
     .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
                 padding: 16px 20px 0; pointer-events: none; }
     .nav { pointer-events: auto; display: flex; align-items: center; gap: 6px; width: min(900px, 100%);
-           padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+           padding: 8px 10px 8px 18px; border-radius: 999px; background: color-mix(in srgb, var(--glass) 74%, transparent);
            backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+           border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
     .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto;
                  text-decoration: none; color: var(--text); font-weight: 600; letter-spacing: -0.02em; }
     .nav .mark span.l { color: var(--muted); font-weight: 400; }
     .nav .glyph { display: inline-flex; color: var(--green); }
     .nav .link { padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--muted);
                  text-decoration: none; }
-    .nav .link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+    .nav .link:hover { color: var(--text); background: color-mix(in srgb, var(--wash) 5%, transparent); }
 
     .mast { padding: 56px 0 26px; border-bottom: 1px solid var(--hair); }
     .mast .kick { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase;
@@ -48,7 +49,7 @@
     .mast .when { margin-top: 18px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
 
     .doc { padding: 10px 0 0; }
-    .doc section { padding: 34px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.055); }
+    .doc section { padding: 34px 0; border-bottom: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent); }
     .doc h2 { margin: 0 0 14px; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
               display: flex; gap: 12px; align-items: baseline; }
     .doc h2 .n { font-family: var(--mono); font-size: 12px; color: var(--green); font-weight: 500; }
@@ -61,23 +62,23 @@
     .doc ul { margin: 0 0 13px; padding-left: 20px; max-width: 74ch; }
     .doc li { font-size: 14.5px; line-height: 1.78; color: var(--muted); margin-bottom: 7px; }
     code { font-family: var(--mono); font-size: 0.92em; color: var(--text);
-           background: rgba(255, 255, 255, 0.05); padding: 1px 5px; border-radius: 5px; }
+           background: color-mix(in srgb, var(--wash) 5%, transparent); padding: 1px 5px; border-radius: 5px; }
 
     .lg-wrap { overflow-x: auto; margin: 0 0 14px; }
     table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 520px; }
     th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
          color: var(--faint); font-weight: 500; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--hair); }
-    td { padding: 10px 14px 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    td { padding: 10px 14px 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent);
          color: var(--muted); line-height: 1.6; vertical-align: top; }
     td:first-child { color: var(--text); white-space: nowrap; }
     td code { white-space: nowrap; }
 
-    .lg-note { border: 1px solid rgba(52, 211, 153, 0.32); border-radius: 12px; padding: 16px 18px;
-               background: rgba(52, 211, 153, 0.05); margin: 4px 0 16px; }
+    .lg-note { border: 1px solid color-mix(in srgb, var(--green) 32%, transparent); border-radius: 12px; padding: 16px 18px;
+               background: color-mix(in srgb, var(--green) 5%, transparent); margin: 4px 0 16px; }
     .lg-note p { color: var(--muted); margin-bottom: 0; }
     .lg-note p + p { margin-top: 10px; }
 
-    footer { padding: 28px 0 46px; border-top: 1px solid rgba(255, 255, 255, 0.055);
+    footer { padding: 28px 0 46px; border-top: 1px solid color-mix(in srgb, var(--wash) 5.5%, transparent);
              display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
              font-size: 12.5px; color: var(--faint); margin-top: 8px; }
     footer a { color: var(--muted); text-decoration: none; }

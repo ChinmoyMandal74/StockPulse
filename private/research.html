@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Research — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -17,8 +18,8 @@
     .page { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 4% -8%, rgba(34, 211, 238, 0.09), transparent 62%),
-        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--cyan) 9%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
     .bezel { border-radius: 26px; }
     .bezel > .core { border-radius: 20px; }
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
@@ -26,22 +27,22 @@
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px;
       width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
-      background: rgba(9, 11, 15, 0.72);
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
     }
     .mark .glyph {
       width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
       align-items: center; justify-content: center; color: var(--green);
-      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
-      border: 1px solid rgba(52, 211, 153, 0.24);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
     }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
-      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
       font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
     }
-    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 8px #22d3ee; }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
     h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
     .lede { margin: 16px 0 0; max-width: 70ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
     .masthead { margin: 34px 0 22px; }
@@ -52,7 +53,7 @@
     .rs-stats > *, .rs-bar > *, .page > * { min-width: 0; }
     .rs-stat { text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
     .rs-stat .core { padding: 16px 18px; transition: background .25s var(--ease); height: 100%; }
-    .rs-stat:hover .core { background: rgba(255, 255, 255, 0.035); }
+    .rs-stat:hover .core { background: color-mix(in srgb, var(--wash) 3.5%, transparent); }
     .rs-stat.on { outline: 1px solid var(--rs-c); outline-offset: -1px; border-radius: 26px; }
     .rs-val { margin-top: 8px; font-family: var(--mono); font-size: 30px; font-weight: 500;
               letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--rs-c); }
@@ -72,7 +73,7 @@
     .rs-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 4px 12px; }
     .rs-bar input, .rs-bar select {
       padding: 8px 12px; border-radius: 10px; border: 1px solid var(--hair);
-      background: rgba(255, 255, 255, 0.04); color: var(--text); font: 500 12.5px var(--sans); }
+      background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 12.5px var(--sans); }
     .rs-bar input { flex: 1 1 220px; min-width: 0; }
     .rs-bar input:focus-visible, .rs-bar select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .rs-count { margin-left: auto; font-size: 12px; color: var(--faint); }
@@ -88,9 +89,9 @@
     table.rs > thead th[data-k]:hover { color: var(--text); }
     table.rs > thead th.on { color: var(--accent); }
     table.rs > tbody > tr.rs-row { cursor: pointer; }
-    table.rs > tbody > tr.rs-row > td { padding: 14px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); vertical-align: top; }
-    table.rs > tbody > tr.rs-row:hover > td { background: rgba(255, 255, 255, 0.025); }
-    table.rs > tbody > tr.rs-row.open > td { background: rgba(255, 255, 255, 0.035); border-bottom-color: transparent; }
+    table.rs > tbody > tr.rs-row > td { padding: 14px 14px; border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); vertical-align: top; }
+    table.rs > tbody > tr.rs-row:hover > td { background: color-mix(in srgb, var(--wash) 2.5%, transparent); }
+    table.rs > tbody > tr.rs-row.open > td { background: color-mix(in srgb, var(--wash) 3.5%, transparent); border-bottom-color: transparent; }
     td.rs-n { font-family: var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
     td.rs-idea { min-width: 230px; width: 22%; }
     td.rs-txt { min-width: 190px; color: var(--muted); line-height: 1.5; }
@@ -106,10 +107,10 @@
     .rs-chev { display: inline-block; margin-left: 8px; color: var(--faint); transition: transform .3s var(--ease); }
     .rs-row.open .rs-chev { transform: rotate(90deg); }
     .rs-none { color: var(--faint); }
-    mark.rs-hit { background: rgba(251, 191, 36, 0.22); color: inherit; border-radius: 3px; padding: 0 1px; }
+    mark.rs-hit { background: color-mix(in srgb, var(--amber) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 
     /* ---- an opened entry -------------------------------------------------- */
-    tr.rs-detail > td { padding: 0 16px 24px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.045); background: rgba(255, 255, 255, 0.035); }
+    tr.rs-detail > td { padding: 0 16px 24px 16px; border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); background: color-mix(in srgb, var(--wash) 3.5%, transparent); }
     .rs-facts { display: flex; gap: 22px; flex-wrap: wrap; margin: 2px 0 14px 46px; }
     .rs-fact .k { display: block; margin-bottom: 4px; }
     .rs-fact span:last-child { font-size: 12.5px; color: var(--text); }
@@ -118,7 +119,7 @@
     .rs-body p, .rs-body ul, .rs-body ol { max-width: 92ch; }
     .rs-body p { margin: 0 0 12px; }
     .rs-body strong { color: var(--text); font-weight: 600; }
-    .rs-body code { font-family: var(--mono); font-size: 12px; color: var(--text); background: rgba(255, 255, 255, 0.06);
+    .rs-body code { font-family: var(--mono); font-size: 12px; color: var(--text); background: color-mix(in srgb, var(--wash) 6%, transparent);
                     padding: 1px 5px; border-radius: 5px; }
     .rs-body ul, .rs-body ol { margin: 0 0 12px; padding-left: 20px; }
     .rs-body li { margin: 0 0 6px; }
@@ -214,12 +215,12 @@
     // this site, so no verdict uses them: amber is "notice this", grey is
     // nothing, the others are plain hues.
     const VERDICT = {
-      'Weak lead': ['#22d3ee', 'a small effect that held in both periods'],
-      'One period only': ['#fbbf24', 'looked good in one period and not the other'],
-      'No edge': ['#9aa3b2', 'no difference worth the name'],
-      'Wrong way': ['#fb923c', 'pointed against the idea'],
-      'Used for display': ['#a78bfa', 'kept as a reading, not a forecast'],
-      'Not yet tested': ['#7c9cff', 'queued, with the data in hand'],
+      'Weak lead': ['var(--cyan)', 'a small effect that held in both periods'],
+      'One period only': ['var(--amber)', 'looked good in one period and not the other'],
+      'No edge': ['var(--muted)', 'no difference worth the name'],
+      'Wrong way': ['var(--orange)', 'pointed against the idea'],
+      'Used for display': ['var(--accent-2)', 'kept as a reading, not a forecast'],
+      'Not yet tested': ['var(--accent)', 'queued, with the data in hand'],
     };
     const vOrder = (v) => { const i = Object.keys(VERDICT).indexOf(v); return i < 0 ? 99 : i; };
 
@@ -268,7 +269,7 @@
       for (const e of data.entries) counts[e.verdict] = (counts[e.verdict] || 0) + 1;
       const names = Object.keys(VERDICT).concat(Object.keys(counts).filter((s) => !VERDICT[s]));
       $('stats').innerHTML = names.map((s) => {
-        const [c, sub] = VERDICT[s] || ['#9aa3b2', 'as written in the file'];
+        const [c, sub] = VERDICT[s] || ['var(--muted)', 'as written in the file'];
         return `<button class="bezel rs-stat${verdict === s ? ' on' : ''}" data-s="${we(s)}" style="--rs-c:${c}" aria-pressed="${verdict === s}">`
           + `<div class="core"><span class="k">${we(s)}</span><div class="rs-val">${counts[s] || 0}</div>`
           + `<div class="rs-sub">${we(sub)}</div></div></button>`;
@@ -289,7 +290,7 @@
         ? `<th class="${cls || ''}${sortKey === key ? ' on' : ''}" data-k="${key}">${label}${sortKey === key ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`
         : `<th class="${cls || ''}">${label}</th>`;
       const rows = list.map((e) => {
-        const c = (VERDICT[e.verdict] || ['#9aa3b2'])[0];
+        const c = (VERDICT[e.verdict] || ['var(--muted)'])[0];
         const isOpen = open.has(e.n);
         const tags = [e.family, e.horizon].filter(Boolean).map((t) => `<span class="rs-tag">${we(t)}</span>`).join('');
         return `<tr class="rs-row${isOpen ? ' open' : ''}" data-n="${e.n}" tabindex="0" role="button" aria-expanded="${isOpen}">`

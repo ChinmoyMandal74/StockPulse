@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
   <title>Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,28 +21,28 @@
     body { min-height: 100dvh; margin: 0; padding: 0 0 calc(64px + env(safe-area-inset-bottom));
            overflow-x: hidden; -webkit-text-size-adjust: 100%; }
     .aura { background:
-      radial-gradient(70vw 50vw at 10% -8%, rgba(52, 211, 153, 0.10), transparent 62%),
-      radial-gradient(70vw 50vw at 95% 2%, rgba(124, 156, 255, 0.10), transparent 64%); }
+      radial-gradient(70vw 50vw at 10% -8%, color-mix(in srgb, var(--green) 10%, transparent), transparent 62%),
+      radial-gradient(70vw 50vw at 95% 2%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 64%); }
     .wrap { position: relative; z-index: 1; padding: 0 14px; }
 
     /* ---- top bar ------------------------------------------------------- */
     .top { position: sticky; top: 0; z-index: 30; padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
-           background: rgba(5, 5, 5, 0.86); backdrop-filter: blur(18px);
-           border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+           background: color-mix(in srgb, var(--void) 86%, transparent); backdrop-filter: blur(18px);
+           border-bottom: 1px solid color-mix(in srgb, var(--wash) 7%, transparent); }
     .top-row { display: flex; align-items: center; gap: 10px; }
     .brand { font-family: var(--sans); font-weight: 600; letter-spacing: -0.02em; font-size: 15px; }
     .brand .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green);
                   margin-right: 7px; box-shadow: 0 0 8px var(--green); }
     .vbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
             padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hair);
-            background: rgba(255, 255, 255, 0.05); color: var(--text); font: 500 13px var(--sans); }
+            background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); font: 500 13px var(--sans); }
     .vbtn small { color: var(--faint); font-size: 11px; }
     .cbtn { margin-left: 8px; display: inline-flex; align-items: center; justify-content: center;
             min-height: 36px; min-width: 36px; padding: 0 9px; border-radius: 999px;
-            border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.05); color: var(--faint); }
+            border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--faint); }
     .cbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7;
                 stroke-linecap: round; stroke-linejoin: round; }
-    .cbtn.on { color: var(--green); border-color: rgba(52, 211, 153, 0.34); background: rgba(52, 211, 153, 0.10); }
+    .cbtn.on { color: var(--green); border-color: color-mix(in srgb, var(--green) 34%, transparent); background: color-mix(in srgb, var(--green) 10%, transparent); }
     .back { min-height: 36px; padding: 7px 12px 7px 8px; border-radius: 999px; border: 1px solid var(--hair);
             background: none; color: var(--muted); font: 500 13px var(--sans); }
     h1 { margin: 12px 0 2px; font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
@@ -53,7 +54,7 @@
             min-height: 60px; padding: 13px 15px; margin-bottom: 8px; border-radius: 15px;
             border: 1px solid var(--hair); background: var(--surface); color: inherit;
             text-align: left; font: inherit; }
-    .card:active { background: rgba(255, 255, 255, 0.06); }
+    .card:active { background: color-mix(in srgb, var(--wash) 6%, transparent); }
     .card .t { flex: 1; min-width: 0; }
     .card .nm { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
     .card .ds { margin-top: 3px; font-size: 12px; color: var(--faint); line-height: 1.4;
@@ -65,7 +66,7 @@
     .row { display: block; width: 100%; box-sizing: border-box; text-align: left; font: inherit; color: inherit;
            padding: 12px 14px; margin-bottom: 8px; border-radius: 15px;
            border: 1px solid var(--hair); background: var(--surface); }
-    .row:active { background: rgba(255, 255, 255, 0.06); }
+    .row:active { background: color-mix(in srgb, var(--wash) 6%, transparent); }
     .r-top { display: flex; align-items: baseline; gap: 10px; }
     .r-sym { font-family: var(--mono); font-size: 14px; font-weight: 600; }
     .r-nm { font-size: 12.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -90,7 +91,7 @@
     .ranges::-webkit-scrollbar { display: none; }
     .rg { flex: 1 0 auto; min-height: 32px; padding: 6px 12px; border-radius: 999px; border: 1px solid transparent;
           background: none; color: var(--faint); font: 500 12.5px var(--sans); }
-    .rg.on { background: rgba(255, 255, 255, 0.08); border-color: var(--hair); color: var(--text); }
+    .rg.on { background: color-mix(in srgb, var(--wash) 8%, transparent); border-color: var(--hair); color: var(--text); }
     /* A card row is the shared stock card, so it carries no layout of its own
        beyond the box it sits in. */
     .card-row { padding: 14px 15px; }
@@ -121,13 +122,13 @@
     .shotwrap .note { margin-top: 10px; font-size: 12px; color: var(--faint); line-height: 1.5; }
 
     /* ---- sheets --------------------------------------------------------- */
-    .veil { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); }
+    .veil { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--shade) 60%, transparent); backdrop-filter: blur(3px); }
     .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; max-height: 86dvh; overflow: auto;
              border-radius: 20px 20px 0 0; border-top: 1px solid var(--hair-2);
-             background: #0a0c11; padding: 8px 16px calc(22px + env(safe-area-inset-bottom));
+             background: var(--surface); padding: 8px 16px calc(22px + env(safe-area-inset-bottom));
              animation: rise .18s var(--ease); }
     @keyframes rise { from { transform: translateY(12px); opacity: 0.6 } to { transform: none; opacity: 1 } }
-    .grab { width: 38px; height: 4px; border-radius: 99px; background: rgba(255, 255, 255, 0.18); margin: 6px auto 12px; }
+    .grab { width: 38px; height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--wash) 18%, transparent); margin: 6px auto 12px; }
     /* Direct children only. A sheet can now hold a promo CARD, which brings
        its own h2, .meta, .v and .why from cards.js — and `.sheet h2` beats
        `.s-title` on specificity, so a descendant selector here silently
@@ -136,29 +137,29 @@
     .sheet > h2 { margin: 0 0 2px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
     .sheet > .meta { font-size: 12px; color: var(--faint); margin-bottom: 12px; }
     .sheet > .verdict { padding: 11px 13px; border-radius: 13px; border: 1px solid var(--hair);
-                        background: rgba(255, 255, 255, 0.03); margin-bottom: 14px; }
+                        background: color-mix(in srgb, var(--wash) 3%, transparent); margin-bottom: 14px; }
     .sheet > .verdict .v { font-size: 15px; font-weight: 600; }
     .sheet > .verdict .why { margin-top: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
     .sheet > .sec { margin-top: 14px; }
     .sheet > .sec h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tint, var(--faint)); }
-    .sheet > .sec .pair { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); font-size: 13px; }
+    .sheet > .sec .pair { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5%, transparent); font-size: 13px; }
     .sheet > .sec .pair .k { color: var(--muted); }
     .sheet > .sec .pair .v { margin-left: auto; font-family: var(--mono); }
-    .sheet > .news a { display: block; padding: 9px 0; border-top: 1px solid rgba(255, 255, 255, 0.05);
+    .sheet > .news a { display: block; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--wash) 5%, transparent);
               text-decoration: none; color: var(--text); font-size: 13px; line-height: 1.4; }
     .sheet > .news a .src { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
     .vopt { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; min-height: 52px;
             padding: 12px 14px; margin-bottom: 8px; border-radius: 13px; border: 1px solid var(--hair);
             background: var(--surface); color: inherit; font: inherit; text-align: left; }
-    .vopt.on { border-color: var(--green); background: rgba(52, 211, 153, 0.08); }
+    .vopt.on { border-color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
     .vopt .nm { font-size: 14px; font-weight: 600; }
     .vopt .fl { margin-top: 2px; font-size: 11.5px; color: var(--faint); }
 
     /* ---- tabs ----------------------------------------------------------- */
     .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex;
             padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-            background: rgba(5, 5, 5, 0.92); backdrop-filter: blur(18px);
-            border-top: 1px solid rgba(255, 255, 255, 0.08); }
+            background: color-mix(in srgb, var(--void) 92%, transparent); backdrop-filter: blur(18px);
+            border-top: 1px solid color-mix(in srgb, var(--wash) 8%, transparent); }
     .tab { flex: 1; min-height: 50px; border: 0; background: none; color: var(--faint);
            font: 500 11px var(--sans); letter-spacing: 0.04em; display: flex; flex-direction: column;
            align-items: center; justify-content: center; gap: 4px; border-radius: 12px; }
@@ -167,7 +168,7 @@
 
     .msg { padding: 24px 4px; color: var(--faint); font-size: 13.5px; line-height: 1.5; }
     input[type="search"] { width: 100%; box-sizing: border-box; min-height: 44px; padding: 11px 14px;
-      border-radius: 13px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.05);
+      border-radius: 13px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 5%, transparent);
       color: var(--text); font: 400 15px var(--sans); }
     .foot { padding: 20px 4px 6px; font-size: 11.5px; color: var(--faint); line-height: 1.6; }
     .foot a { color: var(--muted); }
@@ -181,6 +182,11 @@
       <button class="back" id="back" hidden>‹ Back</button>
       <span class="brand"><span class="dot"></span>Tickr Lab</span>
       <button class="vbtn" id="viewBtn">View <small id="viewName">…</small></button>
+      <!-- Theme (2026-10-15): Dark, Light, Auto in turn. Saved to the account,
+           so the desktop screener and this page agree. -->
+      <button class="cbtn" id="themeBtn" type="button" aria-label="Appearance" title="Appearance">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><path d="M12 4.5v15" /><path d="M12 4.5a7.5 7.5 0 0 1 0 15z" fill="currentColor" stroke="none"/></svg>
+      </button>
       <button class="cbtn" id="chartBtn" aria-pressed="true" aria-label="Show charts" title="Charts">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 16.4 9 10.2l3.6 3.4 7.9-8.2"/></svg>
       </button>
@@ -194,6 +200,26 @@
   </header>
 
   <main class="wrap" id="main"><div class="msg">Loading…</div></main>
+  <script>
+    // The theme button: Dark -> Light -> Auto. The account's choice is read
+    // once on load, so a choice made on the desktop screener arrives here.
+    (function () {
+      const T = window.TickrTheme, btn = document.getElementById('themeBtn');
+      if (!T || !btn) return;
+      const NAME = { dark: 'Dark', light: 'Light', auto: 'Auto (follows this phone)' };
+      const label = () => { const c = T.choice(); btn.title = 'Appearance: ' + NAME[c]; btn.setAttribute('aria-label', 'Appearance: ' + NAME[c]); };
+      label();
+      btn.addEventListener('click', () => {
+        const next = { dark: 'light', light: 'auto', auto: 'dark' }[T.choice()] || 'dark';
+        T.set(next); label();
+        fetch('/api/prefs/theme', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: next }) }).catch(() => {});
+      });
+      fetch('/api/prefs', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
+        const t = d && d.prefs && d.prefs.theme;
+        if (['dark', 'light', 'auto'].includes(t) && t !== T.choice()) { T.set(t); label(); }
+      }).catch(() => {});
+    })();
+  </script>
 
   <nav class="tabs">
     <button class="tab on" data-tab="screens">
@@ -220,8 +246,8 @@
     const GROUP_NAMES = { info: 'Info', rank: 'Scores', act: 'Signal', chart: 'Chart', short: 'Short term',
       long: 'Long term', rel: 'Relative', react: 'Reactions', trend: 'Trend', vol: 'Volume', size: 'Size',
       fund: 'Fundamentals', own: 'Ownership' };
-    const GROUP_TINT = { info: '#7c9cff', rank: '#a3e635', act: '#5eead4', short: '#34d399', long: '#a78bfa',
-      rel: '#22d3ee', react: '#f472b6', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', fund: '#fb7185', own: '#f0abfc' };
+    const GROUP_TINT = { info: 'var(--accent, #7c9cff)', rank: 'var(--lime, #a3e635)', act: 'var(--teal, #5eead4)', short: 'var(--green, #34d399)', long: 'var(--accent-2, #a78bfa)',
+      rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)', vol: 'var(--pink, #f472b6)', size: 'var(--steel, #94a3b8)', fund: 'var(--red, #fb7185)', own: 'var(--orchid, #f0abfc)' };
 
     let views = [];
     let viewId = null;

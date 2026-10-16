@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-themeable>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Holder — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -19,8 +20,8 @@
     .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
-        radial-gradient(46vw 40vw at 4% -8%, rgba(167, 139, 250, 0.10), transparent 62%),
-        radial-gradient(50vw 42vw at 98% 4%, rgba(124, 156, 255, 0.12), transparent 64%); }
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
     .bezel { border-radius: 26px; }
     .bezel > .core { border-radius: 20px; }
     .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
@@ -28,22 +29,22 @@
     .island {
       pointer-events: auto; display: flex; align-items: center; gap: 8px;
       width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
-      background: rgba(9, 11, 15, 0.72);
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
       backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
     }
     .mark .glyph {
       width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
       align-items: center; justify-content: center; color: var(--green);
-      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
-      border: 1px solid rgba(52, 211, 153, 0.24);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
     }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
-      border-radius: 999px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035);
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
       font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
     }
-    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
     h1 { margin: 20px 0 0; font-size: clamp(30px, 4.2vw, 50px); font-weight: 600; line-height: 1; letter-spacing: -0.04em; }
     .lede { margin: 14px 0 0; max-width: 74ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
     .masthead { margin: 34px 0 22px; }
@@ -151,7 +152,8 @@
     const chg = (v) => (v == null ? '—' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1) + '%');
     const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
     // A part of a bar is not a price: never green or red.
-    const INK = ['#7c9cff', '#fb923c', '#a78bfa', '#38bdf8', '#f472b6', '#cbd5e1', '#818cf8', '#fdba74', '#c4b5fd', '#7dd3fc', '#f9a8d4', '#8b93a7'];
+    const INK = ['var(--accent, #7c9cff)', 'var(--orange, #fb923c)', 'var(--accent-2, #a78bfa)', 'var(--sky, #38bdf8)', 'var(--pink, #f472b6)', 'var(--slate, #cbd5e1)',
+        'var(--indigo, #818cf8)', 'var(--peach, #fdba74)', 'var(--lilac, #c4b5fd)', 'var(--ice, #7dd3fc)', 'var(--rose, #f9a8d4)', 'var(--dim, #8b93a7)'];
 
     let H = null, sortKey = 'value', sortDir = -1;
     const COLS = [
