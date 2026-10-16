@@ -4322,6 +4322,21 @@ function pctFromHigh(values, lookback = 252) {
   return ((latest - high) / high) * 100;
 }
 
+// The latest close in standard deviations from its `period`-day average, over
+// the same closes (RowCard.bands, the chart's band function). DISPLAY ONLY: the
+// Signal never reads it (2026-10-16, the owner's "add z-score").
+function zVsMA(values, period) {
+  if (!Array.isArray(values) || values.length < period) return null;
+  const closes = [];
+  for (let i = period - 1; i >= 0; i--) {
+    const c = parseFloat(values[i].close);
+    if (!isFinite(c) || c <= 0) return null;
+    closes.push(c);
+  }
+  const z = RowCard.bands(closes, period, 2).z[period - 1];
+  return z == null || !isFinite(z) ? null : Math.round(z * 100) / 100;
+}
+
 // Latest close vs its `period`-day moving average, as a percentage.
 function pctVsMA(values, period) {
   const avg = sma(values, period);
@@ -7825,6 +7840,7 @@ async function computeStocks(asOf, opts = {}) {
         pctFromHigh: pctFromHigh(values, 252),
         vs50ma: pctVsMA(values, 50),
         vs200ma: pctVsMA(values, 200),
+        z200: zVsMA(values, 200),
         rsi: rsi(values, 14),
         maBullish: mc ? mc.bullish : null,
         maCrossDays: mc ? mc.daysSince : null,

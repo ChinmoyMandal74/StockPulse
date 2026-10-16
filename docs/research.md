@@ -241,3 +241,60 @@ None yet.
 
 ### What follows
 The next study worth running. Almost every report lands after the close, so the window has to start the following day, or it measures the announcement jump rather than the drift.
+
+## 16. Distance from the 200-day average, and the 200-day z-score — 2026-10-16
+
+*Family: Mean reversion · Verdict: No edge · Horizon: 1 to 2 months · Data: Daily prices · Sample: 4.4 million stock-days and 210,101 monthly readings in 1,280 stocks, 2007–2026*
+
+### The idea
+Stocks trade around their 200-day average: one that has run far above it should come back down, and one far below should recover. If so, the distance from the average, or the same distance measured in standard deviations (a z-score), says something about the next month or two.
+
+### What was done
+Two measurements. First, over the ten years from October 2016, every stock-day's distance from its 200-day average, and whether a stock far from it was back within 5% of it one and two months later. Second, from 2007, the 200-day z-score: the close less the average of the last 200 closes, divided by their standard deviation. One reading per stock per month (the month's first session, so readings never overlap), compared with the average stock over the following one and two months, before and after 2020.
+
+### Outcome
+Stocks are seldom near the average: only a quarter of stock-days were within 5% of it, and the typical day was 10% away. Being far away persisted: of stocks 30% or more above it, 5% were back within 5% two months later, and of stocks 30% or more below it, 6%. And no level of the z-score was followed by a better or worse month than the average stock's. In every band the average difference was under one percentage point, and 45% to 51% of stocks beat the average. Before 2020 the lowest band did slightly better than the highest; from 2020 the order reversed.
+
+### What follows
+The z-score is on the screener as a description, in the Trend group beside the distance it divides (200D z-score), and is not an input to the Signal. Read it as where a stock sits, not as a sign that it is due to come back. The stock chart's Bollinger bands are the same arithmetic over 20 days, and are offered on the same terms.
+
+### Caveats
+Part of any "return" to the average is the average moving towards the price, not the price moving back, so the first measurement flatters reversion if anything. The archive is today's list of stocks, without most of those that fell and were delisted. The z-score divides by the spread of the last 200 closes, which includes the trend itself: a stock that has risen steadily has a wide spread and so a smaller z-score than its distance alone suggests.
+
+### Numbers
+
+| Distance from the 200-day average, 2016–2026 | Share of stock-days |
+|---|---|
+| Within ±5% | 25.7% |
+| Within ±10% | 48.4% |
+| Within ±20% | 77.0% |
+| More than 30% away | 10.8% |
+
+Typical (median) distance 10.4%; the price crossed the average 8.6 times a year per stock.
+
+| Starting distance | Back within ±5% after 1 month | After 2 months | Readings |
+|---|---|---|---|
+| 30% or more above | 2% | 5% | 189,115 |
+| 20% to 30% above | 5% | 11% | 202,762 |
+| 10% to 20% above | 14% | 20% | 464,207 |
+| 10% to 20% below | 19% | 24% | 264,384 |
+| 20% to 30% below | 7% | 13% | 109,576 |
+| 30% or more below | 2% | 6% | 85,658 |
+
+| 200-day z-score, since 2007 | Share of stock-days |
+|---|---|
+| Between −1 and +1 | 42.4% |
+| Between −2 and +2 | 84.0% |
+| Above +2 | 11.3% |
+| Below −2 | 4.7% |
+
+| z-score band | Before 2020: next month vs the average stock, mean / median | Beat it | From 2020: mean / median | Beat it |
+|---|---|---|---|---|
+| −2 or below | +0.43% / +0.11% | 51% | −0.44% / −0.82% | 46% |
+| −2 to −1 | +0.19% / −0.22% | 49% | −0.06% / −0.83% | 46% |
+| −1 to 0 | +0.04% / −0.39% | 48% | +0.02% / −0.77% | 46% |
+| 0 to +1 | −0.09% / −0.26% | 48% | −0.03% / −0.71% | 46% |
+| +1 to +2 | −0.05% / −0.27% | 48% | −0.16% / −0.61% | 47% |
+| +2 or above | −0.15% / −0.34% | 47% | +0.63% / −0.37% | 48% |
+
+Over two months the picture is the same: every band within 0.6 points of the average stock on the mean, beat rates 45% to 49%. The medians are below zero throughout because a few large winners lift the average stock's mean.

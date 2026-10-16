@@ -350,6 +350,9 @@
     ['react', 'Last 8-K',       (s) => (s.lastEvent ? { t: s.lastEvent + (s.lastEventDate ? ' \u00b7 ' + shortDate(s.lastEventDate) : ''), c: '' } : null)],
     ['trend', 'vs 50D MA',      (s) => V.pct(s.vs50ma)],
     ['trend', 'vs 200D MA',     (s) => V.pct(s.vs200ma)],
+    // How far from the 200-day average in standard deviations of the same 200
+    // closes (RowCard.bands). Neutral, not green and red: a position, not a move.
+    ['trend', '200D z-score',   (s) => V.num(s.z200, 2)],
     ['trend', 'MA cross',       (s) => {
       if (s.maBullish == null) return null;
       const fresh = s.maCrossDays != null && s.maCrossDays <= 20;
@@ -537,6 +540,35 @@
     return out;
   }
 
+  // BANDS AND THE Z-SCORE (2026-10-16, the owner: "add z-score .. graph
+  // changes"). Over each window of `n` closes: the mean, and the mean plus and
+  // minus `k` standard deviations (the population figure, as Bollinger
+  // defined it), and z, how many standard deviations the close sits from the
+  // mean. The chart draws n = 20, k = 2; the screener's z-score is z at
+  // n = 200. One function for both, so the band on the chart and the number
+  // in the table cannot disagree about what a standard deviation is.
+  // Oldest-first, the same length as the input; null until the window is
+  // full, and wherever a close in it is missing.
+  function bands(values, n, k) {
+    const len = values.length;
+    const mid = new Array(len).fill(null), upper = new Array(len).fill(null),
+      lower = new Array(len).fill(null), z = new Array(len).fill(null);
+    for (let i = n - 1; i < len; i++) {
+      let sum = 0, sq = 0, ok = true;
+      for (let j = i - n + 1; j <= i; j++) {
+        const v = values[j];
+        if (v == null || !isFinite(v)) { ok = false; break; }
+        sum += v; sq += v * v;
+      }
+      if (!ok) continue;
+      const m = sum / n;
+      const sd = Math.sqrt(Math.max(0, sq / n - m * m));
+      mid[i] = m; upper[i] = m + k * sd; lower[i] = m - k * sd;
+      z[i] = sd > 0 ? (values[i] - m) / sd : null;
+    }
+    return { mid, upper, lower, z };
+  }
+
   // ---- a quarterly figure onto a daily axis ---------------------------------
   //
   // The chart's x axis is an INDEX into the drawn sessions, so a filed figure
@@ -710,8 +742,11 @@
     // Overlays are folded into the range: a moving average sits above a falling
     // price and below a rising one, so scaling to the price alone clips it.
     const overlays = (o.overlays || []).filter((ov) => ov && ov.values);
+    // A band (the chart's Bollinger option): two edges and a tint between.
+    const band = o.band && Array.isArray(o.band.upper) && Array.isArray(o.band.lower) ? o.band : null;
     const scaleVals = closes.concat(
-      overlays.reduce((acc, ov) => acc.concat(ov.values.filter((v) => v != null)), []));
+      overlays.reduce((acc, ov) => acc.concat(ov.values.filter((v) => v != null)), []),
+      band ? band.upper.concat(band.lower).filter((v) => v != null) : []);
     const lo = Math.min.apply(null, scaleVals);
     const hi = Math.max.apply(null, scaleVals);
     // Over a long span a linear axis is useless: MU ran from $1.69 to $932, so
@@ -743,6 +778,27 @@
         pen = true;
       }
       if (od) overlayPaths += `<path class="ov ${ov.cls || ''}" d="${od}"/>`;
+    }
+
+    // The band, under the price: for each unbroken run, the upper edge out and
+    // the lower edge back, closed, as the tint; the two edges as lines of their
+    // own (a stroke on the closed shape would draw the joins at its ends too).
+    let bandPaths = '';
+    if (band) {
+      let i = 0;
+      while (i < closes.length) {
+        while (i < closes.length && (band.upper[i] == null || band.lower[i] == null)) i++;
+        const s = i;
+        while (i < closes.length && band.upper[i] != null && band.lower[i] != null) i++;
+        if (i - s < 2) continue;
+        let up = '', dn = '', back = '';
+        for (let j = s; j < i; j++) {
+          up += (j === s ? 'M' : 'L') + x(j).toFixed(1) + ' ' + y(band.upper[j]).toFixed(1);
+          dn += (j === s ? 'M' : 'L') + x(j).toFixed(1) + ' ' + y(band.lower[j]).toFixed(1);
+        }
+        for (let j = i - 1; j >= s; j--) back += 'L' + x(j).toFixed(1) + ' ' + y(band.lower[j]).toFixed(1);
+        bandPaths += `<path class="bb-fill" d="${up}${back}Z"/><path class="bb-edge" d="${up}"/><path class="bb-edge" d="${dn}"/>`;
+      }
     }
 
     // RSI pane: 0-100 on its own scale, with the 30 and 70 lines that make the
@@ -855,7 +911,7 @@
       : '';
 
     const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
-      grid + area +
+      grid + area + bandPaths +
       `<line class="base" x1="0" y1="${baseY}" x2="${W}" y2="${baseY}"/>` +
       `<path class="ln" d="${d}"/>` +
       overlayPaths +
@@ -1424,7 +1480,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, googleExchange, canHover,
     // used by the stock page
-    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, rsiSeries, aoSeries, stepSeries, fmtMktCap,
+    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
     fieldCatalogue, fieldValues, fieldProps, isFund,

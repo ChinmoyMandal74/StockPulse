@@ -1521,7 +1521,7 @@
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-rel" data-group="rel" colspan="19">Relative</th>
         <th class="group grp-react" data-group="react" colspan="6">Reactions</th>
-        <th class="group grp-trend" data-group="trend" colspan="5">Trend</th>
+        <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="24">Fundamentals</th>
         <th class="group grp-own" data-group="own" colspan="11">Ownership</th>
@@ -1594,6 +1594,7 @@
         <th class="left grp-react" data-key="lastEvent" title="The newest 8-K the company filed in the last sixty days: what it was about, and how many days ago. An 8-K is the report a company files within four business days of something material: results released, an officer or director arriving or leaving, a material agreement, new debt. The words name the kind of event from the item numbers on the filing and do not say whether it was good news. The rare kinds are in bold: a restatement warning, an auditor change, an impairment, a listing notice, a change of control, a cybersecurity incident, a bankruptcy. Type in the filter row to find a kind, for example officer. Blank when nothing was filed in the window. From the SEC, updated as each company's filings are re-read.">Last<br>8-K</th>
         <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
         <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
+        <th class="grp-trend" data-key="z200" title="200-day z-score: how many standard deviations the latest close is from its 200-day average, the deviation taken over the same 200 closes. It puts a volatile stock and a quiet one on one scale: 20% above the average is ordinary for one and rare for the other. Since 2007, 42% of stock-days sat between -1 and +1 and 84% between -2 and +2; more sat above +2 (11%) than below -2 (5%). A position, not a forecast: no level of it was followed by a better or worse month than the average stock's, in either period tested (see Research). Not an input to Signal.">200D<br>z-score</th>
         <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
         <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
         <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Signal.">Awesome<br>Osc</th>
@@ -2449,6 +2450,16 @@
       const dir = s.aoRising == null ? '' : s.aoRising ? ' · higher than the session before' : ' · lower than the session before';
       const title = `Awesome Oscillator (5/34 of the daily midpoint) as a share of the price${dir}`;
       return `<td class="${cls} ${v >= 0 ? 'pos' : 'neg'}"${attr(title)}>${v >= 0 ? '+' : ''}${v.toFixed(1)}%</td>`;
+    }
+    // NEUTRAL INK, not green and red: those mean the price went up or down,
+    // and this is where the price sits. Two or more deviations out is bold,
+    // which is all the table says about it.
+    function zCell(s) {
+      const cls = 'grp-trend';
+      const v = s.z200;
+      if (v == null || !isFinite(v)) return `<td class="na ${cls}">—</td>`;
+      const title = `${Math.abs(v).toFixed(2)} standard deviations ${v >= 0 ? 'above' : 'below'} the 200-day average`;
+      return `<td class="${cls}"${Math.abs(v) >= 2 ? ' style="font-weight:600"' : ''}${attr(title)}>${v > 0 ? '+' : ''}${v.toFixed(2)}</td>`;
     }
     function macdCell(s) {
       const cls = 'grp-trend';
@@ -3814,6 +3825,7 @@
           ${lastEventCell(s)}
           ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
           ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
+          ${zCell(s)}
           ${maCrossCell(s)}
           ${macdCell(s)}
           ${aoCell(s)}
@@ -3881,7 +3893,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 118;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 119;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;

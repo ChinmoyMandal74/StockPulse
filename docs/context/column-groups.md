@@ -868,3 +868,12 @@ The **Chart** group is one column (`90d`) between Scores and Short-term, holding
 - **The generated markup is cached per symbol.** The table rebuilds every row on each sort and filter, and regenerating 69 paths each time would make sorting feel heavy. Measured at 81ms per sort with all 69 intact afterwards.
 - Row height is unchanged at 37px — a 20px line fits inside the existing `padding: 7px` cells.
 
+
+## 200D z-score (Trend group, 2026-10-16)
+The owner: "add z-score". The `z200` column sits after "vs 200D MA": (latest close − its 200-day average) ÷ the standard deviation of the same 200 closes. It is computed in `computeStocks` by `zVsMA(values, 200)`, through `RowCard.bands`, the function behind the chart's Bollinger bands, and rounded to two places. It is null with fewer than 200 closes, a missing or non-positive close, or a flat run.
+
+- **Why this form, not "today's distance against the stock's own history"**: the live refresh carries about 300 bars (`a-live-price-pull-is-shallow`), so a multi-year baseline would need stored figures like the drawdown columns. This needs only the bars in hand, and is the standard 200-day z-score.
+- **Display only**: not read by `action.js`, not in `CHAT_FIELDS`. `bands-test.js` scores 1,280 real rows with `z200` absent, present and set to ±1e9 and requires identical verdicts. That check was proven by making `apply` read the field: it failed, and was restored.
+- **Neutral ink**, not green and red (a position, not a move); bold at ±2 or beyond. Sorts and filters like any number. `FIELD_SPEC` row `trend|200D z-score` (`V.num`, two places).
+- The step list for a new column was followed: header and body cells, the Trend banner 5 → 6, `PAD_SPAN` 118 → 119. Checked in the real page with a fixture: all 112 visible columns aligned header to body down to the last (`optPcr`), the banner spans exactly its six cells, 119 filter cells, and a sort works both ways. With the banner put back to 5, the check failed.
+- The header's hover quotes research entry 16: since 2007, 42% of stock-days were between −1 and +1, and 84% between −2 and +2; no level was followed by a better or worse month than the average stock's.

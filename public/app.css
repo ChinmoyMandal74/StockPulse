@@ -427,6 +427,11 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
                 vector-effect: non-scaling-stroke; }
 .rc-chart .ov.ma50 { stroke: var(--accent); }
 .rc-chart .ov.ma200 { stroke: var(--amber); }
+/* Bollinger band (20-day, two deviations): blue, the colour for a series that
+   is neither the price nor a direction, and faint, so the price stays on top */
+.rc-chart .bb-fill { fill: color-mix(in srgb, var(--blue) 9%, transparent); stroke: none; }
+.rc-chart .bb-edge { fill: none; stroke: color-mix(in srgb, var(--blue) 55%, transparent);
+                     stroke-width: 1; vector-effect: non-scaling-stroke; }
 /* stroke and fill kept apart on purpose: grouping them set fill on the line
    path too, which closed it back to its start and drew a filled wedge. The
    area path hid that until it was removed. */
