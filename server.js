@@ -11221,6 +11221,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const hbNeed = Cards.holderBookNeed(post.tpl, post.opts || {});
   if (hbNeed && hbNeed.id && /^[A-Za-z0-9]{1,24}$/.test(String(hbNeed.id))) { try { hbook = await holderPayload(hbNeed.kind, String(hbNeed.id)); } catch { hbook = null; } }
 
+  // The Who added, who cut card, likewise.
+  let iflow = null;
+  const ifNeed = Cards.instFlowNeed(post.tpl, post.opts || {});
+  if (ifNeed && ifNeed.symbol && /^[A-Z0-9.-]{1,15}$/.test(String(ifNeed.symbol).toUpperCase())) { try { iflow = await instFlowPayload(String(ifNeed.symbol).toUpperCase()); } catch { iflow = null; } }
+
   // The Revenue mix card, likewise.
   let rmix = null;
   const rmNeed = Cards.revMixNeed(post.tpl, post.opts || {});
@@ -11278,6 +11283,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getSegments: () => rmix,
       getFundHolders: () => fholders,
       getHolderBook: () => hbook,
+      getInstFlow: () => iflow,
       getCapReturns: () => capret,
       getOptions: () => optoi,
       getInsider: () => insd,
@@ -13561,6 +13567,10 @@ app.get('/api/institutions/history', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
+  res.json(await instHistoryPayload(symbol));
+}));
+// One stock's 13F quarters, oldest first, with the split-proof index.
+async function instHistoryPayload(symbol) {
   const rows = await store.readInstHistory(symbol);
   let idx = null;
   const quarters = rows.map((r) => {
@@ -13571,7 +13581,22 @@ app.get('/api/institutions/history', requireAuth, route(async (req, res) => {
       value: r.value == null ? null : Number(r.value), px: r.px == null ? null : Number(r.px), change,
       added: r.added == null ? null : Number(r.added), exited: r.exited == null ? null : Number(r.exited), index: idx };
   });
-  res.json({ symbol, quarters });
+  return { symbol, quarters };
+}
+// Both at once, for the Who added, who cut card (2026-10-17): the latest
+// quarter with its buyers and sellers, and the quarters before it.
+async function instFlowPayload(symbol) {
+  const [a, b] = await Promise.all([instHoldingPayload(symbol), instHistoryPayload(symbol)]);
+  return { symbol, holding: a.holding, quarters: b.quarters };
+}
+app.get('/api/institutions/flow', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await instFlowPayload(symbol));
 }));
 
 // One holder's periods, oldest first, and optionally one stock's position in
@@ -13740,8 +13765,13 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
+  res.json(await instHoldingPayload(symbol));
+}));
+// One stock's latest 13F quarter as the page and the Who added card read it.
+// A function declaration, so the saved-post route above can call it.
+async function instHoldingPayload(symbol) {
   const h = await store.readInstHolding(symbol);
-  if (!h) return res.json({ symbol, holding: null });
+  if (!h) return { symbol, holding: null };
   // Shares outstanding from the profile: one row, not the snapshot.
   let out = null;
   try { const p = await store.readProfile(symbol); out = p && Number(p.sharesOutstanding) > 0 ? Number(p.sharesOutstanding) : null; } catch { out = null; }
@@ -13750,7 +13780,7 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
   // a half times, no percentage of the company is offered at all.
   if (out && h.shares > out * 1.5) out = null;
   const pct = Inst13f.pctOf(h.shares, out);
-  res.json({ symbol, holding: {
+  return { symbol, holding: {
     period: h.period, quarter: Inst13f.quarterName(h.period), prevQuarter: Inst13f.quarterName(h.prevPeriod),
     managers: h.managers, managersPrev: h.managersPrev, shares: h.shares, sharesPrev: h.sharesPrev,
     sharesChange: Inst13f.change(h.shares, h.sharesPrev), value: h.value, px: h.px, added: h.added, exited: h.exited,
@@ -13760,8 +13790,8 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
     // Who added and who cut on the quarter (null until a load has written
     // them). The change in shares, and its value at the quarter-end price.
     buyers: moversOf(h.buyers, h.px), sellers: moversOf(h.sellers, h.px),
-  } });
-}));
+  } };
+}
 
 // One company's filings as the page and the card both read them. A function
 // declaration, so the saved-post route above can call it.

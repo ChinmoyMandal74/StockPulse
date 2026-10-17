@@ -2069,6 +2069,39 @@ universe at most, since the rules take the rest: likely cents a day.
 
 ---
 
+## 43. Does institutional buying come before better returns? — 2026-10-17
+
+*Area: Research · Status: Open · Note: the owner asked for it on the backlog; the data was loaded the same day*
+
+Since 2026-10-17 the archive holds nine quarters of Form 13F (Q2 2024 to
+Q2 2026) for every tracked stock: shares held by institutional managers,
+managers holding, each quarter's change (split-adjusted), and the largest
+buyers and sellers, plus each manager's net bought or sold in tracked stocks
+(`inst_history`, `holder_history`, `flow13f:M:<period>`). That is enough to
+ask whether stocks that institutions added to most did better than the
+average stock over the following one to two months.
+
+**How it would be framed, to the research page's standard.** Event: the
+quarter's 13F data becoming public (about 45 days after quarter end, and
+the data set's own publication date, not the quarter end, since nobody
+could act before then). Signal: the quarter's change in shares held, the
+change in managers holding, or the net flow from managers with low turnover
+(a high-turnover book is often a trading desk or a filing change). Compare
+the top and bottom fifths with the average stock over 21 and 42 sessions
+from the next close after publication, per quarter.
+
+**What to expect, so a flat result is not a surprise.** The published
+literature finds the effect weak and mostly gone by the time 13F data is
+public; the 45-day lag is the reason. Nine quarters is also only nine
+cross-sections, too few to split before and after 2020 as the research page
+usually does; the backfill would need to go further back first (the SEC's
+data sets run to 2013, at about 100MB and a minute each).
+
+**Biases to name in the write-up.** Only today's universe is in the archive
+(companies that fell away are missing); only today's CUSIP map is used, so
+older quarters miss a company whose security code changed; firms that
+changed their SEC filer id (BlackRock in 2024) break a holder's continuity.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

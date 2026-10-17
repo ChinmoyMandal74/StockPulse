@@ -55,6 +55,7 @@
   let getSegments = () => null;
   let getFundHolders = () => null;
   let getHolderBook = () => null;
+  let getInstFlow = () => null;
   let getCapReturns = () => null;
   let getOptions = () => null;
   let getInsider = () => null;
@@ -9872,6 +9873,94 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Who added, who cut: one stock's institutional holders over time -----
+  //
+  // (2026-10-17, the owner: "'who's been buying' promo card you can do now".)
+  // The stock page's Institutional holders section as a picture: each
+  // quarter's change in shares held by 13F managers (split-proof: every
+  // quarter's change is on its own footing, see splitadj.js), four figures,
+  // and the latest quarter's largest buyers and sellers among managers that
+  // filed in both quarters. The data is /api/institutions/flow through the
+  // getInstFlow channel both hosts answer.
+  //
+  // A RECORD, MONTHS OLD, AND SAID SO: 13F is published about 45 days after
+  // the quarter, long positions only, managers over $100 million. Accent and
+  // orange for adding and cutting: green and red mean a price that moved.
+  const IFL_ROWS = { portrait: 5, square: 3, story: 7 };
+  function instFlowNeed(tpl, opts) {
+    if (tpl !== 'instflow') return null;
+    const o = opts || {};
+    return { symbol: o.iflSym ? String(o.iflSym).toUpperCase() : null };
+  }
+  function tplInstFlow() {
+    const need = instFlowNeed('instflow', O);
+    const row = need.symbol ? stocks.find((x) => x && x.symbol === need.symbol) : null;
+    const label = row ? nameOf(row) : (need.symbol || '');
+    const empty = (msg) => chromeTop() + '<div class="s-body"><div class="s-empty">' + esc(msg) + '</div></div>' + chromeFoot();
+    if (!need.symbol) return empty('Pick a stock.');
+    const data = getInstFlow(need.symbol);
+    if (!data) return empty('Reading the filings…');
+    const H = data.holding;
+    const qs = (data.quarters || []).filter((q) => q.change != null);
+    if (!H || !H.managers) return empty('No institutional holders on file for ' + label + '.');
+    const sg = (v, d) => (v == null ? '—' : Math.abs(v) < 0.05 ? '0.0%' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(d == null ? 1 : d) + '%');
+    const usd = (v) => (v == null ? '—' : (v < 0 ? '−' : '') + '$' + fmtMoney(Math.abs(v)));
+    const shs = (v) => { const a = Math.abs(v); return (v < 0 ? '−' : '+') + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(0) + 'K' : String(Math.round(a))); };
+    const short = (q) => String(q.quarter || '').replace(/^Q(\d) (\d{2})(\d{2})$/, 'Q$1 ’$3');
+    let chain = 1;
+    for (const q of qs) chain *= 1 + q.change / 100;
+    const first = qs[0], last = qs[qs.length - 1];
+
+    // ---- the quarters: a bar above zero for adding, below for cutting ----
+    const W = 952, Hh = Math.max(130, (({ portrait: 230, square: 150, story: 380 })[size.id] || 230) + cardFill);
+    let bars = '';
+    if (qs.length >= 2) {
+      const n = qs.length, gap = 10, bw = (W - gap * (n - 1)) / n;
+      const mid = Hh * 0.5, labH = 44, room = mid - 8 - (labH / 2);
+      const max = Math.max(1, ...qs.map((q) => Math.abs(q.change)));
+      const up = pal.ink('#7c9cff'), dn = pal.ink('#fb923c');
+      let g = '<line x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '" stroke="' + pal.zero + '" stroke-width="1.5"/>';
+      qs.forEach((q, i) => {
+        const x = i * (bw + gap), h = Math.max(3, Math.abs(q.change) / max * room);
+        const y = q.change >= 0 ? mid - h : mid;
+        g += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4" fill="' + (q.change >= 0 ? up : dn) + '" fill-opacity="0.85"/>';
+        const ty = q.change >= 0 ? mid + 26 : mid - 12;
+        g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + ty + '" text-anchor="middle" font-size="19" font-weight="600" fill="' + pal.ink('#e9ecf2') + '" font-family="Geist Mono, monospace">' + esc(sg(q.change)) + '</text>';
+        g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (Hh - 4) + '" text-anchor="middle" font-size="17" fill="' + pal.axis + '" font-family="Geist Mono, monospace">' + esc(short(q)) + '</text>';
+      });
+      bars = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" width="100%" height="' + Hh + '" style="display:block;margin-top:20px">' + g + '</svg>';
+    }
+
+    // ---- four figures ----------------------------------------------------
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
+    const figs = fig('Managers holding', Number(H.managers).toLocaleString('en-US'), first && first.managers ? Number(first.managers).toLocaleString('en-US') + ' in ' + first.quarter : '')
+      + fig('Shares held',qs.length >= 2 ? sg((chain - 1) * 100) : sg(H.sharesChange), qs.length >= 2 ? first.quarter + ' to ' + last.quarter : '')
+      + fig('Last quarter', sg(H.sharesChange), H.added == null ? '' : H.added + ' new, ' + H.exited + ' gone')
+      + fig('Worth', usd(H.value), H.px == null ? '' : 'at $' + Number(H.px).toFixed(2) + ' a share');
+
+    // ---- the latest quarter's largest buyers and sellers -----------------
+    const N = IFL_ROWS[size.id] || 5;
+    const fs = ({ portrait: 19, square: 16, story: 24 })[size.id] || 19;
+    const list = (arr, head) => '<div class="ifl-col"><div class="ifl-h">' + esc(head) + '</div>'
+      + ((arr || []).slice(0, N).map((m) => '<div class="ifl-r" style="font-size:' + fs + 'px"><span class="ifl-n">' + esc(m.name)
+        + (m.isNew ? ' <em>new</em>' : m.isExit ? ' <em>exited</em>' : '') + '</span><span class="ifl-v">' + esc(m.value == null ? shs(m.delta) : (m.value > 0 ? '+' : '') + usd(m.value)) + '</span></div>').join('')
+        || '<div class="ifl-r" style="font-size:' + fs + 'px"><span class="ifl-n">None on the quarter</span></div>') + '</div>';
+    const lists = Array.isArray(H.buyers) && Array.isArray(H.sellers)
+      ? '<div class="ifl-two">' + list(H.buyers, 'Added the most, ' + (H.quarter || '')) + list(H.sellers, 'Cut the most') + '</div>' : '';
+
+    const head = '<span class="s-kick">' + esc((label !== need.symbol ? need.symbol + ' · ' : '') + '13F managers · '
+      + (qs.length >= 2 ? first.quarter + ' to ' + last.quarter : (H.quarter || ''))) + '</span>'
+      + '<h2 class="s-title">' + esc(label) + '<br><span class="dim">who added, who cut</span></h2>';
+    const note = 'Bars: each quarter’s change in shares held by institutional managers, adjusted for stock splits. '
+      + 'Added and cut are the largest changes among managers that filed in both quarters, valued at the quarter-end price. '
+      + 'From Form 13F, published about 45 days after each quarter: long positions only, managers over $100 million. A record of what was reported, not a view on the stock.';
+    return chromeTop()
+      + '<div class="s-body"><div>' + head + bars
+      + '<div class="cr-figs">' + figs + '</div>' + lists
+      + '<p class="s-sub wide" style="--fs:16px;margin-top:14px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Bollinger bands: one stock in its 20-day band ------------------------
   //
   // (2026-10-16, the owner: "a new promo card on this bollinger band on the
@@ -10856,6 +10945,7 @@
     optind: () => optGroupCard('optind'),
     drawdown: tplDrawdown,
     bands: tplBands,
+    instflow: tplInstFlow,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,
@@ -11142,6 +11232,14 @@
     .bx-v.rm-pct { font-weight: 500; color: var(--muted); }
     /* Capital returns: four figures above the yearly bars, and a bar in two parts. */
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
+    /* Who added, who cut: two lists side by side. */
+    .ifl-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 34px; margin-top: 22px; }
+    .ifl-h { font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 8px; border-bottom: 1px solid var(--hair); }
+    .ifl-r { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+    .ifl-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .ifl-n em { font: 500 0.62em var(--mono); font-style: normal; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+    .ifl-v { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+    .sz-story .ifl-two { grid-template-columns: minmax(0, 1fr); gap: 22px; }
     /* What one holder holds: the sector split as one bar, and the NEW tag. */
     .hb-sec { margin: 18px 0 8px; }
     .hb-bar { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; }
@@ -13232,6 +13330,7 @@
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
     fundHoldersNeed,
     holderBookNeed,
+    instFlowNeed,
     capReturnNeed,
     optionsNeed,
     insiderNeed, insiderWindows: () => IN_WINS.map((p) => p.slice()),
@@ -13362,6 +13461,7 @@
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);
       getHolderBook = c.getHolderBook || (() => null);
+      getInstFlow = c.getInstFlow || (() => null);
       getCapReturns = c.getCapReturns || (() => null);
       getOptions = c.getOptions || (() => null);
       getInsider = c.getInsider || (() => null);
