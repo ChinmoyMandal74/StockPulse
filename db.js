@@ -4855,7 +4855,12 @@ async function writeSecEvents(symbol, events, keepSince) {
             items = excluded.items, report_date = excluded.report_date, doc = excluded.doc`,
     args: [sym, String(e.accn), String(e.filed), e.form || null, e.items || '', e.reportDate || null, e.doc || null],
   }));
-  if (keepSince) stmts.push({ sql: 'delete from sec_events where symbol = ? and filed < ?', args: [sym, String(keepSince)] });
+  // NOTHING OLDER IS DELETED (2026-10-16, the owner: "Do not delete the
+  // history of anything unless I say so"). This used to trim the company's
+  // 8-Ks to the fetch window on every write. `keepSince` is still accepted
+  // and ignored; the readers take the newest N or a since-date, so what is
+  // shown is unchanged.
+  void keepSince;
   if (!stmts.length) return 0;
   await db.batch(stmts, 'write');
   return rows.length;
@@ -4896,7 +4901,8 @@ async function writeSecHolders(symbol, rows, keepSince) {
       e.shares == null ? null : Number(e.shares), e.pct == null ? null : Number(e.pct),
       e.persons == null ? null : Number(e.persons), e.eventDate || null],
   }));
-  if (keepSince) stmts.push({ sql: 'delete from sec_holders where symbol = ? and filed < ?', args: [sym, String(keepSince)] });
+  // Kept, not trimmed to the window (the owner, 2026-10-16), as for 8-Ks above.
+  void keepSince;
   if (!stmts.length) return 0;
   await db.batch(stmts, 'write');
   return list.length;

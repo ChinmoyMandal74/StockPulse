@@ -98,6 +98,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - Every async route is wrapped in `route()`; Express 4 does not catch async rejections. Routes using `requireAdmin` must be registered below its definition (`node --check` does not catch this; booting does).
 - A schema statement in `db.js` is paid on every cold start: keep statements `if not exists` so `init()` can batch them.
 - **Reads may be retried once; a write is never retried.**
+- **Keep history; never delete it without the owner's say-so** (owner, 2026-10-16: "Do not delete the history of anything unless I say so .. the only history I don't need is the intraday prices"). New stored data accumulates by date or period instead of replacing the latest. Ask before writing any delete, trim, keep-window or wholesale replace; moving rows to an archive table is the alternative. Intraday price samples are the one exception.
 - Irrecoverable if deleted: `fundamentals_history`, `advice_state`. `backfill-bars.js` replaces each symbol wholesale — always `--only`, never a shallow `--depth` over deep history.
 - Any new per-symbol table goes in `SYMBOL_TABLES`. Any new stored data is listed on `/privacy` in the same commit.
 - A restore or backfill must never pass through a transforming path (`cleanScreens`, `writeScreens`, `readProfiles`/`writeProfiles`). Use targeted writes. The sanitizers (`cleanScreens`, `cleanPosts`, `cleanPivots`, `cleanViews`) silently drop unknown keys and still answer `ok`.
