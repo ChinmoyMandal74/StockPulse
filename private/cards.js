@@ -1834,7 +1834,7 @@
       // eight tags need, so this cannot press them back into the top clamp.
       if (over > 0) for (const m of marks) m.y = Math.max(PT + 14, m.y - over);
       const tags = marks.map((m) =>
-        `<text x="${W - PR + 14}" y="${m.y.toFixed(1)}" font-size="24" font-weight="600" fill="${m.color}" font-family="Geist Mono, monospace">${(m.v >= 0 ? '+' : '') + m.v.toFixed(1)}%</text>`).join('');
+        `<text x="${W - PR + 14}" y="${m.y.toFixed(1)}" font-size="21" font-weight="500" fill="${m.color}" font-family="Geist Mono, monospace">${(m.v >= 0 ? '+' : '') + m.v.toFixed(1)}%</text>`).join('');
       const d0 = dates[0], d1 = dates[dates.length - 1];
       const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
         `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
@@ -1912,7 +1912,7 @@
         'Price only — no dividends, no positions.';
       return chromeTop() +
         '<div class="s-body"><div class="stk">' + head +
-        lineChart(c.dates || closes.map(() => ''), [{ color: colour, S, width: 4, fill: true }],
+        lineChart(c.dates || closes.map(() => ''), [{ color: colour, S, width: 3, fill: true }],
           { h: size.id === 'story' ? 1180 : size.id === 'square' ? 470 : 590 }) +
         `<p class="s-sub wide" style="--fs:17px;margin-top:18px">${note}</p>` +
         '</div></div>' + chromeFoot();
@@ -1981,7 +1981,7 @@
         // the y-scale toward the middle so the stock's own shape read flatter
         // than it is. The other two chart modes still carry it, where a
         // comparison is the point.
-        lines = [{ color: pal.up, S, width: 4, fill: true }];
+        lines = [{ color: pal.up, S, width: 3, fill: true }];
         legend = [{ color: pal.up, label: esc(sym) }];
         note = 'Price only, rebased to the start of the window \u2014 no dividends, no positions.';
         const ma = CHART_MAS[O.chtMa];
@@ -2039,7 +2039,7 @@
         // and already mapped in LIGHT_INK, so the ground sweep covers them.
         const cA = pal.ink('#60a5fa'), cB = pal.ink('#fb923c');
         const eA = endOf(SA), eB = endOf(SB);
-        lines = [{ color: cA, S: SA, width: 4 }, { color: cB, S: SB, width: 4 }];
+        lines = [{ color: cA, S: SA, width: 3 }, { color: cB, S: SB, width: 3 }];
         legend = [{ color: cA, label: `${symA} ${pct(eA)}` }, { color: cB, label: `${symB} ${pct(eB)}` }];
         kick = `${esc(symA)} vs ${esc(symB)} \u00b7 ${esc(winLabel)}`;
         title = `${esc(symA)}<br><span class="dim">vs ${esc(symB)}</span>`;
@@ -2068,7 +2068,9 @@
           .slice(0, n);
         if (!ranked.length) return chromeTop() + `<div class="s-body"><div><p class="s-empty">Nothing in ${esc(scope.label)} has history for this window.</p></div></div>` + chromeFoot();
         const cp = (i) => pal.ink(CHART_PALETTE[i % CHART_PALETTE.length]);
-        lines = ranked.map((r, i) => ({ color: cp(i), S: r.S, width: 3, sym: r.sym }));
+        // LIGHTER (2026-10-17, the owner: "reduce the weight or width of the line
+        // chart and the ticker font, It seems heavy"): 3 to 2.2, several lines at once.
+        lines = ranked.map((r, i) => ({ color: cp(i), S: r.S, width: 2.2, sym: r.sym }));
         legend = ranked.map((r, i) => ({ color: cp(i), label: `${r.sym} ${pct(r.end)}` }));
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
@@ -2081,8 +2083,8 @@
         const all = mean(stocks.map((r) => r.symbol));
         const same = O.chtScope === 'All';
         const acc = pal.ink('#7c9cff');
-        lines = same ? [{ color: pal.up, S: basket, width: 4, fill: true }]
-          : [{ color: pal.up, S: basket, width: 4, fill: true }, { color: acc, S: all, width: 2, dim: true }];
+        lines = same ? [{ color: pal.up, S: basket, width: 3, fill: true }]
+          : [{ color: pal.up, S: basket, width: 3, fill: true }, { color: acc, S: all, width: 2, dim: true }];
         legend = same ? [{ color: pal.up, label: 'All screened' }]
           : [{ color: pal.up, label: esc(scope.label) }, { color: acc, label: 'All screened' }];
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
@@ -3401,7 +3403,7 @@
       // mt: 0 — the wrap below is a flex column with its own gap, and the
       // chart's default top margin would be that spacing charged twice. It
       // measured exactly 26px, which is most of what the 4:5 was short by.
-      ? lineChart(d.dates, [{ color: colour, S, width: 4, fill: true }], { h: H, mt: 0 })
+      ? lineChart(d.dates, [{ color: colour, S, width: 3, fill: true }], { h: H, mt: 0 })
       : '<p class="s-empty">No stored history for ' + esc(sym) + ' over the ' +
         esc(winLabel) + '.</p>';
 
@@ -7794,7 +7796,7 @@
     let benchMove = null;
     if (bench) for (let i = bench.length - 1; i >= 0 && benchMove == null; i--) if (bench[i] != null) benchMove = (bench[i] - 1) * 100;
     const H = size.id === 'story' ? 600 : size.id === 'square' ? 158 : 292;
-    const lines = line ? [{ color: colour, S: line, width: 4, fill: true }] : [];
+    const lines = line ? [{ color: colour, S: line, width: 3, fill: true }] : [];
     if (line && bench) lines.push({ color: pal.flat, S: bench, width: 2, dim: true });
     const plot = line
       ? lineChart(d.dates, lines, { h: H, mt: 0 })
@@ -12897,7 +12899,7 @@
     .chipL { display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px;
              border-radius: 999px; border: 1px solid var(--hair-2);
              background: rgba(255, 255, 255, 0.03);
-             font: 600 20px var(--mono); color: var(--text); letter-spacing: -0.01em; }
+             font: 500 18px var(--mono); color: var(--text); letter-spacing: -0.01em; }
     .chipL .cdot { width: 12px; height: 12px; border-radius: 50%; }
     .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
 

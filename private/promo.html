@@ -2850,7 +2850,7 @@
           // The lines, up to now.
           const tips = [];
           for (const l of L) {
-            g.strokeStyle = l.color; g.lineWidth = 3.5; g.lineJoin = 'round'; g.lineCap = 'round';
+            g.strokeStyle = l.color; g.lineWidth = 2.5; g.lineJoin = 'round'; g.lineCap = 'round';
             g.beginPath(); let pen = false;
             for (let j = 0; j <= i0; j++) { const v = l.P[j]; if (v == null) { pen = false; continue; } const x = X(j), y = Y(v); if (pen) g.lineTo(x, y); else { g.moveTo(x, y); pen = true; } }
             const vt = at(l.P, i0);
@@ -2864,7 +2864,7 @@
           const over = ys.length ? Math.max(0, ys[ys.length - 1] - (py + ph)) : 0;
           for (let i = 0; i < ys.length; i++) ys[i] = Math.max(py + 12, ys[i] - over);
           for (let i = ys.length - 2; i >= 0; i--) if (ys[i + 1] - ys[i] < GAP) ys[i] = ys[i + 1] - GAP;
-          g.font = '700 26px "Geist Mono", monospace'; g.textAlign = 'left'; g.textBaseline = 'middle';
+          g.font = '600 23px "Geist Mono", monospace'; g.textAlign = 'left'; g.textBaseline = 'middle';
           tips.forEach((t, i) => {
             g.fillStyle = t.l.color;
             g.beginPath(); g.arc(t.x, t.y, 7, 0, Math.PI * 2); g.fill();
