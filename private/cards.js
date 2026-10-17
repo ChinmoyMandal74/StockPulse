@@ -9917,6 +9917,64 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Fall from highs: how far a cut's stocks sit below their high --------
+  //
+  // (2026-10-17, the owner, over a social-media chart of AI stocks below their
+  // highs: "add that under market, call it Fall from Highs".) The stocks in a
+  // cut that sit furthest below their high, as bars hanging from zero, the
+  // smallest fall on the left and the deepest on the right, each with its
+  // ticker and its distance. Against the 52-week high (pctFromHigh) or the
+  // record close on file (pctFromAth). RED IS RIGHT: every bar is a price
+  // below where it was. The words are descriptive ("below its high"), never
+  // the post's "collapse" or "bloodbath": the card records a distance, not a
+  // verdict, and says nothing about what comes next.
+  const FALL_FROM = { h52: ['pctFromHigh', 'its 52-week high', '52-week high'], ath: ['pctFromAth', 'its record close', 'record close'] };
+  const FALL_CAP = { portrait: 20, square: 16, story: 20 };
+  function tplFallHigh() {
+    const fromKey = FALL_FROM[O.fallFrom] ? O.fallFrom : 'h52';
+    const [field, phrase, short] = FALL_FROM[fromKey];
+    const sc = scopeOf('fallScope', 'fallSector');
+    const want = [10, 15, 20].includes(Number(O.fallCount)) ? Number(O.fallCount) : 15;
+    const N = Math.min(want, FALL_CAP[size.id] || 15);
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+    const pool = sc.rows.filter((x) => x && !x.error && !IS_BENCH.has(x.symbol) && !IS_SECTOR_ETF.has(x.symbol) && num(x[field]) != null);
+    const deep = pool.slice().sort((a, b) => num(a[field]) - num(b[field])).slice(0, N);
+    if (!deep.length) {
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + esc(sc.label) + '</span>'
+        + '<h2 class="s-title">Fall from highs</h2><p class="s-empty">No stock in this cut has a ' + esc(short) + ' on file.</p></div></div>' + chromeFoot();
+    }
+    const shown = deep.slice().reverse();                 // smallest fall left, deepest right
+    const deepest = Math.min(...shown.map((r) => num(r[field])));
+    const median = (() => { const v = pool.map((r) => num(r[field])).sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; })();
+
+    // ---- the bars, hanging from a zero line ----------------------------
+    const W = 952, H = Math.max(260, (({ portrait: 700, square: 470, story: 1080 })[size.id] || 700) + cardFill);
+    const n = shown.length, gap = n > 15 ? 6 : 10, bw = (W - gap * (n - 1)) / n;
+    const top = 58, valH = 34, room = H - top - valH - 8;
+    const tick = n > 15 ? 15 : n > 10 ? 17 : 20, val = n > 15 ? 15 : n > 10 ? 17 : 20;
+    const red = pal.down, ink = pal.ink('#e9ecf2');
+    let g = '<line x1="0" y1="' + top + '" x2="' + W + '" y2="' + top + '" stroke="' + pal.zero + '" stroke-width="1.5"/>';
+    shown.forEach((r, i) => {
+      const x = i * (bw + gap), v = num(r[field]);
+      const h = Math.max(3, Math.abs(v) / Math.abs(deepest || -1) * room);
+      g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (top - 16) + '" text-anchor="middle" font-size="' + tick + '" font-weight="600" fill="' + ink + '" font-family="Geist Mono, monospace">' + esc(r.symbol) + '</text>';
+      g += '<rect x="' + x.toFixed(1) + '" y="' + top + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3" fill="' + red + '" fill-opacity="0.85"/>';
+      g += '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (top + h + valH - 10).toFixed(1) + '" text-anchor="middle" font-size="' + val + '" font-weight="500" fill="' + pal.axis + '" font-family="Geist Mono, monospace">'
+        + esc('−' + Math.abs(v).toFixed(0) + '%') + '</text>';
+    });
+    const svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" style="display:block;margin-top:18px">' + g + '</svg>';
+
+    const head = '<span class="s-kick">' + esc(sc.label + ' · below ' + phrase) + '</span>'
+      + '<h2 class="s-title">Fall from highs<br><span class="dim">' + esc(n + ' furthest down') + '</span></h2>';
+    const note = 'Each bar is how far the latest close sits below ' + phrase + ' (' + (fromKey === 'ath' ? 'the highest close on file, back to 2006 for most stocks' : 'the highest close of the past year')
+      + '), the ' + n + ' furthest of ' + pool.length.toLocaleString('en-US') + ' in this cut. The typical one sits ' + Math.abs(median).toFixed(0) + '% below. '
+      + 'Prices are split-adjusted and leave out dividends. A distance from a high, not a view on what comes next.';
+    return chromeTop()
+      + '<div class="s-body"><div>' + head + svg
+      + '<p class="s-sub wide" style="--fs:16px;margin-top:14px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Who added, who cut: one stock's institutional holders over time -----
   //
   // (2026-10-17, the owner: "'who's been buying' promo card you can do now".)
@@ -10990,6 +11048,7 @@
     drawdown: tplDrawdown,
     bands: tplBands,
     instflow: tplInstFlow,
+    fallhigh: tplFallHigh,
     evo2: tplEvoTwo,
     industries: tplIndustries,
     indspot: tplIndSpot,

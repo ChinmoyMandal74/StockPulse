@@ -320,6 +320,36 @@
           9:16 for a Reel. It records in real time, so keep the tab in front.</p>
       </div>
       <!-- Benchmarks (Market group, 2026-10-17): the four index funds' lines. -->
+      <!-- Fall from highs (Market group, 2026-10-17): a cut's stocks furthest
+           below their high, as bars hanging from zero. -->
+      <div id="fallBox">
+        <label>Below</label>
+        <select id="fallFrom">
+          <option value="h52" selected>The 52-week high</option>
+          <option value="ath">The record close on file</option>
+        </select>
+        <label>How many</label>
+        <select id="fallCount">
+          <option value="10">10</option>
+          <option value="15" selected>15</option>
+          <option value="20">20</option>
+        </select>
+        <label>Within</label>
+        <select id="fallScope"><option value="All">All screened</option></select>
+        <label>Sector</label>
+        <select id="fallSector"><option value="All">All sectors</option></select>
+        <label>Industry</label>
+        <select id="fallIndustry"><option value="All">All industries</option></select>
+        <label>Size</label>
+        <select id="fallCap"><option value="All">All sizes</option></select>
+        <label>Screen</label>
+        <select id="fallScreen"><option value="">No screen</option></select>
+        <label>Index</label>
+        <select id="fallSp500"></select>
+        <p class="hint">The stocks in the cut furthest below their high, the
+          smallest fall on the left. A theme such as an AI list is picked under
+          Within. Funds are left out. Square holds 16.</p>
+      </div>
       <div id="bmkBox">
         <label>Window</label>
         <select id="bmkWin">
@@ -2003,6 +2033,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
+      { id: 'fallhigh', name: 'Fall from highs', note: 'The stocks in a cut furthest below their 52-week high or their record close, as bars hanging from zero' },
       { id: 'benchmarks', name: 'Benchmarks', note: 'The four index funds \u2014 S&P 500, Nasdaq 100, Russell 2000 and Dow \u2014 rebased to the start of the window and ranked' },
       { id: 'race', name: 'Race chart', note: 'The leaders in a list as a 25-second video: each line drawn day by day, the labels re-sorting as they overtake' },
       { id: 'scatter', name: 'Scatter', note: 'Any two measures against each other, a dot per company — point at one for its name, click to open it' },
@@ -2069,6 +2100,7 @@
     const MKT_VIEWS = [
       ['day', 'Snapshot'],
       ['benchmarks', 'Benchmarks'],
+      ['fallhigh', 'Fall from highs'],
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
       ['movegrid', 'Moves by sector'],
@@ -2209,7 +2241,7 @@
       for (const part of ['Scope', 'Sector', 'Cap', 'Screen', 'Sp500', 'Industry']) scopeSyncFrom(prefix + part);
     }
     // Which scoped controls belong to which template, for an opened post.
-    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac' };
+    const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac', fallhigh: 'fall' };
     // The Race chart is the owner's too (2026-10-16: "always for Admin only").
     const OWNER_ONLY_TPLS = new Set(['announce', 'race']);
     let canAnnounce = false;
@@ -2737,7 +2769,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'bmkWin', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
+      'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -2937,7 +2969,7 @@
     // (an industry belongs to one sector), and drops a choice the new sector
     // does not contain. Run at the top of every render, so it has already
     // happened by the time a card reads the controls.
-    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin', 'sct', 'rac'];
+    const INDUSTRY_PREFIXES = ['mov', 'cht', 'spk', 'rng', 'adv', 'fund', 'size', 'bub', 'hist', 'shrt', 'bar', 'lin', 'sct', 'rac', 'fall'];
     const industryFor = {};
     function syncIndustries(force) {
       INDUSTRY_PREFIXES.forEach((p) => {
@@ -3233,7 +3265,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
@@ -3357,6 +3389,7 @@
       $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
       $('racBox').style.display = tpl === 'race' ? 'block' : 'none';
       $('bmkBox').style.display = tpl === 'benchmarks' ? 'block' : 'none';
+      $('fallBox').style.display = tpl === 'fallhigh' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
@@ -3729,6 +3762,8 @@
       for (const [v, label] of Cards.scatterCounts()) $('sctCount').appendChild(new Option(label, v, v === '100', v === '100'));
     }());
     $('bmkWin').addEventListener('change', () => { if (tpl === 'benchmarks') render(); });
+    ['fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'fallhigh') render(); }));
     ['racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'race') render(); }));
     ['sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector',
@@ -4507,6 +4542,7 @@
         $('linScope').innerHTML = $('movScope').innerHTML;
         $('sctScope').innerHTML = $('movScope').innerHTML;
         $('racScope').innerHTML = $('movScope').innerHTML;
+        $('fallScope').innerHTML = $('movScope').innerHTML;
         $('fundSym').innerHTML = $('chtSym').innerHTML;
         $('spotSym').innerHTML = $('chtSym').innerHTML;
         $('histSym').innerHTML = $('chtSym').innerHTML;
@@ -4579,7 +4615,7 @@
         const secOpts = '<option value="All">All sectors</option>' +
           Cards.sectors(stocks).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
         ['movSector', 'chtSector', 'advSector', 'fundSector', 'spkSector', 'rngSector',
-          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'sctSector', 'racSector', 'indSector'].forEach((id) => {
+          'sizeSector', 'bubSector', 'histSector', 'shrtSector', 'barSector', 'linSector', 'sctSector', 'racSector', 'fallSector', 'indSector'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = secOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4593,7 +4629,7 @@
           Filters.CAP_ORDER.map((n) => `<option value="${esc(n)}">${esc(n)} · ` +
             `${esc(Filters.CAP_RANGE[n])}</option>`).join('');
         ['movCap', 'chtCap', 'advCap', 'fundCap', 'spkCap', 'rngCap',
-          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'sctCap', 'racCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
+          'sizeCap', 'bubCap', 'histCap', 'shrtCap', 'barCap', 'linCap', 'sctCap', 'racCap', 'fallCap', 'indCap', 'secCap', 'trkCap'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = capOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4609,7 +4645,7 @@
             list.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('') +
             '</optgroup>').join('');
         ['movScreen', 'chtScreen', 'advScreen', 'fundScreen', 'spkScreen', 'rngScreen',
-          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'sctScreen', 'racScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
+          'sizeScreen', 'bubScreen', 'histScreen', 'shrtScreen', 'barScreen', 'linScreen', 'sctScreen', 'racScreen', 'fallScreen', 'indScreen', 'secScreen', 'trkScreen'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = scrOpts;
           if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep;
@@ -4625,7 +4661,7 @@
           `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
         ['movSp500', 'chtSp500', 'advSp500', 'fundSp500', 'spkSp500', 'rngSp500',
           'sizeSp500', 'bubSp500', 'daySp500', 'histSp500', 'smovSp500', 'sbaSp500', 'eaSp500', 'corSp500', 'ssnSp500',
-          'shrtSp500', 'barSp500', 'linSp500', 'sctSp500', 'racSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
+          'shrtSp500', 'barSp500', 'linSp500', 'sctSp500', 'racSp500', 'fallSp500', 'indSp500', 'ispSp500', 'secSp500', 'sspSp500',
           'omkSp500', 'oscSp500', 'oinSp500', 'trkSp500', 'tsnSp500', 'tspSp500', 'othSp500'].forEach((id) => {
           const keep = $(id).value;
           $(id).innerHTML = spOpts;
