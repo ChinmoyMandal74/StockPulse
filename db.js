@@ -5018,6 +5018,57 @@ async function writeInstHoldings(rows) {
   return list.length;
 }
 
+// EARLIER QUARTERS, INTO THE HISTORY ONLY (inst13f-backfill.js, 2026-10-17).
+// Never the latest tables, and never over a period already on file: a
+// quarter the live load wrote (with its 250-position books) is not replaced
+// by a backfill's leaner copy. `insert ... do nothing`, so a re-run is safe.
+async function writeInstHistoryOnly(rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && r.period);
+  const now = Date.now();
+  for (let i = 0; i < list.length; i += 100) {
+    await db.batch(list.slice(i, i + 100).map((r) => ({
+      sql: 'insert into inst_history (symbol, period, data, at) values (?, ?, ?, ?) on conflict(symbol, period) do nothing',
+      args: [String(r.symbol).toUpperCase(), String(r.period), JSON.stringify(r), now],
+    })), 'write');
+  }
+  return list.length;
+}
+async function writeHolderHistoryOnly(kind, label, rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.key && r.name);
+  if (!list.length) return 0;
+  const now = Date.now();
+  const n = (v) => (v == null ? null : Number(v));
+  await db.batch(list.map((r) => ({
+    sql: `insert into holder_history (kind, id, label, name, value, positions, bought, sold, data, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(kind, id, label) do nothing`,
+    args: [String(kind), String(r.key), String(label), String(r.name).slice(0, 160), n(r.value), n(r.positions), n(r.bought), n(r.sold),
+      JSON.stringify({ asOf: r.asOf || null, nav: n(r.nav), added: n(r.added), exited: n(r.exited), data: r.data || {} }), now],
+  })), 'write');
+  return list.length;
+}
+// One stock's quarters, oldest first: a seek on the primary key.
+async function readInstHistory(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select period, data from inst_history where symbol = ? order by period', args: [String(symbol).toUpperCase()] });
+  return r.rows.map((x) => { try { return Object.assign(JSON.parse(x.data), { period: String(x.period) }); } catch { return null; } }).filter(Boolean);
+}
+// One holder's periods, oldest first by the date each describes: a seek on
+// the primary key's (kind, id) prefix. `withData` false leaves the positions.
+async function readHolderHistory(kind, id, withData) {
+  await init();
+  const r = await db.execute({ sql: 'select label, value, positions, bought, sold, data from holder_history where kind = ? and id = ?', args: [String(kind), String(id)] });
+  const n = (v) => (v == null ? null : Number(v));
+  return r.rows.map((x) => {
+    let d = {};
+    try { d = JSON.parse(x.data || '{}'); } catch { d = {}; }
+    const o = { label: String(x.label), asOf: d.asOf || null, value: n(x.value), positions: n(x.positions), bought: n(x.bought), sold: n(x.sold) };
+    if (withData) o.data = d.data || {};
+    return o;
+  }).sort((a, b) => String(a.asOf || a.label).localeCompare(String(b.asOf || b.label)));
+}
+
 async function readInstHolding(symbol) {
   await init();
   const r = await db.execute({ sql: 'select * from inst_holdings where symbol = ?', args: [String(symbol).toUpperCase()] });
@@ -7383,6 +7434,7 @@ module.exports = {
   readBarsFor,
   purgeSymbol,
   readSplitsBetween,
+  writeInstHistoryOnly, writeHolderHistoryOnly, readInstHistory, readHolderHistory,
   retireSymbol,
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,

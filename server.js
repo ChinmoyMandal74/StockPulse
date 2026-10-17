@@ -13545,6 +13545,63 @@ app.get('/api/holder', requireMember, route(async (req, res) => {
   res.json(await holderPayload(kind, id));
 }));
 
+// ---- holdings over the quarters (2026-10-17) --------------------------------
+// The history tables, drawn. Share counts from different quarters are not on
+// one footing across a split, but every stored quarter carries LAST quarter's
+// count adjusted to its own (splitadj.js at load time), so the
+// quarter-on-quarter change is split-proof, and chaining it gives an index a
+// split cannot bend. Values are in dollars at each quarter's price.
+
+// One stock's 13F quarters, oldest first. Members and guests as the
+// institutions route.
+app.get('/api/institutions/history', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  const rows = await store.readInstHistory(symbol);
+  let idx = null;
+  const quarters = rows.map((r) => {
+    const change = r.sharesPrev > 0 && r.shares >= 0 ? (r.shares / r.sharesPrev - 1) * 100 : null;
+    // The index restarts where a quarter cannot be chained to the one before.
+    idx = idx == null || change == null ? 100 : idx * (1 + change / 100);
+    return { period: r.period, quarter: Inst13f.quarterName(r.period), managers: r.managers == null ? null : Number(r.managers),
+      value: r.value == null ? null : Number(r.value), px: r.px == null ? null : Number(r.px), change,
+      added: r.added == null ? null : Number(r.added), exited: r.exited == null ? null : Number(r.exited), index: idx };
+  });
+  res.json({ symbol, quarters });
+}));
+
+// One holder's periods, oldest first, and optionally one stock's position in
+// each. Members, as the holder pages. A position absent from a period's
+// stored list is ZERO only when that list held all the holder's positions;
+// otherwise it is unknown (the list is capped), and said so.
+app.get('/api/holder/history', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const kind = String(req.query.kind || '').toUpperCase();
+  const id = String(req.query.id || '').trim();
+  if (!HOLDER_KINDS[kind] || !/^[A-Za-z0-9]{1,24}$/.test(id)) return res.status(400).json({ error: 'Bad holder.' });
+  const sym = String(req.query.symbol || '').trim().toUpperCase();
+  const want = /^[A-Z0-9.\-]{1,15}$/.test(sym) ? sym : null;
+  const rows = await store.readHolderHistory(kind, id, !!want);
+  const periods = rows.map((r) => ({ label: r.label, asOf: r.asOf, value: r.value, positions: r.positions, bought: r.bought, sold: r.sold,
+    net: r.bought != null && r.sold != null ? r.bought - r.sold : null }));
+  let position = null;
+  if (want) {
+    position = rows.map((r) => {
+      const pos = (r.data && r.data.pos) || [];
+      const hit = pos.find((p) => p[0] === want);
+      if (hit) return { label: r.label, asOf: r.asOf, held: true, shares: hit[1], value: hit[2], prev: hit[3],
+        change: hit[3] > 0 ? (hit[1] / hit[3] - 1) * 100 : null, isNew: hit[3] === 0 };
+      const complete = r.positions != null && pos.length >= r.positions;
+      return { label: r.label, asOf: r.asOf, held: complete ? false : null, shares: complete ? 0 : null, value: complete ? 0 : null };
+    });
+  }
+  res.json({ kind, id, periods, symbol: want, position });
+}));
+
 // ---- options open interest ---------------------------------------------------------
 // The contracts open on one stock, from the Options Clearing Corporation's
 // public series report (optionsoi.js). One function reads a stock; a route

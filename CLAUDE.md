@@ -41,6 +41,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
 | `nport.js`, `nport-load.js` | Which mutual funds and ETFs hold each stock, from Form N-PORT: the rules and the quarterly loader (local, by hand; streams a 460MB data set) |
 | `segments.js`, `sec-segments-load.js` | Where a company's revenue comes from, by fiscal year and by quarter with history, read from its reports' XBRL instances: the parser (and the worked-out fourth quarter and mix over time), and the history backfill |
+| `inst13f-backfill.js` | Earlier 13F quarters into the history tables only, never over a quarter on file; local, by hand |
 | `inst13f.js`, `inst13f-load.js`, `zipread.js` | Form 13F institutional holdings: the rules, the quarterly loader (local, by hand, four times a year), and the ZIP reader it needs |
 | `holders13.js`, `sec-holders-load.js` | Schedule 13D and 13G filings about each company: the reader, and the first fill |
 | `events8k.js`, `sec-events-load.js` | 8-K filings: the item catalogue and parser, and the first fill. The filings refresh keeps them current |

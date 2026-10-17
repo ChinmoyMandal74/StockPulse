@@ -134,7 +134,10 @@ function readSet(zip, cusips) {
   return { period, holders: q.done(), stats: { filings: subs.length, managers: new Set([...pick.values()].map((x) => x.cik)).size, rows, used, options } };
 }
 
-(async () => {
+// The reading half is shared with inst13f-backfill.js, which loads earlier
+// quarters into the history tables only. Run directly, this is the quarterly load.
+module.exports = { page, download, zipLinks, cusipMap, readSet, DIR, TOP };
+if (require.main === module) (async () => {
   const universe = (await store.readUniverse()).map((s) => String(s).toUpperCase());
   const tracked = new Set(universe);
   const sets = zipLinks(await page('https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets')).filter((u) => /form13f\.zip$/i.test(u)).slice(0, 2);

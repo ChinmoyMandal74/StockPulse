@@ -82,6 +82,27 @@
     .hb-gone > .core { padding: 20px 24px; }
     .hb-gone p { margin: 10px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted); }
     .hb-gone a { color: var(--text); text-decoration: none; font-family: var(--mono); margin-right: 14px; }
+    /* Quarter by quarter, and one position over the quarters: bars above zero
+       for buying, below for selling. Accent and orange, never green and red. */
+    .hb-qwrap { margin-bottom: 16px; }
+    .hb-qsub { font-size: 12px; color: var(--muted); margin-left: 6px; }
+    .hb-q { display: grid; gap: 6px; margin-top: 14px; align-items: end; }
+    .hb-q .c { display: flex; flex-direction: column; text-align: center; min-width: 0; }
+    .hb-q .u, .hb-q .d { height: 46px; display: flex; justify-content: center; }
+    .hb-q .u { align-items: flex-end; border-bottom: 1px solid var(--hair-2); }
+    .hb-q .d { align-items: flex-start; }
+    .hb-q .u i, .hb-q .d i { display: block; width: 60%; max-width: 44px; }
+    .hb-q .u i { background: color-mix(in srgb, var(--accent) 70%, transparent); border-radius: 3px 3px 0 0; }
+    .hb-q .d i { background: color-mix(in srgb, var(--orange) 70%, transparent); border-radius: 0 0 3px 3px; }
+    .hb-q .v { font: 500 11px var(--mono); color: var(--text); margin-top: 6px; }
+    .hb-q .l { font: 500 10.5px var(--mono); color: var(--muted); margin-top: 2px; }
+    .hb-q .m { font: 500 10.5px var(--mono); color: var(--faint); margin-top: 2px; }
+    .hb-q.pos .u { border-bottom: 0; height: 64px; }
+    .hb-q.pos .u i { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .hb-wrap tr.hb-row { cursor: pointer; }
+    .hb-wrap tr.hb-row:hover td { background: color-mix(in srgb, var(--wash) 3%, transparent); }
+    .hb-wrap tr.hb-det td { white-space: normal; text-align: left; font-family: var(--sans); background: color-mix(in srgb, var(--wash) 2%, transparent); }
+    .hb-det .hb-detn { font-size: 11.5px; color: var(--faint); margin-top: 8px; }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
   </style>
 </head>
@@ -115,6 +136,13 @@
     </header>
 
     <div class="hb-stats" id="stats"></div>
+
+    <!-- Quarter by quarter (2026-10-17): net bought or sold in tracked stocks
+         each period, from holder_history. -->
+    <div class="bezel hb-qwrap" id="qWrap" hidden><div class="core" style="padding:18px 22px">
+      <span class="k">Quarter by quarter</span> <span class="hb-qsub" id="qSub"></span>
+      <div id="qBody"></div>
+    </div></div>
 
     <div class="bezel" id="secWrap" hidden><div class="core" style="padding:18px 22px">
       <span class="k">By sector, of what is shown</span>
@@ -183,7 +211,7 @@
       $('count').textContent = rows.length + (rows.length === H.positions.length ? '' : ' of ' + H.positions.length) + ' shown';
       if (!rows.length) { $('wrap').innerHTML = '<div class="hb-empty">Nothing matches.</div>'; return; }
       $('wrap').innerHTML = '<table><thead><tr>' + COLS.map(([k, label, cls]) => '<th class="' + cls + (k === sortKey ? ' on' : '') + '" data-k="' + k + '">' + we(label) + (k === sortKey && label ? (sortDir < 0 ? ' ↓' : ' ↑') : '') + '</th>').join('') + '</tr></thead><tbody>'
-        + rows.map((p) => '<tr><td class="l"><a href="/stock/' + encodeURIComponent(p.symbol) + '">' + we(p.symbol) + '</a><span>' + we(p.name || '') + '</span></td>'
+        + rows.map((p) => '<tr class="hb-row" data-sym="' + we(p.symbol) + '" title="Click for this position over the quarters"><td class="l"><a href="/stock/' + encodeURIComponent(p.symbol) + '">' + we(p.symbol) + '</a><span>' + we(p.name || '') + '</span></td>'
           + '<td class="b"><i style="width:' + Math.max(0, (p.value || 0) / top * 100).toFixed(1) + '%"></i></td>'
           + '<td>' + we(money(p.value)) + '</td><td class="q">' + we(pct(p.ofBook)) + '</td>'
           + (isFund ? '<td class="q">' + we(pct(p.ofFund)) + '</td>' : '')
@@ -192,7 +220,41 @@
         + '</tbody></table>';
     }
 
+    // ONE POSITION OVER THE QUARTERS (2026-10-17): a click on a row opens it
+    // beneath, from /api/holder/history. Values at each period's price; the
+    // change in shares is the stored one, split-proof. A period whose stored
+    // list was capped and does not carry the stock is unknown, not zero.
+    const posCache = {};
+    async function openPosition(tr) {
+      const sym = tr.dataset.sym;
+      const next = tr.nextElementSibling;
+      if (next && next.classList.contains('hb-det')) { next.remove(); return; }
+      const det = document.createElement('tr');
+      det.className = 'hb-det';
+      det.innerHTML = '<td colspan="' + tr.children.length + '">Reading ' + we(sym) + ' over the quarters&hellip;</td>';
+      tr.after(det);
+      try {
+        if (!posCache[sym]) {
+          const r = await fetch('/api/holder/history?kind=' + encodeURIComponent(KIND) + '&id=' + encodeURIComponent(ID) + '&symbol=' + encodeURIComponent(sym), { cache: 'no-store' });
+          if (!r.ok) throw new Error('The server answered ' + r.status + '.');
+          posCache[sym] = (await r.json()).position || [];
+        }
+        const ps = posCache[sym];
+        if (ps.length < 2) { det.firstChild.textContent = 'Only one period on file for this holder so far.'; return; }
+        const top = Math.max(1e-9, ...ps.map((p) => p.value || 0));
+        const word = (p) => (p.held === null ? 'not in the stored list' : !p.held ? 'none' : p.isNew ? 'new' : p.change == null ? '' : chg(p.change));
+        det.firstChild.innerHTML = '<b>' + we(sym) + '</b> held by ' + we(H.name) + ', each period'
+          + '<div class="hb-q pos" style="grid-template-columns:repeat(' + ps.length + ', minmax(0, 1fr))">'
+          + ps.map((p) => '<div class="c" title="' + we(p.label + ': ' + (p.held === null ? 'not among the positions stored for that period' : money(p.value) + ', ' + shares(p.shares) + ' shares')) + '">'
+            + '<div class="u">' + (p.value > 0 ? '<i style="height:' + Math.max(3, p.value / top * 100).toFixed(1) + '%"></i>' : '') + '</div>'
+            + '<div class="v">' + we(p.held === null ? '?' : money(p.value)) + '</div><div class="l">' + we(p.label) + '</div><div class="m">' + we(word(p)) + '</div></div>').join('')
+          + '</div><div class="hb-detn">Bars: value at each period\u2019s price. Below: the change in shares on the period before, adjusted for splits. '
+          + (ps.some((p) => p.held === null) ? 'A \u201c?\u201d is a period whose stored list held only this holder\u2019s largest positions and not this one.' : '') + '</div>';
+      } catch (err) { det.firstChild.textContent = err.message || 'Could not read the history.'; }
+    }
     $('wrap').addEventListener('click', (e) => {
+      const row = e.target.closest('tr.hb-row');
+      if (row && !e.target.closest('a')) { openPosition(row); return; }
       const th = e.target.closest('th[data-k]');
       if (!th || !H) return;
       const k = th.dataset.k;
@@ -201,6 +263,25 @@
       draw();
     });
     $('q').addEventListener('input', () => { if (H) draw(); });
+
+    // QUARTER BY QUARTER (2026-10-17): net bought or sold in tracked stocks
+    // each period, at one price a stock, with what it held then beneath.
+    async function loadQuarters() {
+      const r = await fetch('/api/holder/history?kind=' + encodeURIComponent(KIND) + '&id=' + encodeURIComponent(ID), { cache: 'no-store' });
+      if (!r.ok) return;
+      const ps = ((await r.json()).periods || []).filter((p) => p.net != null);
+      if (ps.length < 2) return;
+      const max = Math.max(1, ...ps.map((p) => Math.abs(p.net)));
+      const sgn = (v) => (v >= 0 ? '+' : '\u2212') + money(Math.abs(v));
+      $('qSub').textContent = ps[0].label + ' to ' + ps[ps.length - 1].label + ' \u00b7 net bought or sold in tracked stocks each period, at one price a stock';
+      $('qBody').innerHTML = '<div class="hb-q" style="grid-template-columns:repeat(' + ps.length + ', minmax(0, 1fr))">'
+        + ps.map((p) => { const h = Math.max(2, Math.abs(p.net) / max * 100).toFixed(1);
+          return '<div class="c" title="' + we(p.label + ': bought ' + money(p.bought) + ', sold ' + money(p.sold) + '; held ' + money(p.value) + ' in tracked stocks') + '">'
+            + '<div class="u">' + (p.net > 0 ? '<i style="height:' + h + '%"></i>' : '') + '</div><div class="d">' + (p.net < 0 ? '<i style="height:' + h + '%"></i>' : '') + '</div>'
+            + '<div class="v">' + we(sgn(p.net)) + '</div><div class="l">' + we(p.label) + '</div><div class="m">' + we(money(p.value)) + '</div></div>'; }).join('')
+        + '</div>';
+      $('qWrap').hidden = false;
+    }
 
     (async () => {
       $('kind').textContent = isFund ? 'Fund' : 'Institutional manager';
@@ -240,6 +321,7 @@
           + 'Only stocks tracked on this site are counted, so the total is not the size of the ' + (isFund ? 'fund' : 'manager') + '. “Of the company” is blank where the share count on file is smaller than the position. '
           + 'A record of what was reported, months old by the time it is public; not a forecast and not a view on any stock.';
         draw();
+        loadQuarters().catch(() => {});
       } catch (e) {
         $('name').textContent = 'Could not load';
         $('wrap').innerHTML = '<div class="hb-empty">' + we(e.message || 'Something went wrong.') + '</div>';
