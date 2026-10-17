@@ -59,6 +59,7 @@
     .ig-ask .btn { margin-top: 0; }
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
+    #shwBox { display: none; }
     #disBox { display: none; }
     #movBox { display: none; }
     #dayBox { display: none; }
@@ -1882,6 +1883,19 @@
         <textarea id="annBody" maxlength="280">Try the screener on twenty real stocks — no account, no card, one click.</textarea>
       </div>
 
+      <!-- Showcase (2026-10-17): the product in a laptop and a phone, drawn from
+           the day's data. Owner-only, as the Announcement: the words are free text. -->
+      <div id="shwBox">
+        <label>Headline</label>
+        <textarea id="shwHead" maxlength="90">Every stock, measured the same way after every close.</textarea>
+        <label>Line under it (empty: the count of companies)</label>
+        <textarea id="shwSub" maxlength="140"></textarea>
+        <label>Stock on the phone</label>
+        <select id="shwSym"></select>
+        <p class="hint">The laptop shows the largest companies by market value, the
+          phone one stock with six months of prices, both from today's data. Keep
+          the headline to what the site does: no picks, no "next big stock".</p>
+      </div>
       <div id="disBox">
         <label>Depth</label>
         <select id="disMode">
@@ -2052,6 +2066,7 @@
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
+      { id: 'showcase', name: 'Showcase', note: 'The site in a laptop and a phone, drawn from today\u2019s data, under a headline of your own' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
     ];
@@ -2164,6 +2179,7 @@
       ['intro', 'Intro'],
       ['howto', 'How to'],
       ['announce', 'Announcement'],
+      ['showcase', 'Showcase'],
       ['disclaimer', 'Disclaimer'],
       ['avatar', 'Profile picture'],
     ];
@@ -2252,7 +2268,7 @@
     // Which scoped controls belong to which template, for an opened post.
     const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac', fallhigh: 'fall' };
     // The Race chart is the owner's too (2026-10-16: "always for Admin only").
-    const OWNER_ONLY_TPLS = new Set(['announce', 'race']);
+    const OWNER_ONLY_TPLS = new Set(['announce', 'race', 'showcase']);
     let canAnnounce = false;
     // ---- member mode ---------------------------------------------------------
     //
@@ -2788,7 +2804,7 @@
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
-      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody',
+      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym',
       'disMode'];
     function controlOpts() {
       const o = {};
@@ -3324,6 +3340,7 @@
       linkStockNames(stage);
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
+      $('shwBox').style.display = tpl === 'showcase' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
@@ -3562,6 +3579,9 @@
     });
     ['disMode'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
+    ['shwHead', 'shwSub'].forEach((id) =>
+      $(id).addEventListener('input', () => { if (tpl === 'showcase') render(); }));
+    $('shwSym').addEventListener('change', () => { if (tpl === 'showcase') render(); });
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
@@ -4580,6 +4600,8 @@
           if ([...$('ddSym').options].some((o) => o.value === keep)) $('ddSym').value = keep; }
         { const keep = $('iflSym').value; $('iflSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('iflSym').options].some((o) => o.value === keep)) $('iflSym').value = keep; }
+        { const keep = $('shwSym').value; $('shwSym').innerHTML = $('chtSym').innerHTML;
+          $('shwSym').value = [...$('shwSym').options].some((o) => o.value === keep) ? keep : ([...$('shwSym').options].some((o) => o.value === 'NVDA') ? 'NVDA' : $('shwSym').value); }
         { const keep = $('bndSym').value; $('bndSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('bndSym').options].some((o) => o.value === keep)) $('bndSym').value = keep; }
         // Two pickers from the one list, each keeping its choice across a

@@ -11140,7 +11140,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // The Drawdowns card: the same one-symbol read, at the depth Cards asks
   // for, so a saved post opens here with the history the studio drew.
   // The Bollinger bands card asks for its symbol's closes the same way.
-  const ddNeed = Cards.drawdownNeed(post.tpl, post.opts || {}) || Cards.bandsNeed(post.tpl, post.opts || {});
+  const ddNeed = Cards.drawdownNeed(post.tpl, post.opts || {}) || Cards.bandsNeed(post.tpl, post.opts || {}) || Cards.showcaseNeed(post.tpl, post.opts || {});
   if (ddNeed && ddNeed.symbol) {
     try {
       const bars = await store.readBars(ddNeed.symbol, ddNeed.days);   // newest-first

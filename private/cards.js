@@ -2196,6 +2196,90 @@
         '</div></div>' + chromeFoot();
     }
 
+    // ---- Showcase: the product in a laptop and a phone ---------------------
+    //
+    // (2026-10-17, the owner, over an Investor's Business Daily ad with its
+    // site in a laptop and a phone: "How can I make promotional photos like
+    // this", then "Go ahead".) A headline and a line under it, then a laptop
+    // drawn in CSS showing a small screener and a phone showing one stock, BOTH
+    // DRAWN FROM THE DAY'S DATA rather than pasted screenshots, so the picture
+    // is never stale and never shows a screen that no longer exists.
+    //
+    // THE HOUSE RULES THE AD DID NOT KEEP. The default headline describes what
+    // the site does; it does not promise to find the next big stock, and the
+    // owner's free text is the owner's (this card is owner-only, as the
+    // Announcement is). No Signal words on the screens: a verdict travels with
+    // the rule that fired, and a thumbnail has no room for the rule. The
+    // laptop's rows are the largest companies by market value, a neutral
+    // order, not a ranking of performers. Green and red are the day's and the
+    // year's price moves only. No offer and no button: there is no price to
+    // quote, and a drawn button on a still image does nothing.
+    function showcaseNeed(tpl, opts) {
+      if (tpl !== 'showcase') return null;
+      const o = opts || {};
+      return { symbol: o.shwSym || null, days: 130 };
+    }
+    function tplShowcase() {
+      const story = size.id === 'story', square = size.id === 'square';
+      const cos = stocks.filter((x) => x && !x.error && !isFundRow(x));
+      const all = stocks.filter((x) => x && !x.error);
+      const head = String(O.shwHead || '').trim() || 'Every stock, measured the same way after every close.';
+      const sub = String(O.shwSub || '').trim()
+        || cos.length.toLocaleString('en-US') + ' US-listed companies on one screen, with their filings, holders and history.';
+      const pctTxt = (v) => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(Math.abs(v) < 10 ? 2 : 1) + '%');
+      const pctCls = (v) => (v == null || !isFinite(v) || Math.abs(v) < 0.005 ? '' : v > 0 ? ' shw-up' : ' shw-dn');
+      const px = (v) => (v == null || !(Number(v) > 0) ? '—' : Number(v).toFixed(2));
+      // ---- the laptop: a screener of the largest companies -----------------
+      const nRows = story ? 13 : square ? 10 : 12;
+      const big = cos.filter((r) => Number(r.marketCap) > 0).sort((a, b) => b.marketCap - a.marketCap).slice(0, nRows);
+      const tr = (r) => '<div class="shw-tr"><b>' + esc(r.symbol) + '</b><span class="shw-nm">' + esc(nameOf(r)) + '</span>'
+        + '<span>' + esc(px(r.price)) + '</span><span class="' + pctCls(r.todayPct).trim() + '">' + esc(pctTxt(r.todayPct)) + '</span>'
+        + '<span class="' + pctCls(r.ytdPct).trim() + '">' + esc(pctTxt(r.ytdPct)) + '</span><span>' + esc(r.pctFromHigh == null ? '—' : pctTxt(r.pctFromHigh)) + '</span>'
+        + '<span>$' + esc(fmtMoney(r.marketCap)) + '</span></div>';
+      const screen = '<div class="shw-nav"><i class="shw-dot"></i><b>Tickr Lab</b><span>Screener</span><span>Themes</span><span>Compare</span>'
+        + '<em>' + esc(all.length.toLocaleString('en-US')) + ' tracked</em></div>'
+        + '<div class="shw-tr shw-th"><b>Symbol</b><span class="shw-nm">Company</span><span>Price</span><span>Today</span><span>YTD</span><span>Off high</span><span>Value</span></div>'
+        + big.map(tr).join('');
+      const laptop = '<div class="shw-lap"><div class="shw-lid"><div class="shw-scr">' + screen + '</div></div><div class="shw-base"></div></div>';
+      // ---- the phone: one stock --------------------------------------------
+      const need = showcaseNeed('showcase', O);
+      const row = (need.symbol && stocks.find((x) => x && x.symbol === need.symbol)) || big[0] || null;
+      let phone = '';
+      if (row) {
+        const hist = getHistory(row.symbol, need.days);
+        const C = hist && Array.isArray(hist.closes) ? hist.closes.map(Number).filter((c) => c > 0 && isFinite(c)).slice(-126) : [];
+        let spark = '<div class="shw-wait">Reading prices…</div>';
+        if (C.length >= 2) {
+          const W = 200, Hs = 70, lo = Math.min(...C), hi = Math.max(...C), rng = hi - lo || 1;
+          const pts = C.map((c, i) => (i / (C.length - 1) * W).toFixed(1) + ',' + (Hs - 4 - (c - lo) / rng * (Hs - 8)).toFixed(1)).join(' ');
+          const col = C[C.length - 1] >= C[0] ? pal.up : pal.down;
+          spark = '<div class="shw-spw"><svg viewBox="0 0 ' + W + ' ' + Hs + '" preserveAspectRatio="none" class="shw-sp"><polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>'
+            + '</div><div class="shw-cap">Six months</div>';
+        }
+        const pe = Number(row.trailingPe) > 0 ? Number(row.trailingPe).toFixed(1) : '—';
+        const tile = (k, v, cls) => '<div class="shw-tl"><span>' + esc(k) + '</span><b class="' + (cls || '').trim() + '">' + esc(v) + '</b></div>';
+        phone = '<div class="shw-ph"><div class="shw-isl"></div><div class="shw-pscr">'
+          + '<div class="shw-psym">' + esc(row.symbol) + '</div><div class="shw-pnm">' + esc(nameOf(row)) + '</div>'
+          + '<div class="shw-ppx">$' + esc(px(row.price)) + ' <span class="' + pctCls(row.todayPct).trim() + '">' + esc(pctTxt(row.todayPct)) + '</span></div>'
+          + spark
+          + '<div class="shw-tls">' + tile('This year', pctTxt(row.ytdPct), pctCls(row.ytdPct)) + tile('From high', row.pctFromHigh == null ? '—' : pctTxt(row.pctFromHigh))
+          + tile('Value', Number(row.marketCap) > 0 ? '$' + fmtMoney(row.marketCap) : '—') + tile('P/E', pe) + '</div>'
+          + '</div></div>';
+      }
+      return chromeTop()
+        + '<div class="s-body"><div class="shw-in">'
+        + '<h2 class="shw-h">' + esc(head) + '</h2>'
+        + '<p class="shw-s">' + esc(sub) + '</p>'
+        + '<div class="shw-scene">' + laptop + phone
+        + (story ? '<div class="shw-facts">' + [
+          [String(COV_DATA.length), 'data sets kept on the stocks tracked'],
+          ['1998', 'the earliest daily prices on file'],
+          ['SEC', 'filings, insiders and institutional holders, from the source'],
+        ].map(([a, b]) => '<div><b>' + esc(a) + '</b><span>' + esc(b) + '</span></div>').join('') + '</div>' : '')
+        + '</div>'
+        + '</div></div>' + chromeFoot();
+    }
+
     // ---- the disclaimer ----------------------------------------------------
     //
     // THE WORDS ARE /terms's OWN, DISTILLED — not written fresh here. Four
@@ -11264,7 +11348,7 @@
 
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
-    intro: tplIntro, announce: tplAnnounce,
+    intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
@@ -11599,6 +11683,59 @@
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
     /* Who added, who cut: two lists side by side. */
     /* The holder card as a ring: the ring beside its key; stacked on 9:16. */
+    .shw-in { display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .shw-h { font: 700 64px/1.04 var(--sans); letter-spacing: -0.03em; color: var(--text); margin: 0; max-width: 920px; text-wrap: balance; }
+    .sz-square .shw-h { font-size: 50px; }
+    .sz-story .shw-h { font-size: 76px; }
+    .shw-s { font-size: 24px; line-height: 1.4; color: var(--muted); margin: 18px 0 0; max-width: 800px; text-wrap: balance; }
+    .sz-square .shw-s { font-size: 20px; margin-top: 12px; }
+    .sz-story .shw-s { font-size: 30px; }
+    .shw-scene { position: relative; width: 100%; height: 560px; margin-top: 44px; }
+    .sz-story .shw-in { padding-top: 92px; }
+    .sz-square .shw-scene { height: 470px; margin-top: 30px; }
+    .sz-story .shw-scene { height: 1130px; margin-top: 54px; }
+    .shw-lap { position: absolute; left: 0; bottom: 34px; width: 712px; }
+    .sz-square .shw-lap { width: 680px; bottom: 26px; }
+    .sz-story .shw-lap { width: 880px; bottom: auto; top: 0; left: 36px; }
+    .shw-lid { background: color-mix(in srgb, var(--text) 14%, var(--card-ground)); border: 1px solid var(--hair-2); border-radius: 18px 18px 6px 6px; padding: 14px; }
+    .shw-scr { background: var(--card-ground); border-radius: 6px; aspect-ratio: 16 / 10; overflow: hidden; padding: 14px 16px; box-sizing: border-box; font-size: 13px; text-align: left; }
+    .sz-square .shw-scr { font-size: 11px; padding: 12px 14px; }
+    .sz-story .shw-scr { font-size: 15px; }
+    .shw-base { height: 18px; margin: 0 -44px; background: color-mix(in srgb, var(--text) 22%, var(--card-ground)); border-radius: 0 0 18px 18px; }
+    .shw-nav { display: flex; gap: 1.1em; align-items: center; padding-bottom: 0.8em; margin-bottom: 0.2em; border-bottom: 1px solid var(--hair); color: var(--muted); font-size: 0.92em; }
+    .shw-nav b { color: var(--text); font-weight: 650; margin-right: 0.6em; }
+    .shw-dot { display: block; width: 0.8em; height: 0.8em; border-radius: 0.22em; background: var(--accent); }
+    .shw-nav em { margin-left: auto; font-style: normal; font-family: var(--mono); color: var(--faint); }
+    .shw-tr { display: grid; grid-template-columns: 4.4em minmax(0, 1fr) 5.4em 4.8em 5.2em 5em 4.6em; gap: 0.6em; align-items: center; padding: 0.45em 0; border-bottom: 1px solid var(--hair); font-family: var(--mono); color: var(--text); }
+    .shw-tr > span:not(.shw-nm) { text-align: right; white-space: nowrap; }
+    .shw-tr b { font-weight: 600; }
+    .shw-nm { font-family: var(--sans); color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
+    .shw-th { color: var(--faint); font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.05em; }
+    .shw-th b { font-weight: 500; }
+    .shw-in .shw-up { color: var(--green); }
+    .shw-in .shw-dn { color: var(--red); }
+    .shw-ph { position: absolute; right: 0; bottom: 0; width: 250px; aspect-ratio: 9 / 19; background: color-mix(in srgb, var(--text) 16%, var(--card-ground)); border: 1px solid var(--hair-2); border-radius: 38px; padding: 9px; box-sizing: border-box; font-size: 16px; }
+    .sz-square .shw-ph { width: 210px; font-size: 13.5px; border-radius: 32px; }
+    .sz-story .shw-ph { width: 280px; font-size: 18px; border-radius: 42px; padding: 10px; right: 20px; }
+    .shw-facts { position: absolute; left: 20px; bottom: 40px; width: 560px; display: flex; flex-direction: column; gap: 34px; text-align: left; }
+    .shw-facts div { display: flex; flex-direction: column; gap: 4px; border-left: 3px solid var(--accent-2, var(--accent)); padding-left: 20px; }
+    .shw-facts b { font: 700 60px/1 var(--mono); color: var(--text); }
+    .shw-facts span { font-size: 26px; line-height: 1.3; color: var(--muted); }
+    .shw-pscr { background: var(--card-ground); border-radius: 30px; height: 100%; padding: 2.4em 1em 1em; box-sizing: border-box; display: flex; flex-direction: column; text-align: left; }
+    .sz-square .shw-pscr { border-radius: 25px; }
+    .sz-story .shw-pscr { border-radius: 36px; }
+    .shw-psym { font: 700 1.75em var(--mono); color: var(--text); line-height: 1.1; }
+    .shw-pnm { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .shw-ppx { font: 600 1.35em var(--mono); color: var(--text); margin: 0.6em 0 0.5em; white-space: nowrap; }
+    .shw-ppx span { font-size: 0.62em; }
+    .shw-spw { flex: 1 1 0; min-height: 4em; max-height: 13em; position: relative; }
+    .shw-sp { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .shw-cap { font: 0.66em var(--mono); color: var(--faint); margin-top: 0.3em; }
+    .shw-wait { height: 5em; display: flex; align-items: center; font-size: 0.75em; color: var(--faint); }
+    .shw-tls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5em; margin-top: 0.9em; }
+    .shw-tl { border: 1px solid var(--hair); border-radius: 0.6em; padding: 0.5em 0.6em; min-width: 0; }
+    .shw-tl span { display: block; font-size: 0.6em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+    .shw-tl b { display: block; font: 600 0.92em var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cvd-rows { margin-top: 20px; }
     .cvd-r { display: grid; align-items: center; gap: 16px; border-bottom: 1px solid var(--hair); }
     .cvd-ax { font: 600 13px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 6px; }
@@ -13746,7 +13883,7 @@
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
-    bandsNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    bandsNeed, showcaseNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
     drawdownYears: () => Object.keys(DD_YEARS),
     // The drawdown rules alone, for a host that draws the block outside a
     // card: the stock page takes these and none of the artboard's.
