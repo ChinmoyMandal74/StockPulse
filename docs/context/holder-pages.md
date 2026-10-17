@@ -52,3 +52,13 @@ The owner, on `/holder/M/1045810` (NVIDIA): *"Can you make a new promo template 
 - The card: kind and quarter, the name, four figures (in tracked stocks, stocks held, new, gone) on the capital-returns card's `cr-figs` grid, the sector split as one bar with its key, and the largest positions as bars (value, share of what is shown, `NEW` for a new position). Rows: 9 portrait, 5 square, 13 story. **Only the tracked stocks**, said in the subtitle and the note; a fund's note adds that its holdings are reported again inside its manager's 13F.
 - **The holder page links to it**: a Visuals button opens `/promo?tpl=holderbook&hkind=M&hid=<id>`. A holder outside the 200 is added to the picker under its own name once its book arrives.
 - Verified: built in Node at all three sizes from NVIDIA's figures; drawn in the studio from the holder page's link in dark and light.
+
+## The studio's holder picker is searchable (2026-10-16)
+The owner: "make the which one drop down searchable" (Holders › What one holder holds). `hbkId` became one of the studio's type-to-search pickers (`enhanceStockPickers`), through a small per-select config, `SP_NAMED`:
+
+- **It matches anywhere in the names already loaded** (the 200 largest of the kind, largest first within each rank).
+- **From two letters it also asks `/api/holder-directory?kind=&q=`**, 220ms after typing stops, which finds any holder on file by the start of its name. A reply for a term no longer in the box, or for the other kind, is dropped (`scope`).
+- **Picking a holder the select does not hold adds it as an option and chooses it**, so the card, saved posts and the change listener work as before.
+- Holder rows show the name and value without a ticker; the stock pickers are unchanged.
+
+Checked in the studio harness: "black" and "rock" find BlackRock in the loaded list, "zeb" finds a holder only the server knows and choosing it selects and draws it, nonsense finds nothing, and a stock picker still shows ticker and name.

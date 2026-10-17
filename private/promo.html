@@ -2921,23 +2921,52 @@
     // Options are read from the select when you type, never copied, so a
     // reload of the rows needs nothing done here.
     const SP_MAX = 40;
-    const isStockPicker = (el) => el && el.tagName === 'SELECT' && /Sym[AB2]?$/.test(el.id || '');
+    // THE HOLDER PICKER IS ONE OF THESE TOO (2026-10-16, the owner: "make the
+    // which one drop down searchable"). Its select holds the 200 largest of a
+    // kind; typing also asks /api/holder-directory, which finds any holder on
+    // file by the start of its name, so one outside the 200 can be picked.
+    // A pick that is not in the select yet is added to it, then chosen.
+    const SP_NAMED = {
+      hbkId: {
+        label: 'Holder: type a name', placeholder: 'Manager or fund name', none: 'No holder on file matches.',
+        scope: () => ($('hbkKind').value === 'F' ? 'F' : 'M'),
+        remote: async (q) => {
+          const kind = $('hbkKind').value === 'F' ? 'F' : 'M';
+          const r = await fetch('/api/holder-directory?kind=' + kind + '&q=' + encodeURIComponent(q), { cache: 'no-store' });
+          const d = await r.json();
+          const money = (v) => (v >= 1e12 ? '$' + (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? '$' + (v / 1e9).toFixed(1) + 'B' : '$' + Math.round(v / 1e6) + 'M');
+          return ((d && d.holders) || []).map((h) => ({ sym: String(h.id), name: h.name + (h.value > 0 ? ' · ' + money(h.value) : '') }));
+        },
+      },
+    };
+    const isStockPicker = (el) => el && el.tagName === 'SELECT' && (/Sym[AB2]?$/.test(el.id || '') || !!SP_NAMED[el.id]);
     const spLabel = (sel) => { const o = sel.options[sel.selectedIndex]; return o ? o.textContent : ''; };
     // Ticker matches first (exact, then the start), then a name that starts
     // with what was typed, then a word in it that does, then anywhere.
     function spMatches(sel, q) {
       const term = String(q || '').trim().toLowerCase();
       const out = [];
+      const named = !!SP_NAMED[sel.id];
       for (const o of sel.options) {
+        if (named && !o.value) continue;
         const sym = o.value, text = o.textContent, cut = text.indexOf(' \u2014 ');
-        const name = cut < 0 ? '' : text.slice(cut + 3);
+        // A named picker (a holder) has no ticker: its whole label is the name.
+        const name = named ? text : cut < 0 ? '' : text.slice(cut + 3);
+        if (named) {
+          const nm = name.toLowerCase();
+          const rank = !term ? 9 : nm.startsWith(term) ? 2 : nm.split(/[\s&.,\-\/]+/).some((w) => w.startsWith(term)) ? 3 : nm.includes(term) ? 4 : -1;
+          if (rank >= 0) out.push({ sym, name, rank });
+          continue;
+        }
         if (!term) { out.push({ sym, name, rank: 9 }); continue; }
         const s = sym.toLowerCase(), nm = name.toLowerCase();
         const rank = s === term ? 0 : s.startsWith(term) ? 1 : nm.startsWith(term) ? 2
           : nm.split(/[\s&.,\-\/]+/).some((w) => w.startsWith(term)) ? 3 : nm.includes(term) ? 4 : -1;
         if (rank >= 0) out.push({ sym, name, rank });
       }
-      if (term) out.sort((a, b) => a.rank - b.rank || a.sym.localeCompare(b.sym));
+      if (term && !named) out.sort((a, b) => a.rank - b.rank || a.sym.localeCompare(b.sym));
+      // Holders keep the select's order (largest first) within each rank.
+      if (term && named) out.sort((a, b) => a.rank - b.rank);
       return out;
     }
     function enhanceStockPickers() {
@@ -2951,34 +2980,60 @@
         const inp = document.createElement('input');
         inp.type = 'text'; inp.className = 'sp-in'; inp.autocomplete = 'off'; inp.spellcheck = false;
         inp.setAttribute('role', 'combobox'); inp.setAttribute('aria-autocomplete', 'list'); inp.setAttribute('aria-expanded', 'false');
-        inp.setAttribute('aria-label', 'Stock: type a ticker or a company name');
-        inp.placeholder = 'Ticker or company name';
+        const cfg = SP_NAMED[sel.id] || null;
+        inp.setAttribute('aria-label', cfg ? cfg.label : 'Stock: type a ticker or a company name');
+        inp.placeholder = cfg ? cfg.placeholder : 'Ticker or company name';
         const list = document.createElement('div');
         list.className = 'sp-list'; list.hidden = true; list.setAttribute('role', 'listbox');
         wrap.appendChild(inp); wrap.appendChild(list);
         let found = [], at = 0;
+        // What the server found for the term typed (a named picker only).
+        let remote = { term: '', hits: [] }, remoteTimer = null;
         const close = () => { list.hidden = true; inp.setAttribute('aria-expanded', 'false'); inp.value = spLabel(sel); };
         const draw = () => {
-          const all = spMatches(sel, inp.dataset.typed === '1' ? inp.value : '');
+          const typed = inp.dataset.typed === '1' ? inp.value : '';
+          let all = spMatches(sel, typed);
+          if (cfg && typed.trim() && remote.term === typed.trim().toLowerCase() && remote.scope === (cfg.scope ? cfg.scope() : '')) {
+            const have = new Set(all.map((m) => m.sym));
+            all = all.concat(remote.hits.filter((h) => !have.has(h.sym)));
+          }
           found = all.slice(0, SP_MAX);
           if (at >= found.length) at = 0;
           list.innerHTML = found.length
-            ? found.map((m, i) => `<div class="sp-opt${i === at ? ' on' : ''}" role="option" data-i="${i}"><b>${esc(m.sym)}</b><span>${esc(m.name)}</span></div>`).join('')
+            ? found.map((m, i) => `<div class="sp-opt${i === at ? ' on' : ''}" role="option" data-i="${i}">${cfg ? '' : `<b>${esc(m.sym)}</b>`}<span>${esc(m.name)}</span></div>`).join('')
               + (all.length > found.length ? `<div class="sp-none">${all.length - found.length} more \u2014 keep typing</div>` : '')
-            : '<div class="sp-none">Nothing on this screen matches.</div>';
+            : `<div class="sp-none">${cfg ? (typed.trim().length < 2 ? 'Keep typing\u2026' : cfg.none) : 'Nothing on this screen matches.'}</div>`;
           list.hidden = false; inp.setAttribute('aria-expanded', 'true');
           const on = list.querySelector('.sp-opt.on');
           if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
         };
         const choose = (m) => {
           if (!m) return;
+          // A holder the server found and the select does not hold yet.
+          if (![...sel.options].some((o) => o.value === m.sym)) sel.insertBefore(new Option(m.name, m.sym), sel.firstChild);
           const changed = sel.value !== m.sym;
           sel.value = m.sym;
           close();
           if (changed) sel.dispatchEvent(new Event('change', { bubbles: true }));
         };
         inp.addEventListener('focus', () => { inp.dataset.typed = '0'; at = 0; inp.select(); draw(); });
-        inp.addEventListener('input', () => { inp.dataset.typed = '1'; at = 0; draw(); });
+        inp.addEventListener('input', () => {
+          inp.dataset.typed = '1'; at = 0; draw();
+          // Ask the server too, a beat after typing stops; a reply for a term
+          // no longer in the box is dropped.
+          const term = inp.value.trim().toLowerCase();
+          if (!cfg || !cfg.remote || term.length < 2) return;
+          const scope = cfg.scope ? cfg.scope() : '';
+          clearTimeout(remoteTimer);
+          remoteTimer = setTimeout(async () => {
+            try {
+              const hits = await cfg.remote(term);
+              if (inp.value.trim().toLowerCase() !== term) return;
+              remote = { term, scope, hits };
+              if (document.activeElement === inp) draw();
+            } catch (e) { /* the list on the page still answers */ }
+          }, 220);
+        });
         inp.addEventListener('keydown', (e) => {
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (list.hidden) { draw(); return; } at = (at + (e.key === 'ArrowDown' ? 1 : found.length - 1)) % Math.max(1, found.length); draw(); }
           else if (e.key === 'Enter') { e.preventDefault(); if (!list.hidden) choose(found[at]); inp.blur(); }
