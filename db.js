@@ -2483,6 +2483,23 @@ async function writePostalAddress(text) {
   return v;
 }
 
+// The newest SEC bulk data set seen for each quarterly load (13F, N-PORT), by
+// file name, so the daily check mails the owner once when a new one appears.
+async function readSecSetsSeen() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'sec_sets_seen'");
+  try { return r.rows.length ? JSON.parse(String(r.rows[0].value || '{}')) || {} : {}; } catch { return {}; }
+}
+
+async function writeSecSetsSeen(seen) {
+  await init();
+  await db.execute({
+    sql: "insert into app_meta (key, value) values ('sec_sets_seen', ?) "
+       + 'on conflict(key) do update set value = excluded.value',
+    args: [JSON.stringify(seen || {})],
+  });
+}
+
 async function readHiddenColumns() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'hidden_columns'");
@@ -7356,6 +7373,8 @@ module.exports = {
   deletePost,
   readPostalAddress,
   writePostalAddress,
+  readSecSetsSeen,
+  writeSecSetsSeen,
   readHiddenColumns,
   readPeerLinks,
   writePeerLinks,

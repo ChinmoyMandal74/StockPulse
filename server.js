@@ -17587,8 +17587,75 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
       }
     } catch (err) { console.warn('watchdog: instagram token check skipped:', err.message); }
   }
-  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns, margins });
+  // A new SEC bulk data set for a quarterly load, on the same daily pass.
+  let secSets = null;
+  if (req.query.dry !== '1') {
+    try {
+      secSets = await Promise.race([secSetsCheck(),
+        new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
+    } catch (err) { console.warn('watchdog: SEC data set check skipped:', err.message); }
+  }
+  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns, margins, secSets });
 }));
+
+// NEW 13F AND N-PORT DATA (2026-10-17, the owner: "Can I get an alert when the
+// 13F arrives"). The quarterly loads (inst13f-load.js, nport-load.js) are run
+// by hand from the owner's machine and read the SEC's bulk data sets, which
+// come out a few weeks after each three-month window of filings closes: a
+// manager files its 13F any day up to 45 days after the quarter, so there is
+// no one day the quarter "arrives". Two page reads a day, one after the other
+// as the SEC asks. The first sighting of each list is recorded without a
+// letter; after that, a file name not seen before is mailed once. A page that
+// cannot be read records nothing, so tomorrow tries again.
+const SEC_SETS = [
+  { key: 'f13', label: '13F', url: 'https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets', re: /href="([^"]+_form13f\.zip)"/i,
+    cmd: 'node --use-system-ca inst13f-load.js --commit', page: '/holders' },
+  { key: 'nport', label: 'N-PORT', url: 'https://www.sec.gov/data-research/sec-markets-data/form-n-port-data-sets', re: /href="([^"]+_nport\.zip)"/i,
+    cmd: 'node --use-system-ca nport-load.js --commit', page: '/holders' },
+];
+// '01sep2026-30nov2026_form13f.zip' -> 'Q3 2026': the window opening in the
+// month a quarter ends carries that quarter's filings (due 45 days later).
+function sec13fQuarter(name) {
+  const m = /^\d{2}(mar|jun|sep|dec)(\d{4})-/i.exec(String(name || ''));
+  return m ? 'Q' + ({ mar: 1, jun: 2, sep: 3, dec: 4 })[m[1].toLowerCase()] + ' ' + m[2] : null;
+}
+async function secSetsCheck() {
+  if (!SEC_UA) return { skipped: 'no SEC_UA' };
+  const seen = await store.readSecSetsSeen();
+  const out = {};
+  let changed = false;
+  for (const s of SEC_SETS) {
+    let newest = null;
+    try {
+      const r = await fetch(s.url, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(15000) });
+      if (!r.ok) { out[s.key] = { status: r.status }; if (r.status === 429 || r.status === 403) break; continue; }
+      const m = s.re.exec(await r.text());
+      newest = m ? m[1].split('/').pop() : null;
+    } catch (err) { out[s.key] = { error: err.name }; continue; }
+    if (!newest) { out[s.key] = { found: null }; continue; }
+    const was = seen[s.key] || null;
+    out[s.key] = { newest, was };
+    if (newest === was) continue;
+    seen[s.key] = newest;
+    changed = true;
+    if (!was || !MAIL_READY) continue;
+    const to = await operatorEmail();
+    if (!to) continue;
+    const q = s.key === 'f13' ? sec13fQuarter(newest) : null;
+    const heading = `New ${s.label} data at the SEC${q ? ': ' + q : ''}`;
+    const intro = `The SEC has published a new ${s.label} data set (${newest}). Nothing loads it on its own: `
+      + `run the loader from your machine, outside the nightly windows. It is a dry run without --commit.`;
+    const lines = [s.cmd];
+    const note = `Sent by the daily check, which looks at the SEC's ${s.label} data set page once a day.`;
+    try {
+      out[s.key].mailed = await sendMail({ kind: 'sec-data-set', to, subject: `[Tickr Lab] ${heading}`,
+        text: textShell({ heading, intro, lines, note }),
+        html: emailShell({ heading, intro, body: '<p style="margin:0 0 14px;font-size:14px;line-height:1.6"><code>' + s.cmd + '</code></p>', note }) });
+    } catch (err) { console.warn('sec data set mail failed:', err.message); }
+  }
+  if (changed) await store.writeSecSetsSeen(seen);
+  return out;
+}
 
 // ---- intraday price refreshes -------------------------------------------------
 // Called every 30 minutes by an external scheduler (cron-job.org, set in New
