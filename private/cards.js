@@ -10332,6 +10332,12 @@
   // one thing red means on this site.
   const DD_YEARS = { 3: 760, 5: 1265, 10: 2530, max: 5200 };
   const DD_ROWS = { portrait: 6, square: 4, story: 8 };
+  // EVERY CARD THAT READS ONE SYMBOL'S CLOSES, asked by both hosts: the studio
+  // repaints on its reply, /api/m/post reads it. A list kept in a host left the
+  // Showcase phone and the What we measure trend stuck on "Reading prices" (2026-10-17).
+  function historyNeed(tpl, opts) {
+    return drawdownNeed(tpl, opts) || bandsNeed(tpl, opts) || showcaseNeed(tpl, opts) || readingsNeed(tpl, opts);
+  }
   function drawdownNeed(tpl, opts) {
     if (tpl !== 'drawdown') return null;
     const o = opts || {};
@@ -14202,7 +14208,7 @@
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
-    bandsNeed, showcaseNeed, readingsNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    bandsNeed, showcaseNeed, readingsNeed, historyNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
     drawdownYears: () => Object.keys(DD_YEARS),
     // The drawdown rules alone, for a host that draws the block outside a
     // card: the stock page takes these and none of the artboard's.

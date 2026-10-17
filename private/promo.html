@@ -2380,7 +2380,7 @@
         .then((d) => {
           histCache[key] = d; delete histPending[key];
           // The Drawdowns card reads the same channel, at its own depth.
-          if (tpl === 'chart' || tpl === 'drawdown' || tpl === 'bands') render();
+          if (tpl === 'chart' || Cards.historyNeed(tpl, controlOpts())) render();
         })
         .catch(() => { delete histPending[key]; });
       return null;
