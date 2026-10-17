@@ -2219,33 +2219,100 @@
       const o = opts || {};
       return { symbol: o.shwSym || null, days: 130 };
     }
+    // MORE THAN ONE PICTURE (2026-10-17, the owner: "Can we make different such
+    // visualizations... showing different data and may be different styles").
+    // Four choices, each a control: the STYLE (a laptop and a phone, one large
+    // browser window, or two phones), what the BIG SCREEN shows (the screener,
+    // a heat map of the largest companies, or the sectors), what the PHONE
+    // shows (one stock, its ratios, or who reports next), the WINDOW the heat
+    // map and the sectors are measured over, and the BACKDROP (plain, or a
+    // field of linked dots). Every screen is still drawn from the day's rows.
+    // The heat map and the sector bars are price moves, so green and red; the
+    // sectors are the median company, so one giant cannot carry its sector.
+    const SHW_WIN = { today: ['todayPct', 'Today', 3], m1: ['oneMonthPct', 'Past month', 10], ytd: ['ytdPct', 'This year', 30] };
     function tplShowcase() {
       const story = size.id === 'story', square = size.id === 'square';
+      const style = ['devices', 'browser', 'phones'].includes(O.shwStyle) ? O.shwStyle : 'devices';
+      const bigKind = ['screener', 'heat', 'sectors'].includes(O.shwLap) ? O.shwLap : 'screener';
+      const phKind = ['stock', 'ratios', 'earnings'].includes(O.shwPh) ? O.shwPh : 'stock';
+      const W8 = SHW_WIN[O.shwWin] || SHW_WIN.today;
       const cos = stocks.filter((x) => x && !x.error && !isFundRow(x));
       const all = stocks.filter((x) => x && !x.error);
       const head = String(O.shwHead || '').trim() || 'Every stock, measured the same way after every close.';
       const sub = String(O.shwSub || '').trim()
         || cos.length.toLocaleString('en-US') + ' US-listed companies on one screen, with their filings, holders and history.';
+      const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
       const pctTxt = (v) => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(Math.abs(v) < 10 ? 2 : 1) + '%');
-      const pctCls = (v) => (v == null || !isFinite(v) || Math.abs(v) < 0.005 ? '' : v > 0 ? ' shw-up' : ' shw-dn');
+      const pctCls = (v) => (v == null || !isFinite(v) || Math.abs(v) < 0.005 ? '' : v > 0 ? 'shw-up' : 'shw-dn');
       const px = (v) => (v == null || !(Number(v) > 0) ? '—' : Number(v).toFixed(2));
-      // ---- the laptop: a screener of the largest companies -----------------
-      const nRows = story ? 13 : square ? 10 : 12;
-      const big = cos.filter((r) => Number(r.marketCap) > 0).sort((a, b) => b.marketCap - a.marketCap).slice(0, nRows);
-      const tr = (r) => '<div class="shw-tr"><b>' + esc(r.symbol) + '</b><span class="shw-nm">' + esc(nameOf(r)) + '</span>'
-        + '<span>' + esc(px(r.price)) + '</span><span class="' + pctCls(r.todayPct).trim() + '">' + esc(pctTxt(r.todayPct)) + '</span>'
-        + '<span class="' + pctCls(r.ytdPct).trim() + '">' + esc(pctTxt(r.ytdPct)) + '</span><span>' + esc(r.pctFromHigh == null ? '—' : pctTxt(r.pctFromHigh)) + '</span>'
-        + '<span>$' + esc(fmtMoney(r.marketCap)) + '</span></div>';
-      const screen = '<div class="shw-nav"><i class="shw-dot"></i><b>Tickr Lab</b><span>Screener</span><span>Themes</span><span>Compare</span>'
-        + '<em>' + esc(all.length.toLocaleString('en-US')) + ' tracked</em></div>'
-        + '<div class="shw-tr shw-th"><b>Symbol</b><span class="shw-nm">Company</span><span>Price</span><span>Today</span><span>YTD</span><span>Off high</span><span>Value</span></div>'
-        + big.map(tr).join('');
-      const laptop = '<div class="shw-lap"><div class="shw-lid"><div class="shw-scr">' + screen + '</div></div><div class="shw-base"></div></div>';
-      // ---- the phone: one stock --------------------------------------------
+      const bySize = cos.filter((r) => Number(r.marketCap) > 0).sort((a, b) => b.marketCap - a.marketCap);
+      const nav = (right) => '<div class="shw-nav"><i class="shw-dot"></i><b>Tickr Lab</b><span>Screener</span><span>Themes</span><span>Compare</span>'
+        + '<em>' + esc(right) + '</em></div>';
+
+      // ---- the big screen ----------------------------------------------------
+      // `narrow` is the same screen on a phone: fewer columns, a short header.
+      function bigScreen(narrow) {
+        const browser = style === 'browser';
+        if (bigKind === 'heat') {
+          const cols = narrow ? 4 : browser ? (story ? 6 : 8) : 8;
+          const rowsN = narrow ? (story ? 9 : 7) : browser ? (story ? 12 : square ? 5 : 6) : (story ? 6 : 5);
+          const tiles = bySize.slice(0, cols * rowsN).map((r) => {
+            const v = num(r[W8[0]]);
+            const k = v == null ? 0 : Math.min(1, Math.abs(v) / W8[2]);
+            const bg = v == null ? 'var(--hair)' : 'color-mix(in srgb, var(--' + (v >= 0 ? 'green' : 'red') + ') ' + Math.round(14 + k * 62) + '%, var(--card-ground))';
+            return '<div class="shw-ht" style="background:' + bg + '"><b>' + esc(r.symbol) + '</b><span>' + esc(pctTxt(v)) + '</span></div>';
+          }).join('');
+          return (narrow ? '<div class="shw-ptl">' + esc(W8[1] + ', the largest') + '</div>' : nav('The ' + cols * rowsN + ' largest · ' + W8[1]))
+            + '<div class="shw-heat" style="grid-template-columns:repeat(' + cols + ',1fr);grid-template-rows:repeat(' + rowsN + ',1fr)">' + tiles + '</div>';
+        }
+        if (bigKind === 'sectors') {
+          const m = new Map();
+          for (const r of cos) { const v = num(r[W8[0]]); if (v == null || !r.sector) continue; (m.get(r.sector) || m.set(r.sector, []).get(r.sector)).push(v); }
+          const med = (a) => { const s = a.slice().sort((x, y) => x - y), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+          const secs = [...m].map(([name, a]) => ({ name, n: a.length, v: med(a) })).sort((a, b) => b.v - a.v);
+          const scale = Math.max(0.01, ...secs.map((s) => Math.abs(s.v)));
+          const rows = secs.map((s) => '<div class="shw-sr"><span class="shw-sn">' + esc(s.name) + (narrow ? '' : ' <i>' + s.n + '</i>') + '</span>'
+            + '<span class="shw-st"><span class="shw-sf ' + (s.v >= 0 ? 'shw-bu' : 'shw-bd') + '" style="' + (s.v >= 0 ? 'left:50%' : 'right:50%') + ';width:' + Math.max(0.8, Math.abs(s.v) / scale * 50).toFixed(1) + '%"></span></span>'
+            + '<span class="' + pctCls(s.v) + '">' + esc(pctTxt(s.v)) + '</span></div>').join('');
+          return (narrow ? '<div class="shw-ptl">' + esc('Sectors, ' + W8[1].toLowerCase()) + '</div>' : nav('The median company · ' + W8[1]))
+            + '<div class="shw-secs">' + rows + '</div>';
+        }
+        const n = narrow ? (story ? 20 : square ? 13 : 17) : browser ? (story ? 26 : square ? 11 : 14) : (story ? 13 : square ? 10 : 12);
+        const tr = (r) => '<div class="shw-tr"><b>' + esc(r.symbol) + '</b><span class="shw-nm">' + esc(nameOf(r)) + '</span>'
+          + '<span>' + esc(px(r.price)) + '</span><span class="' + pctCls(r.todayPct) + '">' + esc(pctTxt(r.todayPct)) + '</span>'
+          + '<span class="' + pctCls(r.ytdPct) + '">' + esc(pctTxt(r.ytdPct)) + '</span><span>' + esc(r.pctFromHigh == null ? '—' : pctTxt(r.pctFromHigh)) + '</span>'
+          + '<span>$' + esc(fmtMoney(r.marketCap)) + '</span></div>';
+        return (narrow ? '<div class="shw-ptl">The largest, today</div>' : nav(all.length.toLocaleString('en-US') + ' tracked'))
+          + '<div class="shw-tr shw-th"><b>Symbol</b><span class="shw-nm">Company</span><span>Price</span><span>Today</span><span>YTD</span><span>Off high</span><span>Value</span></div>'
+          + bySize.slice(0, n).map(tr).join('');
+      }
+
+      // ---- the phone ---------------------------------------------------------
       const need = showcaseNeed('showcase', O);
-      const row = (need.symbol && stocks.find((x) => x && x.symbol === need.symbol)) || big[0] || null;
-      let phone = '';
-      if (row) {
+      const row = (need.symbol && stocks.find((x) => x && x.symbol === need.symbol)) || bySize[0] || null;
+      function phoneScreen() {
+        if (phKind === 'earnings') {
+          const t = new Date(); t.setHours(12, 0, 0, 0);
+          const soon = bySize.slice(0, 100).map((r) => ({ r, d: r.nextEarningsDate ? new Date(String(r.nextEarningsDate).slice(0, 10) + 'T12:00:00') : null }))
+            .filter((x) => x.d && !isNaN(x.d) && x.d >= t).sort((a, b) => a.d - b.d).slice(0, story ? 10 : 8);
+          const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const anyEst = soon.some((x) => x.r.nextEarningsEstimated);
+          return '<div class="shw-ptl">Reporting next</div><div class="shw-pst">among the 100 largest</div>'
+            + '<div class="shw-er">' + soon.map((x) => '<div><span class="shw-ed">' + MON[x.d.getMonth()] + ' ' + x.d.getDate() + '</span><b>' + esc(x.r.symbol) + '</b>'
+              + '<span class="shw-en">' + esc(nameOf(x.r)) + '</span>' + (x.r.nextEarningsEstimated ? '<i>est.</i>' : '') + '</div>').join('') + '</div>'
+            + (anyEst ? '<div class="shw-cap">est.: worked out from its past report dates</div>' : '');
+        }
+        if (!row) return '';
+        const top = '<div class="shw-psym">' + esc(row.symbol) + '</div><div class="shw-pnm">' + esc(nameOf(row)) + '</div>'
+          + '<div class="shw-ppx">$' + esc(px(row.price)) + ' <span class="' + pctCls(row.todayPct) + '">' + esc(pctTxt(row.todayPct)) + '</span></div>';
+        if (phKind === 'ratios') {
+          const pos = (v, d) => (num(v) != null && num(v) > 0 ? num(v).toFixed(d == null ? 1 : d) : '—');
+          const pc = (v) => (num(v) == null ? '—' : num(v).toFixed(Math.abs(num(v)) < 10 ? 1 : 0) + '%');
+          const L = [['P/E, trailing', pos(row.trailingPe)], ['P/E, forward', pos(row.forwardPe)], ['Price / sales', pos(row.priceToSales)],
+            ['Gross margin', pc(row.grossMargin)], ['Operating margin', pc(row.operatingMargin)], ['Revenue growth', pc(row.revenueGrowthYoY)],
+            ['Return on equity', pc(row.roe)], ['Dividend yield', num(row.divYield) > 0 ? pc(row.divYield) : '—']];
+          return top + '<div class="shw-rl">' + L.map(([k, v]) => '<div><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>').join('') + '</div>';
+        }
         const hist = getHistory(row.symbol, need.days);
         const C = hist && Array.isArray(hist.closes) ? hist.closes.map(Number).filter((c) => c > 0 && isFinite(c)).slice(-126) : [];
         let spark = '<div class="shw-wait">Reading prices…</div>';
@@ -2256,27 +2323,48 @@
           spark = '<div class="shw-spw"><svg viewBox="0 0 ' + W + ' ' + Hs + '" preserveAspectRatio="none" class="shw-sp"><polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="2.2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>'
             + '</div><div class="shw-cap">Six months</div>';
         }
-        const pe = Number(row.trailingPe) > 0 ? Number(row.trailingPe).toFixed(1) : '—';
-        const tile = (k, v, cls) => '<div class="shw-tl"><span>' + esc(k) + '</span><b class="' + (cls || '').trim() + '">' + esc(v) + '</b></div>';
-        phone = '<div class="shw-ph"><div class="shw-isl"></div><div class="shw-pscr">'
-          + '<div class="shw-psym">' + esc(row.symbol) + '</div><div class="shw-pnm">' + esc(nameOf(row)) + '</div>'
-          + '<div class="shw-ppx">$' + esc(px(row.price)) + ' <span class="' + pctCls(row.todayPct).trim() + '">' + esc(pctTxt(row.todayPct)) + '</span></div>'
-          + spark
+        const tile = (k, v, cls) => '<div class="shw-tl"><span>' + esc(k) + '</span><b class="' + (cls || '') + '">' + esc(v) + '</b></div>';
+        return top + spark
           + '<div class="shw-tls">' + tile('This year', pctTxt(row.ytdPct), pctCls(row.ytdPct)) + tile('From high', row.pctFromHigh == null ? '—' : pctTxt(row.pctFromHigh))
-          + tile('Value', Number(row.marketCap) > 0 ? '$' + fmtMoney(row.marketCap) : '—') + tile('P/E', pe) + '</div>'
-          + '</div></div>';
+          + tile('Value', Number(row.marketCap) > 0 ? '$' + fmtMoney(row.marketCap) : '—') + tile('P/E', num(row.trailingPe) > 0 ? num(row.trailingPe).toFixed(1) : '—') + '</div>';
       }
-      return chromeTop()
-        + '<div class="s-body"><div class="shw-in">'
+      const phoneOf = (inner, cls) => '<div class="shw-ph' + (cls ? ' ' + cls : '') + '"><div class="shw-pscr">' + inner + '</div></div>';
+
+      // ---- the scene ---------------------------------------------------------
+      let scene;
+      if (style === 'browser') {
+        scene = '<div class="shw-win"><div class="shw-bar"><i></i><i></i><i></i><span>tickrlab.com</span></div>'
+          + '<div class="shw-scr shw-wscr">' + bigScreen(false) + '</div></div>';
+      } else if (style === 'phones') {
+        scene = phoneOf(phoneScreen(), 'shw-pa') + phoneOf(bigScreen(true), 'shw-pb shw-narrow');
+      } else {
+        scene = '<div class="shw-lap"><div class="shw-lid"><div class="shw-scr">' + bigScreen(false) + '</div></div><div class="shw-base"></div></div>'
+          + phoneOf(phoneScreen())
+          + (story ? '<div class="shw-facts">' + [
+            [String(COV_DATA.length), 'data sets kept on the stocks tracked'],
+            ['1998', 'the earliest daily prices on file'],
+            ['SEC', 'filings, insiders and institutional holders, from the source'],
+          ].map(([a, b]) => '<div><b>' + esc(a) + '</b><span>' + esc(b) + '</span></div>').join('') + '</div>' : '');
+      }
+      // ---- the backdrop: dots joined to their nearest neighbours, fixed seed --
+      let mesh = '';
+      if (O.shwBg === 'mesh') {
+        let seed = 7;
+        const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        const P = Array.from({ length: 26 }, () => [rnd() * 1080, rnd() * (story ? 560 : 420), 2 + rnd() * 4]);
+        let g = '';
+        P.forEach((p, i) => {
+          P.map((q, j) => [j, Math.hypot(p[0] - q[0], p[1] - q[1])]).filter(([j]) => j !== i).sort((a, b) => a[1] - b[1]).slice(0, 2)
+            .forEach(([j]) => { g += '<line x1="' + p[0].toFixed(0) + '" y1="' + p[1].toFixed(0) + '" x2="' + P[j][0].toFixed(0) + '" y2="' + P[j][1].toFixed(0) + '" stroke="' + pal.axis + '" stroke-opacity="0.2" stroke-width="1"/>'; });
+        });
+        P.forEach((p, i) => { g += '<circle cx="' + p[0].toFixed(0) + '" cy="' + p[1].toFixed(0) + '" r="' + p[2].toFixed(1) + '" fill="' + (i % 3 ? pal.axis : pal.ink('#7c9cff')) + '" fill-opacity="0.45"/>'; });
+        mesh = '<svg class="shw-mesh" viewBox="0 0 1080 ' + (story ? 560 : 420) + '" preserveAspectRatio="xMidYMin slice" aria-hidden="true">' + g + '</svg>';
+      }
+      return chromeTop() + mesh
+        + '<div class="s-body"><div class="shw-in shw-' + style + '">'
         + '<h2 class="shw-h">' + esc(head) + '</h2>'
         + '<p class="shw-s">' + esc(sub) + '</p>'
-        + '<div class="shw-scene">' + laptop + phone
-        + (story ? '<div class="shw-facts">' + [
-          [String(COV_DATA.length), 'data sets kept on the stocks tracked'],
-          ['1998', 'the earliest daily prices on file'],
-          ['SEC', 'filings, insiders and institutional holders, from the source'],
-        ].map(([a, b]) => '<div><b>' + esc(a) + '</b><span>' + esc(b) + '</span></div>').join('') + '</div>' : '')
-        + '</div>'
+        + '<div class="shw-scene">' + scene + '</div>'
         + '</div></div>' + chromeFoot();
     }
 
@@ -11683,7 +11771,63 @@
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
     /* Who added, who cut: two lists side by side. */
     /* The holder card as a ring: the ring beside its key; stacked on 9:16. */
-    .shw-in { display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .shw-in { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+    .shw-mesh { position: absolute; left: 0; top: 0; width: 100%; height: 30%; z-index: 0; pointer-events: none; }
+    .sz-story .shw-mesh { height: 22%; }
+    .shw-scr { display: flex; flex-direction: column; }
+    .shw-heat { flex: 1 1 0; display: grid; gap: 4px; margin-top: 0.6em; min-height: 0; }
+    .shw-ht { border-radius: 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 0; overflow: hidden; }
+    .shw-ht b { font: 600 1em var(--mono); color: var(--text); }
+    .shw-ht span { font: 0.82em var(--mono); color: var(--text); opacity: 0.85; }
+    .shw-secs { flex: 1 1 0; display: flex; flex-direction: column; justify-content: space-around; margin-top: 0.3em; }
+    .shw-sr { display: grid; grid-template-columns: minmax(0, 13em) minmax(0, 1fr) 5.4em; gap: 0.8em; align-items: center; font-family: var(--mono); color: var(--text); }
+    .shw-sr > span:last-child { text-align: right; white-space: nowrap; }
+    .shw-sn { font-family: var(--sans); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+    .shw-sn i { font-style: normal; font-family: var(--mono); font-size: 0.8em; color: var(--faint); }
+    .shw-st { position: relative; height: 0.9em; }
+    .shw-st::before { content: ''; position: absolute; left: 50%; top: -0.25em; bottom: -0.25em; width: 1px; background: var(--hair-2); }
+    .shw-sf { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+    .shw-in .shw-bu { background: var(--green); }
+    .shw-in .shw-bd { background: var(--red); }
+    .shw-ptl { font: 700 1.15em var(--sans); color: var(--text); margin-bottom: 0.15em; }
+    .shw-pst { font-size: 0.72em; color: var(--faint); margin-bottom: 0.6em; }
+    .shw-er { display: flex; flex-direction: column; flex: 1 1 0; justify-content: space-around; }
+    .shw-er div { display: grid; grid-template-columns: 3.6em 3.4em minmax(0, 1fr) auto; gap: 0.45em; align-items: baseline; padding: 0.35em 0; border-bottom: 1px solid var(--hair); }
+    .shw-ed { font: 600 0.8em var(--mono); color: var(--muted); }
+    .shw-er b { font: 600 0.85em var(--mono); color: var(--text); }
+    .shw-en { font-size: 0.72em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .shw-er i { font: 0.62em var(--mono); font-style: normal; color: var(--faint); }
+    .shw-rl { display: flex; flex-direction: column; flex: 1 1 0; justify-content: space-around; margin-top: 0.4em; }
+    .shw-rl div { display: flex; justify-content: space-between; gap: 0.6em; padding: 0.42em 0; border-bottom: 1px solid var(--hair); }
+    .shw-rl span { font-size: 0.78em; color: var(--muted); }
+    .shw-rl b { font: 600 0.85em var(--mono); color: var(--text); }
+    .shw-narrow .shw-pscr { font-size: 0.86em; padding-left: 0.8em; padding-right: 0.8em; }
+    .shw-narrow .shw-tr { grid-template-columns: 4.3em 1fr 1fr 1fr; font-size: 0.82em; }
+    .shw-narrow .shw-tr > :nth-child(2), .shw-narrow .shw-tr > :nth-child(6), .shw-narrow .shw-tr > :nth-child(7) { display: none; }
+    .shw-narrow .shw-sr { grid-template-columns: minmax(0, 1fr) 4.5em 4.6em; font-size: 0.8em; gap: 0.5em; }
+    .shw-narrow .shw-heat { gap: 3px; }
+    .shw-narrow .shw-ht b { font-size: 0.78em; }
+    .shw-narrow .shw-ht span { font-size: 0.66em; }
+    .shw-phones .shw-ph { width: 292px; bottom: auto; top: 0; right: auto; }
+    .shw-phones .shw-pa { left: 130px; }
+    .shw-phones .shw-pb { left: 530px; top: 30px; }
+    .sz-square .shw-phones .shw-ph { width: 218px; }
+    .sz-square .shw-phones .shw-pa { left: 190px; }
+    .sz-square .shw-phones .shw-pb { left: 530px; top: 12px; }
+    .sz-story .shw-phones .shw-ph { width: 410px; font-size: 22px; border-radius: 54px; }
+    .sz-story .shw-phones .shw-pscr { border-radius: 44px; }
+    .sz-story .shw-phones .shw-pa { left: 26px; }
+    .sz-story .shw-phones .shw-pb { left: 516px; top: 200px; }
+    .shw-phones .shw-scene { height: 650px; }
+    .sz-square .shw-phones .shw-scene { height: 480px; }
+    .sz-story .shw-phones .shw-scene { height: 1130px; }
+    .shw-win { position: absolute; inset: 0 0 10px 0; border: 1px solid var(--hair-2); border-radius: 16px; overflow: hidden; background: color-mix(in srgb, var(--text) 10%, var(--card-ground)); display: flex; flex-direction: column; }
+    .shw-bar { display: flex; align-items: center; gap: 9px; padding: 12px 16px; }
+    .shw-bar i { display: block; width: 13px; height: 13px; border-radius: 50%; background: var(--hair-2); }
+    .shw-bar span { margin-left: 18px; flex: 1; max-width: 420px; text-align: left; font: 14px var(--mono); color: var(--muted); background: var(--card-ground); border-radius: 8px; padding: 6px 12px; }
+    .shw-wscr { flex: 1 1 0; aspect-ratio: auto; border-radius: 0; font-size: 15px; padding: 16px 20px; }
+    .sz-square .shw-wscr { font-size: 13px; }
+    .sz-story .shw-wscr { font-size: 17px; }
     .shw-h { font: 700 64px/1.04 var(--sans); letter-spacing: -0.03em; color: var(--text); margin: 0; max-width: 920px; text-wrap: balance; }
     .sz-square .shw-h { font-size: 50px; }
     .sz-story .shw-h { font-size: 76px; }
@@ -11728,7 +11872,7 @@
     .shw-pnm { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .shw-ppx { font: 600 1.35em var(--mono); color: var(--text); margin: 0.6em 0 0.5em; white-space: nowrap; }
     .shw-ppx span { font-size: 0.62em; }
-    .shw-spw { flex: 1 1 0; min-height: 4em; max-height: 13em; position: relative; }
+    .shw-spw { flex: 1 1 0; min-height: 4em; position: relative; }
     .shw-sp { position: absolute; inset: 0; width: 100%; height: 100%; }
     .shw-cap { font: 0.66em var(--mono); color: var(--faint); margin-top: 0.3em; }
     .shw-wait { height: 5em; display: flex; align-items: center; font-size: 0.75em; color: var(--faint); }

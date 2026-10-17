@@ -1890,8 +1890,37 @@
         <textarea id="shwHead" maxlength="90">Every stock, measured the same way after every close.</textarea>
         <label>Line under it (empty: the count of companies)</label>
         <textarea id="shwSub" maxlength="140"></textarea>
+        <label>Style</label>
+        <select id="shwStyle">
+          <option value="devices" selected>A laptop and a phone</option>
+          <option value="browser">One browser window</option>
+          <option value="phones">Two phones</option>
+        </select>
+        <label>The big screen shows</label>
+        <select id="shwLap">
+          <option value="screener" selected>The screener, largest first</option>
+          <option value="heat">A heat map of the largest</option>
+          <option value="sectors">The sectors, median company</option>
+        </select>
+        <label>Measured over (heat map, sectors)</label>
+        <select id="shwWin">
+          <option value="today" selected>Today</option>
+          <option value="m1">The past month</option>
+          <option value="ytd">This year</option>
+        </select>
+        <label>The phone shows</label>
+        <select id="shwPh">
+          <option value="stock" selected>One stock, six months</option>
+          <option value="ratios">One stock, its ratios</option>
+          <option value="earnings">Who reports next</option>
+        </select>
         <label>Stock on the phone</label>
         <select id="shwSym"></select>
+        <label>Backdrop</label>
+        <select id="shwBg">
+          <option value="plain" selected>Plain</option>
+          <option value="mesh">Linked dots</option>
+        </select>
         <p class="hint">The laptop shows the largest companies by market value, the
           phone one stock with six months of prices, both from today's data. Keep
           the headline to what the site does: no picks, no "next big stock".</p>
@@ -2804,7 +2833,7 @@
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
-      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym',
+      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
       'disMode'];
     function controlOpts() {
       const o = {};
@@ -3581,7 +3610,8 @@
       $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
     ['shwHead', 'shwSub'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'showcase') render(); }));
-    $('shwSym').addEventListener('change', () => { if (tpl === 'showcase') render(); });
+    ['shwSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'showcase') render(); }));
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
