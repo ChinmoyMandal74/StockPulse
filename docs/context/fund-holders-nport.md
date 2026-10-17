@@ -47,3 +47,6 @@ The second is inside the first: a manager's 13F adds up its funds and its other 
 Sets 2026q3 and 2026q2: 13,908 funds, 5,627,083 holdings rows, 650,683 of them a long position in a tracked stock. 1,275 of 1,280 symbols written. Apple: 2,111 funds, 3.72 billion shares; Vanguard Total Stock Market 466 million (5.87% of the fund), Vanguard 500 381 million, iShares Core S&P 500 202 million, Fidelity 500 188 million, SPDR S&P 500 178 million.
 
 Tests were a scratchpad Node suite (42 checks, including the streaming reader against an archive written to disk in the test) plus the real run. Neither surface was rendered in a browser by the build.
+
+## Splits, history and net flow (2026-10-16)
+`nport-load.js` adjusts each fund's earlier holding for splits between that fund's two report dates (or the newest date in the set when it has no later report), only for factors the funds' own share counts confirm (`splitadj.js`). It prices positions at the median value per share the funds reported, so books carry bought and sold, and it writes the funds' net buyers and sellers as figure `flow13f:F`. `fund_history (symbol, label)` keeps a dated copy of each stock's row as `writeFundHolders` writes it. See `institutional-holdings-13f.md` and `holder-pages.md`.

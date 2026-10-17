@@ -220,7 +220,10 @@
         $('stats').innerHTML = fig('In tracked stocks', money(H.value), isFund && H.nav > 0 && H.value != null ? pct(H.value / H.nav * 100, 1) + ' of the fund’s ' + money(H.nav) + ' net assets' : 'not the manager’s whole portfolio')
           + fig('Tracked stocks held', Number(H.positionsAll).toLocaleString('en-US'), H.positions.length < H.positionsAll ? 'the ' + H.positions.length + ' largest are listed' : 'all listed below')
           + fig('New since the period before', H.added == null ? '—' : String(H.added), H.added == null ? 'no earlier period on file' : 'held now, not then')
-          + fig('Gone since the period before', H.exited == null ? '—' : String(H.exited), H.exited == null ? '' : 'held then, not now');
+          + fig('Gone since the period before', H.exited == null ? '—' : String(H.exited), H.exited == null ? '' : 'held then, not now')
+          // Bought less sold in tracked stocks at one price a stock (2026-10-16):
+          // what it traded, not what the market did. Only once a load has written it.
+          + (H.bought != null && H.sold != null ? fig('Net on the period', (H.bought - H.sold >= 0 ? '+' : '−') + money(Math.abs(H.bought - H.sold)), 'bought ' + money(H.bought) + ', sold ' + money(H.sold) + ', at one price a stock') : '');
         if (H.sectors && H.sectors.length) {
           $('secBar').innerHTML = H.sectors.map((s, i) => '<i style="flex:' + (s.pct || 0).toFixed(3) + ' 0 0;background:' + INK[i % INK.length] + '" title="' + we(s.name + ' ' + pct(s.pct, 1)) + '"></i>').join('');
           $('secKey').innerHTML = H.sectors.map((s, i) => '<span><i style="background:' + INK[i % INK.length] + '"></i>' + we(s.name) + '<b>' + we(pct(s.pct, 1)) + '</b></span>').join('');

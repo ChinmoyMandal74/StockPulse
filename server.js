@@ -13513,6 +13513,17 @@ app.get('/api/holder-directory', requireMember, route(async (req, res) => {
   res.json({ kind, q, holders: list.map((h) => ({ id: h.id, name: h.name, family: h.family, label: h.label, asOf: h.asOf,
     positions: h.positions, value: h.value, nav: h.nav, added: h.added, exited: h.exited })) });
 }));
+// The quarter's largest net buyers and sellers in tracked stocks, at constant
+// prices (2026-10-16), built by the quarterly loader as one stored figure.
+// Members, as the directory.
+app.get('/api/holder-flow', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const kind = String(req.query.kind || 'M').toUpperCase();
+  if (!HOLDER_KINDS[kind]) return res.status(400).json({ error: 'Bad kind.' });
+  const f = await store.readFigure('flow13f:' + kind).catch(() => null);
+  res.json({ kind, flow: f || null });
+}));
+
 // One holder's book as the page and the card both draw it. Also asked by the
 // saved-post renderer for the What one holder holds card (2026-10-15).
 async function holderPayload(kind, id) {
@@ -13523,7 +13534,7 @@ async function holderPayload(kind, id) {
   for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol && !r.error) by.set(String(r.symbol).toUpperCase(), r);
   const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0 } : null; });
   return { kind, id, holder: { name: book.name, family: book.family, label: book.label, asOf: book.asOf, nav: book.nav,
-    positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited,
+    positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited, bought: book.bought, sold: book.sold,
     positions: v.positions, gone: v.gone, sectors: v.sectors } };
 }
 app.get('/api/holder', requireMember, route(async (req, res) => {
@@ -13658,6 +13669,13 @@ app.get('/api/capital-returns', requireAuth, route(async (req, res) => {
 // DISPLAY ONLY, and a quarter-end snapshot that is months old by the time
 // it can be shown. The payload carries the quarter so no surface can
 // present it as current.
+// A stock's buyers or sellers among 13F managers, as the page shows them.
+function moversOf(list, px) {
+  if (!Array.isArray(list)) return null;
+  return list.map((m) => ({ id: m.cik == null ? null : String(m.cik), name: m.name, shares: m.shares, prev: m.prev,
+    delta: m.shares - m.prev, value: px > 0 ? (m.shares - m.prev) * px : null,
+    isNew: m.prev === 0, isExit: m.shares === 0 }));
+}
 app.get('/api/institutions', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -13682,6 +13700,9 @@ app.get('/api/institutions', requireAuth, route(async (req, res) => {
     sharesOut: out, pct,
     top: (h.top || []).map((t) => ({ id: t.cik == null ? null : String(t.cik), name: t.name, shares: t.shares, pct: Inst13f.pctOf(t.shares, out),
       isNew: t.prev === 0, change: t.prev > 0 ? Inst13f.change(t.shares, t.prev) : null })),
+    // Who added and who cut on the quarter (null until a load has written
+    // them). The change in shares, and its value at the quarter-end price.
+    buyers: moversOf(h.buyers, h.px), sellers: moversOf(h.sellers, h.px),
   } });
 }));
 

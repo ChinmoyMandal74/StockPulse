@@ -103,6 +103,13 @@
       <input type="search" id="q" placeholder="Start of a name, e.g. vanguard" aria-label="Find a holder by the start of its name" />
       <span class="hd-count" id="count"></span>
     </div>
+    <!-- Who bought and who sold on the period (2026-10-16): the loader's
+         stored list, at constant prices. A name search shows the largest. -->
+    <div class="hd-bar hd-order">
+      <button class="hd-tab" data-o="size">Largest</button>
+      <button class="hd-tab" data-o="buy">Net buyers</button>
+      <button class="hd-tab" data-o="sell">Net sellers</button>
+    </div>
 
     <div class="bezel"><div class="core" style="padding:0">
       <div class="hd-wrap" id="wrap"><div class="hd-empty">Reading the list&hellip;</div></div>
@@ -118,12 +125,44 @@
     const money = (v) => (v == null ? '—' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1e3) + 'K'));
     const mon = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? (iso || '') : t.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
     let kind = new URLSearchParams(location.search).get('kind') === 'F' ? 'F' : 'M';
+    let order = ['buy', 'sell'].includes(new URLSearchParams(location.search).get('o')) ? new URLSearchParams(location.search).get('o') : 'size';
     let seq = 0;
+    const signed = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + money(Math.abs(v)));
+
+    // NET BUYERS AND SELLERS: each holder's change in shares in tracked stocks
+    // over the period, valued at one price a stock (this period's), so the
+    // figure is what it traded and not what the market did to its holdings.
+    async function loadFlow(mine) {
+      const r = await fetch('/api/holder-flow?kind=' + kind, { cache: 'no-store' });
+      if (mine !== seq) return;
+      if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
+      const f = (await r.json()).flow;
+      if (mine !== seq) return;
+      if (!f) { $('count').textContent = ''; $('wrap').innerHTML = '<div class="hd-empty">Not on file yet: the next quarterly load writes it.</div>'; $('foot').textContent = ''; return; }
+      const list = order === 'buy' ? f.buyers : f.sellers;
+      const fund = kind === 'F';
+      $('count').textContent = list.length + (order === 'buy' ? ' largest net buyers' : ' largest net sellers') + ', ' + (f.label || '');
+      $('wrap').innerHTML = '<table><thead><tr><th class="l">' + (fund ? 'Fund' : 'Manager') + '</th><th>Net</th><th>Bought</th><th>Sold</th><th>In tracked stocks</th><th title="Bought plus sold, as a share of what it holds now">Turnover</th></tr></thead><tbody>'
+        + list.map((h) => '<tr><td class="l"><a href="/holder/' + kind + '/' + encodeURIComponent(h.id) + '">' + we(h.name) + '</a></td>'
+          + '<td>' + we(signed(h.net)) + '</td><td class="q">' + we(money(h.bought)) + '</td><td class="q">' + we(money(h.sold)) + '</td>'
+          + '<td class="q">' + we(money(h.value)) + '</td><td class="q">' + (h.turnover == null ? '—' : Math.round(h.turnover) + '%') + '</td></tr>').join('')
+        + '</tbody></table>';
+      $('foot').textContent = 'Each holder’s change in shares in the stocks tracked here, '
+        + (f.prevPeriod ? 'from ' + f.prevPeriod + ' to ' + f.period : 'on the period') + ', valued at one price a stock, so a rise in the market is not counted as buying. '
+        + 'Share counts are adjusted for splits between the two. An exit counts its whole holding as sold. '
+        + 'Only holders that reported in both periods, and stocks that were held in both, are counted, so a missing filing or a new listing is not read as buying. '
+        + 'Turnover is bought plus sold as a share of what it holds now: a holder that turned over a third or more of its book in a period is more often a trading book, or a firm that changed how it files, than an investor changing its mind. Of ' + Number(f.holders || 0).toLocaleString('en-US') + ' holders that could be compared. A record of what was reported, months old; not a view on any stock.';
+    }
 
     async function load() {
       const mine = ++seq;
       const q = $('q').value.trim();
-      document.querySelectorAll('.hd-tab').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
+      document.querySelectorAll('.hd-tab[data-k]').forEach((b) => b.classList.toggle('on', b.dataset.k === kind));
+      document.querySelectorAll('.hd-tab[data-o]').forEach((b) => b.classList.toggle('on', b.dataset.o === (q ? 'size' : order)));
+      if (!q && order !== 'size') {
+        try { await loadFlow(mine); } catch (e) { if (mine === seq) $('wrap').innerHTML = '<div class="hd-empty">' + we(e.message || 'Something went wrong.') + '</div>'; }
+        return;
+      }
       try {
         const r = await fetch('/api/holder-directory?kind=' + kind + (q ? '&q=' + encodeURIComponent(q) : ''), { cache: 'no-store' });
         if (mine !== seq) return;                       // a later keystroke already asked
@@ -150,7 +189,9 @@
         if (mine === seq) $('wrap').innerHTML = '<div class="hd-empty">' + we(e.message || 'Something went wrong.') + '</div>';
       }
     }
-    document.querySelectorAll('.hd-tab').forEach((b) => b.addEventListener('click', () => { kind = b.dataset.k; history.replaceState(null, '', '/holders?kind=' + kind); load(); }));
+    const syncUrl = () => history.replaceState(null, '', '/holders?kind=' + kind + (order !== 'size' ? '&o=' + order : ''));
+    document.querySelectorAll('.hd-tab[data-k]').forEach((b) => b.addEventListener('click', () => { kind = b.dataset.k; syncUrl(); load(); }));
+    document.querySelectorAll('.hd-tab[data-o]').forEach((b) => b.addEventListener('click', () => { order = b.dataset.o; if (order !== 'size') $('q').value = ''; syncUrl(); load(); }));
     let timer = null;
     $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
     load();

@@ -28,6 +28,7 @@ const store = require('./db.js');
 const Zip = require('./zipread.js');
 const N = require('./nport.js');
 const HolderBook = require('./holderbook.js');
+const SplitAdj = require('./splitadj.js');
 
 const COMMIT = process.argv.includes('--commit');
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
@@ -114,6 +115,33 @@ async function readSet(file, cusips) {
     prev = await readSet(await download(sets[1]), cusips);
     console.log(`${label(sets[1])}: ${prev.stats.funds.toLocaleString()} funds, ${prev.stats.used.toLocaleString()} positions in a tracked stock; ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
+  // ACROSS A SPLIT (2026-10-16): each fund's earlier holding on the footing
+  // of its later report. A fund reports as of its own date, so the window is
+  // that fund's two dates; a fund with no later report uses the newest date
+  // in this set (splitadj.js).
+  if (prev) {
+    let lo = null, hi = null;
+    for (const m of prev.byStock.values()) for (const h of m.values()) if (h.asOf && (!lo || h.asOf < lo)) lo = h.asOf;
+    for (const m of cur.byStock.values()) for (const h of m.values()) if (h.asOf && (!hi || h.asOf > hi)) hi = h.asOf;
+    if (lo && hi) {
+      const listed = await store.readSplitsBetween(lo, hi);
+      // Only the factors the funds' own share counts confirm (splitadj.js).
+      const conf = SplitAdj.confirmed(cur.byStock, prev.byStock, listed, () => [lo, hi]);
+      for (const x of conf.report) console.log(`  ${x.sym.padEnd(6)} factor ${x.f.toFixed(4)}, funds' median ratio ${x.med == null ? '-' : x.med.toFixed(4)} over ${x.n}: ${x.kept ? 'a split, applied' : 'left alone'}`);
+      const splits = conf.splits;
+      const a = SplitAdj.adjustPrev(prev.byStock, splits, (sym, id, h) => h.asOf,
+        (sym, id) => { const c = cur.byStock.get(sym); const h = c && c.get(id); return (h && h.asOf) || hi; });
+      prev.byStock = a.prev;
+      console.log(`splits between the two sets: ${a.symbols.length ? a.symbols.join(' ') : 'none'}; ${a.adjusted.toLocaleString()} fund holdings put on the later footing`);
+    }
+  }
+  // One price a stock, for valuing a change in shares and an exit: the
+  // median of what the funds themselves reported (value over shares).
+  const pxOf = new Map();
+  for (const [sym, m] of cur.byStock) {
+    const v = [...m.values()].filter((h) => h.value > 0 && h.shares > 0).map((h) => h.value / h.shares).sort((a, b) => a - b);
+    if (v.length) pxOf.set(sym, v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+  }
 
   const rows = [];
   for (const sym of universe) {
@@ -138,6 +166,7 @@ async function readSet(file, cusips) {
   const books = [...HolderBook.invert(cur.byStock, prev ? prev.byStock : null, {
     keyOf: (id) => N.fundKey(id), sharesOf: (h) => h.shares,
     valueOf: (sym, h) => (h.value > 0 ? h.value : null),
+    priceOf: (sym) => pxOf.get(sym) || null,
     meta: (id, h) => ({ name: h.name, family: h.family, asOf: h.asOf, nav: h.nav }),
   }).values()].map((b) => HolderBook.finish(b)).filter((b) => b.positions > 0);
   books.sort((a, b) => (b.value || 0) - (a.value || 0));
@@ -178,7 +207,12 @@ async function readSet(file, cusips) {
       // something last time and nothing now.
       let cleared = 0;
       if (!bfailed.length) { try { cleared = await store.clearHolderBooks(BOOK_KIND, started); } catch (e) { console.log('old books not cleared: ' + e.message); } }
-      console.log(`books written: ${bn} of ${books.length}` + (cleared ? `, ${cleared} from an earlier load removed` : ''));
+      console.log(`books written: ${bn} of ${books.length}` + (cleared ? `, ${cleared} from an earlier load removed from the latest list (their periods stay in holder_history)` : ''));
+      const flow = HolderBook.flowList(books, BOOK_LABEL, BOOK_LABEL, prev ? label(sets[1]) : null);
+      if (flow) {
+        try { await store.writeFigures({ ['flow13f:F']: flow, ['flow13f:F:' + BOOK_LABEL]: flow }); console.log('net buyers and sellers among funds written'); }
+        catch (e) { console.log('net buyers and sellers among funds NOT written: ' + e.message); process.exitCode = 1; }
+      }
       for (const f of bfailed.slice(0, 10)) console.log('  BOOK NOT WRITTEN ' + f);
       if (bfailed.length) process.exitCode = 1;
     }

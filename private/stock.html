@@ -1170,6 +1170,11 @@
     #inst td.n, #inst th.n { text-align: right; font-family: var(--mono); white-space: nowrap; }
     #inst td.c { color: var(--muted); }
     #inst .inote { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    /* Added the most / cut the most, side by side; stacked on a phone. */
+    #inst .inst-mv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; margin-top: 22px; align-items: start; }
+    #inst .inst-mv .am { font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-left: 4px; }
+    #inst .inst-mv .faint { color: var(--faint); }
+    @media (max-width: 760px) { #inst .inst-mv { grid-template-columns: minmax(0, 1fr); } }
     /* Large holders: the 13D and 13G filings, one line each. */
     #hold table { width: 100%; border-collapse: collapse; }
     #hold th { text-align: left; font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
@@ -5112,9 +5117,28 @@
             + (h.top || []).map((t) => '<tr><td>' + holderLink('M', t.id, t.name) + '</td><td class="n">' + esc(sh(t.shares)) + '</td><td class="n">' + esc(pc(t.pct)) + '</td>'
               + '<td class="n c">' + esc(t.isNew ? 'new' : sg(t.change)) + '</td></tr>').join('')
             + '</tbody></table>'
+            // WHO ADDED AND WHO CUT (2026-10-16, the owner: "which institution
+            // has reduced or increased their exposure"). Every manager in
+            // either quarter by its change in shares, last quarter's already
+            // adjusted for a split; the change's worth at the quarter-end
+            // price. Neutral ink: green and red mean a price that moved.
+            + (Array.isArray(h.buyers) && Array.isArray(h.sellers) && (h.buyers.length || h.sellers.length)
+              ? (() => {
+                  const mv = (list, head) => '<table><thead><tr><th>' + esc(head) + '</th><th class="n">Shares</th><th class="n">Worth</th></tr></thead><tbody>'
+                    + (list.length ? list.map((m) => '<tr><td>' + holderLink('M', m.id, m.name)
+                      + (m.isNew ? ' <span class="am">new</span>' : m.isExit ? ' <span class="am">exited</span>' : '') + '</td>'
+                      + '<td class="n">' + esc((m.delta > 0 ? '+' : '−') + sh(Math.abs(m.delta))) + '</td>'
+                      + '<td class="n">' + esc(m.value == null ? '—' : (m.value > 0 ? '+' : '−') + usd(Math.abs(m.value))) + '</td></tr>').join('')
+                      : '<tr><td colspan="3" class="faint">None on the quarter.</td></tr>')
+                    + '</tbody></table>';
+                  return '<div class="inst-mv">' + mv(h.buyers, 'Added the most, ' + h.prevQuarter + ' to ' + h.quarter)
+                    + mv(h.sellers, 'Cut the most') + '</div>';
+                })()
+              : '')
             + '<p class="inote">From Form 13F, which every institutional manager with more than $100 million in US-listed securities files within 45 days of a quarter end. '
             + 'It is a snapshot of ' + esc(h.quarter) + ', not of today, and it counts long positions in shares only: options are left out, short positions are never reported, and smaller managers and individuals do not file. '
-            + 'Related managers sometimes report the same shares, so the total can overstate. Names are as filed. Updated once a quarter.</p>';
+            + 'Related managers sometimes report the same shares, so the total can overstate. Names are as filed. Updated once a quarter. '
+            + 'Added and cut compare each manager’s shares with the quarter before, adjusted for any stock split between the two, among managers that filed in both quarters; a change of hands inside a firm, or a firm that changes how it files, can read as one manager selling and another buying.</p>';
           card.hidden = false;
         } catch { card.remove(); }
       }

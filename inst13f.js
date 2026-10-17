@@ -126,7 +126,7 @@
     }
     return out;
   }
-  function summarise(cur, prev, sharesOut, topN) {
+  function summarise(cur, prev, sharesOut, topN, filers) {
     // THE SHARE COUNT ITSELF CAN BE THE WRONG ONE. For a company with two
     // classes the vendor's count may be the other class's: Berkshire's B
     // shares came with 1.4 million outstanding, which is the A class, and
@@ -161,8 +161,30 @@
         // 0 when there is one and this manager was not in it (a new holder).
         prev: prev ? (p ? p.shares : 0) : null };
     });
+    // WHO ADDED AND WHO CUT (2026-10-16, the owner: "which institution has
+    // reduced or increased their exposure ... to a stock"). Every manager in
+    // either quarter, by the change in its shares (last quarter's already on
+    // this quarter's footing across a split: splitadj.js): the largest
+    // increases, a new position included, and the largest cuts, an exit
+    // included. Only where there is an earlier quarter to compare with.
+    // ONLY MANAGERS THAT FILED IN BOTH QUARTERS (`filers`: { prev, cur },
+    // Sets of every manager in each data set). One whose report is missing
+    // from a set, filed late or not at all, would read as a new holder of
+    // everything or an exit from everything. And a stock with no holders
+    // last quarter (a new listing) has nothing to compare: no lists.
+    let buyers = null, sellers = null;
+    if (prev && before.size > 0) {
+      const both = (cik) => !filers || (filers.prev.has(cik) && filers.cur.has(cik));
+      const moves = [];
+      const nowBy = new Map(now);
+      for (const [cik, h] of now) { if (!both(cik)) continue; const p = before.get(cik); moves.push({ cik, name: h.name, shares: h.shares, prev: p ? p.shares : 0 }); }
+      for (const [cik, h] of before) if (!nowBy.has(cik) && both(cik)) moves.push({ cik, name: h.name, shares: 0, prev: h.shares });
+      const n = topN || 15;
+      buyers = moves.filter((m) => m.shares > m.prev).sort((a, b) => (b.shares - b.prev) - (a.shares - a.prev)).slice(0, n);
+      sellers = moves.filter((m) => m.shares < m.prev).sort((a, b) => (a.shares - a.prev) - (b.shares - b.prev)).slice(0, n);
+    }
     return { managers: now.length, managersPrev: prev ? before.size : null, shares, sharesPrev: prev ? sharesPrev : null,
-      value, px, added: prev ? added : null, exited: prev ? exited : null, dropped, top };
+      value, px, added: prev ? added : null, exited: prev ? exited : null, dropped, top, buyers, sellers };
   }
 
   // Words and figures shared by the page and the screener.

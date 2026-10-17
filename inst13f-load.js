@@ -29,6 +29,7 @@ const store = require('./db.js');
 const Zip = require('./zipread.js');
 const I = require('./inst13f.js');
 const HolderBook = require('./holderbook.js');
+const SplitAdj = require('./splitadj.js');
 
 const COMMIT = process.argv.includes('--commit');
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
@@ -155,18 +156,35 @@ function readSet(zip, cusips) {
     console.log(`${I.quarterName(prev.period)} (period ${prev.period}): ${prev.stats.managers} managers, ${prev.stats.used.toLocaleString()} holdings of a tracked stock; ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     if (!(prev.period < cur.period)) { console.log('  the second set is not an earlier quarter; no change will be computed.'); prev = null; }
   }
+  // ACROSS A SPLIT (2026-10-16): last quarter's shares on this quarter's
+  // footing, or every holder of a stock that split between the two quarter
+  // ends reads as buying (splitadj.js).
+  if (prev) {
+    const listed = await store.readSplitsBetween(prev.period, cur.period);
+    // Only the factors the holders' own share counts confirm (splitadj.js):
+    // a spin-off's price factor is not a change in shares.
+    const conf = SplitAdj.confirmed(cur.holders, prev.holders, listed, () => [prev.period, cur.period]);
+    for (const x of conf.report) console.log(`  ${x.sym.padEnd(6)} factor ${x.f.toFixed(4)}, holders' median ratio ${x.med == null ? '-' : x.med.toFixed(4)} over ${x.n}: ${x.kept ? 'a split, applied' : 'not a change in shares, left alone'}`);
+    const splits = conf.splits;
+    const a = SplitAdj.adjustPrev(prev.holders, splits, () => prev.period, () => cur.period);
+    prev.holders = a.prev;
+    console.log(`splits between the two quarter ends: ${a.symbols.length ? a.symbols.join(' ') : 'none'}; ${a.adjusted.toLocaleString()} holdings put on this quarter's footing`);
+  }
 
   // Shares outstanding, to catch a manager who filed in the wrong units.
   const snap = await store.readSnapshot();
   const out = {};
   for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol) out[String(r.symbol).toUpperCase()] = Number(r.sharesOutstanding) || 0;
 
+  // Every manager with a report in each set: who can be compared (inst13f.js).
+  const filersIn = (set) => { const s = new Set(); for (const m of set.holders.values()) for (const cik of m.keys()) s.add(cik); return s; };
+  const filers = prev ? { prev: filersIn(prev), cur: filersIn(cur) } : null;
   const rows = [];
   let dropped = 0;
   for (const sym of universe) {
     const c = cur.holders.get(sym);
     if (!c) continue;
-    const s = I.summarise(c, prev ? prev.holders.get(sym) || new Map() : null, out[sym], TOP);
+    const s = I.summarise(c, prev ? prev.holders.get(sym) || new Map() : null, out[sym], TOP, filers);
     dropped += s.dropped;
     if (!s.managers) continue;
     rows.push(Object.assign({ symbol: sym, period: cur.period, prevPeriod: prev ? prev.period : null }, s));
@@ -195,12 +213,23 @@ function readSet(zip, cusips) {
   const books = [...HolderBook.invert(cur.holders, prev ? prev.holders : null, {
     keyOf: (cik) => String(cik), sharesOf: (h) => h.shares, keep,
     valueOf: (sym, h) => (pxOf.get(sym) > 0 ? h.shares * pxOf.get(sym) : null),
+    priceOf: (sym) => pxOf.get(sym) || null,
     meta: (cik, h) => ({ name: h.name, asOf: cur.period }),
   }).values()].map((b) => HolderBook.finish(b)).filter((b) => b.positions > 0);
   books.sort((a, b) => (b.value || 0) - (a.value || 0));
   const BOOK_KIND = 'M', BOOK_LABEL = I.quarterName(cur.period);
   console.log(`\n${books.length.toLocaleString()} managers hold at least one tracked stock. The largest in tracked stocks:`);
   for (const b of books.slice(0, 8)) console.log(`   ${b.name.slice(0, 44).padEnd(44)} $${((b.value || 0) / 1e9).toFixed(0).padStart(5)}B in ${String(b.positions).padStart(5)} stocks` + (b.added == null ? '' : `, ${b.added} new, ${b.exited} gone`));
+  // THE QUARTER'S NET BUYERS AND SELLERS in tracked stocks, at constant
+  // prices: one stored figure, so the directory reads one row, not thousands.
+  const flow = HolderBook.flowList(books, I.quarterName(cur.period), cur.period, prev ? prev.period : null);
+  if (flow) {
+    console.log('');
+    console.log('net buyers in tracked stocks, at quarter-end prices:');
+    for (const x of flow.buyers.slice(0, 6)) console.log(`   ${x.name.slice(0, 44).padEnd(44)} +$${(x.net / 1e9).toFixed(1)}B  (bought $${(x.bought / 1e9).toFixed(1)}B, sold $${(x.sold / 1e9).toFixed(1)}B, holds $${((x.value || 0) / 1e9).toFixed(0)}B)`);
+    console.log('net sellers:');
+    for (const x of flow.sellers.slice(0, 6)) console.log(`   ${x.name.slice(0, 44).padEnd(44)} -$${(-x.net / 1e9).toFixed(1)}B`);
+  }
   if (COMMIT) {
     // IN SMALL BATCHES, EACH TRIED TWICE, and a batch that still fails is
     // reported and skipped rather than ending the run. The connection has sat
@@ -246,7 +275,11 @@ function readSet(zip, cusips) {
       // something last time and nothing now.
       let cleared = 0;
       if (!bfailed.length) { try { cleared = await store.clearHolderBooks(BOOK_KIND, started); } catch (e) { console.log('old books not cleared: ' + e.message); } }
-      console.log(`books written: ${bn} of ${books.length}` + (cleared ? `, ${cleared} from an earlier load removed` : ''));
+      console.log(`books written: ${bn} of ${books.length}` + (cleared ? `, ${cleared} from an earlier load removed from the latest list (their quarters stay in holder_history)` : ''));
+      if (flow) {
+        try { await store.writeFigures({ ['flow13f:M']: flow, ['flow13f:M:' + flow.period]: flow }); console.log('net buyers and sellers written'); }
+        catch (e) { console.log('net buyers and sellers NOT written: ' + e.message); process.exitCode = 1; }
+      }
       for (const f of bfailed.slice(0, 10)) console.log('  BOOK NOT WRITTEN ' + f);
       if (bfailed.length) process.exitCode = 1;
     }

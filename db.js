@@ -915,6 +915,39 @@ const SCHEMA = [
   // as JSON and capped (holderbook.js). Written by the two quarterly
   // loaders on the owner's machine. NOT in SYMBOL_TABLES: it is keyed by
   // the holder, and a dropped symbol leaves on the next load.
+  // EVERY QUARTER, NOT JUST THE LATEST (2026-10-16, the owner: "Do not delete
+  // the history of anything unless I say so"). inst_holdings, fund_holders and
+  // holder_books hold the newest load and are replaced by the next; these
+  // keep a dated copy of each row as it is written, keyed by its period, so a
+  // load adds a quarter and never removes one. Written by the same db.js
+  // writers that write the latest rows, so no loader can forget.
+  `create table if not exists inst_history (
+     symbol text not null,
+     period text not null,
+     data   text not null,
+     at     integer not null,
+     primary key (symbol, period)
+   )`,
+  `create table if not exists fund_history (
+     symbol text not null,
+     label  text not null,
+     data   text not null,
+     at     integer not null,
+     primary key (symbol, label)
+   )`,
+  `create table if not exists holder_history (
+     kind      text not null,
+     id        text not null,
+     label     text not null,
+     name      text,
+     value     real,
+     positions integer,
+     bought    real,
+     sold      real,
+     data      text not null,
+     at        integer not null,
+     primary key (kind, id, label)
+   )`,
   `create table if not exists holder_books (
      kind      text not null,
      id        text not null,
@@ -1373,6 +1406,13 @@ const ADDED_COLUMNS = [
   // 'story' for a Story; absent on a feed post, which is what every row was
   // before Stories could be posted (2026-10-10).
   "alter table ig_posts add column kind text",
+  // Who added and who cut (2026-10-16): each stock's largest buyers and
+  // sellers among 13F managers on the quarter, and each holder's buying and
+  // selling in tracked stocks at constant prices. Null until the next load.
+  "alter table inst_holdings add column buyers text",
+  "alter table inst_holdings add column sellers text",
+  "alter table holder_books add column bought real",
+  "alter table holder_books add column sold real",
   "alter table sec_state add column taxonomy text",
   "alter table sec_state add column currency text",
   "alter table sec_facts add column currency text",
@@ -3803,6 +3843,17 @@ async function splitCoverage() {
 // One symbol's split history, or null where it has never been fetched --
 // which is a different answer from an empty list (fetched: never split).
 // Two seeks on primary keys, in one batch.
+// Every split dated after `from` (exclusive) and up to `to` (inclusive), by
+// symbol: what the 13F and N-PORT loaders need to put two quarters' share
+// counts on one footing. The splits table is small (a few rows a symbol).
+async function readSplitsBetween(from, to) {
+  await init();
+  const r = await db.execute({ sql: 'select symbol, d, f from splits where d > ? and d <= ? order by symbol, d', args: [String(from), String(to)] });
+  const out = new Map();
+  for (const x of r.rows) { const s = String(x.symbol); if (!out.has(s)) out.set(s, []); out.get(s).push({ d: String(x.d), f: Number(x.f) }); }
+  return out;
+}
+
 async function readSplits(symbol) {
   await init();
   const [st, sp] = await db.batch([
@@ -4945,18 +4996,24 @@ async function writeInstHoldings(rows) {
   const list = (rows || []).filter((r) => r && r.symbol && r.period);
   const now = Date.now();
   for (let i = 0; i < list.length; i += 100) {
-    await db.batch(list.slice(i, i + 100).map((r) => ({
-      sql: `insert into inst_holdings (symbol, period, prev_period, managers, managers_prev, shares, shares_prev, value, px, added, exited, top, at)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    await db.batch(list.slice(i, i + 100).flatMap((r) => [{
+      sql: `insert into inst_holdings (symbol, period, prev_period, managers, managers_prev, shares, shares_prev, value, px, added, exited, top, buyers, sellers, at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(symbol) do update set period = excluded.period, prev_period = excluded.prev_period,
               managers = excluded.managers, managers_prev = excluded.managers_prev, shares = excluded.shares,
               shares_prev = excluded.shares_prev, value = excluded.value, px = excluded.px, added = excluded.added,
-              exited = excluded.exited, top = excluded.top, at = excluded.at`,
+              exited = excluded.exited, top = excluded.top, buyers = excluded.buyers, sellers = excluded.sellers, at = excluded.at`,
       args: [String(r.symbol).toUpperCase(), String(r.period), r.prevPeriod || null, r.managers == null ? null : Number(r.managers),
         r.managersPrev == null ? null : Number(r.managersPrev), r.shares == null ? null : Number(r.shares),
         r.sharesPrev == null ? null : Number(r.sharesPrev), r.value == null ? null : Number(r.value), r.px == null ? null : Number(r.px),
-        r.added == null ? null : Number(r.added), r.exited == null ? null : Number(r.exited), JSON.stringify(r.top || []), now],
-    })), 'write');
+        r.added == null ? null : Number(r.added), r.exited == null ? null : Number(r.exited), JSON.stringify(r.top || []),
+        r.buyers ? JSON.stringify(r.buyers) : null, r.sellers ? JSON.stringify(r.sellers) : null, now],
+    }, {
+      // The dated copy: this quarter's row, kept when the next load replaces it.
+      sql: `insert into inst_history (symbol, period, data, at) values (?, ?, ?, ?)
+            on conflict(symbol, period) do update set data = excluded.data, at = excluded.at`,
+      args: [String(r.symbol).toUpperCase(), String(r.period), JSON.stringify(r), now],
+    }]), 'write');
   }
   return list.length;
 }
@@ -4969,9 +5026,10 @@ async function readInstHolding(symbol) {
   let top = [];
   try { top = JSON.parse(x.top || '[]'); } catch { /* an unreadable list is an empty one */ }
   const n = (v) => (v == null ? null : Number(v));
+  const list = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
   return { symbol: String(x.symbol), period: String(x.period), prevPeriod: x.prev_period || null, managers: n(x.managers),
     managersPrev: n(x.managers_prev), shares: n(x.shares), sharesPrev: n(x.shares_prev), value: n(x.value), px: n(x.px),
-    added: n(x.added), exited: n(x.exited), top, at: Number(x.at) || 0 };
+    added: n(x.added), exited: n(x.exited), top, buyers: list(x.buyers), sellers: list(x.sellers), at: Number(x.at) || 0 };
 }
 
 // Every stock's counts, WITHOUT the holder lists: for the screener's columns.
@@ -4999,7 +5057,7 @@ async function writeFundHolders(rows) {
   if (!list.length) return 0;
   const now = Date.now();
   const n = (v) => (v == null ? null : Number(v));
-  await db.batch(list.map((r) => ({
+  await db.batch(list.flatMap((r) => [{
     sql: `insert into fund_holders (symbol, label, prev_label, funds, funds_prev, shares, shares_prev, value, added, exited, from_d, to_d, top, at)
           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           on conflict(symbol) do update set label = excluded.label, prev_label = excluded.prev_label, funds = excluded.funds,
@@ -5007,7 +5065,12 @@ async function writeFundHolders(rows) {
             added = excluded.added, exited = excluded.exited, from_d = excluded.from_d, to_d = excluded.to_d, top = excluded.top, at = excluded.at`,
     args: [String(r.symbol).toUpperCase(), String(r.label), r.prevLabel || null, n(r.funds), n(r.fundsPrev), n(r.shares), n(r.sharesPrev),
       n(r.value), n(r.added), n(r.exited), r.from || null, r.to || null, JSON.stringify(r.top || []), now],
-  })), 'write');
+  }, {
+    // The dated copy, kept when the next load replaces the row above.
+    sql: `insert into fund_history (symbol, label, data, at) values (?, ?, ?, ?)
+          on conflict(symbol, label) do update set data = excluded.data, at = excluded.at`,
+    args: [String(r.symbol).toUpperCase(), String(r.label), JSON.stringify(r), now],
+  }]), 'write');
   return list.length;
 }
 
@@ -5021,15 +5084,25 @@ async function writeHolderBooks(kind, label, rows) {
   if (!list.length) return 0;
   const now = Date.now();
   const n = (v) => (v == null ? null : Number(v));
-  await db.batch(list.map((r) => ({
-    sql: `insert into holder_books (kind, id, name, name_lc, family, label, as_of, positions, value, nav, added, exited, data, at)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  await db.batch(list.flatMap((r) => [{
+    sql: `insert into holder_books (kind, id, name, name_lc, family, label, as_of, positions, value, nav, added, exited, data, bought, sold, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           on conflict(kind, id) do update set name = excluded.name, name_lc = excluded.name_lc, family = excluded.family,
             label = excluded.label, as_of = excluded.as_of, positions = excluded.positions, value = excluded.value,
-            nav = excluded.nav, added = excluded.added, exited = excluded.exited, data = excluded.data, at = excluded.at`,
+            nav = excluded.nav, added = excluded.added, exited = excluded.exited, data = excluded.data,
+            bought = excluded.bought, sold = excluded.sold, at = excluded.at`,
     args: [String(kind), String(r.key), String(r.name).slice(0, 160), String(r.name).toLowerCase().slice(0, 160), r.family || null, label || null,
-      r.asOf || null, n(r.positions), n(r.value), n(r.nav), n(r.added), n(r.exited), JSON.stringify(r.data || {}), now],
-  })), 'write');
+      r.asOf || null, n(r.positions), n(r.value), n(r.nav), n(r.added), n(r.exited), JSON.stringify(r.data || {}), n(r.bought), n(r.sold), now],
+  }, {
+    // The dated copy, by the load's label (a quarter), kept when the next
+    // load replaces the book above or clears a holder that has gone.
+    sql: `insert into holder_history (kind, id, label, name, value, positions, bought, sold, data, at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(kind, id, label) do update set name = excluded.name, value = excluded.value, positions = excluded.positions,
+            bought = excluded.bought, sold = excluded.sold, data = excluded.data, at = excluded.at`,
+    args: [String(kind), String(r.key), String(label || r.asOf || ''), String(r.name).slice(0, 160), n(r.value), n(r.positions), n(r.bought), n(r.sold),
+      JSON.stringify({ asOf: r.asOf || null, nav: n(r.nav), added: n(r.added), exited: n(r.exited), data: r.data || {} }), now],
+  }]), 'write');
   return list.length;
 }
 
@@ -5044,7 +5117,8 @@ async function clearHolderBooks(kind, before) {
 const holderRow = (x, withData) => {
   const n = (v) => (v == null ? null : Number(v));
   const o = { kind: String(x.kind), id: String(x.id), name: String(x.name), family: x.family || null, label: x.label || null, asOf: x.as_of || null,
-    positions: n(x.positions), value: n(x.value), nav: n(x.nav), added: n(x.added), exited: n(x.exited), at: Number(x.at) || 0 };
+    positions: n(x.positions), value: n(x.value), nav: n(x.nav), added: n(x.added), exited: n(x.exited),
+    bought: n(x.bought), sold: n(x.sold), at: Number(x.at) || 0 };
   if (withData) { try { o.data = JSON.parse(x.data || '{}'); } catch { o.data = {}; } }
   return o;
 };
@@ -5450,7 +5524,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'options_state', 'options_oi',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -7308,6 +7382,7 @@ module.exports = {
   readBars,
   readBarsFor,
   purgeSymbol,
+  readSplitsBetween,
   retireSymbol,
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
