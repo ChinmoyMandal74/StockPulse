@@ -9021,7 +9021,12 @@
   // many, and the period's net bought or sold at one price a stock). One hue
   // in steps for the slices and grey for Other: not green and red, which mean
   // a price that moved, and not a rainbow a reader has to decode.
-  const HB_DONUT_N = { portrait: 8, square: 8, story: 10 };
+  // Layout by shape (2026-10-17, the owner: "fix the empty space"): 9:16
+  // stacks the ring over a one-column key; 4:5 stacks it over a two-column key,
+  // since a ring beside the key is held to the card's width and left a band
+  // of empty card under the note; 1:1 keeps the ring beside the key. The ring
+  // takes the card's spare height (FILL_TPLS), which the stacked 4:5 can now use.
+  const HB_DONUT_N = { portrait: 9, square: 8, story: 10 };
   function hbDonut(H, n, kick, isFund, money, pc, cnt, filing) {
     const all = H.positions.slice().filter((p) => p.ofBook != null && p.ofBook > 0).sort((a, b) => b.ofBook - a.ofBook);
     const N = HB_DONUT_N[size.id] || 8;
@@ -9029,10 +9034,14 @@
     const topSum = top.reduce((s, p) => s + p.ofBook, 0);
     const other = Math.max(0, 100 - topSum);
     const top3 = all.slice(0, 3).reduce((s, p) => s + p.ofBook, 0);
-    const story = size.id === 'story', square = size.id === 'square';
-    // The ring's outer diameter, grown into the card's spare height (FILL_TPLS)
-    // as far as the key beside it allows.
-    const D = Math.round(Math.min(story ? 900 : square ? 420 : 540, (story ? 640 : square ? 400 : 470) + Math.max(0, cardFill)));
+    const story = size.id === 'story', square = size.id === 'square', stack = !square;
+    // The ring's outer diameter, grown (or, past the footer, shrunk) by the
+    // card's spare height; the 1:1 cap leaves the key beside it its room.
+    // 9:16 is not measured (its body is full height already), so there the ring
+    // takes the room of each key row a short book does not need.
+    const rows = top.length + (other > 0.05 ? 1 : 0);
+    const D = Math.round(Math.max(260, Math.min(story ? 900 : square ? 560 : 700,
+      (story ? 640 + Math.max(0, 11 - rows) * 46 : square ? 400 : 300) + cardFill)));
     const R = D / 2, r = R * 0.58, cx = R, cy = R;
     const hue = pal.ink('#7c9cff');
     const slices = top.map((p, i) => ({ label: p.symbol, name: p.name || '', pct: p.ofBook, fill: hue, op: Math.max(0.16, Math.pow(0.8, i)) }));
@@ -9049,16 +9058,21 @@
     }
     // The centre: what it holds, how many, and what it did on the period.
     const net = H.bought != null && H.sold != null ? H.bought - H.sold : null;
-    const fs = story ? 1.3 : square ? 0.9 : 1;
+    // Sized to the hole, so the lowest line (where the hole is narrowest)
+    // stays inside it at any diameter.
+    const fs = Math.min(1.35, D / 540);
     const t = (y, size, weight, fill, text) => '<text x="' + cx + '" y="' + y.toFixed(1) + '" text-anchor="middle" font-size="' + (size * fs).toFixed(1) + '" font-weight="' + weight + '" fill="' + fill + '" font-family="Geist Mono, monospace">' + esc(text) + '</text>';
-    g += t(cy - 34 * fs, 18, 500, pal.axis, 'IN TRACKED STOCKS')
-      + t(cy + 10 * fs, 44, 600, pal.ink('#e9ecf2'), money(H.value))
-      + t(cy + 40 * fs, 18, 500, pal.axis, cnt(H.positionsAll) + ' stocks')
-      + (net == null ? '' : t(cy + 70 * fs, 18, 500, pal.axis, (net >= 0 ? 'net +' : 'net −') + money(Math.abs(net)).replace('$', '$') + ' on the period'));
+    const dy = net == null ? 0 : -12;
+    g += t(cy + (dy - 34) * fs, 18, 500, pal.axis, 'IN TRACKED STOCKS')
+      + t(cy + (dy + 10) * fs, 44, 600, pal.ink('#e9ecf2'), money(H.value))
+      + t(cy + (dy + 40) * fs, 18, 500, pal.axis, cnt(H.positionsAll) + ' stocks')
+      + (net == null ? '' : t(cy + (dy + 70) * fs, 18, 500, pal.axis, (net >= 0 ? 'net bought ' : 'net sold ') + money(Math.abs(net))));
     const ring = '<svg viewBox="0 0 ' + D + ' ' + D + '" width="' + D + '" height="' + D + '" style="display:block;flex:0 0 auto">' + g + '</svg>';
     // The key: swatch, ticker, name, share. Other last.
     const kf = story ? 27 : square ? 17 : 20;
-    const key = '<div class="hbd-key" style="font-size:' + kf + 'px">' + slices.map((s) => '<div class="hbd-r">'
+    const two = stack && !story;
+    const key = '<div class="hbd-key' + (two ? ' hbd-k2' : '') + '" style="font-size:' + kf + 'px'
+      + (two ? ';grid-template-rows:repeat(' + Math.ceil(slices.length / 2) + ',auto)' : '') + '">' + slices.map((s) => '<div class="hbd-r">'
       + '<i style="background:' + s.fill + ';opacity:' + s.op.toFixed(2) + '"></i>'
       + '<b>' + esc(s.label) + '</b><span class="hbd-n">' + esc(s.name) + '</span><span class="hbd-v">' + esc(pc(s.pct)) + '</span></div>').join('') + '</div>';
     const note = 'Shares are of its holdings in the stocks tracked here, from ' + filing + (H.asOf ? ', as of ' + H.asOf : '')
@@ -9070,7 +9084,7 @@
       + '<span class="s-kick">' + esc(kick) + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
       + '<span class="dim">what it holds</span></h2>'
-      + '<div class="hbd' + (story ? ' hbd-col' : '') + '">' + ring + key + '</div>'
+      + '<div class="hbd' + (stack ? ' hbd-col' : '') + '">' + ring + key + '</div>'
       + '<p class="s-sub wide" style="--fs:16px;margin-top:18px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
@@ -11406,6 +11420,7 @@
     .hbd { display: flex; align-items: center; gap: 40px; margin-top: 26px; }
     .hbd.hbd-col { flex-direction: column; align-items: center; gap: 30px; }
     .hbd-key { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5em; width: 100%; }
+    .hbd-key.hbd-k2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-auto-flow: column; column-gap: 56px; row-gap: 0.5em; }
     .hbd-r { display: grid; grid-template-columns: 0.75em auto minmax(0, 1fr) auto; align-items: center; gap: 0.55em; }
     .hbd-r i { width: 0.75em; height: 0.75em; border-radius: 3px; display: block; }
     .hbd-r b { font-family: var(--mono); font-weight: 600; color: var(--text); }
