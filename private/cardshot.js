@@ -42,14 +42,24 @@
     'border-bottom-left-radius', 'border-bottom-right-radius',
     'box-shadow', 'transform', 'transform-origin', 'filter',
     'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill',
+    // The dash and the two opacities (2026-10-16): the Growth and
+    // profitability card draws a computed quarter as a dashed, half-filled
+    // bar from class rules, and the export drew it solid.
+    'stroke-dasharray', 'stroke-dashoffset', 'fill-opacity', 'stroke-opacity',
   ];
+  // `none` is skipped because for nearly every property it is the default, so
+  // writing it changes nothing. NOT for fill: an SVG shape's default fill is
+  // BLACK, so a line drawn with `fill: none` from a class rule lost it and
+  // exported as a solid black shape between its points (the owner's NVIDIA
+  // margin line, 2026-10-16).
+  const KEEP_NONE = new Set(['display', 'fill']);
 
   function inlineStyles(src, dst) {
     const cs = getComputedStyle(src);
     let text = '';
     for (const prop of INLINE_PROPS) {
       const v = cs.getPropertyValue(prop);
-      if (v && v !== 'none' || prop === 'display') text += `${prop}:${v};`;
+      if (v && (v !== 'none' || KEEP_NONE.has(prop))) text += `${prop}:${v};`;
     }
     dst.setAttribute('style', text);
     const sk = src.children, dk = dst.children;
