@@ -17612,12 +17612,19 @@ const SEC_SETS = [
     cmd: 'node --use-system-ca inst13f-load.js --commit', page: '/holders' },
   { key: 'nport', label: 'N-PORT', url: 'https://www.sec.gov/data-research/sec-markets-data/form-n-port-data-sets', re: /href="([^"]+_nport\.zip)"/i,
     cmd: 'node --use-system-ca nport-load.js --commit', page: '/holders' },
+  // Insider transactions (Forms 3, 4 and 5), the quarterly file behind
+  // insider-load.js; the nightly reads each day's filings in between.
+  { key: 'f345', label: 'insider transactions (Forms 3, 4, 5)', url: 'https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets', re: /href="([^"]+_form345\.zip)"/i,
+    cmd: 'node --use-system-ca insider-load.js --commit', page: '/edgar' },
 ];
 // '01sep2026-30nov2026_form13f.zip' -> 'Q3 2026': the window opening in the
 // month a quarter ends carries that quarter's filings (due 45 days later).
 function sec13fQuarter(name) {
   const m = /^\d{2}(mar|jun|sep|dec)(\d{4})-/i.exec(String(name || ''));
-  return m ? 'Q' + ({ mar: 1, jun: 2, sep: 3, dec: 4 })[m[1].toLowerCase()] + ' ' + m[2] : null;
+  if (m) return 'Q' + ({ mar: 1, jun: 2, sep: 3, dec: 4 })[m[1].toLowerCase()] + ' ' + m[2];
+  // '2026q3_form345.zip', '2026q3_nport.zip': the quarter of filing dates.
+  const q = /^(\d{4})q([1-4])_/i.exec(String(name || ''));
+  return q ? 'Q' + q[2] + ' ' + q[1] : null;
 }
 async function secSetsCheck() {
   if (!SEC_UA) return { skipped: 'no SEC_UA' };
@@ -17641,7 +17648,7 @@ async function secSetsCheck() {
     if (!was || !MAIL_READY) continue;
     const to = await operatorEmail();
     if (!to) continue;
-    const q = s.key === 'f13' ? sec13fQuarter(newest) : null;
+    const q = sec13fQuarter(newest);
     const heading = `New ${s.label} data at the SEC${q ? ': ' + q : ''}`;
     const intro = `The SEC has published a new ${s.label} data set (${newest}). Nothing loads it on its own: `
       + `run the loader from your machine, outside the nightly windows. It is a dry run without --commit.`;

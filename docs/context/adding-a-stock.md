@@ -35,3 +35,6 @@
 - **In 180 days all 1,241 backfilled on 2026-10-08 go stale together**; at 100 a run that drains in about a week, oldest first.
 - Verified: **33 checks** (`onboard-test.js`), **proved by reverting nine times, every one load-bearing**; `splits-test.js` (20) and `tail-test.js` corrected for the new rule and the fourth tail phase.
 
+
+### The steps on /themes (2026-10-17)
+The owner: "on the page /themes, can you clearly add instruction what I need to do if I new stocks". A card under the two Add cards, **After you add stocks, what to do** (`#afterAdd`), restates this file in order: `onboard.js --commit` the same day and before the next price refresh (about 21 credits a stock: 1 for bars, 20 for splits; it refuses inside the nightly windows); company data with the next nightly or Fill missing after step 1 (linked to `/refreshes`, **not** `?do=refreshmissing`, which starts a run on load); the insider reload once filings are fetched; `/onboarding` to check. A warning line names what cannot be backfilled and the rebuild order after a removal. Both add confirmations now point at the card instead of saying "Run Fill missing". **The card restates facts from code: change it with `onboard.js`, the nightly windows, or the credit costs.**

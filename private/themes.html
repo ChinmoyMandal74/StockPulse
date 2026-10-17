@@ -99,6 +99,13 @@
     .warn { border-left: 2px solid var(--amber); padding-left: 12px; margin-top: 14px;
             font-size: 12.5px; color: var(--muted); line-height: 1.6; }
     .empty { color: var(--muted); padding: 22px; text-align: center; font-size: 13px; }
+    #afterAdd .aa-steps { margin: 0; padding-left: 22px; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    #afterAdd .aa-steps li { margin-bottom: 9px; padding-left: 4px; }
+    #afterAdd .aa-steps b { color: var(--text); font-weight: 600; }
+    #afterAdd code { font: 12px var(--mono); color: var(--text); background: var(--surface-2);
+                     border: 1px solid var(--hair); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+    #afterAdd a { color: var(--accent); }
+    @media (max-width: 720px) { #afterAdd code { white-space: normal; word-break: break-all; } }
     @media (max-width: 720px) {
       .page { padding: 0 16px; }
       select, #sym { width: 100%; min-width: 0; }
@@ -154,6 +161,34 @@
       </div>
       <p class="said" id="bulkSaid">Adding costs no API credits and pulls nothing &mdash; the data arrives
         with Fill missing or the nightly gap fill.</p>
+    </div></section>
+
+    <!-- AFTER YOU ADD STOCKS (2026-10-17, the owner: "clearly add instruction
+         what I need to do if I add new stocks"). The steps from
+         docs/context/adding-a-stock.md, in the order they have to happen: the
+         price history BEFORE the next price refresh, or the refresh times out. -->
+    <section class="bezel card" id="afterAdd"><div class="core">
+      <span class="lbl">After you add stocks &mdash; what to do</span>
+      <ol class="aa-steps">
+        <li><b>Load their history, the same day, from your computer.</b> In the project folder run
+          <code>node --use-system-ca onboard.js --commit</code>. It loads the full price history, the record close,
+          short-interest history back to 2017 and split history for every stock still waiting, at about
+          21 API credits a stock. <b>Do it before the next price refresh</b> &mdash; a refresh that meets
+          stocks with no price history times out. It will not start during a nightly run (7:25&ndash;8:20 AM
+          and 7:25&ndash;8:20 PM Eastern, weekdays); wait for the window to pass. Run it without
+          <code>--commit</code> first to see what it would do.</li>
+        <li><b>Company data arrives on its own</b> with the next nightly run (new stocks go first): profile,
+          fundamentals, earnings history, SEC filings, news and splits. To have it now, after step 1, press
+          Fill missing on <a href="/refreshes">Refresh runs</a> (about 81 credits a stock, about seven stocks a minute).</li>
+        <li><b>Insider trades, after the filings have been fetched</b> (the day after the add): reload the current
+          quarter with <code>node --use-system-ca insider-load.js --commit --quarters 1 --force</code>.</li>
+        <li><b>Check <a href="/onboarding">New stocks</a>.</b> It lists every stock added that is not finished
+          yet, piece by piece, and clears once the history is in.</li>
+      </ol>
+      <p class="warn">Two things cannot be filled in for the past and start from the day of the add: the recorded
+        fundamentals history and how long a stock has held its Signal. Removing stocks is different: after a
+        removal the research files are rebuilt in order (<code>analysis-db.js --full</code>, then
+        <code>single-data.js</code>, <code>strategy-runs.js</code>, <code>lab-grid.js</code>).</p>
     </div></section>
 
     <!-- DELIBERATELY NOT BESIDE "Add many at once". The two take the same paste
@@ -305,7 +340,7 @@
         // next refresh.
         const nm = r.name || (r.names && r.names[symbol]);
         say('addSaid', `${symbol} added${theme ? ` to ${theme}` : ''}${nm ? ` — ${nm}` : ''}.`
-          + (nm ? '' : ' No company name came back, which usually means a typo.'), nm ? 'ok' : 'err');
+          + (nm ? ' Next: load its history (see After you add stocks, below).' : ' No company name came back, which usually means a typo.'), nm ? 'ok' : 'err');
       } catch (err) { say('addSaid', err.message, 'err'); }
       $('addBtn').disabled = false;
     }
@@ -402,7 +437,7 @@
           + ((r.invalid || []).length ? `, ${r.invalid.length} rejected` : '')
           + (refused.length ? `, ${refused.length} refused by the data provider (`
             + refused.slice(0, 6).map((x) => x.symbol).join(', ') + ')' : '')
-          + '. Run Fill missing to pull their data.', refused.length ? 'err' : 'ok');
+          + '. Next: load their history (see After you add stocks, below).', refused.length ? 'err' : 'ok');
       } catch (err) { say('bulkSaid', err.message, 'err'); $('bulkGo').disabled = false; }
     }
 
