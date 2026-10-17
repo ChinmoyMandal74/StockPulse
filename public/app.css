@@ -238,12 +238,23 @@ body {
 /* ==========================================================================
    Double-bezel primitive
    ========================================================================== */
+/* ONE EDGE, NOT TWO (2026-10-16, the owner on the light theme: "Each of these
+   panels have a thick border around everywhere ... Do we need these thick
+   border, It also takes up valuable screen space"). The bezel was a 6px tinted
+   shell around the card, under a deep shadow: a faint double rim on dark, a
+   grey frame with a halo on light. Now the shell IS the card's edge: no
+   padding, the card's own ground, a hairline and a short shadow. The markup
+   is unchanged (every page keeps .bezel > .core), so this is the only edit.
+   The core follows the shell's corners with a selector that outranks the
+   pages' own `.bezel > .core { border-radius }` lines, which were written
+   for the 6px gap and would now poke out at the corners. */
 .bezel {
-  background: var(--shell);
+  background: var(--surface);
   border: 1px solid var(--hair);
   border-radius: var(--r-shell);
-  padding: 6px;
-  box-shadow: 0 30px 80px -40px color-mix(in srgb, var(--shade) 95%, transparent);
+  padding: 0;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--shade) 25%, transparent),
+              0 18px 40px -28px color-mix(in srgb, var(--shade) 60%, transparent);
 }
 .bezel > .core {
   background: var(--surface);
@@ -252,6 +263,7 @@ body {
   overflow: hidden;
   min-width: 0;
 }
+:root .bezel > .core { border-radius: inherit; }
 
 /* ==========================================================================
    Buttons — pills, magnetic hover, button-in-button trailing nub

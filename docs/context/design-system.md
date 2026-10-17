@@ -34,3 +34,6 @@ Dark-only. "Ethereal glass": OLED black with a fixed radial mesh aura and a film
 
 **`--surface` must stay opaque.** The frozen table columns and the sticky header cells paint on it to mask the rows scrolling underneath; a translucent value makes them see-through.
 
+
+## The bezel is one edge now (2026-10-16)
+The owner, on the light theme: "Each of these panels have a thick border around everywhere ... Do we need these thick border, It also takes up valuable screen space". The double bezel was a 6px tinted shell (`--shell`) around the card, under a `0 30px 80px -40px` shadow: a faint double rim on dark, a grey frame with a halo on light. **`app.css` alone changed**: `.bezel` now has no padding, takes `--surface` (the card's ground, so nothing shows at the corners), keeps the 1px `--hair` edge, and has a short two-part shadow. `:root .bezel > .core { border-radius: inherit; }` makes the card follow the shell's corners. It outranks the roughly thirty pages that set `.bezel > .core { border-radius: 20px }` for the old 6px gap, which would otherwise poke out at the corners, so none of them needed editing. Markup is unchanged everywhere. 12px more width and height per panel. `--r-core` and `--shell` remain as tokens; `--shell` is no longer read by the bezel. Checked on the screener (light and dark) and the stock page (light).
