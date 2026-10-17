@@ -15,10 +15,21 @@
 // run prints exactly what would go, per table, so the trade is visible before
 // it is made.
 
+// SINCE 2026-10-16 THIS DELETES KEPT HISTORY, and refuses without being told.
+// The owner: "Do not delete the history of anything unless I say so", and a
+// removed stock now KEEPS its history (db.retireSymbol), so every "orphan" this
+// finds is a company's past on purpose. --commit alone stops; it needs
+// --delete-history as well, which is the owner saying so.
+
 require('dotenv').config();
 const store = require('./db.js');
 
 const COMMIT = process.argv.includes('--commit');
+if (COMMIT && !process.argv.includes('--delete-history')) {
+  console.error('Refused: a removed stock keeps its history by the owner\'s rule (CLAUDE.md, "Keep history").\n'
+    + 'Deleting it needs the owner\'s say-so; if you have it, add --delete-history. The dry run (no --commit) is safe.');
+  process.exit(1);
+}
 const argOf = (name) => {
   const i = process.argv.indexOf(name);
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : '';

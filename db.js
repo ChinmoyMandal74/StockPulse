@@ -5490,6 +5490,23 @@ async function purgeSymbol(symbol) {
   return { symbol: sym, removed, total };
 }
 
+// REMOVING A STOCK KEEPS ITS HISTORY (2026-10-16, the owner: "Do not delete
+// the history of anything unless I say so", and then, asked about removal:
+// keep it). The caller takes the stock out of the universe and its themes;
+// this does the one other thing a removal needs, taking it out of members'
+// own lists (settings, not history). Every SYMBOL_TABLES row stays: its bars,
+// fundamentals history, filings and headlines are there for research, and a
+// re-added stock picks up where it left off. Every job chooses its stocks from
+// the universe, so kept rows are not refreshed. purgeSymbol above still
+// exists for purge-orphans.js, run by hand, which says it deletes history.
+async function retireSymbol(symbol) {
+  await init();
+  const sym = String(symbol).toUpperCase();
+  let memberLists = 0;
+  try { memberLists = await removeSymbolFromUserPortfolios(sym); } catch { /* the sweep can catch it later */ }
+  return { symbol: sym, kept: true, memberLists };
+}
+
 // How many rows one table holds for one symbol — what the removal dialog
 // counts before anything is destroyed.
 async function countSymbolRows(table, symbol) {
@@ -7291,6 +7308,7 @@ module.exports = {
   readBars,
   readBarsFor,
   purgeSymbol,
+  retireSymbol,
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,

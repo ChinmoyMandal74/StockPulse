@@ -6848,14 +6848,9 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
     if (i > 0 && Date.now() > deadline) { remaining.push(sym); continue; }
     try {
       await store.removeFromUniverse(sym);
-      try {
-        purged.push(await store.purgeSymbol(sym));
-      } catch (err) {
-        // The removal stands even when the sweep fails — losing the edit
-        // because the cleanup broke would be worse, and purge-orphans.js
-        // collects what is left. The bars rule.
-        console.warn(`purge ${sym} failed (removed anyway): ${err.message}`);
-      }
+      // ITS HISTORY IS KEPT (the owner, 2026-10-16): out of the universe,
+      // the themes and members' lists, and nothing else (store.retireSymbol).
+      try { await store.retireSymbol(sym); } catch (err) { console.warn(`retire ${sym}: ${err.message}`); }
     } catch (err) {
       failed.push(sym);
       console.warn(`bulk delete: ${sym} failed: ${err.message}`);
@@ -6865,9 +6860,8 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
   // One activity row for the batch, capped, not one per symbol: the log is a
   // record of who did what, not somewhere to put a 500-line list.
   logAct(req, 'portfolio', 'bulk-remove:' + removed.length + ':' + removed.slice(0, 12).join(','));
-  const rowsGone = purged.reduce((a, p) => a + (p.total || 0), 0);
-  console.log(`bulk delete: ${removed.length} symbols, ${rowsGone.toLocaleString()} rows, ` +
-    `${fundTotal} recorded fundamentals days`);
+  const rowsGone = purged.reduce((a, p) => a + (p.total || 0), 0);   // 0: nothing is deleted now
+  console.log(`bulk remove: ${removed.length} symbols out of the screener, their history kept`);
   res.json(await portfolioAnswer({
     purged, removed, failed, unknown, invalid, fundDays: fundTotal, rowsGone,
     // What this request did not reach. The page sends it straight back; the
@@ -6887,11 +6881,12 @@ app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (r
   res.json(await portfolioAnswer({ purged: [] }));
 }));
 
-// Remove a stock from the screener: out of the universe and every portfolio,
-// and its data with it — bars, fundamentals history, the cached profile, the
-// name and its headlines. Bars come back for a credit; FUNDAMENTALS HISTORY
-// CANNOT BE REBUILT (the API only returns today's numbers), so re-adding the
-// ticker starts that series over. The counts are returned for that reason.
+// Remove a stock from the screener: out of the universe, every portfolio and
+// members' lists. ITS HISTORY IS KEPT (the owner, 2026-10-16: "Do not delete
+// the history of anything unless I say so"): bars, fundamentals history,
+// filings and headlines stay, nothing refreshes them, and a re-added ticker
+// finds them. It used to delete them, fundamentals history included, which
+// cannot be rebuilt.
 app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
@@ -6902,18 +6897,8 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   }
   await store.removeFromUniverse(symbol);
   logAct(req, 'portfolio', 'remove:' + symbol);
-  const purged = [];
-  try {
-    const r = await store.purgeSymbol(symbol);
-    purged.push(r);
-    console.log(`purged ${r.symbol}: ${r.total.toLocaleString()} rows — ` +
-      (Object.entries(r.removed).map(([t, n]) => `${t} ${n.toLocaleString()}`).join(', ') || 'nothing stored'));
-  } catch (err) {
-    // Losing the removal because the cleanup failed would be worse than
-    // leaving rows behind; purge-orphans.js sweeps them up later.
-    console.warn(`purge ${symbol} failed (the ticker was still removed):`, err.message);
-  }
-  res.json(await portfolioAnswer({ purged }));
+  try { await store.retireSymbol(symbol); } catch (err) { console.warn(`retire ${symbol}:`, err.message); }
+  res.json(await portfolioAnswer({ purged: [], kept: true }));
 }));
 
 // Expire the per-symbol profile cache (sector / fundamentals) so the

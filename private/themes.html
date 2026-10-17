@@ -170,9 +170,9 @@
         <button class="btn danger" id="delGo" disabled>Remove them</button>
       </div>
       <div id="delList" hidden></div>
-      <p class="said" id="delSaid">This takes the stocks out of the screener and every theme, and deletes
-        their stored data. Bars and earnings can be re-pulled for a credit; <b>recorded fundamentals
-        cannot</b> &mdash; that series starts from zero if you add the ticker back. Preview first: the
+      <p class="said" id="delSaid">This takes the stocks out of the screener and every theme, and stops
+        refreshing them. <b>Their stored history is kept</b> &mdash; prices, recorded fundamentals, filings and
+        headlines &mdash; so a ticker added back picks up where it left off. Preview first: the
         list is split into tokens, so a stray word can match a real ticker.</p>
     </div></section>
 
@@ -421,8 +421,8 @@
       const row = (r) => '<li><b>' + we(r.symbol) + '</b> ' +
         (r.name ? we(r.name) : '<i class="faint">no name stored</i>') +
         (r.themes.length ? ' <span class="faint">· ' + we(r.themes.join(', ')) + '</span>' : '') +
-        (r.fundDays ? ' <span class="loss">' + r.fundDays +
-          ' day' + (r.fundDays === 1 ? '' : 's') + ' of fundamentals</span>' : '') + '</li>';
+        (r.fundDays ? ' <span class="faint">' + r.fundDays +
+          ' day' + (r.fundDays === 1 ? '' : 's') + ' of fundamentals, kept</span>' : '') + '</li>';
       host.innerHTML =
         (found.length ? '<ul class="dellist">' + found.map(row).join('') + '</ul>' : '') +
         (unknown.length ? '<p class="said err">Not in the screener, so nothing to remove: ' +
@@ -445,7 +445,7 @@
         }
         delReady = { symbols: (r.found || []).map((x) => x.symbol), fundDays: r.fundDays || 0 };
         const bits = [`${delReady.symbols.length} stock${delReady.symbols.length === 1 ? '' : 's'} would be removed`];
-        if (r.fundDays) bits.push(`${r.fundDays.toLocaleString()} recorded fundamentals days lost for good`);
+        if (r.fundDays) bits.push(`${r.fundDays.toLocaleString()} recorded fundamentals days, kept`);
         if ((r.unknown || []).length) bits.push(`${r.unknown.length} not in the screener`);
         say('delSaid', bits.join(' · ') + ' — check the names below before removing.', 'err');
         $('delGo').disabled = false;
@@ -455,12 +455,12 @@
     async function doDelete() {
       if (!delReady) return;
       const { symbols, fundDays } = delReady;
-      // Names the irreversible loss in the confirm, not just the count. The
-      // rule this page already follows for deleting a theme.
+      // History is kept (the owner, 2026-10-16), so the confirm says so
+      // rather than warning of a loss. `fundDays` is still counted for the list.
+      void fundDays;
       if (!confirm(`Remove ${symbols.length} stock${symbols.length === 1 ? '' : 's'} from the screener?\n\n` +
-        `Their bars, profiles, headlines and earnings go too. Bars and earnings can be re-pulled.\n` +
-        (fundDays ? `${fundDays.toLocaleString()} days of recorded fundamentals CANNOT be — that history is gone.\n` : '') +
-        `\nThis cannot be undone.`)) return;
+        `They leave every theme and stop being refreshed. Their stored history is kept, ` +
+        `so adding one back picks up where it left off.`)) return;
       $('delGo').disabled = true;
       say('delSaid', 'Removing…');
       // THE SERVER DOES WHAT FITS AND SAYS WHAT IS LEFT; this drives the rest.
@@ -493,7 +493,8 @@
         $('delText').value = '';
         delReady = null;
         paintDelList([], []);
-        say('delSaid', `${done} removed, ${rows.toLocaleString()} rows deleted` +
+        void rows;
+        say('delSaid', `${done} removed, their history kept` +
           (allFailed.length ? ` — ${allFailed.length} failed: ${allFailed.join(', ')}` : '') +
           '. The screener still lists them until the next refresh rewrites the snapshot.',
           allFailed.length ? 'err' : 'ok');

@@ -4364,15 +4364,15 @@
       onAction: (id, s) => {
         if (id !== 'remove') return;
         // Removing from the All view takes the stock out of the screener and
-        // deletes its stored data, and the fundamentals history among that
-        // cannot be rebuilt — so it asks. Taking it out of one portfolio only
+        // every portfolio. Its stored history is KEPT (the owner, 2026-10-16),
+        // but it is still a real change to what the screener tracks, so it asks. Taking it out of one portfolio only
         // changes the grouping, is undone by adding it back, and does not ask.
         if (lastHome(s.symbol) &&
             !window.confirm(`Remove ${s.symbol} from the screener?
 
 ` +
-              'It leaves every portfolio too, and its stored price history and ' +
-              'fundamentals history are deleted. The fundamentals history cannot be rebuilt.')) return;
+              'It leaves every portfolio too and stops being refreshed. Its stored history ' +
+              '(prices, fundamentals, filings, headlines) is kept, so adding it back later picks up where it left off.')) return;
         removeTicker(s.symbol);
       },
     });
