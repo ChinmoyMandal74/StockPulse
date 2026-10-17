@@ -319,6 +319,19 @@
           stage; Record saves it as a video (MP4 in Chrome) at the size chosen below,
           9:16 for a Reel. It records in real time, so keep the tab in front.</p>
       </div>
+      <!-- Benchmarks (Market group, 2026-10-17): the four index funds' lines. -->
+      <div id="bmkBox">
+        <label>Window</label>
+        <select id="bmkWin">
+          <option value="m1">Past month</option>
+          <option value="m3">Past three months</option>
+          <option value="m6">Past six months</option>
+          <option value="ytd" selected>This year (since last year's close)</option>
+          <option value="y1">Past year</option>
+        </select>
+        <p class="hint">The S&amp;P 500, Nasdaq 100, Russell 2000 and Dow funds,
+          each rebased to the start of the window and ranked on it.</p>
+      </div>
       <div id="chtBox">
         <label>Chart</label>
         <select id="chtMode">
@@ -1990,6 +2003,7 @@
       { id: 'sparks', name: 'Sparklines', note: 'The leaders in a list, one shape each' },
       { id: 'chart', name: 'Chart', note: 'A line chart built for posts' },
       { id: 'lines', name: 'Lines', note: 'Any one measure over time — price or a filed fundamental — a line per company' },
+      { id: 'benchmarks', name: 'Benchmarks', note: 'The four index funds \u2014 S&P 500, Nasdaq 100, Russell 2000 and Dow \u2014 rebased to the start of the window and ranked' },
       { id: 'race', name: 'Race chart', note: 'The leaders in a list as a 25-second video: each line drawn day by day, the labels re-sorting as they overtake' },
       { id: 'scatter', name: 'Scatter', note: 'Any two measures against each other, a dot per company — point at one for its name, click to open it' },
       { id: 'evo2', name: 'Evolution Two Stocks', note: 'Two companies, what each business did and what the market paid for it — from the filings, on one axis' },
@@ -2054,6 +2068,7 @@
     // opens on the whole screen), so nothing is carried across.
     const MKT_VIEWS = [
       ['day', 'Snapshot'],
+      ['benchmarks', 'Benchmarks'],
       ['breadth', 'Narrow or broad'],
       ['beat', 'Beating the index'],
       ['movegrid', 'Moves by sector'],
@@ -2722,7 +2737,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
+      'bmkWin', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -3218,7 +3233,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
@@ -3341,6 +3356,7 @@
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
       $('racBox').style.display = tpl === 'race' ? 'block' : 'none';
+      $('bmkBox').style.display = tpl === 'benchmarks' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
@@ -3712,6 +3728,7 @@
       $('sctX').value = 'v200'; $('sctY').value = 'm1';
       for (const [v, label] of Cards.scatterCounts()) $('sctCount').appendChild(new Option(label, v, v === '100', v === '100'));
     }());
+    $('bmkWin').addEventListener('change', () => { if (tpl === 'benchmarks') render(); });
     ['racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'race') render(); }));
     ['sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector',

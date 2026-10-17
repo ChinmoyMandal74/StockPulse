@@ -1509,7 +1509,7 @@
     // shipped for an hour reading a basket that never arrived, because its
     // fetch landed and nothing repainted. Asked here instead, the way
     // chartHistoryNeed already is, so a fourth costs one line in one place.
-    const BASKET_WIN_KEY = { chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin', thmspot: 'tspWin', race: 'racWin' };
+    const BASKET_WIN_KEY = { benchmarks: 'bmkWin', chart: 'chtWin', sparks: 'spkWin', spotlight: 'spotWin', indspot: 'ispWin', secspot: 'sspWin', thmspot: 'tspWin', race: 'racWin' };
     function basketDays(tpl, opts) {
       // The Lines card reads the basket only for a DAILY price window; which
       // that is depends on its measure as well as its window, so it answers
@@ -1525,6 +1525,7 @@
       // one key: any other value still resolves through barWin.
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
         : tpl === 'race' ? (v === 'y1' ? CHART_WINDOWS.y1 : v === 'y5' ? CHART_WINDOWS.y5 : CHART_WINDOWS.ytd)
+        : tpl === 'benchmarks' ? (['m1', 'm3', 'm6', 'ytd', 'y1'].includes(v) ? CHART_WINDOWS[v] : CHART_WINDOWS.ytd)
         : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
@@ -1864,7 +1865,10 @@
     // `ctx.fill` pixels more (or fewer, when a long title overflows); a host
     // that cannot measure passes nothing and gets the fixed height.
     let cardFill = 0;
+    // Set by tplBenchmarks: the four index funds, whatever the themes say.
+    let chartScopeFixed = null;
     function chartScopeSymbols() {
+      if (chartScopeFixed) return chartScopeFixed;
       const sc = scopeOf('chtScope', 'chtSector');
       return { syms: sc.rows.map((x) => x.symbol), label: sc.label };
     }
@@ -2160,6 +2164,22 @@
         racTall: true,
       });
       try { return tplChart(); } finally { O = saved; }
+    }
+
+    // ---- Benchmarks (Market group, 2026-10-17, the owner: "add this chart
+    // under Market Template, you can call it Benchmarks") -----------------
+    // The Chart card in leaders mode over the four index funds, from BENCH
+    // (this module's own list, the one every market card subtracts), not
+    // the hand-edited "Benchmarks" theme, so the card cannot change if the
+    // theme is renamed or edited. One code path: tplChart draws it.
+    const BMK_WINS = ["m1", "m3", "m6", "ytd", "y1"];
+    function tplBenchmarks() {
+      const saved = O;
+      O = Object.assign({}, O, {
+        chtMode: 'leaders', chtWin: BMK_WINS.includes(O.bmkWin) ? O.bmkWin : 'ytd', chtLines: BENCH.length,
+      });
+      chartScopeFixed = { syms: BENCH.map((b) => b[0]).filter((s) => stocks.some((r) => r.symbol === s)), label: 'Benchmarks' };
+      try { return tplChart(); } finally { O = saved; chartScopeFixed = null; }
     }
 
     function tplAnnounce() {
@@ -10925,7 +10945,7 @@
   }
 
   const BUILDERS = {
-    movers: tplMovers, chart: tplChart, race: tplRace, advboard: tplAdvBoard,
+    movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
