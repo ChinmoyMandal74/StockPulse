@@ -64,6 +64,16 @@ const listed = new Map([['KLAC', [{ d: '2026-06-12', f: 10 }]], ['FDX', [{ d: '2
 const conf = S.confirmed(curK, prevK, listed, () => ['2026-03-31', '2026-06-30']);
 check('a real 10-for-1 is confirmed', conf.splits.has('KLAC'), conf.report);
 check('a spin-off factor is not', !conf.splits.has('FDX'), conf.report);
+// A factor close to 1 with unchanged counts: within 15% of both, so the
+// nearer-than-1 rule must refuse it (S&P Global 1.057, Unilever 0.888).
+const nearOne = S.confirmed(new Map([['SPGI', holders(ids.map((id, i) => [id, (i + 1) * 10]))], ['UL', holders(ids.map((id, i) => [id, (i + 1) * 10]))]]),
+  new Map([['SPGI', holders(ids.map((id, i) => [id, (i + 1) * 10]))], ['UL', holders(ids.map((id, i) => [id, (i + 1) * 10]))]]),
+  new Map([['SPGI', [{ d: '2026-05-01', f: 1.057 }]], ['UL', [{ d: '2026-05-01', f: 0.888 }]]]), () => ['2026-03-31', '2026-06-30']);
+check('a near-1 factor with unchanged counts is refused', !nearOne.splits.has('SPGI') && !nearOne.splits.has('UL'), nearOne.report);
+// A real small split still passes: 3-for-2 with counts up 50%.
+const threeTwo = S.confirmed(new Map([['X', holders(ids.map((id, i) => [id, (i + 1) * 15]))]]), new Map([['X', holders(ids.map((id, i) => [id, (i + 1) * 10]))]]),
+  new Map([['X', [{ d: '2026-05-01', f: 1.5 }]]]), () => ['2026-03-31', '2026-06-30']);
+check('a real 3-for-2 still passes', threeTwo.splits.has('X'), threeTwo.report);
 const few = S.confirmed(new Map([['X', holders([['a', 20]])]]), new Map([['X', holders([['a', 10]])]]), new Map([['X', [{ d: '2026-05-01', f: 2 }]]]), () => ['2026-03-31', '2026-06-30']);
 check('too few holders in both: not applied', !few.splits.has('X'));
 

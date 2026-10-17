@@ -69,7 +69,12 @@
       if (c && p) for (const [id, h] of c) { const was = p.get(id); if (was && was.shares > 0 && h.shares > 0) ratios.push(h.shares / was.shares); }
       ratios.sort((a, b) => a - b);
       const med = ratios.length ? (ratios.length % 2 ? ratios[(ratios.length - 1) / 2] : (ratios[ratios.length / 2 - 1] + ratios[ratios.length / 2]) / 2) : null;
-      const ok = med != null && ratios.length >= min && Math.abs(f - 1) > 0.02 && Math.abs(med / f - 1) <= tol;
+      // NEARER THE FACTOR THAN TO 1, as well as within `tol` of it. A factor
+      // close to 1 (S&P Global's 1.057, Unilever's 0.888 in the 2026 fund
+      // sets) is within 15% of an unchanged count too, and the first version
+      // applied both. In log terms the median must sit closer to f than to 1.
+      const ok = med != null && med > 0 && ratios.length >= min && Math.abs(f - 1) > 0.02 && Math.abs(med / f - 1) <= tol
+        && Math.abs(Math.log(med / f)) < Math.abs(Math.log(med));
       report.push({ sym, f, med, n: ratios.length, kept: ok });
       if (ok) keep.set(sym, list);
     }
