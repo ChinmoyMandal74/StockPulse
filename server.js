@@ -11114,7 +11114,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     // A card that names its own stocks (the race over five years) says so
     // when built without a basket: one dry build, then the narrowed read.
     let asked = null;
-    if (post.tpl === 'race') try {
+    if (post.tpl === 'race' || post.tpl === 'chart') try {
       Cards.build(post.tpl, { stocks, myLists, screens, size: { id: 'portrait', w: 1080, h: 1350 }, opts: post.opts,
         getBasket: (dd, o) => { if (Array.isArray(o) && o.length) asked = o; return null; } });
     } catch { asked = null; }
@@ -14815,7 +14815,9 @@ async function basketPayload(req, rawName, days, only) {
   const since = new Date(Date.now() - Math.round(days * 1.55 + 14) * 86400000)
     .toISOString().slice(0, 10);
   const uniSet = new Set(all);
-  const asked = Array.isArray(only) ? [...new Set(only.filter((s) => uniSet.has(s)))].slice(0, 10) : [];
+  // Up to 60 named symbols (the Chart card names a small list's members,
+  // 2026-10-17; Cards.BASKET_ONLY_MAX is the same number).
+  const asked = Array.isArray(only) ? [...new Set(only.filter((s) => uniSet.has(s)))].slice(0, 60) : [];
   // Nothing asked for is on the screen: answer with the whole screen, as before.
   const narrow = asked.length ? asked : null;
   if (narrow) symbols = symbols.filter((s) => narrow.includes(s));

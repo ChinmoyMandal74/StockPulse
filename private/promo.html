@@ -2217,7 +2217,10 @@
     // The archive read for the chart card: the host owns the cache and the
     // repaint, the module only asks for the data.
     const chartCache = {};
-    let chartPending = null;
+    // One marker per request in flight, not one for all: a slower earlier
+    // reply used to clear the marker of a later one, and the next redraw asked
+    // again (three identical reads seen on 2026-10-17).
+    const chartPending = new Set();
     function getBasket(days, asked) {
       // A one-stock card asks for that stock alone (Cards.basketSymbols); the
       // cache is keyed by both, so switching stocks never draws the last one.
@@ -2226,19 +2229,19 @@
         || (Cards.basketSymbols && Cards.basketSymbols(tpl, controlOpts())) || null;
       const key = days + (only ? '|' + only.join(',') : '');
       if (chartCache[key]) return chartCache[key];
-      if (chartPending === key) return null;
-      chartPending = key;
+      if (chartPending.has(key)) return null;
+      chartPending.add(key);
       fetch(`/api/basket?name=All&days=${days}` + (only ? '&only=' + encodeURIComponent(only.join(',')) : ''), { cache: 'no-store' })
         .then((r) => r.json())
         .then((d) => {
-          chartCache[key] = d; chartPending = null;
+          chartCache[key] = d; chartPending.delete(key);
           // WHICH TEMPLATES CARE IS ASKED OF THE MODULE. Listing them here is
           // how the spotlight shipped drawing nothing: the card asked for a
           // basket, the fetch landed, and no repaint followed — so it kept
           // its "Drawing the chart..." placeholder for ever.
           if (Cards.basketDays(tpl, controlOpts())) render();
         })
-        .catch(() => { chartPending = null; });
+        .catch(() => { chartPending.delete(key); });
       return null;
     }
 

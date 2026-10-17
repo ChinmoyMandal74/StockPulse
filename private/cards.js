@@ -1536,6 +1536,9 @@
     // needs one names it here and the hosts ask the server for that stock and
     // the benchmarks alone; null keeps the whole screen, which every other
     // basket card (chart, sparklines, the group spotlights, lines) really uses.
+    // The most symbols a card may name for its basket; the server holds the same
+    // cap (BASKET_ONLY_MAX in server.js). Past it, the card reads the whole screen.
+    const BASKET_ONLY_MAX = 60;
     function basketSymbols(tpl, opts) {
       const o = opts || {};
       if (tpl === 'spotlight' && o.spotSym) return [String(o.spotSym).toUpperCase()];
@@ -1936,6 +1939,25 @@
         only = chartScopeSymbols().syms.filter((s) => fy(s) != null)
           .sort((a, b) => fy(b) - fy(a)).slice(0, Math.min(10, Number(O.chtLines) || 5));
         if (!only.length) return chromeTop() + '<div class="s-body"><div><p class="s-empty">Nothing here has five years of history.</p></div></div>' + chromeFoot();
+      } else if (mode === 'stock' || mode === 'two' || mode === 'leaders') {
+        // ASK ONLY FOR WHAT IS DRAWN (2026-10-17, the owner: "when I am
+        // changing the window from 6 months to YTD, it is taking a long time").
+        // Every window change read the whole screen, ~1,300 stocks of bars,
+        // to draw four benchmark funds. One stock, two, or the leaders of a
+        // list of up to BASKET_ONLY_MAX name their symbols; the leaders of the
+        // whole screen, and the average mode (which draws the whole screen's
+        // line beside the cut), still read everything. The Stock spotlight's
+        // fix, one card over.
+        const first = stocks[0] && stocks[0].symbol;
+        if (mode === 'stock') only = [O.chtSym || first].filter(Boolean);
+        else if (mode === 'two') {
+          const a = O.chtSym || first;
+          only = [a, O.chtSym2 || ((stocks.find((r) => r.symbol !== a) || {}).symbol)].filter(Boolean);
+        } else {
+          const syms = chartScopeSymbols().syms;
+          if (syms.length && syms.length <= BASKET_ONLY_MAX) only = syms;
+        }
+        if (only && !only.length) only = null;
       }
       let d = only ? getBasket(days, only) : getBasket(days);
       if (!d || !d.dates || !d.dates.length) {
@@ -2075,7 +2097,7 @@
         kick = `${esc(scope.label)} \u00b7 ${esc(winLabel)}`;
         title = `The leaders<br><span class="dim">${esc(scope.label)}</span>`;
         note = 'Each line is one stock, rebased to the start of the window. Ranked on the window, not a forecast.';
-        if (only) note += ' Drawn from the stocks with the largest five-year change; one listed for less than five years has none and is not in it.';
+        if (winKey === 'y5') note += ' Drawn from the stocks with the largest five-year change; one listed for less than five years has none and is not in it.';
       } else {
         const scope = chartScopeSymbols();
         const basket = mean(scope.syms);
