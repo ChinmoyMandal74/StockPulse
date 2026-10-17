@@ -322,10 +322,13 @@
       <div id="chtBox">
         <label>Chart</label>
         <select id="chtMode">
-          <option value="list" selected>A list vs the whole screen</option>
+          <!-- One stock first and the default; the list against the whole
+               screen last (the owner, 2026-10-17). Values unchanged, so
+               saved posts keep their mode. -->
+          <option value="stock" selected>One stock</option>
           <option value="leaders">The leaders in a list</option>
-          <option value="stock">One stock</option>
           <option value="two">Two stocks</option>
+          <option value="list">A list vs the whole screen</option>
         </select>
         <label>Window</label>
         <select id="chtWin">
