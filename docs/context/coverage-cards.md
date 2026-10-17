@@ -26,3 +26,29 @@ Each row: a bar scaled to the largest count, the count, its share of the compani
 1,256 companies and 24 funds, $92.41T combined, 11 sectors and 138 industries. By size: Mega 74, Large 215, Mid-Large 509, Mid 390, Small 55, Micro 12, one with no market value. S&P 500 members 499, Nasdaq 100 members 99, in both 84, in neither 742.
 
 Tests: a scratchpad suite, 24 checks, including all three cards built from the real screen. Not rendered in a browser by the build.
+
+## What we collect (2026-10-17)
+The owner: "I don't think there is any promotional visual on the various data points the app currently collects and has history of and how frequently they are refreshed". A fourth view, `covdata` (`coverageData()`), from a fixed list `COV_DATA` in `cards.js`: each data set as a bar on one time axis (1998 to today) from its earliest stored day, with the source, "stored since" and how often it is refreshed. A short bar is where the site began recording a source that cannot be backfilled, and the note says so; "latest only" is a data set with no history (the profile). The 1:1 card keeps the nine rows marked `sq`. Accent-2 bars (not green, which is price). `FILL_TPLS` includes it (rows grow).
+
+**The list restates facts and has to move with them.** Where each row's figures come from:
+
+| Row | From | Refreshed | Source of the figures |
+|---|---|---|---|
+| Daily prices | 1998-12-23 (longest listed) | intraday every 30 min, settled nightly | `bar-archive.md`, `intraday-task.ps1` |
+| Weekly trend readings (`tech_history`) | 2001-03-21 | weekly mark on Refresh all | `the-trend-only-backtest.md` |
+| Financial statements (`sec_facts`) | 2007 for long-listed | SEC rotation, each company about weekly | `sec-edgar.md` |
+| Short interest | 2017-12-29 | nightly, new settlement twice a month | `sec-edgar.md` |
+| Earnings, reported | median company to 2020-05 ("typically") | profile rotation, 7 days | `earnings-history-on-the-stock-page.md` |
+| 13F | Q2 2024 (backfill) | quarterly | `institutional-holdings-13f.md` |
+| Insider trades | 2024 Q3 (`insider_state`, read 2026-10-17: 2024q3 to 2026q3) | nightly daily index | `sec-edgar.md` |
+| 13D/13G | December 2024 (structured forms) | SEC rotation | `large-holder-filings.md` |
+| 8-K | about 2025-09 (400-day first fill on 2026-10-11) | SEC rotation | `8k-events.md` |
+| N-PORT | 2026q2 set | quarterly | `fund-holders-nport.md` |
+| Fundamentals, day by day | 2026-08-30 | each Refresh all | `fundamentals-history.md` |
+| Days each Signal has held | 2026-09-17 | each Refresh all | `the-advice-column.md` |
+| Headlines | 2026-09-22 | news job 09:00, 13:00, 17:00 daily | `news.md`, `news-task.ps1` |
+| Index membership | 2026-10-03 (SPY) | nightly | `sec-edgar.md` |
+| Options open interest | 2026-10-09 close | nightly, 19:30 run | `options-open-interest.md` |
+| Company profile and ratios | latest only | 7-day rotation | `server.js` `FUND_ROTATION_DAYS` |
+
+Left off on purpose: splits (depth undocumented), drawdowns, margins, capital returns, group months and index P/E (worked out from the above, not collected), euro rates, the Nasdaq listing.

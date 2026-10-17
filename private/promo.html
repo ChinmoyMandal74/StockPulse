@@ -2047,6 +2047,7 @@
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
       { id: 'covsize', name: 'Coverage by size', note: 'How many companies the site tracks in each size band, and the value in each' },
       { id: 'covsector', name: 'Coverage by sector', note: 'How many companies the site tracks in each sector, with its industries and value' },
+      { id: 'covdata', name: 'What we collect', note: 'Every data set the site keeps on each stock: where it comes from, how far back it is stored and how often it is refreshed' },
       { id: 'covindex', name: 'Coverage by index', note: 'How many S&P 500 and Nasdaq 100 members the site tracks, and how many sit outside both' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
@@ -2157,6 +2158,7 @@
       ['covsize', 'By size'],
       ['covsector', 'By sector'],
       ['covindex', 'By index'],
+      ['covdata', 'What we collect'],
     ];
     const BRAND_VIEWS = [
       ['intro', 'Intro'],
@@ -3272,7 +3274,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.

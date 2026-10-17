@@ -8303,6 +8303,89 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- What we collect: every data set, how far back, how often -------------
+  //
+  // (2026-10-17, the owner: "I don't think there is any promotional visual on
+  // the various data points the app currently collects and has history of and
+  // how frequently they are refreshed".) A fourth Coverage view. Each data set
+  // is a bar on one time axis, from the earliest day stored to today, with its
+  // source and how often it is refreshed.
+  //
+  // THIS LIST RESTATES FACTS FROM CODE AND DOCS, as of 2026-10-17, and moves
+  // with them: a new data set, a deeper backfill or a changed schedule changes
+  // a row here (docs/context/coverage-cards.md lists where each figure comes
+  // from). `from` is the earliest stored day; null means only the latest value
+  // is kept. A short bar is honest: it is where this site began recording a
+  // source that cannot be filled in backwards. `sq` marks the rows the 1:1
+  // card keeps.
+  const COV_DATA = [
+    { name: 'Daily prices', src: 'Twelve Data', from: '1998-12-23', every: 'Every 30 min, trading days', sq: 1 },
+    { name: 'Weekly trend readings', src: 'worked out from prices', from: '2001-03-21', every: 'Weekly' },
+    { name: 'Financial statements', src: 'SEC filings', from: '2007-01-01', every: 'Weekly a company', sq: 1 },
+    { name: 'Short interest', src: 'FINRA', from: '2017-12-29', every: 'Twice a month', sq: 1 },
+    { name: 'Earnings, reported', src: 'Twelve Data', from: '2020-05-01', every: 'Weekly a company', typ: 1 },
+    { name: 'Institutional holdings (13F)', src: 'SEC filings', from: '2024-06-30', every: 'Quarterly', sq: 1 },
+    { name: 'Insider trades', src: 'SEC Forms 3, 4, 5', from: '2024-07-01', every: 'Each weekday', sq: 1 },
+    { name: 'Large holders (13D, 13G)', src: 'SEC filings', from: '2024-12-01', every: 'Weekly a company' },
+    { name: 'Company events (8-K)', src: 'SEC filings', from: '2025-09-06', every: 'Weekly a company' },
+    { name: 'Fund holdings (N-PORT)', src: 'SEC filings', from: '2026-04-01', every: 'Quarterly', sq: 1 },
+    { name: 'Fundamentals, day by day', src: 'Twelve Data', from: '2026-08-30', every: 'Each trading day', sq: 1 },
+    { name: 'Days each Signal has held', src: 'worked out here', from: '2026-09-17', every: 'Each trading day' },
+    { name: 'Headlines', src: 'Google News', from: '2026-09-22', every: 'Three times a day', sq: 1 },
+    { name: 'Index membership', src: 'SPY and QQQ holdings files', from: '2026-10-03', every: 'Each weekday' },
+    { name: 'Options open interest', src: 'OCC', from: '2026-10-09', every: 'Each weekday', sq: 1 },
+    { name: 'Company profile and ratios', src: 'Twelve Data', from: null, every: 'Weekly a company' },
+  ];
+  const COV_DATA_SRC = 6; // Twelve Data, SEC, FINRA, OCC, the two index funds' issuers, Google News
+  function coverageData() {
+    const square = size.id === 'square', story = size.id === 'story';
+    const list = square ? COV_DATA.filter((d) => d.sq) : COV_DATA;
+    const t0 = new Date('1998-01-01T12:00:00').getTime();
+    const now = Date.now(), span = now - t0;
+    const pos = (iso) => Math.max(0, Math.min(100, (new Date(iso + 'T12:00:00').getTime() - t0) / span * 100));
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const since = (d) => {
+      if (!d.from) return 'latest only';
+      const y = Number(d.from.slice(0, 4)), m = Number(d.from.slice(5, 7));
+      return (d.typ ? 'typically ' : '') + (y < 2024 ? String(y) : MON[m - 1] + ' ' + y);
+    };
+    const fs = story ? 23 : square ? 15 : 17;
+    const rowH = Math.round(fs * (story ? 2.75 : 2.05) + Math.max(0, cardFill) / Math.max(1, list.length));
+    // Sized to the longest entry at the 0.8em the two columns are set in:
+    // mono for "typically 2020", the sans for "Every 30 min, trading days".
+    const sw = Math.ceil(Math.max(...list.map((d) => since(d).length)) * fs * 0.8 * 0.61) + 4;
+    const cw = Math.ceil(Math.max(...list.map((d) => d.every.length)) * fs * 0.8 * 0.5) + 6;
+    const cols = 'minmax(0,' + (story ? 31 : 30) + '%) minmax(0,1fr) ' + sw + 'px ' + cw + 'px';
+    const rows = list.map((d) => {
+      const x = d.from ? pos(d.from) : 99;
+      return '<div class="cvd-r" style="font-size:' + fs + 'px;height:' + rowH + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="cvd-n"><b>' + esc(d.name) + '</b><i>' + esc(d.src) + '</i></span>'
+        + '<span class="cvd-t"><span class="cvd-f' + (d.from ? '' : ' cvd-now') + '" style="left:' + x.toFixed(2) + '%;width:' + Math.max(0.9, 100 - x).toFixed(2) + '%"></span></span>'
+        + '<span class="cvd-s">' + esc(since(d)) + '</span>'
+        + '<span class="cvd-e">' + esc(d.every) + '</span></div>';
+    }).join('');
+    const ticks = (story ? [2000, 2010, 2020] : [2000, 2005, 2010, 2015, 2020, 2025]).map((y) => '<span style="left:' + pos(y + '-01-01').toFixed(2) + '%">' + y + '</span>').join('');
+    const axis = '<div class="cvd-r cvd-ax" style="grid-template-columns:' + cols + '"><span>Data set</span><span class="cvd-tk">' + ticks + '</span><span>Stored since</span><span>Refreshed</span></div>';
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
+    const years = new Date(now).getFullYear() - 1998;
+    const figs = fig('Data sets', String(COV_DATA.length), 'kept on the stocks tracked')
+      + fig('Sources', String(COV_DATA_SRC), 'price feed, SEC, FINRA, OCC and more')
+      + fig('Prices back', years + ' years', 'daily, for the longest listed')
+      + fig('Quickest', '30 min', 'prices, while the market is open');
+    const note = 'Each bar runs from the earliest day stored to today. A short bar is where this site began recording a source that cannot be filled in backwards; '
+      + 'it grows from here and nothing is deleted. Earnings go back further for some companies than others. Prices during the day are used and not kept; the close is. '
+      + (square ? 'The ' + list.length + ' main sets of ' + COV_DATA.length + ' are shown. ' : '')
+      + 'Every company on the list is measured the same way after each close.';
+    return chromeTop()
+      + '<div class="s-body"><div class="cvd-in" data-fill>'
+      + '<span class="s-kick">What this site tracks</span>'
+      + '<h2 class="s-title">Coverage<br><span class="dim">what we collect, and how often</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="cvd-rows">' + axis + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px;margin-top:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- One figure's history: the screener's drill-down, as a card ----------------
   //
   // (2026-10-13, the owner, of the panel a click on a screener cell opens:
@@ -11214,6 +11297,7 @@
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
+    covdata: coverageData,
     movegrid: tplMoveGrid,
     mktmonths: () => groupMonthsCard('mktmonths'),
     secmonths: () => groupMonthsCard('secmonths'),
@@ -11448,10 +11532,10 @@
     /* A .dim span inside .s-title inherits the display size, and a measure
        name is a phrase rather than a word. Per card, because .s-title is
        shared. */
-    .bx-in .s-title .dim, .hbd-in .s-title .dim, .hbc-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
+    .bx-in .s-title .dim, .hbd-in .s-title .dim, .hbc-in .s-title .dim, .cvd-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
                            letter-spacing: -0.02em; margin-top: 8px; }
-    .sz-square .bx-in .s-title .dim, .sz-square .hbd-in .s-title .dim, .sz-square .hbc-in .s-title .dim { font-size: 32px; }
-    .sz-story .bx-in .s-title .dim, .sz-story .hbd-in .s-title .dim, .sz-story .hbc-in .s-title .dim { font-size: 52px; }
+    .sz-square .bx-in .s-title .dim, .sz-square .hbd-in .s-title .dim, .sz-square .hbc-in .s-title .dim, .sz-square .cvd-in .s-title .dim { font-size: 32px; }
+    .sz-story .bx-in .s-title .dim, .sz-story .hbd-in .s-title .dim, .sz-story .hbc-in .s-title .dim, .sz-story .cvd-in .s-title .dim { font-size: 52px; }
     /* The rows take whatever the title and the note leave and spread through
        it, so five rows and fifteen both fill the card and no band of dead
        space collects above the note. */
@@ -11515,6 +11599,19 @@
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
     /* Who added, who cut: two lists side by side. */
     /* The holder card as a ring: the ring beside its key; stacked on 9:16. */
+    .cvd-rows { margin-top: 20px; }
+    .cvd-r { display: grid; align-items: center; gap: 16px; border-bottom: 1px solid var(--hair); }
+    .cvd-ax { font: 600 13px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 6px; }
+    .cvd-tk { position: relative; height: 1.2em; }
+    .cvd-tk span { position: absolute; transform: translateX(-50%); letter-spacing: 0; }
+    .cvd-n { min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+    .cvd-n b { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cvd-n i { font-style: normal; font-size: 0.72em; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cvd-t { position: relative; height: 42%; background: color-mix(in srgb, var(--hair) 55%, transparent); border-radius: 4px; }
+    .cvd-f { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--accent-2, var(--accent)); opacity: 0.85; }
+    .cvd-f.cvd-now { background: var(--muted); }
+    .cvd-s { font-family: var(--mono); font-size: 0.8em; color: var(--muted); white-space: nowrap; }
+    .cvd-e { font-size: 0.8em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hbc-in .hbc-up { background: var(--hbc-up); }
     .hbc-in .hbc-dn { background: var(--hbc-dn); }
     .hbc-split { display: flex; gap: 3px; height: 14px; margin-top: 22px; border-radius: 4px; overflow: hidden; }
