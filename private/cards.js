@@ -8558,6 +8558,136 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- What we measure: twelve readings, shown on one stock -----------------
+  //
+  // (2026-10-17, the owner, over two quantfinance.ai explainer grids, "20 quant
+  // trading strategies" and "15 must-know quant concepts", asked whether any
+  // applied, then of the offer of "12 readings we take on every stock": "Can
+  // you build the first one".) The grid format, with the site's own readings
+  // instead of strategies it does not run: each tile is a field the screener
+  // computes for every company after each close, with a small chart DRAWN
+  // FROM ONE REAL STOCK (`covSym`, NVDA by default), its value, and a line
+  // saying what it is. Descriptions, not forecasts: the research page records
+  // that none of these, alone, has predicted the next month.
+  //
+  // The Signal tile carries the rule that fired with the word, as a verdict
+  // must. RSI and the band are described as measures, never "overbought". The
+  // definitions restate the code: vs200ma, relStrength (three months against
+  // SPY), bandPct ((high - low) / median over the year), realisedVol (six
+  // months, annualised), shortPctFloat and shortRatio.
+  function readingsNeed(tpl, opts) {
+    if (tpl !== 'covread') return null;
+    const o = opts || {};
+    // A year drawn, and 200 sessions before it for the moving average.
+    return { symbol: o.covSym || null, days: 470 };
+  }
+  const RD_SQ = ['trend', 'returns', 'range', 'rel', 'vol', 'value', 'margins', 'growth', 'signal'];
+  function tplReadings() {
+    const story = size.id === 'story', square = size.id === 'square';
+    const need = readingsNeed('covread', O);
+    const cos = stocks.filter((x) => x && !x.error && !isFundRow(x));
+    const r = (need.symbol && stocks.find((x) => x && x.symbol === need.symbol && !isFundRow(x)))
+      || cos.slice().sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))[0];
+    if (!r) return chromeTop() + '<div class="s-body"><div class="s-empty">Nothing on the screen to show.</div></div>' + chromeFoot();
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const pc = (v, d) => (num(v) == null ? '—' : (num(v) > 0 ? '+' : num(v) < 0 ? '−' : '') + Math.abs(num(v)).toFixed(d == null ? 1 : d) + '%');
+    const pa = (v, d) => (num(v) == null ? '—' : num(v).toFixed(d == null ? 1 : d) + '%');
+    const hist = getHistory(r.symbol, need.days);
+    const C = hist && Array.isArray(hist.closes) ? hist.closes.map(Number).filter((c) => c > 0 && isFinite(c)) : [];
+    // A line over a stretched SVG; anything written on it is HTML, not SVG text.
+    const line = (vals, avg) => {
+      if (vals.length < 2) return '<div class="rd-wait">Reading prices…</div>';
+      const A = Array.isArray(avg) && avg.length === vals.length ? avg : null;
+      const lo = Math.min(...vals, ...(A || [])), hi = Math.max(...vals, ...(A || [])), rg = hi - lo || 1;
+      const y = (v) => (56 - (v - lo) / rg * 52).toFixed(1);
+      const pts = vals.map((v, i) => (i / (vals.length - 1) * 200).toFixed(1) + ',' + y(v)).join(' ');
+      return '<svg viewBox="0 0 200 60" preserveAspectRatio="none" class="rd-svg">'
+        + (A ? '<polyline points="' + A.map((v, i) => (i / (A.length - 1) * 200).toFixed(1) + ',' + y(v)).join(' ') + '" fill="none" stroke="' + pal.axis + '" stroke-dasharray="4 4" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' : '')
+        + '<polyline points="' + pts + '" fill="none" stroke="' + (vals[vals.length - 1] >= vals[0] ? pal.up : pal.down) + '" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>';
+    };
+    // Bars with their labels in HTML under them. `signed` bars hang from a
+    // middle zero line, green up and red down; otherwise one accent hue.
+    const bars = (items, signed) => {
+      const vals = items.map((x) => num(x[1]));
+      const max = Math.max(1e-9, ...vals.filter((v) => v != null).map(Math.abs));
+      return '<div class="rd-bars' + (signed ? ' rd-signed' : '') + '">' + items.map(([k, v]) => {
+        const n = num(v);
+        const h = n == null ? 0 : Math.max(3, Math.abs(n) / max * (signed ? 48 : 96));
+        const cls = n == null ? 'rd-na' : signed ? (n >= 0 ? 'rd-up' : 'rd-dn') : 'rd-ac';
+        return '<div class="rd-bc"><div class="rd-bw"><i class="' + cls + '" style="height:' + h.toFixed(1) + '%;' + (signed ? (n >= 0 ? 'bottom:50%' : 'top:50%') : 'bottom:0') + '"></i></div><span>' + esc(k) + '</span></div>';
+      }).join('') + '</div>';
+    };
+    const gauge = (pos, marks) => '<div class="rd-gauge"><div class="rd-track">' + (marks || []).map((m) => '<em style="left:' + m + '%"></em>').join('')
+      + (pos == null ? '' : '<i style="left:' + Math.max(0, Math.min(100, pos)).toFixed(1) + '%"></i>') + '</div></div>';
+
+    const T = [];
+    // 1. Trend
+    T.push({ id: 'trend', t: 'Trend', v: num(r.vs200ma) == null ? '—' : pc(r.vs200ma) + ' vs 200-day', cls: num(r.vs200ma) == null ? '' : num(r.vs200ma) >= 0 ? 'rd-tu' : 'rd-td',
+      g: (() => { const n = Math.min(252, C.length - 199); if (n < 2) return line(C.slice(-252));
+        const avg = []; for (let i = C.length - n; i < C.length; i++) { let sum = 0; for (let j = i - 199; j <= i; j++) sum += C[j]; avg.push(sum / 200); }
+        return line(C.slice(-n), avg); })(), d: 'How far the price sits above or below its average close of the last 200 sessions (dashed).' });
+    // 2. Returns
+    T.push({ id: 'returns', t: 'Returns', v: 'This year ' + pc(r.ytdPct), cls: num(r.ytdPct) == null ? '' : num(r.ytdPct) >= 0 ? 'rd-tu' : 'rd-td',
+      g: bars([['1W', r.oneWeekPct], ['1M', r.oneMonthPct], ['3M', r.threeMonthPct], ['6M', r.sixMonthPct], ['YTD', r.ytdPct], ['1Y', r.oneYearPct]], true),
+      d: 'The price change over six windows, from a week to a year.' });
+    // 3. The year's range
+    const fh = num(r.pctFromHigh), fl = num(r.pctFromLow);
+    let rpos = null;
+    if (fh != null && fl != null) { const p = 100, lo = p / (1 + fl / 100), hi = p / (1 + fh / 100); rpos = hi > lo ? (p - lo) / (hi - lo) * 100 : null; }
+    T.push({ id: 'range', t: 'The year’s range', v: fh == null ? '—' : (Math.abs(fh) < 0.05 ? 'At its high' : pa(Math.abs(fh)) + ' below its high'), cls: '',
+      g: gauge(rpos) + '<div class="rd-ends"><span>52-week low</span><span>high</span></div>', d: 'Where the last close sits between the lowest and highest close of the past year.' });
+    // 4. Against the S&P 500
+    const m3 = num(r.threeMonthPct), rs = num(r.relStrength);
+    T.push({ id: 'rel', t: 'Against the S&P 500', v: rs == null ? '—' : pc(rs) + ' pts', cls: rs == null ? '' : rs >= 0 ? 'rd-tu' : 'rd-td',
+      g: bars([[r.symbol, m3], ['S&P 500', m3 != null && rs != null ? m3 - rs : null]], true), d: 'Its three-month change less the S&P 500 fund’s over the same three months.' });
+    // 5. RSI
+    T.push({ id: 'rsi', t: 'RSI, 14 days', v: num(r.rsi) == null ? '—' : num(r.rsi).toFixed(0) + ' of 100', cls: '',
+      g: gauge(num(r.rsi), [30, 70]) + '<div class="rd-ends"><span>0</span><span>marks at 30 and 70</span><span>100</span></div>', d: 'The size of recent up days against down days, on a scale of 0 to 100.' });
+    // 6. Volatility: the daily moves behind the figure
+    const mv = [];
+    for (let i = Math.max(1, C.length - 60); i < C.length; i++) mv.push((C[i] / C[i - 1] - 1) * 100);
+    const mvMax = Math.max(0.5, ...mv.map(Math.abs));
+    T.push({ id: 'vol', t: 'Volatility', v: num(r.realisedVol) == null ? '—' : pa(r.realisedVol, 0) + ' a year', cls: '',
+      g: mv.length < 2 ? '<div class="rd-wait">Reading prices…</div>' : '<div class="rd-moves">' + mv.map((m) => '<b><i class="' + (m >= 0 ? 'rd-up' : 'rd-dn') + '" style="height:' + Math.max(2, Math.abs(m) / mvMax * 50).toFixed(1) + '%;' + (m >= 0 ? 'bottom:50%' : 'top:50%') + '"></i></b>').join('') + '</div>',
+      d: 'How widely the price swings from day to day over six months, scaled to a year. The bars are the last 60 days.' });
+    // 7. Short interest
+    T.push({ id: 'short', t: 'Short interest', v: num(r.shortPctFloat) == null ? '—' : pa(r.shortPctFloat) + ' of float' + (num(r.shortRatio) == null ? '' : ' · ' + num(r.shortRatio).toFixed(1) + ' days'), cls: '',
+      g: gauge(num(r.shortPctFloat) == null ? null : num(r.shortPctFloat) / 25 * 100, [20, 40]) + '<div class="rd-ends"><span>0%</span><span>marks at 5% and 10%</span><span>25%</span></div>', d: 'Shares sold short as a share of those that trade, and the days of average volume it would take to buy them back.' });
+    // 8. Valuation
+    const posN = (v) => (num(v) != null && num(v) > 0 ? num(v) : null);
+    T.push({ id: 'value', t: 'Valuation', v: posN(r.trailingPe) == null ? 'P/E —' : 'P/E ' + posN(r.trailingPe).toFixed(1), cls: '',
+      g: bars([['Trailing', posN(r.trailingPe)], ['Forward', posN(r.forwardPe)], ['Price/sales', posN(r.priceToSales)]], false),
+      d: 'The price against a year of earnings, the next year’s expected earnings, and sales. A loss shows no multiple.' });
+    // 9. Margins
+    T.push({ id: 'margins', t: 'Margins', v: 'Operating ' + pa(r.operatingMargin, 0), cls: '',
+      g: bars([['Gross', r.grossMargin], ['Operating', r.operatingMargin], ['Net', r.profitMargin]], false), d: 'What is left of each dollar of sales after costs, at three depths.' });
+    // 10. Growth
+    T.push({ id: 'growth', t: 'Growth', v: 'Revenue ' + pc(r.revenueGrowthYoY, 0), cls: num(r.revenueGrowthYoY) == null ? '' : num(r.revenueGrowthYoY) >= 0 ? 'rd-tu' : 'rd-td',
+      g: bars([['Revenue', r.revenueGrowthYoY], ['Earnings', r.earningsGrowthYoY]], true), d: 'The latest quarter against the same quarter a year before.' });
+    // 11. Ownership
+    T.push({ id: 'own', t: 'Who owns it', v: 'Institutions ' + pa(r.institutionPct, 0), cls: '',
+      g: bars([['Institutions', r.institutionPct], ['Insiders', r.insiderPct]], false), d: 'The share of its stock held by institutions and by the company’s own insiders.' });
+    // 12. The Signal, with the rule that fired
+    const sig = typeof ActionRules !== 'undefined' && ActionRules.canon ? ActionRules.canon(r.action) : r.action;
+    const rule = String(r.actionFlag || '').replace(/^[^:]*:\s*/, '');
+    T.push({ id: 'signal', t: 'The Signal', v: sig || '—', cls: /Strong/.test(sig || '') ? 'rd-tu' : /Weak/.test(sig || '') ? 'rd-td' : '',
+      g: '<div class="rd-rule">' + esc(rule ? 'Rule: ' + rule : 'No rule on file') + '</div>', d: 'One word from fixed rules on trend, entry, risk and fundamentals, with the rule that fired. A reading, not advice.' });
+
+    const tiles = square ? T.filter((x) => RD_SQ.includes(x.id)) : T;
+    const grid = '<div class="rd-grid">' + tiles.map((x, i) => '<div class="rd-tile"><div class="rd-hd"><b>' + (i + 1) + '</b>' + esc(x.t) + '</div>'
+      + '<div class="rd-g">' + x.g + '</div><div class="rd-v ' + x.cls + '">' + esc(x.v) + '</div><div class="rd-d">' + esc(x.d) + '</div></div>').join('') + '</div>';
+    const note = 'Each tile is a reading the screener takes on every company after each close, shown here for ' + nameOf(r) + ' (' + r.symbol + '). '
+      + 'They describe where a stock stands; none of them alone has predicted the next month in the site’s own tests (the Research page). '
+      + (square ? 'Nine of twelve are shown. ' : '') + 'Margins, growth and valuation are from the company’s latest reported figures.';
+    return chromeTop()
+      + '<div class="s-body"><div class="rd-in" data-fill style="--rdg:' + Math.round((story ? 66 : square ? 58 : 72) + Math.max(0, cardFill) / (story ? 6 : square ? 3 : 4)) + 'px">'
+      + '<span class="s-kick">' + esc('What we measure · every close') + '</span>'
+      + '<h2 class="s-title">' + tiles.length + ' readings<br><span class="dim">' + esc('shown on ' + nameOf(r) + ' today') + '</span></h2>'
+      + grid
+      + '<p class="s-sub wide" style="--fs:15px;margin-top:14px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- One figure's history: the screener's drill-down, as a card ----------------
   //
   // (2026-10-13, the owner, of the panel a click on a screener cell opens:
@@ -11470,6 +11600,7 @@
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
     covdata: coverageData,
+    covread: tplReadings,
     movegrid: tplMoveGrid,
     mktmonths: () => groupMonthsCard('mktmonths'),
     secmonths: () => groupMonthsCard('secmonths'),
@@ -11880,6 +12011,50 @@
     .shw-tl { border: 1px solid var(--hair); border-radius: 0.6em; padding: 0.5em 0.6em; min-width: 0; }
     .shw-tl span { display: block; font-size: 0.6em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
     .shw-tl b { display: block; font: 600 0.92em var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rd-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+    .sz-story .rd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 30px; }
+    .sz-square .rd-grid { gap: 10px; margin-top: 16px; }
+    .rd-tile { border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; text-align: left; min-width: 0; background: color-mix(in srgb, var(--text) 3%, transparent); }
+    .sz-square .rd-tile { padding: 10px 12px; border-radius: 12px; }
+    .rd-hd { display: flex; gap: 8px; align-items: baseline; font: 600 16px var(--sans); color: var(--text); }
+    .rd-hd b { font: 600 13px var(--mono); color: var(--accent-2, var(--accent)); }
+    .rd-g { height: var(--rdg, 72px); margin: 10px 0 8px; display: flex; flex-direction: column; }
+    .rd-svg { display: block; width: 100%; height: 100%; }
+    .rd-v { font: 600 18px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rd-in .rd-tu { color: var(--green); }
+    .rd-in .rd-td { color: var(--red); }
+    .rd-d { font-size: 12.5px; line-height: 1.35; color: var(--muted); margin-top: 4px; }
+    .sz-square .rd-hd { font-size: 14px; }
+    .sz-square .rd-v { font-size: 15px; }
+    .sz-square .rd-d { font-size: 11px; }
+    .sz-story .rd-hd { font-size: 22px; }
+    .sz-story .rd-hd b { font-size: 17px; }
+    .sz-story .rd-v { font-size: 25px; }
+    .sz-story .rd-d { font-size: 16px; }
+    .rd-bars { flex: 1 1 0; display: flex; gap: 6px; min-height: 0; }
+    .rd-bc { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+    .rd-bw { flex: 1 1 0; position: relative; }
+    .rd-bw i { position: absolute; left: 14%; right: 14%; border-radius: 3px; display: block; }
+    .rd-signed .rd-bw::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--hair-2); }
+    .rd-bc span { font: 10.5px var(--mono); color: var(--faint); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+    .sz-story .rd-bc span { font-size: 14px; }
+    .rd-in .rd-up { background: var(--green); }
+    .rd-in .rd-dn { background: var(--red); }
+    .rd-in .rd-ac { background: var(--accent-2, var(--accent)); }
+    .rd-in .rd-na { display: none; }
+    .rd-gauge { flex: 1 1 0; display: flex; align-items: center; }
+    .rd-track { position: relative; width: 100%; height: 10px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--text) 8%, transparent), color-mix(in srgb, var(--text) 22%, transparent)); }
+    .rd-track em { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--hair-2); }
+    .rd-track i { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--accent-2, var(--accent)); border: 2px solid var(--card-ground); box-sizing: border-box; }
+    .rd-ends { display: flex; justify-content: space-between; font: 10.5px var(--mono); color: var(--faint); }
+    .sz-story .rd-ends { font-size: 14px; }
+    .rd-moves { flex: 1 1 0; display: flex; gap: 1px; position: relative; }
+    .rd-moves::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--hair-2); }
+    .rd-moves b { flex: 1 1 0; position: relative; }
+    .rd-moves i { position: absolute; left: 0; right: 0; display: block; }
+    .rd-rule { flex: 1 1 0; display: flex; align-items: center; font-size: 13px; line-height: 1.35; color: var(--text); }
+    .sz-story .rd-rule { font-size: 18px; }
+    .rd-wait { flex: 1 1 0; display: flex; align-items: center; font-size: 12px; color: var(--faint); }
     .cvd-rows { margin-top: 20px; }
     .cvd-r { display: grid; align-items: center; gap: 16px; border-bottom: 1px solid var(--hair); }
     .cvd-ax { font: 600 13px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 6px; }
@@ -14027,7 +14202,7 @@
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
     // and its analysis and drawing, which the stock page uses too.
-    bandsNeed, showcaseNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
+    bandsNeed, showcaseNeed, readingsNeed, drawdownNeed, drawdownStats: ddStats, drawdownAnalyse: ddAnalyse, drawdownBlock: ddBlock, drawdownSummary: ddSummary,
     drawdownYears: () => Object.keys(DD_YEARS),
     // The drawdown rules alone, for a host that draws the block outside a
     // card: the stock page takes these and none of the artboard's.

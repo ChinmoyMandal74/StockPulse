@@ -60,6 +60,7 @@
     .panel input:focus-visible, .panel textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #annBox { display: none; }
     #shwBox { display: none; }
+    #covBox { display: none; }
     #disBox { display: none; }
     #movBox { display: none; }
     #dayBox { display: none; }
@@ -1885,6 +1886,13 @@
 
       <!-- Showcase (2026-10-17): the product in a laptop and a phone, drawn from
            the day's data. Owner-only, as the Announcement: the words are free text. -->
+      <!-- What we measure (2026-10-17): the example stock for the twelve readings. -->
+      <div id="covBox">
+        <label>Shown on</label>
+        <select id="covSym"></select>
+        <p class="hint">Each tile is a reading taken on every stock; this picks the one
+          the charts and values are drawn from. Square keeps nine of the twelve.</p>
+      </div>
       <div id="shwBox">
         <label>Headline</label>
         <textarea id="shwHead" maxlength="90">Every stock, measured the same way after every close.</textarea>
@@ -2090,6 +2098,7 @@
       { id: 'advboard', name: 'Signal', note: 'What the rules read, four ways' },
       { id: 'covsize', name: 'Coverage by size', note: 'How many companies the site tracks in each size band, and the value in each' },
       { id: 'covsector', name: 'Coverage by sector', note: 'How many companies the site tracks in each sector, with its industries and value' },
+      { id: 'covread', name: 'What we measure', note: 'Twelve readings the screener takes on every stock after each close, each with a small chart, shown on one stock' },
       { id: 'covdata', name: 'What we collect', note: 'Every data set the site keeps on each stock: where it comes from, how far back it is stored and how often it is refreshed' },
       { id: 'covindex', name: 'Coverage by index', note: 'How many S&P 500 and Nasdaq 100 members the site tracks, and how many sit outside both' },
       { id: 'intro', name: 'Intro', note: 'Explainer carousels, a slide at a time' },
@@ -2203,6 +2212,7 @@
       ['covsector', 'By sector'],
       ['covindex', 'By index'],
       ['covdata', 'What we collect'],
+      ['covread', 'What we measure'],
     ];
     const BRAND_VIEWS = [
       ['intro', 'Intro'],
@@ -2833,7 +2843,7 @@
       'monSym', 'monView',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
-      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
+      'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
       'disMode'];
     function controlOpts() {
       const o = {};
@@ -3319,7 +3329,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
@@ -3370,6 +3380,7 @@
       fit();
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('shwBox').style.display = tpl === 'showcase' ? 'block' : 'none';
+      $('covBox').style.display = tpl === 'covread' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
@@ -3610,6 +3621,7 @@
       $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
     ['shwHead', 'shwSub'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'showcase') render(); }));
+    $('covSym').addEventListener('change', () => { if (tpl === 'covread') render(); });
     ['shwSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'showcase') render(); }));
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
@@ -4630,6 +4642,8 @@
           if ([...$('ddSym').options].some((o) => o.value === keep)) $('ddSym').value = keep; }
         { const keep = $('iflSym').value; $('iflSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('iflSym').options].some((o) => o.value === keep)) $('iflSym').value = keep; }
+        { const keep = $('covSym').value; $('covSym').innerHTML = $('chtSym').innerHTML;
+          $('covSym').value = [...$('covSym').options].some((o) => o.value === keep) ? keep : ([...$('covSym').options].some((o) => o.value === 'NVDA') ? 'NVDA' : $('covSym').value); }
         { const keep = $('shwSym').value; $('shwSym').innerHTML = $('chtSym').innerHTML;
           $('shwSym').value = [...$('shwSym').options].some((o) => o.value === keep) ? keep : ([...$('shwSym').options].some((o) => o.value === 'NVDA') ? 'NVDA' : $('shwSym').value); }
         { const keep = $('bndSym').value; $('bndSym').innerHTML = $('chtSym').innerHTML;
