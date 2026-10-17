@@ -106,17 +106,24 @@
     // dated: true for the data cards, whose numbers belong to a day. The
     // explainers are evergreen, so they carry no date — and no universe
     // count anywhere, since a post outlives the number.
+    // THE DATE LIVES IN THE FOOTER (2026-10-16, the owner: "move the date and
+    // time to the very bottom ... This will give more space to the middle
+    // content"). chromeTop is called first by every template, so it records
+    // whether this card is dated and chromeFoot prints the date there. The
+    // brand is a small mark pinned top-right (see .s-top), out of the flow,
+    // so the card's own topic starts at the top-left at full size.
+    let footDate = null;
     function chromeTop(dated) {
+      footDate = dated === false ? null : dateStr();
       return '<div class="s-top">' +
         '<span class="s-glyph"><svg viewBox="0 0 24 24" aria-hidden="true">' +
         '<path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>' +
         '<span class="s-lock"><span class="s-word">Tickr Lab</span>' +
-        '<span class="s-tag">From data to decisions</span></span>' +
-        (dated === false ? '' : `<span class="s-date">${esc(dateStr())}</span>`) + '</div>';
+        '<span class="s-tag">From data to decisions</span></span></div>';
     }
     function chromeFoot() {
       return '<div class="s-foot"><b>tickrlab.com</b><span class="dot"></span>' +
-        '<span>Screened nightly</span><span class="dot"></span>' +
+        (footDate ? '<span class="s-fdate">' + esc(footDate) + '</span><span class="dot"></span>' : '<span>Screened nightly</span><span class="dot"></span>') +
         '<span>Mechanical readings — not investment advice</span></div>';
     }
     const pct = (n, d = 1) => (n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(d) + '%');
@@ -12121,18 +12128,25 @@
     /* chrome shared by every card, so the family is unmistakable */
     /* The masthead carries the brand at thumbnail size — a feed shrinks a
        1080 card to a few hundred pixels, where 30px type stops reading. */
-    .s-top { display: flex; align-items: center; gap: 20px; }
-    .s-glyph { width: 68px; height: 68px; border-radius: 21px; display: inline-flex;
+    /* A SMALL MARK, TOP RIGHT (2026-10-16, the owner's layout). It was a
+       full-width row with a 68px glyph and the date; pinned out of the flow,
+       the card's topic takes the top-left at full size and the body gains
+       the row's height. The first heading keeps clear of it (below). */
+    .s-top { position: absolute; top: 48px; right: 64px; z-index: 2;
+             display: flex; align-items: center; gap: 12px; }
+    .s-body > div > .s-kick:first-child, .s-body > div > .s-title:first-child { padding-right: 260px; }
+    .s-body > div > .s-kick:first-child { margin-top: 10px; }
+    .s-glyph { width: 40px; height: 40px; border-radius: 13px; display: inline-flex;
                align-items: center; justify-content: center; color: var(--green);
                background: linear-gradient(160deg, rgba(52, 211, 153, 0.22), rgba(52, 211, 153, 0.05));
                border: 1px solid rgba(52, 211, 153, 0.3); }
-    .s-glyph svg { width: 40px; height: 40px; stroke: currentColor; fill: none;
+    .s-glyph svg { width: 24px; height: 24px; stroke: currentColor; fill: none;
                    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
     .s-lock { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .s-word { font-size: 44px; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
+    .s-word { font-size: 26px; font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
     /* line-height 1 on BOTH, or the lockup measures 71px against the glyph's 68
        and every card's body starts three pixels lower. Measured, not assumed. */
-    .s-tag { font-size: 16px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+    .s-tag { font-size: 10.5px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
              color: var(--green); white-space: nowrap; line-height: 1; }
     .s-date { margin-left: auto; font: 500 24px var(--mono); color: var(--muted);
               padding: 11px 24px; border: 1px solid var(--hair-2); border-radius: 999px; }
@@ -12154,9 +12168,10 @@
     .s-sub { margin: 16px 0 0; font-size: var(--fs, 20px); color: var(--muted);
              line-height: 1.5; max-width: 40ch; }
     .s-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
-    .s-foot { display: flex; align-items: center; gap: 15px; font: 500 18px var(--mono);
+    .s-foot { display: flex; flex-wrap: wrap; row-gap: 8px; align-items: center; gap: 15px; font: 500 18px var(--mono);
               color: var(--faint); border-top: 1px solid var(--hair); padding-top: 26px; }
     .s-foot b { color: var(--muted); font-weight: 600; }
+    .s-foot .s-fdate { color: var(--muted); }
     .s-foot .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 
 
@@ -12853,7 +12868,8 @@
     .sz-story .s-title { font-size: 84px; }
     .sz-story .s-sub { font-size: calc(var(--fs, 20px) * 1.25); max-width: 34ch; }
     .sz-story .s-foot { font-size: 20px; }
-    .sz-story .s-tag { font-size: 18px; }
+    .sz-story .s-tag { font-size: 12px; }
+    .sz-story .s-foot { font-size: 18px; }
     .sz-story .s-empty { font-size: 36px; }
 
     /* the lists spread through the space rather than bunching at the top */
