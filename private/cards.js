@@ -8998,6 +8998,7 @@
       + (isFund ? 'A fund\u2019s holdings are reported again inside its manager\u2019s 13F. ' : '')
       + 'A record of what was reported, months old by the time it is public; not a view on any stock.';
     const kick = (isFund ? 'Fund' : 'Institutional manager') + (H.label ? ' \u00b7 ' + H.label : H.asOf ? ' \u00b7 as of ' + H.asOf : '');
+    if (O.hbkView === 'donut') return hbDonut(H, n, kick, isFund, money, pc, cnt, filing);
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
       + '<span class="s-kick">' + esc(kick) + '</span>'
@@ -9006,6 +9007,71 @@
       + figs + sector
       + '<div class="bx-rows">' + hd + rows + '</div>'
       + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // THE DONUT (2026-10-17, the owner, over a race_charts post of ARK's 13F as a
+  // ring: "go"). The same book as a ring: the largest positions as slices and
+  // the rest as "Other", which is the part that says how concentrated a
+  // holder really is. Shares are OF ITS HOLDINGS IN TRACKED STOCKS, said on
+  // the card, so they run higher than a share of the whole 13F would.
+  //
+  // NO LOGOS AND NO PORTRAIT, the house rule and a person's likeness: the
+  // centre carries the figures instead (what it holds in tracked stocks, how
+  // many, and the period's net bought or sold at one price a stock). One hue
+  // in steps for the slices and grey for Other: not green and red, which mean
+  // a price that moved, and not a rainbow a reader has to decode.
+  const HB_DONUT_N = { portrait: 8, square: 8, story: 10 };
+  function hbDonut(H, n, kick, isFund, money, pc, cnt, filing) {
+    const all = H.positions.slice().filter((p) => p.ofBook != null && p.ofBook > 0).sort((a, b) => b.ofBook - a.ofBook);
+    const N = HB_DONUT_N[size.id] || 8;
+    const top = all.slice(0, N);
+    const topSum = top.reduce((s, p) => s + p.ofBook, 0);
+    const other = Math.max(0, 100 - topSum);
+    const top3 = all.slice(0, 3).reduce((s, p) => s + p.ofBook, 0);
+    const story = size.id === 'story', square = size.id === 'square';
+    // The ring's outer diameter, grown into the card's spare height (FILL_TPLS)
+    // as far as the key beside it allows.
+    const D = Math.round(Math.min(story ? 900 : square ? 420 : 540, (story ? 640 : square ? 400 : 470) + Math.max(0, cardFill)));
+    const R = D / 2, r = R * 0.58, cx = R, cy = R;
+    const hue = pal.ink('#7c9cff');
+    const slices = top.map((p, i) => ({ label: p.symbol, name: p.name || '', pct: p.ofBook, fill: hue, op: Math.max(0.16, Math.pow(0.8, i)) }));
+    if (other > 0.05) slices.push({ label: 'Other', name: (all.length - top.length).toLocaleString('en-US') + ' more', pct: other, fill: pal.ink('#9aa3b2'), op: 0.32 });
+    const pt = (rad, a) => [(cx + rad * Math.cos(a)).toFixed(2), (cy + rad * Math.sin(a)).toFixed(2)];
+    let a0 = -Math.PI / 2, g = '';
+    for (const s of slices) {
+      const sweep = Math.max(0.0001, s.pct / 100 * Math.PI * 2);
+      const a1 = a0 + sweep, big = sweep > Math.PI ? 1 : 0;
+      const [x0, y0] = pt(R, a0), [x1, y1] = pt(R, a1), [x2, y2] = pt(r, a1), [x3, y3] = pt(r, a0);
+      g += '<path d="M' + x0 + ' ' + y0 + ' A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + x1 + ' ' + y1 + ' L' + x2 + ' ' + y2 + ' A' + r + ' ' + r + ' 0 ' + big + ' 0 ' + x3 + ' ' + y3
+        + ' Z" fill="' + s.fill + '" fill-opacity="' + s.op.toFixed(2) + '" stroke="' + pal.ground + '" stroke-width="3"/>';
+      a0 = a1;
+    }
+    // The centre: what it holds, how many, and what it did on the period.
+    const net = H.bought != null && H.sold != null ? H.bought - H.sold : null;
+    const fs = story ? 1.3 : square ? 0.9 : 1;
+    const t = (y, size, weight, fill, text) => '<text x="' + cx + '" y="' + y.toFixed(1) + '" text-anchor="middle" font-size="' + (size * fs).toFixed(1) + '" font-weight="' + weight + '" fill="' + fill + '" font-family="Geist Mono, monospace">' + esc(text) + '</text>';
+    g += t(cy - 34 * fs, 18, 500, pal.axis, 'IN TRACKED STOCKS')
+      + t(cy + 10 * fs, 44, 600, pal.ink('#e9ecf2'), money(H.value))
+      + t(cy + 40 * fs, 18, 500, pal.axis, cnt(H.positionsAll) + ' stocks')
+      + (net == null ? '' : t(cy + 70 * fs, 18, 500, pal.axis, (net >= 0 ? 'net +' : 'net −') + money(Math.abs(net)).replace('$', '$') + ' on the period'));
+    const ring = '<svg viewBox="0 0 ' + D + ' ' + D + '" width="' + D + '" height="' + D + '" style="display:block;flex:0 0 auto">' + g + '</svg>';
+    // The key: swatch, ticker, name, share. Other last.
+    const kf = story ? 27 : square ? 17 : 20;
+    const key = '<div class="hbd-key" style="font-size:' + kf + 'px">' + slices.map((s) => '<div class="hbd-r">'
+      + '<i style="background:' + s.fill + ';opacity:' + s.op.toFixed(2) + '"></i>'
+      + '<b>' + esc(s.label) + '</b><span class="hbd-n">' + esc(s.name) + '</span><span class="hbd-v">' + esc(pc(s.pct)) + '</span></div>').join('') + '</div>';
+    const note = 'Shares are of its holdings in the stocks tracked here, from ' + filing + (H.asOf ? ', as of ' + H.asOf : '')
+      + '. The largest three are ' + pc(top3) + ' of them' + (other > 0.05 ? '; the other ' + (all.length - top.length).toLocaleString('en-US') + ' make up ' + pc(other) : '') + '. '
+      + (net == null ? '' : 'Net bought or sold is the change in shares on the period before at one price a stock. ')
+      + 'Only stocks tracked on this site are counted, so this is not the whole ' + (isFund ? 'fund' : 'portfolio') + '. A record of what was reported, months old; not a view on any stock.';
+    return chromeTop()
+      + '<div class="s-body"><div class="hbd-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">what it holds</span></h2>'
+      + '<div class="hbd' + (story ? ' hbd-col' : '') + '">' + ring + key + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px;margin-top:18px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
@@ -11270,10 +11336,10 @@
     /* A .dim span inside .s-title inherits the display size, and a measure
        name is a phrase rather than a word. Per card, because .s-title is
        shared. */
-    .bx-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
+    .bx-in .s-title .dim, .hbd-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
                            letter-spacing: -0.02em; margin-top: 8px; }
-    .sz-square .bx-in .s-title .dim { font-size: 32px; }
-    .sz-story .bx-in .s-title .dim { font-size: 52px; }
+    .sz-square .bx-in .s-title .dim, .sz-square .hbd-in .s-title .dim { font-size: 32px; }
+    .sz-story .bx-in .s-title .dim, .sz-story .hbd-in .s-title .dim { font-size: 52px; }
     /* The rows take whatever the title and the note leave and spread through
        it, so five rows and fifteen both fill the card and no band of dead
        space collects above the note. */
@@ -11336,6 +11402,15 @@
     /* Capital returns: four figures above the yearly bars, and a bar in two parts. */
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
     /* Who added, who cut: two lists side by side. */
+    /* The holder card as a ring: the ring beside its key; stacked on 9:16. */
+    .hbd { display: flex; align-items: center; gap: 40px; margin-top: 26px; }
+    .hbd.hbd-col { flex-direction: column; align-items: center; gap: 30px; }
+    .hbd-key { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5em; width: 100%; }
+    .hbd-r { display: grid; grid-template-columns: 0.75em auto minmax(0, 1fr) auto; align-items: center; gap: 0.55em; }
+    .hbd-r i { width: 0.75em; height: 0.75em; border-radius: 3px; display: block; }
+    .hbd-r b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+    .hbd-n { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hbd-v { font-family: var(--mono); color: var(--text); }
     .ifl-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 34px; margin-top: 22px; }
     .ifl-h { font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 8px; border-bottom: 1px solid var(--hair); }
     .ifl-r { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--hair); }

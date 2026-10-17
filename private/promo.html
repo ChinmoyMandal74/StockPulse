@@ -1071,6 +1071,11 @@
         </select>
         <label>Which one</label>
         <select id="hbkId"><option value="">Reading the list…</option></select>
+        <label>Layout</label>
+        <select id="hbkView">
+          <option value="bars" selected>Bars and figures</option>
+          <option value="donut">Ring</option>
+        </select>
         <p class="hint">What one manager or one fund held among the stocks
           tracked here, from its latest quarterly filing: the largest
           positions, the sector split, and what is new and gone since the
@@ -2758,7 +2763,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -3265,7 +3270,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
@@ -3913,6 +3918,7 @@
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
     $('hbkKind').addEventListener('change', () => fillHolderList(''));
     $('hbkId').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
+    $('hbkView').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
     for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));
