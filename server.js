@@ -13538,7 +13538,7 @@ async function holderPayload(kind, id) {
   const snap = await readSnapshot();
   const by = new Map();
   for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol && !r.error) by.set(String(r.symbol).toUpperCase(), r);
-  const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0 } : null; });
+  const v = HolderBook.view(book, (s) => { const r = by.get(s); return r ? { name: r.shortName || r.name || null, sector: r.sector || null, sharesOutstanding: Number(r.sharesOutstanding) || 0, price: Number(r.price) > 0 ? Number(r.price) : null } : null; });
   return { kind, id, holder: { name: book.name, family: book.family, label: book.label, asOf: book.asOf, nav: book.nav,
     positionsAll: book.positions, value: book.value, added: book.added, exited: book.exited, bought: book.bought, sold: book.sold,
     positions: v.positions, gone: v.gone, sectors: v.sectors } };

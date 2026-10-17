@@ -8938,7 +8938,7 @@
   const HB_ROWS = { portrait: 9, square: 5, story: 13 };
   const HB_SEC_TINT = ['#7c9cff', '#fb923c', '#a78bfa', '#22d3ee', '#f472b6', '#a3e635', '#fbbf24', '#94a3b8'];
   function holderBookNeed(tpl, opts) {
-    if (tpl !== 'holderbook') return null;
+    if (tpl !== 'holderbook' && tpl !== 'holderchg') return null;
     const o = opts || {};
     return { kind: o.hbkKind === 'F' ? 'F' : 'M', id: o.hbkId || null };
   }
@@ -9086,6 +9086,103 @@
       + '<span class="dim">what it holds</span></h2>'
       + '<div class="hbd' + (stack ? ' hbd-col' : '') + '">' + ring + key + '</div>'
       + '<p class="s-sub wide" style="--fs:16px;margin-top:18px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // ---- What changed: one holder's period against the one before -------------
+  //
+  // (2026-10-17, the owner: "a sub-template what has changed for a holder over
+  // the previous period and new period".) The same book as What one holder
+  // holds, read for its changes: what it bought and sold in tracked stocks,
+  // the net, how many positions it opened and closed, and the largest changes
+  // as bars either side of zero, each tagged new, exited or by how far the
+  // share count moved. Every change is in shares valued at ONE price a stock
+  // (holderbook.js), so a price move is never read as buying. Accent for
+  // adding and orange for cutting, as Who added, who cut: green and red mean
+  // a price that moved. Only positions with an earlier period to compare with.
+  const HBC_ROWS = { portrait: 12, square: 7, story: 17 };
+  function tplHolderChange() {
+    const need = holderBookNeed('holderchg', O);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!need.id) return shell('What changed', 'Choose', 'a holder', 'Pick a manager or a fund in the panel.');
+    const data = getHolderBook(need.kind, need.id);
+    if (!data) return shell('Reading the filings', 'Finding', 'the changes…');
+    const H = data.holder;
+    const isFund = need.kind === 'F';
+    const n = String((H && H.name) || need.id);
+    if (!H || !Array.isArray(H.positions) || !H.positions.length) {
+      return shell('Nothing on file', 'No positions', 'in the stocks tracked here', 'This holder’s latest filing lists none of the stocks this site tracks.');
+    }
+    if (H.bought == null || H.sold == null) {
+      return shell('Nothing to compare', n, 'what changed', 'There is no earlier filing on file for this holder to set the latest one against.');
+    }
+    const usd = (v) => (v == null ? '—' : (v < 0 ? '−' : '') + '$' + fmtMoney(Math.abs(v)));
+    const sgn = (v) => (v > 0 ? '+' : '') + usd(v);
+    const cnt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'));
+    // Each comparable position's change in dollars at its one price; exits
+    // as their whole last-period holding sold.
+    const moves = [];
+    for (const p of H.positions) {
+      if (p.prev == null || !(p.px > 0) || p.shares === p.prev) continue;
+      moves.push({ symbol: p.symbol, name: p.name || '', d: (p.shares - p.prev) * p.px,
+        tag: p.prev === 0 ? 'NEW' : (p.shares > p.prev ? '+' : '−') + Math.abs(p.change).toFixed(Math.abs(p.change) < 10 ? 1 : 0) + '%', kind: p.prev === 0 ? 'new' : '' });
+    }
+    let latest = false;
+    for (const g of H.gone || []) {
+      if (!(g.value > 0)) continue;
+      if (g.pxLatest) latest = true;
+      moves.push({ symbol: g.symbol, name: g.name || '', d: -g.value, tag: 'EXIT', kind: 'exit' });
+    }
+    const K = HBC_ROWS[size.id] || 12;
+    const shown = moves.slice().sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, K).sort((a, b) => b.d - a.d);
+    const net = H.bought - H.sold;
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x) + '</span></div>';
+    const figs = '<div class="cr-figs">'
+      + fig('Bought', usd(H.bought), 'added to or opened')
+      + fig('Sold', usd(H.sold), 'cut or closed')
+      + fig('Net', sgn(net), H.value > 0 ? 'on ' + usd(H.value) + ' held now' : 'bought less sold')
+      + fig('New · gone', cnt(H.added) + ' · ' + cnt(H.exited), 'positions, of ' + cnt(H.positionsAll) + ' now')
+      + '</div>';
+    // Bought against sold, as one bar split at the point where they meet.
+    const tot = H.bought + H.sold;
+    const split = tot > 0 ? '<div class="hbc-split"><i class="hbc-up" style="flex:' + (H.bought / tot).toFixed(4) + ' 0 0"></i><i class="hbc-dn" style="flex:' + (H.sold / tot).toFixed(4) + ' 0 0"></i></div>'
+      + '<div class="hbc-sk"><span><i class="hbc-up"></i>Bought ' + esc(Math.round(H.bought / tot * 100) + '%') + '</span><span><i class="hbc-dn"></i>Sold ' + esc(Math.round(H.sold / tot * 100) + '%') + '</span></div>' : '';
+    // The largest changes, either side of zero.
+    const fs = ({ portrait: 18, square: 15, story: 23 })[size.id] || 18;
+    // 9:16 is not measured (its body is full height), so its rows are set taller.
+    const rowH = Math.round(fs * (size.id === 'story' ? 2.3 : 1.75) + Math.max(0, cardFill) / Math.max(1, shown.length));
+    const scale = Math.max(1, ...shown.map((m) => Math.abs(m.d)));
+    const vw = Math.ceil(Math.max(6, ...shown.map((m) => sgn(m.d).length)) * fs * 0.62) + 8;
+    const tw = Math.ceil(6 * fs * 0.62) + 8;
+    const cols = 'minmax(0,32%) minmax(0,1fr) ' + vw + 'px ' + tw + 'px';
+    const rows = shown.map((m) => {
+      const w = Math.max(0.6, Math.abs(m.d) / scale * 50).toFixed(2);
+      return '<div class="hbc-r" style="font-size:' + fs + 'px;height:' + rowH + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="hbc-n"><b>' + esc(m.symbol) + '</b> ' + esc(m.name) + '</span>'
+        + '<span class="hbc-t"><span class="hbc-f ' + (m.d > 0 ? 'hbc-up' : 'hbc-dn') + '" style="' + (m.d > 0 ? 'left:50%' : 'right:50%') + ';width:' + w + '%"></span></span>'
+        + '<span class="hbc-v">' + esc(sgn(m.d)) + '</span>'
+        + '<span class="hbc-g' + (m.kind ? ' hbc-' + m.kind : '') + '">' + esc(m.tag) + '</span></div>';
+    }).join('');
+    const kick = (isFund ? 'Fund' : 'Institutional manager') + (H.label ? ' · ' + H.label : H.asOf ? ' · as of ' + H.asOf : '');
+    // A 13F quarter names the one before it; a fund's report dates do not.
+    const qm = /^Q([1-4]) (\d{4})$/.exec(String(H.label || ''));
+    const since = qm ? 'since ' + (qm[1] === '1' ? 'Q4 ' + (Number(qm[2]) - 1) : 'Q' + (Number(qm[1]) - 1) + ' ' + qm[2]) : 'since the report before';
+    const filing = isFund ? 'its two latest portfolio reports to the SEC (Form N-PORT)' : 'its two latest quarterly Form 13F filings';
+    const note = 'From ' + filing + (H.asOf ? ', the latest as of ' + H.asOf : '') + '. Each change is in shares, valued at one price a stock'
+      + (latest ? ' (an exit without its period’s price on file at the latest close)' : '')
+      + ', so a price move is not counted as buying or selling. New: not held the period before; exit: held then, none now; otherwise the change in the share count. '
+      + 'Only stocks tracked on this site, and only positions with an earlier filing to compare. A record of what was reported, months old; not a view on any stock.';
+    return chromeTop()
+      + '<div class="s-body"><div class="hbc-in" data-fill style="--hbc-up:' + pal.ink('#7c9cff') + ';--hbc-dn:' + pal.ink('#fb923c') + '">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">' + esc('what changed ' + since) + '</span></h2>'
+      + figs + split
+      + (rows ? '<div class="hbc-rows"><div class="hbc-h" style="grid-template-columns:' + cols + '"><span>Largest changes</span><span class="hbc-hc"><span>cut</span><span>added</span></span><span></span><span></span></div>' + rows + '</div>' : '')
+      + '<p class="s-sub wide" style="--fs:16px;margin-top:16px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
@@ -11100,6 +11197,7 @@
     revmix: tplRevMix,
     fundholders: tplFundHolders,
     holderbook: tplHolderBook,
+    holderchg: tplHolderChange,
     capreturn: tplCapReturn,
     optoi: tplOptions,
     insiders: tplInsiders,
@@ -11350,10 +11448,10 @@
     /* A .dim span inside .s-title inherits the display size, and a measure
        name is a phrase rather than a word. Per card, because .s-title is
        shared. */
-    .bx-in .s-title .dim, .hbd-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
+    .bx-in .s-title .dim, .hbd-in .s-title .dim, .hbc-in .s-title .dim { display: block; font-size: 40px; line-height: 1.2;
                            letter-spacing: -0.02em; margin-top: 8px; }
-    .sz-square .bx-in .s-title .dim, .sz-square .hbd-in .s-title .dim { font-size: 32px; }
-    .sz-story .bx-in .s-title .dim, .sz-story .hbd-in .s-title .dim { font-size: 52px; }
+    .sz-square .bx-in .s-title .dim, .sz-square .hbd-in .s-title .dim, .sz-square .hbc-in .s-title .dim { font-size: 32px; }
+    .sz-story .bx-in .s-title .dim, .sz-story .hbd-in .s-title .dim, .sz-story .hbc-in .s-title .dim { font-size: 52px; }
     /* The rows take whatever the title and the note leave and spread through
        it, so five rows and fifteen both fill the card and no band of dead
        space collects above the note. */
@@ -11417,6 +11515,27 @@
     .cr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 26px 0 6px; }
     /* Who added, who cut: two lists side by side. */
     /* The holder card as a ring: the ring beside its key; stacked on 9:16. */
+    .hbc-in .hbc-up { background: var(--hbc-up); }
+    .hbc-in .hbc-dn { background: var(--hbc-dn); }
+    .hbc-split { display: flex; gap: 3px; height: 14px; margin-top: 22px; border-radius: 4px; overflow: hidden; }
+    .hbc-split i { display: block; min-width: 2px; }
+    .hbc-sk { display: flex; gap: 28px; margin-top: 8px; font: 500 15px var(--mono); color: var(--muted); }
+    .hbc-sk span { display: inline-flex; align-items: center; gap: 8px; }
+    .hbc-sk i { display: block; width: 12px; height: 12px; border-radius: 3px; }
+    .hbc-rows { margin-top: 20px; }
+    .hbc-h, .hbc-r { display: grid; align-items: center; gap: 14px; }
+    .hbc-h { font: 600 14px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 6px; border-bottom: 1px solid var(--hair); }
+    .hbc-hc { display: flex; justify-content: space-between; }
+    .hbc-r { border-bottom: 1px solid var(--hair); }
+    .hbc-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .hbc-n b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+    .hbc-t { position: relative; height: 58%; }
+    .hbc-t::before { content: ''; position: absolute; left: 50%; top: -20%; bottom: -20%; width: 1.5px; background: var(--hair-2); }
+    .hbc-f { position: absolute; top: 0; bottom: 0; border-radius: 3px; opacity: 0.88; }
+    .hbc-v { font-family: var(--mono); color: var(--text); text-align: right; white-space: nowrap; }
+    .hbc-g { font: 600 0.78em var(--mono); letter-spacing: 0.06em; color: var(--muted); text-align: right; white-space: nowrap; }
+    .hbc-g.hbc-new { color: var(--hbc-up); }
+    .hbc-g.hbc-exit { color: var(--hbc-dn); }
     .hbd { display: flex; align-items: center; gap: 40px; margin-top: 26px; }
     .hbd.hbd-col { flex-direction: column; align-items: center; gap: 30px; }
     .hbd-key { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5em; width: 100%; }

@@ -109,7 +109,9 @@
       added: hadPrev ? pos.filter((p) => p.p === 0).length : null,
       exited: hadPrev ? b.gone.length : null,
       data: { pos: pos.slice(0, cap || CAP).map((p) => [p.s, p.sh, p.v == null ? null : Math.round(p.v), p.p]),
-        gone: b.gone.slice().sort((x, y) => y.p - x.p).slice(0, EXITS).map((g) => [g.s, g.p]) } };
+        // The exit's price is kept (2026-10-17) so a card can value it as
+        // the sold figure did; rows stored before then have two elements.
+        gone: b.gone.slice().sort((x, y) => y.p - x.p).slice(0, EXITS).map((g) => (g.px > 0 ? [g.s, g.p, g.px] : [g.s, g.p])) } };
   }
 
   // The stored row + what the screen knows of each stock -> the page's rows.
@@ -127,10 +129,20 @@
         // Of the fund's net assets, where it is a fund that reported them.
         ofFund: v != null && book.nav > 0 ? v / book.nav * 100 : null,
         ofCompany: sh > 0 && r.sharesOutstanding > 0 && sh <= r.sharesOutstanding ? sh / r.sharesOutstanding * 100 : null,
-        isNew: p === 0, change: p > 0 ? (sh / p - 1) * 100 : null });
+        isNew: p === 0, change: p > 0 ? (sh / p - 1) * 100 : null,
+        // Last period's shares (null: nothing to compare with) and the one
+        // price the change is valued at, for the What changed card.
+        prev: p == null ? null : p, px: v != null && sh > 0 ? v / sh : null });
     }
     const gone = [];
-    for (const [s, p] of (book.data && book.data.gone) || []) { const r = rowOf(s); if (r) gone.push({ symbol: s, name: r.name || null, shares: p }); }
+    for (const [s, p, px] of (book.data && book.data.gone) || []) {
+      const r = rowOf(s);
+      if (!r) continue;
+      // The period's own price where it was stored, else the latest close,
+      // and said which.
+      const at = px > 0 ? px : r.price > 0 ? r.price : null;
+      gone.push({ symbol: s, name: r.name || null, shares: p, value: at ? p * at : null, pxLatest: !(px > 0) && at != null });
+    }
     const bySector = new Map();
     for (const x of pos) if (x.value != null) bySector.set(x.sector || 'Other', (bySector.get(x.sector || 'Other') || 0) + x.value);
     const shown = pos.reduce((s, x) => s + (x.value || 0), 0);

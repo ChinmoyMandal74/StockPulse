@@ -1071,7 +1071,7 @@
         </select>
         <label>Which one</label>
         <select id="hbkId"><option value="">Reading the list…</option></select>
-        <label>Layout</label>
+        <label id="hbkViewL">Layout</label>
         <select id="hbkView">
           <option value="bars" selected>Bars and figures</option>
           <option value="donut">Ring</option>
@@ -1996,6 +1996,7 @@
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
+      { id: 'holderchg', name: 'What changed', note: 'One 13F manager or one fund, its latest filing against the one before: bought, sold, positions opened and closed, and the largest changes' },
       { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
@@ -2181,6 +2182,7 @@
     // Holders (2026-10-15): a manager's or a fund's book, as its page draws it.
     const HB_VIEWS = [
       ['holderbook', 'What one holder holds'],
+      ['holderchg', 'What changed'],
     ];
     const THM_VIEWS = [
       ['thmrank', 'Ranking'],
@@ -2493,7 +2495,7 @@
       }
       sel.innerHTML = html || '<option value="">None on file</option>';
       sel.value = keep && [...sel.options].some((o) => o.value === String(keep)) ? String(keep) : (sel.options[0] ? sel.options[0].value : '');
-      if (tpl === 'holderbook') render();
+      if (tpl === 'holderbook' || tpl === 'holderchg') render();
     }
     // One company's revenue breakdown, for the Revenue mix card.
     const rmCache = {};
@@ -3270,14 +3272,14 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg']), FILL_KEEP = 32;
     function fillGap(stage) {
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
       if (!FILL_TPLS.has(tpl) || size.id === 'story') return 0;
       const body = stage.querySelector('.s-in > .s-body');
       const inner = body && body.firstElementChild;
-      if (!inner || !inner.querySelector('svg, .race-plot')) return 0;
+      if (!inner || !(inner.matches('[data-fill]') || inner.querySelector('svg, .race-plot'))) return 0;
       // The kicker's top margin collapses out of `inner`, so offsetHeight
       // misses it: counted here, or the chart grows into it and the kicker
       // meets the masthead. FILL_KEEP is left spare, half above and half below,
@@ -3368,7 +3370,8 @@
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
       $('fhBox').style.display = tpl === 'fundholders' ? 'block' : 'none';
-      $('hbkBox').style.display = tpl === 'holderbook' ? 'block' : 'none';
+      $('hbkBox').style.display = tpl === 'holderbook' || tpl === 'holderchg' ? 'block' : 'none';
+      $('hbkView').style.display = $('hbkViewL').style.display = tpl === 'holderchg' ? 'none' : '';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
       $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
@@ -3917,7 +3920,7 @@
     // Fund holders: one control.
     $('fhSym').addEventListener('change', () => { if (tpl === 'fundholders') render(); });
     $('hbkKind').addEventListener('change', () => fillHolderList(''));
-    $('hbkId').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
+    $('hbkId').addEventListener('change', () => { if (tpl === 'holderbook' || tpl === 'holderchg') render(); });
     $('hbkView').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
@@ -4594,7 +4597,7 @@
           const qp = new URLSearchParams(location.search);
           const qt = String(qp.get('tpl') || ''), qs = String(qp.get('sym') || '').toUpperCase();
           if (qt && visibleTpls().some((t) => t.id === qt)) tpl = qt;
-          if (qt === 'holderbook') {
+          if (qt === 'holderbook' || qt === 'holderchg') {
             const hk = String(qp.get('hkind') || 'M').toUpperCase(), hi = String(qp.get('hid') || '');
             $('hbkKind').value = hk === 'F' ? 'F' : 'M';
             if (/^[A-Za-z0-9]{1,24}$/.test(hi)) { getHolderBook($('hbkKind').value, hi); hbkLinked = hi; }

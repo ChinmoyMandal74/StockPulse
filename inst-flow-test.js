@@ -103,5 +103,23 @@ const books = HB.invert(curN, prevL, o2);
 const bN = HB.finish(books.get('NEWFILER'));
 check('a holder with no earlier report is not compared', bN.bought === null && bN.added === null, [bN.bought, bN.added]);
 
+// ---- the What changed card's inputs: last period's shares, one price, exits valued ----
+const pxC = new Map([['UP', 10], ['GO', 20], ['NEW', 5]]);
+const curC = new Map([['UP', new Map([['H', { name: 'H', shares: 150 }]])], ['NEW', new Map([['H', { name: 'H', shares: 40 }]])]]);
+const prevC = new Map([['UP', new Map([['H', { name: 'H', shares: 100 }]])], ['GO', new Map([['H', { name: 'H', shares: 30 }]])], ['NEW', new Map([['X', { name: 'X', shares: 1 }]])]]);
+const oC = { keyOf: (k) => k, sharesOf: (h) => h.shares, valueOf: (sym, h) => h.shares * pxC.get(sym), meta: (k, h) => ({ name: h.name }), priceOf: (sym) => pxC.get(sym) };
+const bC = HB.finish([...HB.invert(curC, prevC, oC).values()][0]);
+check('an exit stores its period price', JSON.stringify(bC.data.gone) === JSON.stringify([['GO', 30, 20]]), bC.data.gone);
+const rowC = (s) => ({ name: s, price: 99 });
+const vC = HB.view(bC, rowC);
+const up = vC.positions.find((p) => p.symbol === 'UP'), nw = vC.positions.find((p) => p.symbol === 'NEW');
+check('a position carries last period and its price', up.prev === 100 && up.px === 10 && nw.prev === 0, [up.prev, up.px, nw.prev]);
+check('the card adds up to the stored bought', (up.shares - up.prev) * up.px + (nw.shares - nw.prev) * nw.px === bC.bought, bC.bought);
+check('an exit is valued at its period price, not the latest', vC.gone[0].value === 600 && vC.gone[0].pxLatest === false && bC.sold === 600, vC.gone);
+const vOld = HB.view(Object.assign({}, bC, { data: { pos: bC.data.pos, gone: [['GO', 30]] } }), rowC);
+check('an exit stored without a price falls back to the latest close, flagged', vOld.gone[0].value === 30 * 99 && vOld.gone[0].pxLatest === true, vOld.gone);
+const vNone = HB.view(Object.assign({}, bC, { data: { pos: bC.data.pos, gone: [['GO', 30]] } }), (s) => ({ name: s }));
+check('no price anywhere leaves the exit unvalued, not zero', vNone.gone[0].value === null, vNone.gone);
+
 console.log(ran + ' checks, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
