@@ -1487,6 +1487,11 @@ const ADDED_COLUMNS = [
   // backlog 45b): JSON {topics, source, ip}. Held here instead of written over
   // the row, so naming someone's address cannot change their row.
   "alter table subscribers add column pending text",
+  // Email verification at sign-up (2026-10-18, backlog 44d, the owner's
+  // choice). A new account starts `unverified` and holds the hash of its
+  // activation token here until the link's button is pressed.
+  "alter table users add column verify_hash text",
+  "alter table users add column verify_sent_at integer",
   // Who added and who cut (2026-10-16): each stock's largest buyers and
   // sellers among 13F managers on the quarter, and each holder's buying and
   // selling in tracked stocks at constant prices. Null until the next load.
@@ -6780,7 +6785,9 @@ async function approveUser(id) {
   await init();
   const r = await db.execute({ sql: 'select email, status from users where id = ?', args: [id] });
   if (!r.rows.length) return null;
-  await db.execute({ sql: "update users set status = 'active' where id = ?", args: [id] });
+  // Never an account whose email is unconfirmed (backlog 44d): approving it
+  // would activate an address nobody has shown they own.
+  await db.execute({ sql: "update users set status = 'active' where id = ? and status <> 'unverified'", args: [id] });
   return { email: r.rows[0].email, wasPending: r.rows[0].status === 'pending' };
 }
 
@@ -6902,11 +6909,19 @@ async function clearLoginFailures(userId) {
 
 // ---- sessions -------------------------------------------------------------
 
+// SESSION TOKENS ARE STORED HASHED (2026-10-18, backlog 44d). The table held
+// the cookie values themselves, so anyone who could read it (a backup, an
+// export, a leaked token for the database) could sign in as every member. The
+// row now holds 'h1:' + SHA-256 of the token. Rows written before this hold
+// the raw token; one is found by either form and rewritten to the hash on its
+// first use, so nobody is signed out by the change.
+const sessionKey = (token) => 'h1:' + crypto.createHash('sha256').update(String(token)).digest('hex');
+
 async function createSession(token, userId, expiresAt) {
   await init();
   await db.execute({
     sql: 'insert into sessions (token, user_id, created_at, expires_at) values (?, ?, ?, ?)',
-    args: [token, userId, new Date().toISOString(), expiresAt],
+    args: [sessionKey(token), userId, new Date().toISOString(), expiresAt],
   });
 }
 
@@ -6914,6 +6929,7 @@ async function createSession(token, userId, expiresAt) {
 async function getSessionUser(token) {
   if (!token) return null;
   await init();
+  const key = sessionKey(token);
   const r = await db.execute({
     // AN ALLOWLIST, NOT A DENYLIST, and the difference is the point. This read
     // used to be `u.status <> 'pending'`, which admits any status nobody has
@@ -6921,10 +6937,10 @@ async function getSessionUser(token) {
     // account's live session would have kept working for up to its full 30
     // days and the feature would have looked like it did nothing. A gate
     // should refuse what it does not recognise.
-    sql: `select u.id, u.email, u.name, u.role, u.terms_version, s.expires_at
+    sql: `select s.token as stoken, u.id, u.email, u.name, u.role, u.terms_version, s.expires_at
           from sessions s join users u on u.id = s.user_id
-          where s.token = ? and u.status = 'active'`,
-    args: [token],
+          where s.token in (?, ?) and u.status = 'active'`,
+    args: [key, String(token)],
   });
   const row = r.rows[0];
   if (!row) return null;
@@ -6932,12 +6948,77 @@ async function getSessionUser(token) {
     await deleteSession(token);
     return null;
   }
+  // A row from before hashing: rewrite it to the hash now. A failure leaves
+  // it as it was, to be tried again on the next request.
+  if (row.stoken === String(token)) {
+    await db.execute({ sql: 'update sessions set token = ? where token = ?', args: [key, String(token)] }).catch(() => {});
+  }
   return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role, termsVersion: row.terms_version || null };
 }
 
 async function deleteSession(token) {
   await init();
-  await db.execute({ sql: 'delete from sessions where token = ?', args: [token] });
+  await db.execute({ sql: 'delete from sessions where token in (?, ?)', args: [sessionKey(token), String(token)] });
+}
+
+// ---- email verification at sign-up (backlog 44d) ----------------------------
+
+// The account an activation link belongs to, read without using it up: the
+// page asks for the password first (see /verify in server.js).
+async function readVerification(tokenHash) {
+  await init();
+  const r = await db.execute({ sql: "select id, email, name, role, salt, password_hash, verify_sent_at from users where verify_hash = ? and status = 'unverified'", args: [tokenHash] });
+  const u = r.rows[0];
+  return u ? { id: Number(u.id), email: u.email, name: u.name || null, role: u.role, salt: u.salt, passwordHash: u.password_hash, sentAt: Number(u.verify_sent_at || 0) } : null;
+}
+
+async function setVerification(userId, tokenHash) {
+  await init();
+  await db.execute({ sql: 'update users set verify_hash = ?, verify_sent_at = ? where id = ?', args: [tokenHash, Date.now(), userId] });
+}
+
+// Single use, and only for an account still waiting: the hash is cleared and
+// the status set in one statement guarded on `unverified`, so a replayed or
+// raced link changes nothing. Returns the user, { expired, email }, or null.
+async function consumeVerification(tokenHash, ttlMs, statusAfter) {
+  await init();
+  const r = await db.execute({ sql: "select id, email, name, role, verify_sent_at from users where verify_hash = ? and status = 'unverified'", args: [tokenHash] });
+  const u = r.rows[0];
+  if (!u) return null;
+  if (!(Date.now() - Number(u.verify_sent_at || 0) < ttlMs)) return { expired: true, email: u.email };
+  const w = await db.execute({
+    sql: "update users set status = ?, verify_hash = null where id = ? and verify_hash = ? and status = 'unverified'",
+    args: [statusAfter, u.id, tokenHash],
+  });
+  if (!Number(w.rowsAffected)) return null;
+  return { id: Number(u.id), email: u.email, name: u.name || null, role: u.role, status: statusAfter };
+}
+
+// Signing up again with an address that is still waiting: the newest request
+// wins (its password and name), and its link replaces the old one. Nothing
+// can be lost: an unverified account has never been used.
+async function replaceUnverified(userId, { passwordHash, salt, name }) {
+  await init();
+  await db.execute({
+    sql: "update users set password_hash = ?, salt = ?, name = ? where id = ? and status = 'unverified'",
+    args: [passwordHash, salt, name ? String(name).trim().slice(0, 80) || null : null, userId],
+  });
+}
+
+// Proof of the mailbox some other way (Google, a password reset): the account
+// is activated. With Google the password whoever registered it chose is also
+// replaced by an unusable one, since that person may not be the mailbox's
+// owner.
+async function markVerified(userId, statusAfter) {
+  await init();
+  await db.execute({ sql: "update users set status = ?, verify_hash = null where id = ? and status = 'unverified'", args: [statusAfter, userId] });
+}
+async function claimUnverified(userId, googleSub, statusAfter) {
+  await init();
+  await db.execute({
+    sql: "update users set status = ?, verify_hash = null, google_sub = ?, password_hash = ?, salt = ? where id = ? and status = 'unverified'",
+    args: [statusAfter, String(googleSub), crypto.randomBytes(32).toString('hex'), crypto.randomBytes(16).toString('hex'), userId],
+  });
 }
 
 // ---- admin sessions and attempt counters (backlog 44a) ----------------------
@@ -7498,6 +7579,7 @@ module.exports = {
   init,
   readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone,
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
+  readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readFigure, writeFigures,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,

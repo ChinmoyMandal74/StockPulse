@@ -438,6 +438,16 @@
         // sent: an address already on the list gets no second email, and
         // saying otherwise would be a promise of mail that is not coming.
         const subLine = data.subscribed ? ' Check your email to confirm the newsletter.' : '';
+        // EVERY SIGN-UP NOW ENDS HERE (2026-10-18): the account waits for its
+        // email, and the reply is the same whether or not the address was
+        // already registered, so it says nothing more specific than this.
+        if (mode === 'register' && data.check) {
+          w.restore();
+          busy = false;
+          setMsg('Check your email to finish signing up: the link there asks for the password you just chose.'
+            + ($('subscribe').checked ? ' A separate email will ask you to confirm the newsletter.' : ''), 'ok');
+          return;
+        }
         if (mode === 'register' && data.pending) {
           // The account exists but the owner has not let it in yet — say so
           // here rather than bouncing to a page that would refuse them.
@@ -534,6 +544,7 @@
         exchange: 'Could not complete the exchange with Google.',
         state: 'The sign-in could not be matched to this browser — cookies may have been blocked.',
         nonce: 'The sign-in could not be matched to this browser. Please try again.',
+        admin: 'Google sign-in cannot be used for this account. Sign in with its password.',
       }[e] || 'Google sign-in did not complete.';
       setMsg(say + ' (' + e + ')');
     }

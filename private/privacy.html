@@ -159,8 +159,11 @@
         <h3>What the account itself holds</h3>
         <p>Your <b>email address</b>, the <b>name</b> you gave at registration, your role, and when
           you joined. Your <b>password is never stored</b> — only a <code>scrypt</code> hash of it
-          with a random per-account salt, which cannot be reversed back into the password. A count of
-          failed sign-in attempts is kept so an account can be locked after repeated guesses.</p>
+          with a random per-account salt, which cannot be reversed back into the password. Counts of
+          failed sign-in attempts are kept, against one-way hashes of the address typed and of the
+          network address, so sign-in can be paused after repeated guesses. Until you use the link in
+          the sign-up email, the account also holds a one-way hash of that link, cleared when it is used.
+          Sign-in sessions are stored as one-way hashes too, never the value in your browser.</p>
         <p>It also holds a record of <b>when you agreed to the terms</b>: the version you agreed to,
           the date, how (at sign-up or when asked later), and the network address that request came
           from. If the terms change and you agree again, both records are kept.</p>

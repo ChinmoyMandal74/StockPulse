@@ -142,6 +142,9 @@ const ADMIN_COOKIE = 'st_admin';
 // setting would hand the whole site to the public, so there the server
 // answers 503 to everything instead (the middleware right after the parsers).
 const OPEN_ON_VERCEL = !AUTH_REQUIRED && !!process.env.VERCEL;
+// Cookies are Secure in production AND on any Vercel deployment (backlog 44d):
+// it keyed on NODE_ENV alone, which a deployment is not guaranteed to set.
+const COOKIE_SECURE = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 // /statistics (market cap, forward P/E, PEG, earnings growth) needs a Twelve Data
 // Pro+ plan. On lower tiers it 403s for real tickers (only the AAPL demo symbol is
 // allowed) and still costs credits, so it's OFF by default. Set ENABLE_FUNDAMENTALS
@@ -217,10 +220,21 @@ const SESSION_COOKIE = 'sp_session';
 const SESSION_DAYS = 30;
 // The length first, then the pattern: see AuthSec.isEmail (backlog 44b).
 const { EMAIL_RE, isEmail } = AuthSec;
+// Answer no sooner than this from the start of the request, for routes whose
+// answer must not say by its timing which of several things happened (an
+// email sent or not). Longer than a send normally takes.
+const RESPONSE_FLOOR_MS = 1500;
+async function answerAfter(res, t0, body) {
+  const wait = RESPONSE_FLOOR_MS - (Date.now() - t0);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  return res.json(body);
+}
 const MIN_PASSWORD = 8;
-// Lock an account briefly after repeated wrong passwords. Tracked per user row
-// rather than per IP, because an in-memory counter is useless on serverless
-// where every request may hit a fresh instance.
+// Lock briefly after repeated wrong passwords: this many from one address
+// against one account (see /api/login). Counted in the database, because an
+// in-memory counter is useless on serverless where every request may hit a
+// fresh instance. The users table's failed_count / locked_until are no longer
+// written.
 const MAX_FAILED = 8;
 const LOCK_MS = 15 * 60 * 1000;
 
@@ -1832,7 +1846,7 @@ function setSessionCookie(res, token) {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: COOKIE_SECURE,
     maxAge: SESSION_DAYS * 24 * 60 * 60 * 1000,
   });
 }
@@ -2125,7 +2139,140 @@ async function sendWelcome(email, role, name) {
   }
 }
 
+// ---- email verification at sign-up (backlog 44d) --------------------------
+// The activation link works for a day. It opens a page that asks for the
+// password chosen at sign-up, and only that page's POST activates (see
+// /verify): a mail scanner following the link changes nothing, and someone
+// who registered your address cannot have it activated by you pressing a
+// button, because you do not know the password they chose.
+const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+async function sendVerification(userId, email, name) {
+  const token = AuthSec.newToken();
+  await store.setVerification(userId, AuthSec.tokenHash(token));
+  const link = `${APP_URL}/verify?t=${encodeURIComponent(token)}`;
+  const hello = name ? `Hello ${name}, one` : 'One';
+  await sendMail({
+    kind: 'signup-verify',
+    to: email,
+    replyTo: process.env.MAIL_REPLY_TO || undefined,
+    subject: `Finish signing up to ${BRAND}`,
+    text: textShell({
+      heading: 'Finish signing up',
+      intro: `${hello} step left: open this link and enter the password you chose.`,
+      lines: [link, '', 'The link works for a day.'],
+      note: 'If you did not sign up, ignore this email. Nothing happens without the password.',
+    }),
+    html: emailShell({
+      heading: 'Finish signing up',
+      intro: `${hello} step left: open the link and enter the password you chose.`,
+      body: mailButton(link, 'Finish signing up')
+        + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link works for a day. `
+        + 'If the button does not work, paste this into your browser:<br>'
+        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
+      note: 'If you did not sign up, ignore this email. Nothing happens without the password.',
+    }),
+  });
+}
+async function sendAlreadyRegistered(email) {
+  const login = `${APP_URL}/login`;
+  await sendMail({
+    kind: 'signup-exists',
+    to: email,
+    replyTo: process.env.MAIL_REPLY_TO || undefined,
+    subject: `Someone tried to sign up to ${BRAND} with this address`,
+    text: textShell({
+      heading: 'You already have an account',
+      intro: 'Someone just tried to create an account with this address, which already has one.',
+      lines: ['Sign in: ' + login, 'Forgotten your password? Use "Forgot your password?" on that page.'],
+      note: 'If this was not you, nothing has changed and you do not need to do anything.',
+    }),
+    html: emailShell({
+      heading: 'You already have an account',
+      intro: 'Someone just tried to create an account with this address, which already has one.',
+      body: mailButton(login, 'Sign in')
+        + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">Forgotten your password? `
+        + `Use "Forgot your password?" on the sign-in page.</p>`,
+      note: 'If this was not you, nothing has changed and you do not need to do anything.',
+    }),
+  });
+}
+// What a newly verified account becomes, and what follows it: a member waits
+// for approval when that is on; otherwise it is active, welcomed, and the
+// owner told, as sign-up used to do at once.
+const statusAfterVerify = () => (REQUIRE_APPROVAL ? 'pending' : 'active');
+async function afterVerified(user) {
+  if (user.status === 'pending') return sendSignupNotice(user.email, user.role, user.name, true).catch(() => {});
+  await Promise.all([
+    sendWelcome(user.email, user.role, user.name).catch(() => {}),
+    sendSignupNotice(user.email, user.role, user.name, false).catch(() => {}),
+  ]);
+}
+
+app.get('/verify', route(async (req, res) => {
+  const base = subBase(req);
+  const token = String(req.query.t || '');
+  const v = token ? await store.readVerification(AuthSec.tokenHash(token)) : null;
+  if (!v || !(Date.now() - v.sentAt < VERIFY_TTL_MS)) {
+    return res.status(v ? 410 : 404).type('html').send(subPage({ base, title: 'Link not valid', heading: 'That link has expired or been used',
+      body: '<p>Sign up again with the same address and a new link will be sent. Already finished? '
+        + '<a href="/login">Sign in</a>.</p>' }));
+  }
+  res.set('Cache-Control', 'no-store');
+  res.type('html').send(verifyPage(base, token, v.email, ''));
+}));
+
+function verifyPage(base, token, email, err) {
+  return subPage({ base, title: 'Finish signing up', heading: 'Finish signing up',
+    body: `<p>Enter the password you chose for <strong style="color:var(--text)">${htmlEsc(email)}</strong>.</p>`
+      + (err ? `<p style="color:var(--red)">${htmlEsc(err)}</p>` : '')
+      + '<form method="post" action="/verify" style="margin:0">'
+      + `<input type="hidden" name="t" value="${htmlEsc(token)}">`
+      + '<input type="password" name="password" autocomplete="current-password" required minlength="1" '
+      + 'style="width:100%;padding:10px 12px;margin:6px 0 10px;border-radius:8px;border:1px solid var(--hair-2);background:transparent;color:var(--text)">'
+      + '<button class="b p" type="submit">Finish signing up</button></form>'
+      + '<p style="font-size:13px;color:var(--faint)">Did not sign up? Close this page; nothing happens without the password.</p>' });
+}
+
+app.post('/verify', express.urlencoded({ extended: false }), route(async (req, res) => {
+  const base = subBase(req);
+  const token = String((req.body && req.body.t) || '');
+  const password = String((req.body && req.body.password) || '');
+  const h = AuthSec.tokenHash(token);
+  const v = token ? await store.readVerification(h) : null;
+  if (!v || !(Date.now() - v.sentAt < VERIFY_TTL_MS)) {
+    return res.status(410).type('html').send(subPage({ base, title: 'Link not valid', heading: 'That link has expired or been used',
+      body: '<p>Sign up again with the same address and a new link will be sent.</p>' }));
+  }
+  // The login's limit, per account, so the page cannot be used to guess.
+  const key = 'verify:' + v.id;
+  const now = Date.now();
+  if (AuthSec.overLimit(await store.readAuthThrottle(key), now, MAX_FAILED, LOCK_MS)) {
+    return res.status(429).type('html').send(verifyPage(base, token, v.email, 'Too many attempts. Please try again in 15 minutes.'));
+  }
+  if (!(await verifyPassword(password, v.salt, v.passwordHash))) {
+    await store.noteAuthFailure(key, now, LOCK_MS).catch(() => {});
+    return res.status(401).type('html').send(verifyPage(base, token, v.email,
+      'That is not the password chosen at sign-up. If you did not sign up, close this page.'));
+  }
+  const user = await store.consumeVerification(h, VERIFY_TTL_MS, statusAfterVerify());
+  if (!user || user.expired) {
+    return res.status(410).type('html').send(subPage({ base, title: 'Link not valid', heading: 'That link has expired or been used',
+      body: '<p>Sign up again with the same address and a new link will be sent.</p>' }));
+  }
+  logAct(req, 'login', 'signup-verified', user.email);
+  await afterVerified(user);
+  if (user.status === 'pending') {
+    return res.type('html').send(subPage({ base, title: 'Email confirmed', heading: 'Email confirmed',
+      body: '<p>The owner has been asked to approve your account. You will get an email when it is ready.</p>' }));
+  }
+  const sess = crypto.randomBytes(32).toString('hex');
+  await store.createSession(sess, user.id, Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  setSessionCookie(res, sess);
+  return res.redirect('/');
+}));
+
 app.post('/api/register', route(async (req, res) => {
+  const t0 = Date.now();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
   const code = String(req.body?.code || '');
@@ -2148,10 +2295,6 @@ app.post('/api/register', route(async (req, res) => {
   // The invite code, with its own attempt limit (see inviteCodeCheck).
   const gate = await inviteCodeCheck(req, code);
   if (!gate.ok) return res.status(gate.status).json({ error: gate.error });
-  if (await store.findUserByEmail(email)) {
-    return res.status(409).json({ error: 'An account with that email already exists.' });
-  }
-
   // Throttled per IP per day, and only once the request is otherwise VALID —
   // a malformed body must not be able to burn the quota (the chat's rule).
   // Against the IP rather than the address, because the address is the thing
@@ -2165,7 +2308,39 @@ app.post('/api/register', route(async (req, res) => {
 
   const salt = newSalt();
   const passwordHash = await hashPassword(password, salt);
-  const role = (await store.countUsers()) === 0 ? ROLE_ADMIN : 'member';
+  const existing = await store.findUserByEmail(email);
+  const role = !existing && (await store.countUsers()) === 0 ? ROLE_ADMIN : 'member';
+
+  // EVERY SIGN-UP GETS THE SAME ANSWER, AND A NEW ACCOUNT WAITS FOR ITS EMAIL
+  // (backlog 44d, the owner's choice). This answered 409 "already exists",
+  // which told anyone who had an account, and an account was usable at once
+  // under an address nobody had checked, so a stranger could register your
+  // address and inherit your Google sign-in when you later used it.
+  //   - a new address: an `unverified` account and an activation link;
+  //   - an address still waiting: the newest request replaces it, new link;
+  //   - an address already registered: a note to it that someone tried.
+  // The reply is the same in all three, and each sends one email.
+  // NOT for the first account on an empty site (the owner, bootstrapping) or
+  // where mail is not configured (a laptop): those are made active as before.
+  if (!isAdminRole(role) && MAIL_READY) {
+    if (existing && String(existing.status) === 'unverified') {
+      await store.replaceUnverified(Number(existing.id), { passwordHash, salt, name });
+      await sendVerification(Number(existing.id), email, name);
+    } else if (existing) {
+      // At most three notes a day to one address, however often it is tried.
+      const notes = await store.noteChatUse(`signup-note:${email}`, 3);
+      if (notes.allowed) await sendAlreadyRegistered(email);
+    } else {
+      const user = await store.createUser({ email, passwordHash, salt, role, status: 'unverified', name });
+      if (req.body?.terms === true) await store.recordTerms(Number(user.id), email, TERMS_VERSION, 'signup', ip).catch(() => {});
+      await sendVerification(Number(user.id), email, name);
+      logAct(req, 'login', 'signup-unverified', email);
+    }
+    await subscribeOnSignup(req, email);
+    return answerAfter(res, t0, { ok: true, check: true });
+  }
+  if (existing) return res.status(409).json({ error: 'An account with that email already exists.' });
+
   // WITH APPROVAL ON a member starts PENDING and cannot sign in until the
   // owner lets them in: no session is created, and getSessionUser refuses
   // pending rows besides — it is enforced, not decoration. With it off they
@@ -2217,6 +2392,27 @@ app.post('/api/register', route(async (req, res) => {
 // password never uses one up. The shared limit can be run down by a stranger;
 // an admin-role account signs in by email and is not affected.
 const ADMIN_TRY = { perAddr: 5, addrWindowMs: 15 * 60 * 1000, all: 30, allWindowMs: 60 * 60 * 1000 };
+
+// Member logins (see the lockout note in /api/login): this address against
+// this account uses MAX_FAILED and LOCK_MS; the account across every address
+// is capped at `acct` an hour.
+const LOGIN_TRY = { acct: 50, acctWindowMs: 60 * 60 * 1000 };
+const loginTryKeys = (req, email) => {
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  const who = authMac('login-email.' + String(email).toLowerCase()) || 'nokey';
+  return { pair: 'login:' + who + ':' + (authMac('throttle-addr.' + ip) || 'nokey'), acct: 'login-acct:' + who };
+};
+// One real password check against a throwaway hash, for an address with no
+// account, so it takes as long as a known one. Built once per instance.
+let dummyCred = null;
+async function dummyPasswordCheck(password) {
+  if (!dummyCred) {
+    const salt = newSalt();
+    dummyCred = { salt, hash: await hashPassword(crypto.randomBytes(16).toString('hex'), salt) };
+  }
+  await verifyPassword(password, dummyCred.salt, dummyCred.hash);
+  return false;
+}
 
 // THE INVITE CODE'S OWN ATTEMPT LIMIT (backlog 45b, found by the VulnHunter
 // scan). Both registration paths compared the code first and counted the
@@ -2303,20 +2499,46 @@ app.post('/api/login', route(async (req, res) => {
   // Same response whether the email is unknown or the password is wrong, so the
   // endpoint can't be used to enumerate who has an account.
   const reject = () => res.status(401).json({ error: 'Incorrect email or password.' });
-  if (!user) return reject();
 
-  if (user.locked_until && Number(user.locked_until) > Date.now()) {
-    const mins = Math.ceil((Number(user.locked_until) - Date.now()) / 60000);
-    return res.status(429).json({ error: `Too many attempts. Try again in ${mins} minute(s).` });
+  // THE LOCKOUT IS PER ACCOUNT AND ADDRESS (backlog 44d, the owner's choice).
+  // It was per account: eight wrong passwords locked the account for
+  // everyone, so a stranger could keep any member out by guessing badly on
+  // purpose, and the decision was made on a stale read that two requests
+  // could race. Now two counters in auth_throttle, counted in one statement
+  // each: this address against this account (MAX_FAILED in LOCK_MS), which a
+  // stranger can only use to lock themselves out, and the account across all
+  // addresses (LOGIN_TRY.acct an hour), which stops guessing spread over many
+  // addresses. Keyed on the email typed, so an unknown address behaves
+  // exactly like a known one.
+  // Without the secret every key would be the same, and one person's failures
+  // would count against everyone; refuse instead (only when the database is
+  // out of reach, which fails sign-in anyway).
+  if (!authKey) return res.status(503).json({ error: 'Sign-in is unavailable right now. Please try again shortly.' });
+  const lk = loginTryKeys(req, email);
+  const now = Date.now();
+  const [pairRow, acctRow] = await Promise.all([store.readAuthThrottle(lk.pair), store.readAuthThrottle(lk.acct)]);
+  if (AuthSec.overLimit(pairRow, now, MAX_FAILED, LOCK_MS) || AuthSec.overLimit(acctRow, now, LOGIN_TRY.acct, LOGIN_TRY.acctWindowMs)) {
+    return res.status(429).json({ error: 'Too many attempts. Please try again in 15 minutes, or reset your password.' });
   }
-
-  if (!(await verifyPassword(password, user.salt, user.password_hash))) {
-    const failed = Number(user.failed_count || 0) + 1;
-    await store.noteLoginFailure(Number(user.id), failed >= MAX_FAILED ? Date.now() + LOCK_MS : null);
+  // An unknown address still pays for one password check, so the time taken
+  // does not say whether the account exists.
+  const ok = user ? await verifyPassword(password, user.salt, user.password_hash) : await dummyPasswordCheck(password);
+  if (!user || !ok) {
+    await Promise.all([
+      store.noteAuthFailure(lk.pair, now, LOCK_MS).catch(() => {}),
+      store.noteAuthFailure(lk.acct, now, LOGIN_TRY.acctWindowMs).catch(() => {}),
+    ]);
     return reject();
   }
 
-  await store.clearLoginFailures(Number(user.id));
+  store.clearAuthThrottle(lk.pair).catch(() => {});
+  // Told only to someone who has just proved the password, so it says nothing
+  // to a stranger about which addresses are registered.
+  if ((user.status || 'active') === 'unverified') {
+    return res.status(403).json({
+      error: 'Check your email for the link that finishes signing up. Signing up again sends a new one.',
+    });
+  }
   if ((user.status || 'active') === 'pending') {
     return res.status(403).json({
       error: 'Your account is awaiting approval by the owner — you will get an email when it is ready.',
@@ -2388,6 +2610,28 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 // and the button never renders and every route here answers 404 — off is the
 // default, and no deploy can turn it on by accident.
 const GOOGLE_READY = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && ADMIN_PASSWORD);
+
+// LINKING A GOOGLE IDENTITY TO AN ACCOUNT FOUND BY EMAIL (backlog 44d). Google
+// has verified the address, so its holder owns the mailbox. Returns the user
+// to sign in, or null to refuse.
+//   - An admin-role account is never linked: the owner's account stays
+//     reachable only by its password, whatever happens to a Google account.
+//   - An unverified account is CLAIMED: activated, linked, and its password
+//     (chosen by whoever registered the address, maybe not its owner)
+//     replaced with an unusable one.
+//   - Any other account is linked, as before.
+async function googleLink(user, sub) {
+  if (isAdminRole(user.role)) return null;
+  if (String(user.status) === 'unverified') {
+    const status = statusAfterVerify();
+    await store.claimUnverified(Number(user.id), sub, status);
+    const claimed = { ...user, status, google_sub: sub };
+    await afterVerified({ id: Number(user.id), email: user.email, name: user.name || null, role: user.role, status });
+    return claimed;
+  }
+  await store.linkGoogleSub(user.id, sub);
+  return user;
+}
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_FLOW_COOKIE = 'sp_gflow';      // state + nonce, one round trip
@@ -2403,7 +2647,7 @@ function googleRedirectUri() {
 }
 const gcookie = (maxAge) => ({
   httpOnly: true, sameSite: 'lax',
-  secure: process.env.NODE_ENV === 'production', maxAge,
+  secure: COOKIE_SECURE, maxAge,
 });
 
 // The carrier between "Google says this is jo@gmail.com" and "jo typed the
@@ -2542,9 +2786,10 @@ app.get('/api/auth/google/callback', route(async (req, res) => {
 
   const byEmail = await store.findUserByEmail(email);
   if (byEmail) {
-    await store.linkGoogleSub(byEmail.id, sub);
+    const linked = await googleLink(byEmail, sub);
+    if (!linked) return fail('admin');
     logAct(req, 'account', 'google-linked', byEmail.email);
-    return signIn(byEmail);
+    return signIn(linked);
   }
 
   // Nobody here yet. Hold the VERIFIED identity and go and ask for the code.
@@ -2634,7 +2879,11 @@ app.post('/api/auth/google/finish', route(async (req, res) => {
   const known = await store.findUserByGoogleSub(p.sub);
   if (known) return done(known);
   const byEmail = await store.findUserByEmail(p.email);
-  if (byEmail) { await store.linkGoogleSub(byEmail.id, p.sub); return done(byEmail); }
+  if (byEmail) {
+    const linked = await googleLink(byEmail, p.sub);
+    if (!linked) { res.clearCookie(GOOGLE_PENDING_COOKIE); return res.status(403).json({ error: 'Sign in to this account with its password; Google sign-in cannot be used for it.' }); }
+    return done(linked);
+  }
 
   // From here on an account is about to be CREATED, so the tick is required.
   // A returning or linked account passed through `done` above, and the gate
@@ -2686,7 +2935,7 @@ app.post('/api/guest', route(async (req, res) => {
   res.cookie(GUEST_COOKIE, gtok, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: COOKIE_SECURE,
     maxAge: GUEST_HOURS * 60 * 60 * 1000,
   });
   // The st_guest token is shared by every guest on purpose; this second
@@ -2699,7 +2948,7 @@ app.post('/api/guest', route(async (req, res) => {
     res.cookie('st_gid', gid, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIE_SECURE,
       maxAge: GUEST_HOURS * 60 * 60 * 1000,
     });
   }
@@ -2719,10 +2968,20 @@ app.post('/api/password', requireAuth, route(async (req, res) => {
   if (next.length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
   }
+  // WRONG CURRENT PASSWORDS COUNT (backlog 44d). This check had no limit, so a
+  // stolen session could be used to guess the password behind it without
+  // end. The login's rule: MAX_FAILED in LOCK_MS, per account.
+  const key = 'pwchange:' + Number(me.id);
+  const now = Date.now();
+  if (AuthSec.overLimit(await store.readAuthThrottle(key), now, MAX_FAILED, LOCK_MS)) {
+    return res.status(429).json({ error: 'Too many attempts. Please try again in 15 minutes.' });
+  }
   const user = await store.findUserByEmail(me.email);
   if (!user || !(await verifyPassword(current, user.salt, user.password_hash))) {
+    await store.noteAuthFailure(key, now, LOCK_MS).catch(() => {});
     return res.status(401).json({ error: 'Current password is incorrect.' });
   }
+  store.clearAuthThrottle(key).catch(() => {});
   await store.setPassword(Number(user.id), next);
   logAct(req, 'account', 'password-changed', me.email);
   res.clearCookie(SESSION_COOKIE);
@@ -3228,17 +3487,22 @@ app.post('/api/contact', requireMember, route(async (req, res) => {
 app.post('/api/forgot', route(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const generic = { ok: true, message: 'If that address has an account, a reset link is on its way.' };
-  if (!isEmail(email)) return res.json(generic);
+  // THE SAME TIME WHATEVER HAPPENED (backlog 44d): a known address waited for
+  // its email to send and an unknown one answered at once, which said which
+  // was which. Every answer is held to RESPONSE_FLOOR_MS from the start.
+  const t0 = Date.now();
+  const answer = () => answerAfter(res, t0, generic);
+  if (!isEmail(email)) return answer();
   if (!MAIL_READY) {
     console.warn('forgot: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
-    return res.json(generic);
+    return answer();
   }
 
   const user = await store.findUserByEmail(email);
-  if (!user) return res.json(generic);
+  if (!user) return answer();
 
   const token = await store.createReset(user.id);
-  if (!token) return res.json(generic);   // one was issued moments ago
+  if (!token) return answer();   // one was issued moments ago
 
   const link = `${APP_URL}/reset?token=${encodeURIComponent(token)}`;
   await sendMail({
@@ -3262,7 +3526,7 @@ app.post('/api/forgot', route(async (req, res) => {
       note: 'If this was not you, ignore this email — nothing has changed and the link will expire on its own.',
     }),
   });
-  res.json(generic);
+  return answer();
 }));
 
 app.post('/api/reset', route(async (req, res) => {
@@ -3278,6 +3542,10 @@ app.post('/api/reset', route(async (req, res) => {
   // setPassword also clears the lockout counter and drops every session for the
   // account — a reset usually means someone else may have had access.
   await store.setPassword(userId, password);
+  // The link proved the mailbox and the new password is its holder's, so an
+  // account still waiting for its sign-up link is activated (backlog 44d).
+  // A no-op for any other account.
+  await store.markVerified(userId, statusAfterVerify());
   logAct(req, 'account', 'reset', null); // token flow — no session to name
   res.json({ ok: true });
 }));
@@ -3460,6 +3728,13 @@ app.post('/api/users/:id/status', requireAdmin, route(async (req, res) => {
   if (target.status === 'pending') {
     return res.status(409).json({
       error: 'That registration is still pending. Approve it, or Delete to decline it.',
+    });
+  }
+  // Nor an account whose email is unconfirmed (backlog 44d): enabling it would
+  // activate an address nobody has shown they own.
+  if (target.status === 'unverified') {
+    return res.status(409).json({
+      error: 'That account has not confirmed its email yet. It activates itself when the link is used; Delete removes it.',
     });
   }
 
