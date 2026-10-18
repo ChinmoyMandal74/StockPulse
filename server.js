@@ -11159,6 +11159,18 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // for one. Read together, and one failing leaves the other standing --
   // the card then draws its waiting state rather than half a comparison.
   const evoBySym = {};
+  // A race over the filings (revenue, P/E and the rest) names its companies
+  // in a dry build, as the five-year price race names its basket; ten at most.
+  if (evoNeed && evoNeed.race) {
+    const want = new Set();
+    try {
+      Cards.build(post.tpl, { stocks, myLists, screens, size: { id: 'portrait', w: 1080, h: 1350 }, opts: post.opts,
+        getEvolution: (s) => { if (s) want.add(String(s)); return null; } });
+    } catch { /* nothing asked */ }
+    await Promise.all([...want].slice(0, 10).map(async (s) => {
+      try { evoBySym[s] = await evolutionFor(s, evoNeed.years); } catch { evoBySym[s] = null; }
+    }));
+  }
   if (evoNeed && Array.isArray(evoNeed.symbols) && evoNeed.symbols.length) {
     await Promise.all(evoNeed.symbols.slice(0, 2).map(async (s) => {
       try { evoBySym[s] = await evolutionFor(s, evoNeed.years); } catch { evoBySym[s] = null; }

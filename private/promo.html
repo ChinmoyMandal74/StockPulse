@@ -288,7 +288,21 @@
       <!-- Race chart (2026-10-16, admin only): the Chart card's leaders in a
            list, as a 25-second video. Year to date or the past year. -->
       <div id="racBox">
-        <label>Window</label>
+        <label>Measure</label>
+        <select id="racMeasure">
+          <option value="price" selected>Price (lines)</option>
+          <option value="rev">Revenue (bars, from filings)</option>
+          <option value="ni">Net income (bars, from filings)</option>
+          <option value="cap">Market value (bars, from filings)</option>
+          <option value="pe">P/E (bars, from filings)</option>
+          <option value="margin">Profit margin (bars, from filings)</option>
+        </select>
+        <label id="racYrsL">Years</label>
+        <select id="racYrs">
+          <option value="5" selected>Past five years</option>
+          <option value="10">Past ten years</option>
+        </select>
+        <label id="racWinL">Window</label>
         <select id="racWin">
           <option value="ytd" selected>Year to date</option>
           <option value="y1">Past year</option>
@@ -2833,7 +2847,7 @@
       'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
-      'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
+      'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
       'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
@@ -2889,11 +2903,61 @@
       const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
       return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
+    // THE BAR RACE (2026-10-17, the filings measures). Same frame, same
+    // recording; only the painting differs. Each bar's value is eased between
+    // quarters, its row eased towards its rank, and the scale follows what is
+    // on screen, so overtaking reads as movement rather than a jump.
+    function raceBarsDraw(g, bg, box, M) {
+      const F = M.labels.length, B = M.bars, INK = M.ink;
+      const PL = 150, PR = 190, PT = 8, PB = 76;
+      const px = box.x + PL, py = box.y + PT, pw = box.w - PL - PR, ph = box.h - PT - PB;
+      const slot = ph / B.length;
+      const pos = B.map((b, i) => i);
+      let xLo = 0, xHi = 1, first = true;
+      const fmt = (v) => {
+        if (M.kind === 'pct') return v.toFixed(1) + '%';
+        if (M.kind === 'x') return v.toFixed(1) + '\u00d7';
+        const a = Math.abs(v), sgn = v < 0 ? '\u2212' : '';
+        return sgn + '$' + (a >= 1e12 ? (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (a / 1e9).toFixed(1) + 'B' : (a / 1e6).toFixed(0) + 'M');
+      };
+      return function (p) {
+        const kk = p * (F - 1), i0 = Math.floor(kk), f = kk - i0;
+        const vals = B.map((b) => { const a = b.V[i0], c = b.V[Math.min(i0 + 1, F - 1)];
+          if (a == null && c == null) return null; if (a == null) return c * f; if (c == null || f === 0) return a; return a + (c - a) * f; });
+        const order = B.map((b, i) => i).sort((i, j) => (vals[i] == null) - (vals[j] == null) || (vals[j] || 0) - (vals[i] || 0));
+        order.forEach((i, r) => { pos[i] = first ? r : pos[i] + (r - pos[i]) * 0.14; });
+        const live = vals.filter((v) => v != null);
+        const lo = Math.min(0, ...live), hi = Math.max(0, ...live);
+        if (first) { xLo = lo; xHi = hi || 1; first = false; }
+        xLo += (lo - xLo) * 0.12; xHi += (hi - xHi) * 0.12;
+        xLo = Math.min(xLo, lo); xHi = Math.max(xHi, hi, xLo + 1e-9);
+        const X = (v) => px + (v - xLo) / (xHi - xLo) * pw;
+        g.drawImage(bg, 0, 0, 1080, size.h);
+        if (xLo < 0) { g.strokeStyle = INK.zero; g.lineWidth = 1.5; g.setLineDash([6, 6]); g.beginPath(); g.moveTo(X(0), py); g.lineTo(X(0), py + ph); g.stroke(); g.setLineDash([]); }
+        g.font = '700 52px Geist, sans-serif'; g.globalAlpha = 0.3; g.fillStyle = INK.text; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+        g.fillText(M.labels[Math.min(F - 1, Math.round(kk))], px + pw + PR - 8, py + ph + PB - 12);
+        g.globalAlpha = 1;
+        const bh = Math.min(64, slot * 0.68), fs = Math.max(16, Math.min(28, Math.round(bh * 0.5)));
+        B.forEach((b, i) => {
+          const v = vals[i], y = py + pos[i] * slot + (slot - bh) / 2;
+          g.font = '650 ' + fs + 'px "Geist Mono", monospace'; g.textBaseline = 'middle'; g.textAlign = 'right'; g.fillStyle = b.color;
+          g.fillText(b.sym, px - 14, y + bh / 2);
+          if (v == null) return;
+          const x0 = X(0), x1 = X(v);
+          g.globalAlpha = 0.9; g.fillStyle = b.color;
+          g.beginPath(); g.roundRect ? g.roundRect(Math.min(x0, x1), y, Math.max(2, Math.abs(x1 - x0)), bh, 5) : g.rect(Math.min(x0, x1), y, Math.max(2, Math.abs(x1 - x0)), bh); g.fill();
+          g.globalAlpha = 1; g.fillStyle = INK.text; g.font = '600 ' + fs + 'px "Geist Mono", monospace';
+          if (v >= 0) { g.textAlign = 'left'; g.fillText(fmt(v), x1 + 12, y + bh / 2); }
+          else { g.textAlign = 'left'; g.fillText(fmt(v), Math.max(x0, x1) + 12, y + bh / 2); }
+        });
+      };
+    }
     async function raceRun(record) {
       if (raceBusy) return;
       cardFill = 0;
       let fr = Cards.raceFrame(cardCtx());
-      if (!fr.model || !fr.model.lines.length || fr.model.dates.length < 3) {
+      const isBars = !!(fr.model && fr.model.type === 'bars');
+      if (!fr.model || (isBars ? !fr.model.bars.length || fr.model.labels.length < 3 : (!fr.model.lines.length || fr.model.dates.length < 3))) {
         raceMsg('The prices for this list are still loading — try again in a moment.', 'warn');
         return;
       }
@@ -2924,8 +2988,8 @@
         stage.innerHTML = '';
         stage.appendChild(cv);
         const g = cv.getContext('2d');
-        const M = fr.model, n = M.dates.length, INK = M.ink;
-        const L = M.lines.map((l) => ({ sym: l.sym, color: l.color, P: l.S.map((v) => (v == null ? null : (v - 1) * 100)) }));
+        const M = fr.model, n = (M.dates || M.labels).length, INK = M.ink;
+        const L = (M.lines || []).map((l) => ({ sym: l.sym, color: l.color, P: l.S.map((v) => (v == null ? null : (v - 1) * 100)) }));
         // The plot: the axis labels on the left, the moving labels on the right.
         const PL = 74, PR = 236, PT = 12, PB = 44;
         const px = box.x + PL, py = box.y + PT, pw = box.w - PL - PR, ph = box.h - PT - PB;
@@ -2988,6 +3052,7 @@
             g.fillText(t.l.sym + ' ' + pct(t.v), px + pw + 22, ys[i]);
           });
         }
+        const drawFn = isBars ? raceBarsDraw(g, bg, box, M) : draw;
         // 3. Play, recording if asked.
         let rec = null; const chunks = [];
         if (record) {
@@ -3001,7 +3066,7 @@
           const t0 = performance.now();
           const step = (now) => {
             const t = now - t0;
-            draw(Math.min(1, t / RACE_MS));
+            drawFn(Math.min(1, t / RACE_MS));
             if (t < RACE_MS + RACE_HOLD) requestAnimationFrame(step); else resolve();
           };
           requestAnimationFrame(step);
@@ -3011,7 +3076,8 @@
           const type = mime.split(';')[0];
           const blob = new Blob(chunks, { type });
           const ext = type === 'video/mp4' ? 'mp4' : 'webm';
-          const name = ['race', (controlOpts().racScope || 'all').replace(/[^a-z0-9]+/gi, '-').toLowerCase(), ({ y1: '1y', y5: '5y' })[controlOpts().racWin] || 'ytd', size.id].join('-') + '.' + ext;
+          const co = controlOpts();
+          const name = ['race', (co.racScope || 'all').replace(/[^a-z0-9]+/gi, '-').toLowerCase()].concat(isBars ? [co.racMeasure, (co.racYrs === '10' ? '10' : '5') + 'y'] : [({ y1: '1y', y5: '5y' })[co.racWin] || 'ytd'], [size.id]).join('-') + '.' + ext;
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob); a.download = name;
           document.body.appendChild(a); a.click(); a.remove();
@@ -3455,6 +3521,9 @@
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
       $('racBox').style.display = tpl === 'race' ? 'block' : 'none';
+      { const bars = $('racMeasure').value !== 'price';
+        $('racWin').style.display = $('racWinL').style.display = bars ? 'none' : '';
+        $('racYrs').style.display = $('racYrsL').style.display = bars ? '' : 'none'; }
       $('bmkBox').style.display = tpl === 'benchmarks' ? 'block' : 'none';
       $('fallBox').style.display = tpl === 'fallhigh' ? 'block' : 'none';
       $('spotBox').style.display = tpl === 'spotlight' ? 'block' : 'none';
@@ -3836,7 +3905,7 @@
     $('bmkWin').addEventListener('change', () => { if (tpl === 'benchmarks') render(); });
     ['fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'fallhigh') render(); }));
-    ['racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500'].forEach((id) =>
+    ['racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'race') render(); }));
     ['sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector',
       'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500'].forEach((id) =>

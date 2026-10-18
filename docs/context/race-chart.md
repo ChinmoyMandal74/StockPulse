@@ -32,5 +32,16 @@ Recording happens in real time: the tab must stay in front, because a background
 Tested as owner, member and anonymous, and the test was proven by reverting the gate.
 
 ## Not done
-- No audio, no bar-chart race (bars re-sorting). The lines version was what the owner pointed at.
+- No audio. (The bar race arrived on 2026-10-17 with the filings measures, below.)
 - The phone page cannot record. A saved race post opens there, for the owner only, as the still card.
+
+## The race by the filings: revenue, net income, market value, P/E, profit margin (2026-10-17)
+The owner: "Can the race chart be extended to other metrics such as revenue, net income, p/e ratio etc", then "Also include profit margin". A **Measure** control (`racMeasure`: `price` (default, the line race above), `rev`, `ni`, `cap`, `pe`, `margin`) and, for the five filings measures, **Years** (`racYrs`: 5 or 10) in place of the price window (`racWin` and its label hide). The filings measures are a **bar race** (`tplRaceBars`, `RACE_MEASURES` in `cards.js`): the N largest companies by today's market value in the cut, one bar each, re-sorting quarter by quarter.
+- **The data is the Evolution card's series** (`evolutionSeries` through `/api/evolution`, the `getEvolution` channel): trailing-twelve-month revenue and net income, net margin, market value at each quarter end (split-adjusted shares times that day's close), and P/E as that value over trailing net income, null on a loss ("loss" on the still card).
+- **Calendar quarters**, not fiscal: each frame is a calendar quarter end, and each company stands at its latest filed quarter on or before it, no older than `RCB_STALE` (200 days) or it has no bar.
+- **Dollars only by construction**: stored filings are dollars (euro converted at the ECB rate per period; any other currency is stored as nothing), so currencies are never ranked against each other. Companies with no filings in the window (TSMC, SK hynix, SpaceX on 2026-10-17) are left out and counted in the note.
+- **Colours** are one a company from `RCB_COLORS` (the chart palette plus fuchsia and slate), assigned to the companies shown, so ten never repeat.
+- **The still card** is the last quarter ranked (HTML rows, the quarter in its own strip under them). **The video** (`raceBarsDraw` in `promo.html`) paints onto the same rasterised frame and records the same way: values eased between quarters, rows eased towards their rank, the scale following what is on screen, the quarter in the strip under the bars. File names carry the measure and years (`race-<scope>-rev-10y-portrait.mp4`).
+- **No basket**: `basketDays('race')` is 0 for a filings measure. `evolutionNeed('race')` answers `{ race: true }`, so the studio repaints when a company's series lands, and `/api/m/post` finds the companies with one dry build (as the five-year price race does) and reads at most ten series.
+- Each series read is a company's whole filing history plus its bars (the Evolution card's read), cached ten minutes; ten companies is the cap.
+Tested on real stored filings for twelve of the largest (fixtures built from the database by a read-only script): still cards at all three sizes for revenue, net income and P/E, Play run in real time through DevTools with a frame captured mid-race, and the saved-post dry build naming the right seven.

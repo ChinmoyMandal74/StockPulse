@@ -1515,6 +1515,7 @@
       // that is depends on its measure as well as its window, so it answers
       // for itself.
       if (tpl === 'lines') return lineBasketDays(opts);
+      if (tpl === 'race' && RACE_MEASURES[(opts || {}).racMeasure]) return 0;
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
       // The chart may ask for a calendar window; the other two may not, so
@@ -2155,6 +2156,7 @@
     // tplChart in leaders mode with the race's own controls, so the still card
     // is exactly that chart and the video animates exactly those lines.
     function tplRace() {
+      if (RACE_MEASURES[O.racMeasure]) return tplRaceBars();
       const saved = O;
       O = Object.assign({}, O, {
         chtMode: 'leaders', chtWin: O.racWin === 'y1' || O.racWin === 'y5' ? O.racWin : 'ytd',
@@ -2164,6 +2166,128 @@
         racTall: true,
       });
       try { return tplChart(); } finally { O = saved; }
+    }
+
+    // ---- The race by the filings (2026-10-17, the owner: "Can the race chart
+    // be extended to other metrics such as revenue, net income, p/e ratio",
+    // then "Also include profit margin") --------------------------------------
+    // A BAR RACE, quarter by quarter: the N largest companies by market value
+    // in the cut, each a bar of its trailing twelve months as filed with the
+    // SEC, re-sorting as they overtake one another. The series is the
+    // Evolution card's own (evolutionSeries through /api/evolution): revenue
+    // and net income are trailing twelve months, the margin is one over the
+    // other, market value is the split-adjusted share count at each quarter
+    // end times that day's close, and the P/E is that value over the trailing
+    // earnings, withheld on a loss.
+    //
+    // CALENDAR QUARTERS, NOT FISCAL ONES. Apple's year ends in September and
+    // Microsoft's in June, so each frame is a calendar quarter end and each
+    // company stands at its latest filed quarter on or before it (no later
+    // than RCB_STALE days, after which it has no bar rather than an old one).
+    //
+    // DOLLARS ONLY, BY CONSTRUCTION: the stored filings are in dollars (euro
+    // filers converted at the ECB's rate for each period, any other currency
+    // stored as nothing), so two currencies are never ranked against each
+    // other. A company with no filings in the window is left out and the note
+    // says how many. One colour a company, never green and red: a bar is an
+    // identity here, not a move. Net income below zero hangs left of zero.
+    const RACE_MEASURES = {
+      rev: ['revenue', 'Revenue', 'money', 'trailing twelve months'],
+      ni: ['netIncome', 'Net income', 'money', 'trailing twelve months'],
+      cap: ['cap', 'Market value', 'money', 'at each quarter end'],
+      pe: ['pe', 'P/E', 'x', 'on trailing earnings'],
+      margin: ['margin', 'Profit margin', 'pct', 'net, trailing year'],
+    };
+    const RCB_STALE = 200;
+    // Ten companies need ten colours: the chart palette's eight and two more
+    // that sit apart from them (and from the red that means down).
+    const RCB_COLORS = CHART_PALETTE.concat(['#e879f9', '#94a3b8']);
+    function raceBarsSyms(o) {
+      const saved = O; O = o || O;
+      try {
+        const sc = scopeOf('racScope', 'racSector');
+        const n = [3, 5, 7, 10].includes(Number(O.racCount)) ? Number(O.racCount) : 5;
+        return { label: sc.label, syms: sc.rows.filter((r) => r && !r.error && !isFundRow(r) && Number(r.marketCap) > 0)
+          .sort((a, b) => b.marketCap - a.marketCap).slice(0, n).map((r) => r.symbol) };
+      } finally { O = saved; }
+    }
+    function raceBarsFmt(kind, v) {
+      if (v == null || !isFinite(v)) return '\u2014';
+      if (kind === 'pct') return v.toFixed(1) + '%';
+      if (kind === 'x') return v.toFixed(1) + '\u00d7';
+      return (v < 0 ? '\u2212' : '') + '$' + fmtMoney(Math.abs(v));
+    }
+    function tplRaceBars() {
+      const [field, mLabel, kind, mWhat] = RACE_MEASURES[O.racMeasure];
+      const years = Number(O.racYrs) === 10 ? 10 : 5;
+      const sc = raceBarsSyms();
+      const empty = (msg) => chromeTop() + '<div class="s-body"><div><p class="s-empty">' + esc(msg) + '</p></div></div>' + chromeFoot();
+      if (!sc.syms.length) return empty('No companies in this cut.');
+      const evs = sc.syms.map((sym) => [sym, getEvolution(sym, years)]);
+      const waiting = evs.filter(([, e]) => !e).length;
+      if (waiting) return empty('Reading the filings\u2026 ' + (evs.length - waiting) + ' of ' + evs.length);
+      // The calendar quarter ends from the window's start to the last one passed.
+      const now = new Date(); now.setHours(12, 0, 0, 0);
+      const qEnd = (y, q) => { const m = q * 3; const d = new Date(y, m, 0, 12); return d; };
+      const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      let y = now.getFullYear(), q = Math.floor(now.getMonth() / 3);
+      if (q === 0) { y -= 1; q = 4; }
+      const ends = [];
+      for (let i = 0; i < years * 4 + 1; i++) { ends.unshift(qEnd(y, q)); q -= 1; if (q === 0) { q = 4; y -= 1; } }
+      const at = (pts, d) => {
+        let best = null;
+        for (const p of pts) { if (p.d <= iso(d)) best = p; else break; }
+        if (!best) return null;
+        const age = (d - new Date(best.d + 'T12:00:00')) / 864e5;
+        const v = best[field];
+        return age <= RCB_STALE && v != null && isFinite(v) ? Number(v) : null;
+      };
+      const bars = [];
+      let dropped = 0;
+      evs.forEach(([sym, e]) => {
+        const pts = (e.points || []).filter((p) => p && p.d).slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+        const V = ends.map((d) => at(pts, d));
+        if (!V.some((v) => v != null)) { dropped++; return; }
+        const row = stocks.find((x) => x && x.symbol === sym);
+        bars.push({ sym, name: row ? nameOf(row) : sym, color: pal.ink(RCB_COLORS[bars.length % RCB_COLORS.length]), V });
+      });
+      if (!bars.length) return empty('None of these companies has filings in dollars for the window.');
+      const qLab = (d) => 'Q' + (Math.floor(d.getMonth() / 3) + 1) + ' ' + d.getFullYear();
+      const labels = ends.map(qLab);
+      const last = ends.length - 1;
+      const kick = esc(sc.label + ' \u00b7 ' + bars.length + ' largest \u00b7 ' + labels[0] + '\u2013' + labels[last]);
+      const title = esc(mLabel) + '<br><span class="dim">' + esc(mWhat) + '</span>';
+      const note = 'Each bar is a company\u2019s ' + (field === 'pe' ? 'P/E' : mLabel.toLowerCase()) + (kind === 'money' && field !== 'cap' ? ' over the trailing twelve months' : '') + ' from its SEC filings, at each calendar quarter end: its latest filed quarter on or before that date. '
+        + (field === 'cap' ? 'Market value is the split-adjusted share count times that day\u2019s close. ' : '')
+        + (field === 'pe' ? 'P/E is market value over trailing net income, and is left out in a loss year. ' : '')
+        + 'The ' + bars.length + ' largest by market value today in ' + sc.label + (dropped ? '; ' + dropped + ' without dollar filings for the window left out' : '') + '. '
+        + 'Figures are as reported, in dollars. A record of what was filed, not a view on any stock.';
+      const chartH = Math.max(280, (size.id === 'story' ? 1240 : size.id === 'square' ? 470 : 590) + cardFill);
+      if (raceCap) {
+        raceCap.model = { type: 'bars', kind, labels, bars: bars.map((b) => ({ sym: b.sym, color: b.color, V: b.V })),
+          ink: { text: pal.ink('#e9ecf2'), axis: pal.axis, grid: pal.grid, zero: pal.zero } };
+        return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + kick + '</span><h2 class="s-title">' + title + '</h2>'
+          + '<div class="race-plot" style="height:' + chartH + 'px"></div>'
+          + '<p class="s-sub wide" style="--fs:16px;margin-top:18px">' + esc(note) + '</p></div></div>' + chromeFoot();
+      }
+      // The still: the last quarter, ranked.
+      const fin = bars.map((b) => ({ b, v: b.V[last] })).sort((a, b) => (b.v == null) - (a.v == null) || (b.v || 0) - (a.v || 0));
+      const vals = fin.map((x) => x.v).filter((v) => v != null);
+      const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals), span = hi - lo || 1;
+      const zx = (-lo / span) * 100;
+      const rowH = Math.floor((chartH - 80) / fin.length);
+      const fs = Math.max(15, Math.min(26, Math.round(rowH * 0.36)));
+      const rows = fin.map(({ b, v }) => {
+        const w = v == null ? 0 : Math.abs(v) / span * 100;
+        const left = v == null ? zx : v >= 0 ? zx : zx - w;
+        return '<div class="rcb-r" style="height:' + rowH + 'px;font-size:' + fs + 'px"><span class="rcb-s" style="color:' + b.color + '">' + esc(b.sym) + '</span>'
+          + '<span class="rcb-t">' + (lo < 0 ? '<i class="rcb-z" style="left:' + zx.toFixed(2) + '%"></i>' : '')
+          + (v == null ? '' : '<i class="rcb-b" style="left:' + left.toFixed(2) + '%;width:' + Math.max(0.4, w).toFixed(2) + '%;background:' + b.color + '"></i>') + '</span>'
+          + '<span class="rcb-v">' + esc(v == null ? (field === 'pe' ? 'loss' : '\u2014') : raceBarsFmt(kind, v)) + '</span></div>';
+      }).join('');
+      return chromeTop() + '<div class="s-body"><div><span class="s-kick">' + kick + '</span><h2 class="s-title">' + title + '</h2>'
+        + '<div class="rcb-plot" style="height:' + chartH + 'px"><div class="rcb-q">' + esc(labels[last]) + '</div>' + rows + '</div>'
+        + '<p class="s-sub wide" style="--fs:16px;margin-top:18px">' + esc(note) + '</p></div></div>' + chromeFoot();
     }
 
     // ---- Benchmarks (Market group, 2026-10-17, the owner: "add this chart
@@ -3821,6 +3945,9 @@
   // `basketDays` exists: the pairing was a hardcoded list in each of them
   // once, and that is how the spotlight shipped drawing nothing at all.
   function evolutionNeed(tpl, opts) {
+    // The race by the filings (RACE_MEASURES, in the build scope): its symbols
+    // come from a dry build, so this only says that it reads the channel.
+    if (tpl === 'race' && ['rev', 'ni', 'cap', 'pe', 'margin'].includes((opts || {}).racMeasure)) return { race: true, symbols: [], years: Number((opts || {}).racYrs) === 10 ? 10 : 5 };
     // The two-stock card needs two companies' filings. `symbol` stays the
     // first so an older host still fetches one; `symbols` is the whole ask.
     if (tpl === 'evo2') {
@@ -12061,6 +12188,14 @@
     .rd-rule { flex: 1 1 0; display: flex; align-items: center; font-size: 13px; line-height: 1.35; color: var(--text); }
     .sz-story .rd-rule { font-size: 18px; }
     .rd-wait { flex: 1 1 0; display: flex; align-items: center; font-size: 12px; color: var(--faint); }
+    .rcb-plot { position: relative; display: flex; flex-direction: column; justify-content: flex-start; margin-top: 18px; padding-bottom: 70px; box-sizing: border-box; }
+    .rcb-q { position: absolute; right: 8px; bottom: 6px; font: 700 52px var(--sans); color: var(--text); opacity: 0.3; }
+    .rcb-r { display: grid; grid-template-columns: 6.2em minmax(0, 1fr) 6.4em; gap: 14px; align-items: center; }
+    .rcb-s { font-family: var(--mono); font-weight: 650; text-align: right; }
+    .rcb-t { position: relative; height: 66%; }
+    .rcb-b { position: absolute; top: 0; bottom: 0; border-radius: 4px; display: block; opacity: 0.9; }
+    .rcb-z { position: absolute; top: -12%; bottom: -12%; width: 1.5px; background: var(--hair-2); display: block; }
+    .rcb-v { font-family: var(--mono); color: var(--text); white-space: nowrap; }
     .cvd-rows { margin-top: 20px; }
     .cvd-r { display: grid; align-items: center; gap: 16px; border-bottom: 1px solid var(--hair); }
     .cvd-ax { font: 600 13px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); padding-bottom: 6px; }
