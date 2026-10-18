@@ -215,7 +215,8 @@ const REQUIRE_TERMS = process.env.REQUIRE_TERMS !== 'false';
 const SIGNUP_PER_IP_DAY = Number(process.env.SIGNUP_PER_IP_DAY || 5);
 const SESSION_COOKIE = 'sp_session';
 const SESSION_DAYS = 30;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// The length first, then the pattern: see AuthSec.isEmail (backlog 44b).
+const { EMAIL_RE, isEmail } = AuthSec;
 const MIN_PASSWORD = 8;
 // Lock an account briefly after repeated wrong passwords. Tracked per user row
 // rather than per IP, because an in-memory counter is useless on serverless
@@ -231,8 +232,22 @@ app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when
 // is idempotent — the second parser sees `req._body` and stands aside — so this
 // raises the ceiling for blog image uploads and nothing else. Base64 costs a
 // third on top of the 2MB the route itself allows.
-app.use('/api/admin/posts/image', express.json({ limit: '4mb' }));
-app.use('/api/adjusted-backtest/runs', express.json({ limit: '2mb' }));
+// ONLY FOR AN ADMIN (backlog 44b): a large body is parsed only once the caller
+// is known to be one, so nobody else can make the server read megabytes; for
+// them the global 100kb parser below answers 413. The signing secret may not
+// be loaded yet on a cold instance (its loader is further down), so it is
+// loaded here first.
+const adminJson = (limit) => {
+  const parse = express.json({ limit });
+  return (req, res, next) => {
+    ensureAuthKey()
+      .then(() => isAdmin(req))
+      .then((ok) => (ok ? parse(req, res, next) : next()))
+      .catch(() => next());
+  };
+};
+app.use('/api/admin/posts/image', adminJson('4mb'));
+app.use('/api/adjusted-backtest/runs', adminJson('2mb'));
 app.use(express.json());
 
 // When this request arrived, so `logAct` can say how long the operation took.
@@ -277,12 +292,12 @@ if (OPEN_ON_VERCEL) {
 // (db.readAuthSecret). Loaded once per instance; a failed load leaves it
 // null, and every check that needs it then refuses rather than passes.
 let authKey = process.env.AUTH_SECRET && process.env.AUTH_SECRET.length >= 32 ? process.env.AUTH_SECRET : null;
-app.use(async (req, res, next) => {
+async function ensureAuthKey() {
   if (!authKey && AUTH_REQUIRED) {
     try { authKey = await store.readAuthSecret(); } catch (err) { console.error('auth secret load failed:', err.message); }
   }
-  next();
-});
+}
+app.use((req, res, next) => { ensureAuthKey().then(() => next()); });
 const authMac = (label) => (authKey ? crypto.createHmac('sha256', authKey).update(label).digest('hex') : null);
 
 // THE TERMS GATE. A signed-in member who has not agreed to the current terms
@@ -510,7 +525,11 @@ const SESSIONS_PER_DAY = 0.69;      // trading days per calendar day, the /quali
 const DEEP_SPAN_DAYS = 1826;        // five years, the 5Y column's requirement
 
 app.get('/api/about-stats', route(async (req, res) => {
-  if (!req.query.fresh && aboutStatsCache && Date.now() - aboutStatsCache.at < ABOUT_TTL_MS) {
+  // ONLY AN ADMIN MAY SKIP THE CACHE (backlog 44b). This route is public, and a
+  // miss runs grouped counts over three large tables, billed per row read:
+  // `?fresh=1` from anyone turned every request into one.
+  const fresh = !!req.query.fresh && (await isAdmin(req));
+  if (!fresh && aboutStatsCache && Date.now() - aboutStatsCache.at < ABOUT_TTL_MS) {
     return res.json({ ...aboutStatsCache.body, cached: true });
   }
   try {
@@ -1238,12 +1257,26 @@ function subPage({ title, heading, body, base }) {
 //
 // It returns what happened rather than rendering anything, so a caller that
 // has its own page to serve, or no page at all, can use it.
+const SUBSCRIBE_PER_IP_DAY = Number(process.env.SUBSCRIBE_PER_IP_DAY || 10);
+const SUBSCRIBE_SITE_DAY = Number(process.env.SUBSCRIBE_SITE_DAY || 300);
 async function beginSubscription({ email, topics, source, ip, base }) {
-  if (!EMAIL_RE.test(email) || email.length > 160) return { bad: true };
+  if (!isEmail(email) || email.length > 160) return { bad: true };
   if (!MAIL_READY) {
     console.warn('subscribe: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
     return { mailOff: true };
   }
+  // TWO CAPS ON CONFIRMATION MAIL (backlog 44b): it was limited only to one per
+  // email address per minute, so one caller could send it to any number of
+  // addresses, at the site's cost and against its sending reputation. Per
+  // network address and site-wide, per day, counted before anything is
+  // stored or sent; the same counter the sign-up throttle uses. A refusal
+  // answers like the per-address throttle, so the form says "try later".
+  const from = String(ip || 'unknown').split(',')[0].trim();
+  const [mine, site] = await Promise.all([
+    store.noteChatUse(`subscribe:${from}`, SUBSCRIBE_PER_IP_DAY),
+    store.noteChatUse('subscribe:all', SUBSCRIBE_SITE_DAY),
+  ]);
+  if (!mine.allowed || !site.allowed) return { throttled: true };
   const want = cleanTopics(topics);
   const started = await store.startSubscribe({
     email, topics: want, source: String(source || 'blog').slice(0, 60), ip });
@@ -1347,7 +1380,11 @@ async function doSubscribe(req, res, wantsJson) {
     email,
     topics: req.body && req.body.topics,
     source: String(req.body?.source || 'blog'),
-    ip: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '',
+    // req.ip, not the header's leftmost entry: that one is written by the
+    // sender, so it made the consent record's address and the per-address
+    // mail cap whatever the caller chose (backlog 45b). The sign-up path
+    // already reads it this way.
+    ip: String(req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim(),
     base,
   });
   if (r.bad) return bad('We could not read that as an address.');
@@ -1756,6 +1793,27 @@ function isCron(req) {
   return !!tok && safeEqual(tok, CRON_SECRET);
 }
 
+// A REQUEST ANOTHER SITE STARTED (backlog 44b). The admin cookie is
+// SameSite=Lax, which a browser still sends on a top-level navigation from
+// another site, so a link or a redirect on any page the admin visits could
+// fire a GET route that spends credits or rewrites data. Browsers mark such a
+// request `Sec-Fetch-Site: cross-site`; the site's own pages send
+// `same-origin`, and the schedulers send no header at all (they use the cron
+// secret). Only `cross-site` is refused: an old browser that sends nothing is
+// not, which is the header's own deal.
+const crossSite = (req) => AuthSec.crossSite(req.get('sec-fetch-site'));
+// The cron-or-admin routes: the cron secret, or an admin whose request did not
+// come from another site.
+async function cronOrAdmin(req) {
+  if (isCron(req)) return true;
+  if (crossSite(req)) return false;
+  return isAdmin(req);
+}
+// Middleware for admin GET routes that do paid work.
+const refuseCrossSite = (req, res, next) => (crossSite(req)
+  ? res.status(403).json({ error: 'This action has to be started from the site itself.' })
+  : next());
+
 // ---- accounts: sessions and gates ------------------------------------------
 // Password hashing lives in db.js beside the users table, so this file and the
 // local set-password script can't drift apart on scrypt parameters.
@@ -2077,7 +2135,7 @@ app.post('/api/register', route(async (req, res) => {
   const name = String(req.body?.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
 
   if (!name) return res.status(400).json({ error: 'Enter your name.' });
-  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (!isEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
   if (password.length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters.` });
   }
@@ -2445,7 +2503,7 @@ app.get('/api/auth/google/callback', route(async (req, res) => {
   if (c.email_verified !== true && c.email_verified !== 'true') return fail('unverified');
   const email = String(c.email || '').trim().toLowerCase();
   const sub = String(c.sub || '');
-  if (!EMAIL_RE.test(email) || !sub) return fail('email');
+  if (!isEmail(email) || !sub) return fail('email');
 
   const signIn = async (user) => {
     if (String(user.status || 'active') === 'pending') return res.redirect('/login?pending=1');
@@ -3150,7 +3208,7 @@ app.post('/api/contact', requireMember, route(async (req, res) => {
 app.post('/api/forgot', route(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const generic = { ok: true, message: 'If that address has an account, a reset link is on its way.' };
-  if (!EMAIL_RE.test(email)) return res.json(generic);
+  if (!isEmail(email)) return res.json(generic);
   if (!MAIL_READY) {
     console.warn('forgot: mail is not configured (RESEND_API_KEY / MAIL_FROM / APP_URL)');
     return res.json(generic);
@@ -3230,7 +3288,7 @@ app.post('/api/access-request', route(async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   // CR and LF stripped, the registration name's rule: it goes into a mail.
   const name = String(req.body?.name || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
-  if (!EMAIL_RE.test(email) || email.length > 160) {
+  if (!isEmail(email) || email.length > 160) {
     return res.status(400).json({ error: 'That does not look like an email address.' });
   }
   const generic = { ok: true, message: 'Request received. If access is available, an invite code will be emailed to that address.' };
@@ -3422,6 +3480,19 @@ app.delete('/api/users/:id', requireAdmin, route(async (req, res) => {
 // Portfolios are groupings now: only removing a stock from the universe takes
 // it (and its data) out of the screener.
 const readUniverse = () => store.readUniverse();
+// Is this a tracked stock? For the per-stock routes that would otherwise call a
+// paid or rate-limited source, or store rows, for any string a caller names
+// (backlog 44b). The universe changes by hand and rarely, so it is held per
+// instance for five minutes rather than read on every request; a stock added
+// in the last five minutes may be refused here until then.
+let universeHeld = { at: 0, set: null };
+async function inUniverse(symbol) {
+  if (!SYMBOL_RE.test(String(symbol || ''))) return false;
+  if (!universeHeld.set || Date.now() - universeHeld.at > 5 * 60 * 1000) {
+    universeHeld = { at: Date.now(), set: new Set((await readUniverse()).map((s) => String(s).toUpperCase())) };
+  }
+  return universeHeld.set.has(String(symbol).toUpperCase());
+}
 
 // Which portfolios contain a given symbol.
 function membershipOf(symbol, portfolios) {
@@ -7160,7 +7231,7 @@ app.post('/api/refresh-all', requireAdmin, route(async (req, res) => {
 //
 // Stopping mid-run loses nothing: the profiles fetched so far are stored, and
 // the next refresh of any kind picks them up.
-app.get('/api/refresh-profiles', requireAdmin, route(async (req, res) => {
+app.get('/api/refresh-profiles', refuseCrossSite, requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const asked = Number(req.query.run) || null;
   if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
@@ -7353,7 +7424,7 @@ app.post('/api/admin/refresh-stock', requireAdmin, route(async (req, res) => {
     priceNow: row && row.price != null ? row.price : null, profileFetchedAt: row ? row.profileFetchedAt || null : null }, out));
 }));
 
-app.get('/api/refresh-prices', requireAdmin, route(async (req, res) => {
+app.get('/api/refresh-prices', refuseCrossSite, requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const asked = Number(req.query.run) || null;
   if (asked && (await trackSafe(store.runStatus(asked))) === 'stopped') {
@@ -10144,7 +10215,7 @@ function parseAddresses(raw) {
     // on commas and semicolons first means a token cannot contain either, so
     // the shared shape is enough and a second, subtly different one is exactly
     // the kind of near-duplicate that drifts.
-    (EMAIL_RE.test(t) ? good : bad).push(t);
+    (isEmail(t) ? good : bad).push(t);
   }
   return { good, bad };
 }
@@ -11059,7 +11130,7 @@ async function filerIds() {
 // READ ONLY: nothing is written and no cache is filled. Admin or the cron
 // secret.
 app.get('/api/diag/serve-timing', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   res.set('Cache-Control', 'no-store');
   const out = [];
   const time = async (name, f) => {
@@ -12096,7 +12167,7 @@ app.post('/api/sec/refresh', route(async (req, res) => {
   // it buys here is the ability to fetch public filings, which costs no API
   // credits and mutates nothing but the filings table. The admin path is
   // unchanged, so /admin's own loop still works exactly as before.
-  if (!isCron(req) && !(await isAdmin(req))) {
+  if (!(await cronOrAdmin(req))) {
     return res.status(401).json({ error: 'Admin or the cron secret.' });
   }
   if (!SEC_READY) {
@@ -12148,7 +12219,7 @@ app.post('/api/sec/refresh', route(async (req, res) => {
 // before for asking too fast.
 const SecProbe = require('./secprobe.js');
 app.get('/api/sec/probe', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (!SEC_READY) return res.status(400).json({ error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA.' });
   const sym = String(req.query.symbol || '').toUpperCase().trim();
   if (!/^[A-Z0-9.\-]{1,10}$/.test(sym)) return res.status(400).json({ error: 'Which symbol?' });
@@ -12703,7 +12774,7 @@ async function indexPeBuild() {
     now: Object.fromEntries(cuts.map((c) => [c, out['pe:' + c].pe[out['pe:' + c].pe.length - 1]])), ms: Date.now() - t0 };
 }
 app.post('/api/index-pe/rebuild', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
   try { res.json(await indexPeBuild()); } catch (e) { res.json({ built: false, reason: String((e && e.message) || e).slice(0, 200) }); }
 }));
@@ -12717,7 +12788,7 @@ app.get('/api/index-pe', requireMember, route(async (req, res) => {
 // The cron secret or an admin: the nightly run asks for it after its rounds,
 // once the refresh it would otherwise compete with is over.
 app.post('/api/group-figures/rebuild', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
   res.json(await groupFiguresBuild());
 }));
@@ -13134,6 +13205,9 @@ app.get('/api/evolution', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
+  // A symbol outside the universe would buy a /splits lookup (20 credits) and
+  // write it to the splits table, for any ticker anyone names (backlog 44b).
+  if (!(await inUniverse(symbol))) return res.status(404).json({ error: 'Not a tracked stock.' });
   const years = EVO_YEARS[String(req.query.years || 10)] != null
     ? Number(req.query.years || 10) : 10;
   res.json(await evolutionFor(symbol, years));
@@ -13796,7 +13870,7 @@ async function optionsFetchOne(sym, date) {
   return { symbol: sym, status: 'ok' };
 }
 app.post('/api/options/refresh', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   const size = Math.max(1, Math.min(40, Number(req.query.n) || 25));
   const universe = (await store.readUniverse()).map((s) => String(s).toUpperCase());
   const state = await store.readOptionsAll();
@@ -14104,7 +14178,7 @@ const SEC_INDEX_REF = 'https://www.sec.gov/Archives/edgar/daily-index/2026/QTR3/
 // nightly driver walks the days since its last run, so the card no longer
 // reads "nothing keeps this up to date on its own".
 app.post('/api/insider/daily', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   if (!SEC_READY) {
     return res.status(400).json({ error: 'No contact address configured. Set MAIL_FROM, REPORT_TO or SEC_UA.' });
   }
@@ -14272,7 +14346,7 @@ app.get('/api/edgar-quality', requireAdmin, route(async (req, res) => {
 // The cron secret or an admin: this is the daily pass's own work, which the
 // secret already sets off, asked for a second time.
 app.post('/api/edgar-quality/rebuild', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
   const out = await marginChangeBuild();
   res.json({ ok: true, companies: out.universe, quality: out.quality });
@@ -14329,7 +14403,7 @@ app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
 // The nightly job's sweep: every stock's headlines past the keep window move
 // to news_archive (db.archiveOldNews). Cron or admin.
 app.post('/api/news/archive-old', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   const t0 = Date.now();
   const r = await store.archiveOldNews(News.KEEP_DAYS);
   res.json({ ok: true, ...r, keepDays: News.KEEP_DAYS, ms: Date.now() - t0 });
@@ -14441,6 +14515,10 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   if (NEWS_OFF) return res.json({ symbol, items: [], checkedAt: null });
+  // Only a tracked stock: any other string would fetch a feed and store its
+  // headlines, state and run rows for ever (backlog 44b). Also bounds the
+  // newsForcedAt map below to the universe.
+  if (!(await inUniverse(symbol))) return res.status(404).json({ error: 'Not a tracked stock.' });
   const state = await store.readNewsState();
   const forced = req.query.force === '1' &&
     Date.now() - (newsForcedAt.get(symbol) || 0) > NEWS_FORCE_FLOOR_MS;
@@ -14564,13 +14642,22 @@ app.get('/api/news/tone/board', requireMember, route(async (req, res) => {
   res.json(await toneBoardPayload(need.group, need.days));
 }));
 
+let newsLatestHeld = null;
 app.get('/api/news/latest', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (NEWS_OFF) return res.json({ items: [], counts: {}, checked: {} });
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const [latest, counts, state] = await Promise.all([
-    store.readLatestNews(), store.newsCountsSince(weekAgo), store.readNewsState(),
-  ]);
+  // CACHED for two minutes per instance (backlog 44b): every screener load
+  // asks, guests included, and the counts are a grouped read over the
+  // headlines table. Headlines arrive a few times a day, so two minutes stale
+  // is invisible. The guest filter runs on every request, after the cache.
+  if (!newsLatestHeld || Date.now() - newsLatestHeld.at > 2 * 60 * 1000) {
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const [l, c, s] = await Promise.all([
+      store.readLatestNews(), store.newsCountsSince(weekAgo), store.readNewsState(),
+    ]);
+    newsLatestHeld = { at: Date.now(), latest: l, counts: c, state: s };
+  }
+  const { latest, counts, state } = newsLatestHeld;
   let items = latest;
   let checked = state;
   let byCount = counts;
@@ -14664,9 +14751,16 @@ async function sparkCloses(req, days) {
   return out;
 }
 
+// THE WINDOWS THE PAGES ASK FOR, and no others (backlog 44b). The cache is
+// keyed by `days`, and a miss reads the whole universe's closes; any number
+// from 5 to 560 was accepted, fractions included, so cycling through them
+// made every request a miss. The screener asks only for the card ranges and
+// the table's 90, so a value is snapped to the nearest of those.
+const SPARK_DAYS = [...new Set(CARD_RANGES.map((r) => r.days).concat(90))].sort((a, b) => a - b);
+const snapSparkDays = (v) => AuthSec.snapTo(SPARK_DAYS, v, 90);
 app.get('/api/sparklines', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const days = Math.min(560, Math.max(5, Number(req.query.days) || 90));
+  const days = snapSparkDays(req.query.days);
   const series = await sparkSeries(req, days);
   const closes = {};
   const ends = {};
@@ -14808,7 +14902,7 @@ async function groupMonthsStored() {
 }
 // The cron secret or an admin: the nightly run asks for it after its rounds.
 app.post('/api/group-months/rebuild', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
   res.json(await groupMonthsBuild());
 }));
@@ -15070,11 +15164,25 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   // Past 400 sessions only for a named few (the Race chart's five years,
   // 2026-10-16): basketPayload keeps at most ten of them plus the benchmarks,
   // so 1,300 sessions is ~16k rows. The whole screen stays capped at 400.
-  const days = Math.min(only.length ? 1300 : 400, Math.max(5, Number(req.query.days) || 253));
-  const out = await basketPayload(req, String(req.query.name || '').trim(), days, only.length ? only : null);
+  const days = Math.min(only.length ? 1300 : 400, Math.max(5, Math.round(Number(req.query.days) || 253)));
+  const name = String(req.query.name || '').trim();
+  // CACHED (backlog 44b): a whole-screen basket reads about half a million
+  // bars, and every promo card that draws a line asks for one. Ten minutes per
+  // instance, keyed by the list, the window and the named symbols. A member's
+  // own list ('my:') is never cached: it is theirs, and it is small.
+  const key = name.startsWith('my:') ? null : `${name}|${days}|${only.join(',')}`;
+  const hit = key && basketCache.get(key);
+  if (hit && Date.now() - hit.at < BASKET_TTL_MS) return res.json(hit.body);
+  const out = await basketPayload(req, name, days, only.length ? only : null);
   if (out.error) return res.status(out.status).json({ error: out.error });
+  if (key) {
+    if (basketCache.size >= 40) basketCache.delete(basketCache.keys().next().value);
+    basketCache.set(key, { at: Date.now(), body: out });
+  }
   res.json(out);
 }));
+const basketCache = new Map();
+const BASKET_TTL_MS = 10 * 60 * 1000;
 
 app.get('/api/history', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -17174,7 +17282,7 @@ async function runAlertPass() {
 // one endpoint, so a leak cannot touch an account. ?dry=1 reports without
 // writing anything.
 app.get('/api/cron/alerts', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   if (req.query.dry) {
     const n = (await store.readActiveAlerts()).length;
     return res.json({ dry: true, activeAlerts: n });
@@ -17240,7 +17348,7 @@ async function finraNewestDate() {
 app.get('/api/cron/shortint', route(async (req, res) => {
   // 401 here and 403 from requireAdmin, so the status code says which bundle
   // is live — a 403 moments after a push is deploy lag, not an auth failure.
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   const t0 = Date.now();
 
   const held = await store.shortNewest();
@@ -17358,7 +17466,7 @@ const SSGA_UA = process.env.SEC_UA
 // says how many remain so the driver can come back a minute later.
 const SPLITS_CRON_MAX = 20;
 app.get('/api/cron/splits', route(async (req, res) => {
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   const dry = req.query.dry === '1';
   const cap = Math.max(1, Math.min(SPLITS_CRON_MAX, Number(req.query.n) || SPLITS_CRON_MAX));
   const [universe, idx, profiles] = await Promise.all([
@@ -17473,7 +17581,7 @@ app.get('/api/cron/holdings', route(async (req, res) => {
   // 401 here and 403 from requireAdmin, so the status code says which
   // bundle is live — a 403 moments after a push is deploy lag, not an auth
   // failure, which cost an hour once on the SEC route.
-  if (!isCron(req) && !(await isAdmin(req))) return res.status(401).json({ error: 'No.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   const t0 = Date.now();
 
   const fund = String(req.query.fund || 'spy').toLowerCase();
@@ -18110,6 +18218,8 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     if (!(await isAdmin(req))) {
       return res.status(403).json({ error: 'Admin only — log in to refresh or rewind the table.' });
     }
+    // A live pull spends credits: never one another site started (crossSite).
+    if (crossSite(req)) return res.status(403).json({ error: 'This action has to be started from the site itself.' });
     const startedAt = Date.now();
     const opts = asOf ? {} : await liveRefreshOpts();
     // A running Refresh All logs once at its POST; its rounds pass through
@@ -18254,9 +18364,24 @@ const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart', 'lo
 // A browser-supplied duration is untrusted input like any other. Ten minutes is
 // far past any real interaction and keeps a junk value out of the percentiles.
 const ACT_MS_MAX = 600000;
+// A DAILY CAP ON THE BROWSER'S ACTIVITY BATCHES (backlog 44b). Each call may
+// write fifty rows, and a guest could call it as fast as they liked; the
+// admin's activity page then aggregates every row. Two counters: per visitor
+// key, and per network address, because a guest's key is an unsigned cookie
+// anyone can change. The tracker sends at most one batch per 20 seconds of
+// activity (private/track.js), so 1,000 is over five hours of constant use.
+const ACT_BATCHES_PER_DAY = 1000;
 app.post('/api/activity', requireAuth, route(async (req, res) => {
   const events = Array.isArray(req.body && req.body.events) ? req.body.events.slice(0, 50) : [];
   const user = await actKey(req);
+  if (events.length && !(await isAdmin(req))) {
+    const from = String(req.ip || 'unknown').split(',')[0].trim();
+    const [byKey, byAddr] = await Promise.all([
+      store.noteChatUse(`activity:${user}`, ACT_BATCHES_PER_DAY),
+      store.noteChatUse(`activity-ip:${from}`, ACT_BATCHES_PER_DAY * 3),
+    ]);
+    if (!byKey.allowed || !byAddr.allowed) return res.json({ ok: true, accepted: 0, capped: true });
+  }
   const ts = new Date().toISOString();
   const rows = [];
   for (const e of events) {

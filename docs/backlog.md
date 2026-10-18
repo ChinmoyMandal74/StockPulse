@@ -2104,7 +2104,7 @@ changed their SEC filer id (BlackRock in 2024) break a holder's continuity.
 
 ## 44. Security hardening from the code review — 2026-10-17
 
-*Area: Infrastructure · Status: Partly done · Note: the admin sign-in (a, all four) and the private-file gate (c, second item) done 2026-10-18; a read-only review of the code, no live probing; the owner asked for the findings on the backlog. The full write-up, with file and line references, is kept off the public repository (docs/security-review-2026-10-17.md, gitignored)*
+*Area: Infrastructure · Status: Partly done · Note: the admin sign-in (a), cost and load limits (b) and the private-file gate (c, second item) done 2026-10-18; a read-only review of the code, no live probing; the owner asked for the findings on the backlog. The full write-up, with file and line references, is kept off the public repository (docs/security-review-2026-10-17.md, gitignored)*
 
 The owner asked for a review "from a penetration-testing perspective". Four
 passes over the code: sign-in and sessions, who can reach what, injection

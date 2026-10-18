@@ -40,4 +40,26 @@ function overLimit(row, now, limit, windowMs) {
 const tokenHash = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
 
-module.exports = { assetRel, overLimit, tokenHash, newToken };
+// ---- cost limits (backlog 44b) ---------------------------------------------------
+// An email address: the length first, then the pattern. The pattern takes time
+// quadratic in a run of dots, and every form that takes an address runs it
+// before anyone signs in (30,000 characters took 0.9s, 100KB about 9s). No
+// address is longer than 254 characters (RFC 5321).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const isEmail = (s) => typeof s === 'string' && s.length <= 254 && EMAIL_RE.test(s);
+
+// A request another site started, from its Sec-Fetch-Site header. Only
+// 'cross-site' counts: the site's own pages send 'same-origin', schedulers
+// send nothing.
+const crossSite = (header) => String(header || '').toLowerCase() === 'cross-site';
+
+// The nearest of a fixed set of values, so a cache keyed by the value has as
+// many entries as the set and no more. `fallback` for anything not a positive
+// number.
+function snapTo(list, v, fallback) {
+  const n = Number(v);
+  if (!(n > 0) || !list.length) return fallback;
+  return list.reduce((best, d) => (Math.abs(d - n) < Math.abs(best - n) ? d : best), list[0]);
+}
+
+module.exports = { assetRel, overLimit, tokenHash, newToken, EMAIL_RE, isEmail, crossSite, snapTo };

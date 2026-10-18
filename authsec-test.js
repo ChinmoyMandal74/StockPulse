@@ -57,6 +57,33 @@ check('the window keeps its first start', row('k').window_start, now);
 note('k', now + W + 5);
 check('a failure after the window starts again at 1', [row('k').count, row('k').window_start], [1, now + W + 5]);
 
+console.log('isEmail: the length before the pattern');
+check('a normal address passes', AuthSec.isEmail('jo@example.com'), true);
+check('254 characters pass', AuthSec.isEmail('a'.repeat(242) + '@example.com'), true);
+check('255 characters are refused', AuthSec.isEmail('a'.repeat(243) + '@example.com'), false);
+check('not a string is refused', AuthSec.isEmail(null), false);
+const t0 = Date.now();
+AuthSec.isEmail('a@' + '.'.repeat(100000) + '@');
+check('a 100KB run of dots is refused at once (under 20ms)', Date.now() - t0 < 20, true);
+
+console.log('crossSite');
+check('cross-site is refused', AuthSec.crossSite('cross-site'), true);
+check('any case', AuthSec.crossSite('Cross-Site'), true);
+check('same-origin passes', AuthSec.crossSite('same-origin'), false);
+check('same-site passes', AuthSec.crossSite('same-site'), false);
+check('none (typed URL, bookmark) passes', AuthSec.crossSite('none'), false);
+check('no header (schedulers, old browsers) passes', AuthSec.crossSite(undefined), false);
+
+console.log('snapTo: a cache key from a fixed set');
+const SET = [5, 21, 63, 90, 126, 253];
+check('a listed value is kept', SET.map((d) => AuthSec.snapTo(SET, d, 90)), SET);
+check('a fraction snaps to the nearest', AuthSec.snapTo(SET, 62.7, 90), 63);
+check('far above snaps to the top', AuthSec.snapTo(SET, 560, 90), 253);
+check('nonsense takes the fallback', [AuthSec.snapTo(SET, 'x', 90), AuthSec.snapTo(SET, -4, 90), AuthSec.snapTo(SET, 0, 90)], [90, 90, 90]);
+let keys = new Set();
+for (let d = 5; d <= 560; d += 0.5) keys.add(AuthSec.snapTo(SET, d, 90));
+check('1,111 different requests make at most six cache keys', keys.size <= SET.length, true);
+
 console.log('server.js signs nothing with the admin password');
 const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 check('no HMAC is keyed on ADMIN_PASSWORD', /createHmac\(\s*'sha256'\s*,\s*ADMIN_PASSWORD/.test(srv), false);
