@@ -141,6 +141,29 @@ check('count leaves out off-topic, skipped and toneless rows', w.count, 3);
 check('average over those three', Math.round(w.avg * 100) / 100, 0.1);
 check('split by band', [w.positive, w.neutral, w.negative], [1, 1, 1]);
 
+console.log('the promo cards agree with this module');
+require('./private/cards.js');
+const C = globalThis.Cards;
+check('the cards restate the same band', C.toneBand, NT.BAND);
+// Every hundredth from -1 to +1: the card's label (read off a drawn chip)
+// must be this module's. Drawn through the real card, not a copy.
+let disagree = 0;
+for (let i = -100; i <= 100; i++) {
+  const t = i / 100;
+  const html = C.build('tonestock', { stocks: [{ symbol: 'X', name: 'X Corp' }], size: { id: 'portrait', w: 1080, h: 1350 }, opts: { tnsSym: 'X' },
+    getToneStock: () => ({ items: [{ headline: 'H', tone: t, published_at: '2026-10-18T00:00:00Z' }], week: null }) });
+  const m = html.match(/class="tn-chip"[^>]*>([A-Za-z]+) /);
+  if (!m || m[1] !== NT.label(t)) disagree++;
+}
+check('chip label matches label() at every hundredth from -1 to +1', disagree, 0);
+check('an unknown group falls back to all', C.toneBoardNeed('indtone', { itnGroup: 'Banks' }).group, 'all');
+check('an unknown window falls back to 7 days', C.toneBoardNeed('indtone', { itnWin: '365' }).days, 7);
+check('other templates ask for nothing', [C.toneBoardNeed('optoi', {}), C.toneStockNeed('optoi', {})], [null, null]);
+const bannedHead = C.build('tonestock', { stocks: [{ symbol: 'X', name: 'X Corp' }], size: { id: 'portrait', w: 1080, h: 1350 }, opts: { tnsSym: 'X' },
+  getToneStock: () => ({ items: [{ headline: 'Should You Buy an Index Fund Now?', tone: 0.1 }, { headline: 'X ships its new chip', tone: 0.4 }], week: null }) });
+check('a headline saying buy is passed over on the card', /Index Fund/.test(bannedHead), false);
+check('...and the next article takes its place', /ships its new chip/.test(bannedHead), true);
+
 console.log('the boundary: the Signal never reads a tone');
 const base = {
   symbol: 'TEST', portfolios: ['Watchlist'], marketCap: 150e9, netIncomeTtm: 5e9, profitMargin: 20, fcfTtm: 4e9, fcfMargin: 12,

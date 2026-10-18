@@ -30,3 +30,12 @@ node news-tone-load.js --commit                # last 7 days, newest first, stop
 node news-tone-load.js --commit --only NVDA    # one stock
 ```
 Scheduling is `news-tone-task.ps1` (Windows Task Scheduler, every six hours: 00:30, 06:30, 12:30, 18:30 local, each ending before the 07:30 and 19:30 nightly; owner, 2026-10-18). Yahoo's feed holds only the latest ~20 items per stock (NVDA's spanned under three hours, ACLS's six weeks), so a daily read missed most of the busy stocks. Each run reads only unseen articles.
+
+## The promo cards (2026-10-18, owner: "Can you create a promo card")
+Two templates in `private/cards.js`, sharing one data path:
+- **`indtone`, Industry → Article tone.** One row per semiconductor stock: the stocks with the most articles in the window (control `itnCount`, 8/12/16, capped at 10 on a square), ordered by their average, each bar drawn left or right of a zero line on a scale rounded up to 0.25 (at least ±0.50). Four figures: articles read, average tone, positive, negative. Controls `itnGroup` (both industries, or one) and `itnWin` (7 or 30 days). Data: `GET /api/news/tone/board?group=&days=` (`requireMember`), built by `toneBoardPayload`: one seek per stock, ten at a time.
+- **`tonestock`, Stock spotlight → Article tone.** One stock's seven-day figures and its latest articles (3 on 4:5, 2 square, 5 on 9:16): chip, headline, the model's summary (clamped to three lines, the headline to two), date, publisher and kind. Control `tnsSym`. Data: `toneStockPayload`, which `/api/news/tone` also uses.
+- Both hosts fetch through `Cards.toneBoardNeed` / `Cards.toneStockNeed`: the studio's `getToneBoard` / `getToneStock`, and the saved-post builder.
+- **A HEADLINE SAYING BUY IS PASSED OVER on the stock card.** Headlines are the publisher's words; a card is the site's marketing. NVDA's first draft carried "Should You Buy an Index Fund Now?". The card skips any article whose headline or summary uses buy, sell, hold, bullish, bearish and the rating words, and takes the next one.
+- `TONE_BAND` is restated in `cards.js` (no requires; the phone does not load `newstone.js`). `newstone-test.js` asserts it equals `NewsTone.BAND`, and draws the real card at every hundredth from −1 to +1 to check the chip's label matches `label()`.
+- Measured in headless Chrome with the real readings: 4:5, square and 9:16, 8/12/16 rows and three stocks each. No overflow, nothing outside the artboard, no green or red, no banned word.

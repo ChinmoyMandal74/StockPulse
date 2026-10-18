@@ -1055,6 +1055,27 @@
           leaning: every contract has a buyer and a seller. Works for
           the index funds too. Refreshed each trading day.</p>
       </div>
+      <div id="tnsBox">
+        <label>Stock</label>
+        <select id="tnsSym"></select>
+        <p class="hint">The latest articles about one stock, each with an
+          AI model's reading of how its content leans (&minus;1 to +1)
+          and its own two-sentence summary, under the week's figures.
+          Read for the semiconductor stocks only; any other stock says
+          so. A description of what was written, not a forecast.</p>
+      </div>
+      <div id="itnBox">
+        <label>Companies</label>
+        <select id="itnGroup"></select>
+        <label>Window</label>
+        <select id="itnWin"></select>
+        <label>How many</label>
+        <select id="itnCount"></select>
+        <p class="hint">Each semiconductor stock's average article tone
+          over the window, one row a company: the ones with the most
+          articles, ordered by their average. Articles that are not
+          about the company, or could not be read, are left out.</p>
+      </div>
       <div id="crBox">
         <label>Stock</label>
         <select id="crSym"></select>
@@ -2061,6 +2082,8 @@
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
+      { id: 'tonestock', name: 'Article tone', note: 'How the articles about one semiconductor stock read — its latest, each with an AI model’s reading and summary' },
+      { id: 'indtone', name: 'Article tone, an industry', note: 'How the week’s articles about each semiconductor stock read, one row a company, from an AI model’s reading of each' },
       { id: 'holderchg', name: 'What changed', note: 'One 13F manager or one fund, its latest filing against the one before: bought, sold, positions opened and closed, and the largest changes' },
       { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
@@ -2162,6 +2185,7 @@
       ['fundholders', 'Fund holders', 'fhSym'],
       ['capreturn', 'Capital returns', 'crSym'],
       ['optoi', 'Options open interest', 'oiSym'],
+      ['tonestock', 'Article tone', 'tnsSym'],
       ['insiders', 'Insider activity', 'inSym'],
     ];
     const spotView = (id) => SPOT_VIEWS.find((v) => v[0] === id) || null;
@@ -2269,6 +2293,7 @@
       ['indspot', 'Spotlight'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
+      ['indtone', 'Article tone'],
     ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
@@ -2467,6 +2492,41 @@
           if (Cards.optionsNeed(tpl, controlOpts())) render();
         })
         .catch(() => { delete oiPending[symbol]; });
+      return null;
+    }
+    // The two Article tone cards' readings, fetched the same way.
+    const tbCache = {};
+    const tbPending = {};
+    function getToneBoard(group, days) {
+      const key = group + '|' + days;
+      if (tbCache[key]) return tbCache[key];
+      if (tbPending[key]) return null;
+      tbPending[key] = true;
+      fetch(`/api/news/tone/board?group=${encodeURIComponent(group)}&days=${encodeURIComponent(days)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          tbCache[key] = d && typeof d === 'object' && Array.isArray(d.rows) ? d : { rows: [], total: null };
+          delete tbPending[key];
+          if (Cards.toneBoardNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete tbPending[key]; });
+      return null;
+    }
+    const tsCache = {};
+    const tsPending = {};
+    function getToneStock(symbol) {
+      if (!symbol) return null;
+      if (tsCache[symbol]) return tsCache[symbol];
+      if (tsPending[symbol]) return null;
+      tsPending[symbol] = true;
+      fetch(`/api/news/tone?symbol=${encodeURIComponent(symbol)}&limit=6`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          tsCache[symbol] = d && typeof d === 'object' && Array.isArray(d.items) ? d : { items: [], week: null };
+          delete tsPending[symbol];
+          if (Cards.toneStockNeed(tpl, controlOpts())) render();
+        })
+        .catch(() => { delete tsPending[symbol]; });
       return null;
     }
     // The Capital returns card's figures, fetched the same way.
@@ -2836,7 +2896,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'itnGroup', 'itnWin', 'itnCount', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -2878,7 +2938,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -3499,6 +3559,8 @@
       $('hbkView').style.display = $('hbkViewL').style.display = tpl === 'holderchg' ? 'none' : '';
       $('crBox').style.display = tpl === 'capreturn' ? 'block' : 'none';
       $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
+      $('tnsBox').style.display = tpl === 'tonestock' ? 'block' : 'none';
+      $('itnBox').style.display = tpl === 'indtone' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
       $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
@@ -4057,6 +4119,14 @@
     $('hbkView').addEventListener('change', () => { if (tpl === 'holderbook') render(); });
     $('crSym').addEventListener('change', () => { if (tpl === 'capreturn') render(); });
     $('oiSym').addEventListener('change', () => { if (tpl === 'optoi') render(); });
+    // Article tone: the stock card's one control, and the industry card's
+    // three, every choice from the module that draws them.
+    $('tnsSym').addEventListener('change', () => { if (tpl === 'tonestock') render(); });
+    for (const [v, label] of Cards.toneGroups()) $('itnGroup').add(new Option(label, v));
+    for (const [v, label] of Cards.toneWindows()) $('itnWin').add(new Option(label, v));
+    for (const c of Cards.toneCounts()) $('itnCount').add(new Option(String(c), String(c)));
+    $('itnCount').value = '12';
+    ['itnGroup', 'itnWin', 'itnCount'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'indtone') render(); }));
     for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));
     ['inSym', 'inWin'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'insiders') render(); }));
@@ -4699,6 +4769,8 @@
           if ([...$('inSym').options].some((o) => o.value === keep)) $('inSym').value = keep; }
         { const keep = $('oiSym').value; $('oiSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('oiSym').options].some((o) => o.value === keep)) $('oiSym').value = keep; }
+        { const keep = $('tnsSym').value; $('tnsSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('tnsSym').options].some((o) => o.value === keep)) $('tnsSym').value = keep; }
         { const keep = $('crSym').value; $('crSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('crSym').options].some((o) => o.value === keep)) $('crSym').value = keep; }
         { const keep = $('fhSym').value; $('fhSym').innerHTML = $('chtSym').innerHTML;

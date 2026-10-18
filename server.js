@@ -11222,6 +11222,14 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const oiNeed = Cards.optionsNeed(post.tpl, post.opts || {});
   if (oiNeed && oiNeed.symbol) { try { optoi = await optionsPayload(String(oiNeed.symbol).toUpperCase()); } catch { optoi = null; } }
 
+  // The two Article tone cards, likewise.
+  let tboard = null;
+  const tbNeed = Cards.toneBoardNeed(post.tpl, post.opts || {});
+  if (tbNeed) { try { tboard = await toneBoardPayload(tbNeed.group, tbNeed.days); } catch { tboard = null; } }
+  let tstock = null;
+  const tsNeed = Cards.toneStockNeed(post.tpl, post.opts || {});
+  if (tsNeed && tsNeed.symbol && /^[A-Z0-9.-]{1,15}$/.test(String(tsNeed.symbol).toUpperCase())) { try { tstock = await toneStockPayload(String(tsNeed.symbol).toUpperCase(), 6); } catch { tstock = null; } }
+
   // The Capital returns card, likewise.
   let capret = null;
   const crNeed = Cards.capReturnNeed(post.tpl, post.opts || {});
@@ -11301,6 +11309,8 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getInstFlow: () => iflow,
       getCapReturns: () => capret,
       getOptions: () => optoi,
+      getToneBoard: () => tboard,
+      getToneStock: () => tstock,
       getInsider: () => insd,
       getLineSeries: () => lines,
       getHistory: () => hist,
@@ -14390,19 +14400,52 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
 // machine by news-tone-load.js, so a page view never calls the model.
 // `more` rather than a total: one extra row asked for is cheaper than a
 // count, and the page only needs to know whether to offer the next page.
-app.get('/api/news/tone', requireMember, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  const symbol = String(req.query.symbol || '').trim().toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol required' });
-  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 8));
-  const offset = Math.max(0, Number(req.query.offset) || 0);
+// One stock's readings: the stock page's card and the Article tone promo
+// card both draw from this.
+async function toneStockPayload(symbol, limit = 8, offset = 0) {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const [rows, week] = await Promise.all([
     store.readNewsToneList(symbol, limit + 1, offset),
     store.readNewsToneSince(symbol, weekAgo),
   ]);
   const items = rows.slice(0, limit).map((x) => Object.assign(x, { label: NewsTone.label(x.tone), kindLabel: NewsTone.KIND_LABEL[x.kind] || null }));
-  res.json({ symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND });
+  return { symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND };
+}
+app.get('/api/news/tone', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 8));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  res.json(await toneStockPayload(symbol, limit, offset));
+}));
+
+// An industry's readings, one row a stock, for the Article tone promo card.
+// One seek per stock on idx_news_tone_symbol, ten at a time: about fifty
+// stocks, each bounded by its feed over the window. Names are not sent; the
+// card has the snapshot rows and names them itself.
+async function toneBoardPayload(group, days) {
+  const inds = group === 'all' ? NewsTone.INDUSTRIES : NewsTone.INDUSTRIES.filter((i) => i === group);
+  const snap = await readSnapshot();
+  const syms = ((snap && snap.stocks) || []).filter((s) => inds.includes(s.industry)).map((s) => s.symbol);
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const all = [];
+  const rows = [];
+  for (let i = 0; i < syms.length; i += 10) {
+    const part = syms.slice(i, i + 10);
+    const got = await Promise.all(part.map((s) => store.readNewsToneSince(s, since)));
+    got.forEach((r, k) => {
+      all.push(...r);
+      const w = NewsTone.summarise(r);
+      if (w) rows.push(Object.assign({ symbol: part[k] }, w));
+    });
+  }
+  return { group, days, stocks: syms.length, rows, total: NewsTone.summarise(all), band: NewsTone.BAND };
+}
+app.get('/api/news/tone/board', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const need = Cards.toneBoardNeed('indtone', { itnGroup: String(req.query.group || ''), itnWin: String(req.query.days || '') });
+  res.json(await toneBoardPayload(need.group, need.days));
 }));
 
 app.get('/api/news/latest', requireAuth, route(async (req, res) => {

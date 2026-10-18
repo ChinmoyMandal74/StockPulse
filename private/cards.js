@@ -58,6 +58,9 @@
   let getInstFlow = () => null;
   let getCapReturns = () => null;
   let getOptions = () => null;
+  // Article tone: an industry's readings (group, days) and one stock's.
+  let getToneBoard = () => null;
+  let getToneStock = () => null;
   let getInsider = () => null;
   let getLineSeries = () => null;
   // One symbol’s month-end closes and the index’s, or null while it loads.
@@ -9315,6 +9318,150 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Article tone: how the articles about a stock read ------------------------
+  //
+  // (2026-10-18, the owner: "Can you create a promo card", after article tone
+  // shipped; see newstone.js.) A model reads each article in a semiconductor
+  // stock's Yahoo Finance feed and scores how its content leans towards the
+  // company, -1 to +1. Two cards: the industry, one row a stock, and one
+  // stock with its latest articles.
+  //
+  // A READING OF WORDS, NOT A MOVE: positive takes blue and negative orange,
+  // never green or red, which mean the price went up or down. Every card
+  // says whose reading it is, that it is not a forecast or a rating, and
+  // that articles not about the company or not readable are left out.
+  //
+  // THE BAND IS RESTATED HERE because cards.js has no requires and the phone
+  // does not load newstone.js; newstone-test.js asserts the two agree.
+  const TONE_BAND = 0.25;
+  const TONE_GROUPS = [['all', 'Semiconductors, all'], ['Semiconductors', 'Semiconductors'], ['Semiconductor Equipment & Materials', 'Equipment & materials']];
+  const TONE_WINS = [['7', 'Past 7 days'], ['30', 'Past 30 days']];
+  const TONE_COUNTS = [8, 12, 16];
+  const TONE_ROWS = { portrait: 16, square: 10, story: 16 };
+  const TONE_ITEMS = { portrait: 3, square: 2, story: 5 };
+  const TONE_WORDS = /\b(buy|sell|hold|bullish|bearish|outperform|underperform|overweight|underweight|price target|target price)\b/i;
+  const toneLabel = (t) => (t == null || !isFinite(t) ? '' : t >= TONE_BAND ? 'Positive' : t <= -TONE_BAND ? 'Negative' : 'Neutral');
+  const toneNum = (t) => (t == null || !isFinite(t) ? '—' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
+  const TONE_NOTE = 'An AI model (Claude Sonnet 5.5) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
+    + 'Articles not about the company, or that could not be read, are left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
+  function toneBoardNeed(tpl, opts) {
+    if (tpl !== 'indtone') return null;
+    const o = opts || {};
+    const group = TONE_GROUPS.some(([k]) => k === o.itnGroup) ? o.itnGroup : 'all';
+    const days = o.itnWin === '30' ? 30 : 7;
+    return { group, days, key: group + '|' + days };
+  }
+  function toneStockNeed(tpl, opts) {
+    if (tpl !== 'tonestock') return null;
+    return { symbol: (opts && opts.tnsSym) || null };
+  }
+  const toneShell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+    + '<span class="s-kick">' + esc(kick) + '</span>'
+    + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+    + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+  const toneFig = (k, v, x, color) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v"' + (color ? ' style="color:' + color + '"' : '') + '>'
+    + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
+
+  // The industry: the stocks with the most articles, one row each, ordered
+  // by their average, each bar drawn left or right of zero.
+  function tplToneBoard() {
+    const need = toneBoardNeed('indtone', O);
+    // "Semiconductors, all" is the picker's word for both industries; on the
+    // card itself the plain name reads better.
+    const gLabel = need.group === 'all' ? 'Semiconductors' : (TONE_GROUPS.find(([k]) => k === need.group) || TONE_GROUPS[0])[1];
+    const wLabel = need.days === 30 ? 'past 30 days' : 'past 7 days';
+    const data = getToneBoard(need.group, need.days);
+    if (!data) return toneShell('Reading the articles', 'Finding', 'the readings…');
+    const T = data.total;
+    if (!T || !Array.isArray(data.rows) || !data.rows.length) {
+      return toneShell(gLabel + ' · ' + wLabel, 'Article tone', 'nothing read yet', 'No article about these companies has been read in the ' + wLabel + '.');
+    }
+    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
+    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
+    const n = Math.min(Math.max(...TONE_COUNTS.filter((c) => c <= (Number(O.itnCount) || 12)), TONE_COUNTS[0]), TONE_ROWS[size.id] || 12);
+    const shown = data.rows.slice().sort((a, b) => b.count - a.count || String(a.symbol).localeCompare(String(b.symbol)))
+      .slice(0, n).sort((a, b) => b.avg - a.avg);
+    const scale = Math.max(0.5, Math.ceil(Math.max(...shown.map((r) => Math.abs(r.avg))) / 0.25) * 0.25);
+    const SZ = ({ portrait: { f: 23, b: 20 }, square: { f: 19, b: 15 }, story: { f: 31, b: 30 } })[size.id] || { f: 23, b: 20 };
+    const vw = Math.ceil(5 * SZ.f * 0.62) + 6, cw = Math.ceil(3 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0, 34%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
+    const nm = (sym) => { const r = stocks.find((x) => x.symbol === sym); return r ? nameOf(r) : sym; };
+    const rows = shown.map((r) => {
+      const w = Math.min(50, Math.abs(r.avg) / scale * 50), c = colorOf(r.avg) || 'var(--muted)';
+      const bar = r.avg >= 0 ? 'left:50%;width:' + w.toFixed(2) + '%' : 'left:' + (50 - w).toFixed(2) + '%;width:' + w.toFixed(2) + '%';
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(nm(r.symbol)) + '</span>'
+        + '<span class="bx-t" style="height:' + SZ.b + 'px"><span class="cr-b" style="' + bar + ';background:' + c + '"></span><span class="bx-z" style="left:50%"></span></span>'
+        + '<span class="bx-v"' + (colorOf(r.avg) ? ' style="color:' + colorOf(r.avg) + '"' : '') + '>' + esc(toneNum(r.avg)) + '</span>'
+        + '<span class="bx-v rm-pct">' + esc(String(r.count)) + '</span></div>';
+    }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Company</span>'
+      + '<span>Average tone, −' + scale.toFixed(2) + ' to +' + scale.toFixed(2) + '</span><span class="sb-hr">Tone</span><span class="sb-hr">Read</span></div>';
+    const share = (k) => Math.round(k / T.count * 100) + '% of them';
+    const figs = toneFig('Articles read', String(T.count), 'about ' + data.rows.length + ' of ' + (data.stocks || data.rows.length) + ' companies')
+      + toneFig('Average tone', toneNum(T.avg), toneLabel(T.avg).toLowerCase() + ', on −1 to +1', colorOf(T.avg))
+      + toneFig('Positive', String(T.positive), share(T.positive), POS)
+      + toneFig('Negative', String(T.negative), share(T.negative), NEG);
+    const note = (shown.length < data.rows.length ? 'Shown: the ' + shown.length + ' companies with the most articles, ordered by their average. ' : 'Ordered by each company’s average. ')
+      + 'Positive is +' + TONE_BAND.toFixed(2) + ' or more, negative −' + TONE_BAND.toFixed(2) + ' or less. ' + TONE_NOTE;
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc('Article tone · ' + wLabel) + '</span>'
+      + '<h2 class="s-title">' + esc(gLabel) + '<span class="dim">how the articles read, ' + esc(wLabel) + '</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // One stock: the week's figures, then its latest articles with their
+  // reading and the model's two-sentence summary.
+  function tplToneStock() {
+    const sym = O.tnsSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    if (!row) return toneShell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getToneStock(sym);
+    if (!data) return toneShell('Reading the articles', 'Finding', 'the readings…');
+    const n = nameOf(row);
+    // A HEADLINE IS THE PUBLISHER'S WORDS, and a card is the site's own
+    // marketing: one that says buy, sell or hold ("Should You Buy an Index
+    // Fund Now?", on NVDA's first card) is passed over for the next article,
+    // as the summaries' own rule already is upstream.
+    const items = (data.items || []).filter((x) => x && x.headline && !TONE_WORDS.test(x.headline) && !TONE_WORDS.test(x.summary || ''))
+      .slice(0, TONE_ITEMS[size.id] || 3);
+    const W = data.week;
+    if (!items.length) {
+      return toneShell(n, 'Article tone', 'nothing read yet', 'Article tone is read for the semiconductor stocks only, and no article about ' + sym + ' has been read yet.');
+    }
+    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
+    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
+    const day = (iso) => { const t = new Date(String(iso || '')); return isNaN(t.getTime()) ? '' : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+    const figs = W
+      ? toneFig('Average tone', toneNum(W.avg), 'last 7 days, ' + toneLabel(W.avg).toLowerCase(), colorOf(W.avg))
+        + toneFig('Articles read', String(W.count), 'about the company')
+        + toneFig('Positive', String(W.positive), Math.round(W.positive / W.count * 100) + '% of them', POS)
+        + toneFig('Negative', String(W.negative), Math.round(W.negative / W.count * 100) + '% of them', NEG)
+      : toneFig('Average tone', '—', 'none in the last 7 days') + toneFig('Articles read', '0', 'in the last 7 days') + toneFig('Positive', '—', '') + toneFig('Negative', '—', '');
+    const list = items.map((x) => {
+      const c = colorOf(x.tone);
+      const meta = [day(x.published_at), x.source, x.kindLabel].filter(Boolean).join(' · ');
+      return '<div class="tn-it">'
+        + '<div class="tn-h"><span class="tn-chip" style="' + (c ? 'color:' + c + ';border-color:' + c : '') + '">' + esc(toneLabel(x.tone) + ' ' + toneNum(x.tone)) + '</span>'
+        + '<span class="tn-hl">' + esc(x.headline) + '</span></div>'
+        + (x.summary ? '<p class="tn-sum">' + esc(x.summary) + '</p>' : '')
+        + '<div class="tn-meta">' + esc(meta) + '</div></div>';
+    }).join('');
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc((row.industry || row.sector || '') + ' · ' + sym + ' · article tone') + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">how the articles read</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="tn-list">' + list + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc('The latest articles about ' + sym + ', each with its reading and the model’s own two-sentence summary. ' + TONE_NOTE) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Capital returns: what one company did with its cash ----------------------
   //
   // (2026-10-11, the owner: "lets work on capital returns".) Shares bought
@@ -11730,6 +11877,8 @@
     holderchg: tplHolderChange,
     capreturn: tplCapReturn,
     optoi: tplOptions,
+    indtone: tplToneBoard,
+    tonestock: tplToneStock,
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     secmargin: () => marginsCard('secmargin'),
@@ -12272,6 +12421,21 @@
     .cr-fig .v { font: 600 36px var(--mono); color: var(--text); white-space: nowrap; }
     .cr-fig .x { font-size: 16px; color: var(--muted); line-height: 1.3; }
     .cr-b { position: absolute; top: 0; bottom: 0; }
+    /* Article tone, one stock: the latest articles fill what the figures and
+       the note leave. A summary is clamped to three lines, a headline to two:
+       a card cannot scroll, and a model's sentence can run long. */
+    .tn-list { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly; gap: 14px; margin-top: 14px; }
+    .tn-it { border-top: 1px solid var(--hair); padding-top: 14px; }
+    .tn-it:first-child { border-top: 0; padding-top: 0; }
+    .tn-h { display: flex; gap: 14px; align-items: baseline; }
+    .tn-chip { flex: none; font: 600 17px var(--mono); padding: 3px 10px; border-radius: 999px; border: 1.5px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .tn-hl { font: 600 25px var(--sans); color: var(--text); letter-spacing: -0.01em; line-height: 1.25; min-width: 0;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tn-sum { margin: 8px 0 0; font-size: 19px; line-height: 1.45; color: var(--muted);
+              display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .tn-meta { margin-top: 6px; font: 500 14px var(--mono); color: var(--faint); }
+    .sz-square .tn-hl { font-size: 20px; } .sz-square .tn-sum { font-size: 16px; } .sz-square .tn-chip { font-size: 14px; }
+    .sz-story .tn-hl { font-size: 32px; } .sz-story .tn-sum { font-size: 24px; } .sz-story .tn-chip { font-size: 22px; } .sz-story .tn-meta { font-size: 18px; }
     /* Insider activity: bought on the upper half of the track, sold on the lower. */
     .in-t { background: none; }
     .in-b { position: absolute; left: 0; border-radius: 3px; }
@@ -14358,6 +14522,8 @@
     instFlowNeed,
     capReturnNeed,
     optionsNeed,
+    toneBoardNeed, toneStockNeed, toneBand: TONE_BAND,
+    toneGroups: () => TONE_GROUPS.map((p) => p.slice()), toneWindows: () => TONE_WINS.map((p) => p.slice()), toneCounts: () => TONE_COUNTS.slice(),
     insiderNeed, insiderWindows: () => IN_WINS.map((p) => p.slice()),
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
     // The drawdown card's history, asked of the host the way the chart's is,
@@ -14489,6 +14655,8 @@
       getInstFlow = c.getInstFlow || (() => null);
       getCapReturns = c.getCapReturns || (() => null);
       getOptions = c.getOptions || (() => null);
+      getToneBoard = c.getToneBoard || (() => null);
+      getToneStock = c.getToneStock || (() => null);
       getInsider = c.getInsider || (() => null);
       getLineSeries = c.getLineSeries || (() => null);
       getMonths = c.getMonths || (() => null);
