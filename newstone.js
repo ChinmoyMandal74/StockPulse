@@ -262,16 +262,21 @@
   }
 
   // ---- the seven-day line ------------------------------------------------------
-  // Over scored articles that are about the company: an article that only
-  // mentions it in passing describes something else. Null when there are
-  // none, never zero.
+  // ONLY ARTICLES MAINLY ABOUT THE COMPANY ("primary"). The first cut counted
+  // "mentioned" too, and the owner pointed at AMD's card (2026-10-18): a
+  // Broadcom forecast, TSMC's results, an ASML piece and a market wrap, each
+  // naming AMD in a list. Measured that day, 167 of 399 readings were
+  // passing mentions, 8 of AMD's 13. They stay stored; `mentioned` says how
+  // many were left out. Null when nothing is left, never zero.
   function summarise(rows) {
-    const use = (rows || []).filter((r) => r && r.status === 'scored' && r.about !== 'not_about' && r.tone != null && isFinite(r.tone));
+    const scored = (rows || []).filter((r) => r && r.status === 'scored' && r.tone != null && isFinite(r.tone));
+    const use = scored.filter((r) => r.about === 'primary');
+    const mentioned = scored.filter((r) => r.about === 'mentioned').length;
     if (!use.length) return null;
     const n = { Positive: 0, Neutral: 0, Negative: 0 };
     let sum = 0;
     for (const r of use) { n[label(r.tone)]++; sum += Number(r.tone); }
-    return { count: use.length, avg: sum / use.length, positive: n.Positive, neutral: n.Neutral, negative: n.Negative };
+    return { count: use.length, avg: sum / use.length, positive: n.Positive, neutral: n.Neutral, negative: n.Negative, mentioned };
   }
 
   return {

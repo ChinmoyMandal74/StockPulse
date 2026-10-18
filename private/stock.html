@@ -629,6 +629,7 @@
                        font-size: 13px; color: var(--muted); }
     #tone .tone-week b { font: 600 22px var(--mono); color: var(--text); letter-spacing: -0.02em; }
     #tone .tone-week .tw-n { font-family: var(--mono); font-size: 12px; }
+    #tone .tone-week .tw-x { font-size: 12px; color: var(--faint); }
     /* Two columns (owner, 2026-10-18: across the whole card the summaries
        ran too wide to read). A grid rather than CSS columns, so the list
        still reads newest first, left to right, row by row, and Show more
@@ -2644,16 +2645,17 @@
     // the word, because "Positive" alone hides whether it is +0.3 or +0.9.
     const toneNum = (t) => (t == null || !isFinite(t) ? '' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
     function renderToneWeek(w) {
-      if (!w) return '<div class="tone-week">No articles about the company read in the last seven days.</div>';
+      if (!w) return '<div class="tone-week">No article mainly about the company read in the last seven days.</div>';
       return '<div class="tone-week"><span>Last 7 days</span>'
-        + `<b>${esc(toneNum(w.avg))}</b><span>average tone over ${w.count} article${w.count === 1 ? '' : 's'}</span>`
-        + `<span class="tw-n">${w.positive} positive · ${w.neutral} neutral · ${w.negative} negative</span></div>`;
+        + `<b>${esc(toneNum(w.avg))}</b><span>average tone over ${w.count} article${w.count === 1 ? '' : 's'} about the company</span>`
+        + `<span class="tw-n">${w.positive} positive · ${w.neutral} neutral · ${w.negative} negative</span>`
+        + (w.mentioned ? `<span class="tw-x">${w.mentioned} more only mention${w.mentioned === 1 ? 's' : ''} it in passing, not counted</span>` : '')
+        + '</div>';
     }
     function renderToneItems(items) {
       return (items || []).filter((x) => x && /^https?:\/\//i.test(x.url || '')).map((x) => {
         const cls = x.label === 'Positive' ? 'pos' : x.label === 'Negative' ? 'neg' : '';
-        const meta = [newsAge(x.published_at), x.source, x.kindLabel, x.about === 'mentioned' ? 'mentions the company' : null,
-          x.complete === false ? 'partial text' : null].filter(Boolean).map(esc).join(' · ');
+        const meta = [newsAge(x.published_at), x.source, x.kindLabel, x.complete === false ? 'partial text' : null].filter(Boolean).map(esc).join(' · ');
         return '<div class="tone-item"><div class="ti-h">'
           + `<span class="ti-chip ${cls}" title="Tone from −1 to +1">${esc(x.label || '')} ${esc(toneNum(x.tone))}</span>`
           + `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.headline || '')}</a></div>`
@@ -3574,7 +3576,8 @@
           <p class="tone-note">Each article in the stock's Yahoo Finance feed is read in full by an AI model
             (<span id="toneModel">Claude Sonnet 5.5</span>), which says how its content leans towards the company and sums it up
             in its own words. A description of what was written, not a forecast or a rating, and never an input to the Signal.
-            Articles that are not about the company, or that could not be read, are left out.</p>
+            Only articles mainly about the company are shown and counted: one that names it in passing, in a list or
+            beside a rival, is left out, as is one that could not be read.</p>
         </div></section>
 
         <section class="bezel card" id="allfields" data-jump="All fields" data-icon="i-columns"><div class="core">

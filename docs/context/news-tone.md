@@ -39,3 +39,8 @@ Two templates in `private/cards.js`, sharing one data path:
 - **A HEADLINE SAYING BUY IS PASSED OVER on the stock card.** Headlines are the publisher's words; a card is the site's marketing. NVDA's first draft carried "Should You Buy an Index Fund Now?". The card skips any article whose headline or summary uses buy, sell, hold, bullish, bearish and the rating words, and takes the next one.
 - `TONE_BAND` is restated in `cards.js` (no requires; the phone does not load `newstone.js`). `newstone-test.js` asserts it equals `NewsTone.BAND`, and draws the real card at every hundredth from −1 to +1 to check the chip's label matches `label()`.
 - Measured in headless Chrome with the real readings: 4:5, square and 9:16, 8/12/16 rows and three stocks each. No overflow, nothing outside the artboard, no green or red, no banned word.
+
+## Only articles mainly about the company (2026-10-18)
+The owner, over AMD's card: "These articles are not really related with AMD" (a Broadcom forecast, TSMC's results, an ASML piece, a market wrap, each naming AMD in a list). Every one was already tagged `about: mentioned`; the first cut listed and counted `mentioned` alongside `primary`. Measured that day: 167 of 399 readings were passing mentions, 8 of AMD's 13.
+- Now **only `about = 'primary'`** is listed (`readNewsToneList`), counted in the seven-day line and the promo cards (`summarise`), and drawn on either promo card. The passing mentions stay stored, and `summarise` returns their number as `mentioned`; the stock page says "N more only mention it in passing, not counted".
+- A stock whose only readings are passing mentions has no seven-day line (null, never zero), so it can drop off the industry card.

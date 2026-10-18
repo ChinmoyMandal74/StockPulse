@@ -130,16 +130,20 @@ check('nothing read is null, not zero', NT.summarise([]), null);
 check('only unreadable rows is null', NT.summarise([{ status: 'unreadable', tone: null }]), null);
 const rows = [
   { status: 'scored', about: 'primary', tone: 0.6 },
-  { status: 'scored', about: 'mentioned', tone: -0.4 },
+  { status: 'scored', about: 'mentioned', tone: -0.4 },        // a passing mention: left out, counted apart
+  { status: 'scored', about: 'mentioned', tone: -0.3 },
   { status: 'scored', about: 'primary', tone: 0.1 },
+  { status: 'scored', about: 'primary', tone: -0.3 },
   { status: 'scored', about: 'not_about', tone: 0.9 },       // off-topic: left out
   { status: 'skipped', about: null, tone: null },              // never read: left out
   { status: 'scored', about: 'primary', tone: null },          // no tone: left out, not counted as 0
 ];
 const w = NT.summarise(rows);
-check('count leaves out off-topic, skipped and toneless rows', w.count, 3);
-check('average over those three', Math.round(w.avg * 100) / 100, 0.1);
+check('count is the articles mainly about the company only', w.count, 3);
+check('average over those three', Math.round(w.avg * 100) / 100, 0.13);
 check('split by band', [w.positive, w.neutral, w.negative], [1, 1, 1]);
+check('passing mentions counted apart', w.mentioned, 2);
+check('only passing mentions is null, not zero', NT.summarise([{ status: 'scored', about: 'mentioned', tone: -0.5 }]), null);
 
 console.log('the promo cards agree with this module');
 require('./private/cards.js');

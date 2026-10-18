@@ -7072,13 +7072,14 @@ async function readNews(symbol, limit = 12, offset = 0) {
 
 // ---- article tone (newstone.js) ---------------------------------------------
 // One stock's readings, newest first: the stock page's list. A seek on
-// idx_news_tone_symbol. Only scored readings of articles about the company;
-// the unreadable and the off-topic rows are bookkeeping.
+// idx_news_tone_symbol. Only scored readings of articles MAINLY about the
+// company (newstone.js summarise() says why); passing mentions, the
+// unreadable and the off-topic rows are kept but not listed.
 async function readNewsToneList(symbol, limit = 20, offset = 0) {
   await init();
   const r = await db.execute({
     sql: `select published_at, headline, source, url, about, kind, tone, summary, complete, model from news_tone
-           where symbol = ? and status = 'scored' and about <> 'not_about'
+           where symbol = ? and status = 'scored' and about = 'primary'
            order by published_at desc limit ? offset ?`,
     args: [symbol, Math.min(100, Math.max(1, Number(limit) || 20)), Math.max(0, Number(offset) || 0)],
   });

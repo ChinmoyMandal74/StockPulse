@@ -9343,7 +9343,7 @@
   const toneLabel = (t) => (t == null || !isFinite(t) ? '' : t >= TONE_BAND ? 'Positive' : t <= -TONE_BAND ? 'Negative' : 'Neutral');
   const toneNum = (t) => (t == null || !isFinite(t) ? '—' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
   const TONE_NOTE = 'An AI model (Claude Sonnet 5.5) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
-    + 'Articles not about the company, or that could not be read, are left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
+    + 'Only articles mainly about the company are counted; one that names it in passing, or that could not be read, is left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
   function toneBoardNeed(tpl, opts) {
     if (tpl !== 'indtone') return null;
     const o = opts || {};
