@@ -1470,13 +1470,12 @@
     // two labels per entry, since only the calendar window differs.
     const winPhrase = (win) => (win && win[2] === 'ytd' ? 'so far this year' : `over the ${win[1]}`);
 
-    // ONLY THE CHART CARD CAN SLICE, so only the chart card may be given a
-    // calendar window. Sparks and the spotlight read this same map and draw
-    // the axis the host fetched as-is — handed `ytd` they would draw a full
-    // YEAR under a heading reading "this year", which is wrong and looks
-    // right. Their pickers do not offer it; this is what stops a hand-edited
-    // saved post reaching them, and what stops the map lying to two of its
-    // three consumers.
+    // A CARD THAT DOES NOT SLICE MUST NOT BE GIVEN A CALENDAR WINDOW. Handed
+    // `ytd` it would draw the full YEAR the host fetched under a heading
+    // reading "this year", which is wrong and looks right. This resolves
+    // `ytd` to six months; the cards that do slice (the chart, Sparks, the
+    // spotlights) check for `ytd` themselves before calling it, slice with
+    // winStart and sliceBasket, and only then rebase.
     const barWin = (key) => {
       const w = CHART_WINDOWS[key];
       return w && !w[2] ? w : CHART_WINDOWS.m6;
@@ -1527,7 +1526,7 @@
       const win = tpl === 'chart' ? (CHART_WINDOWS[v] || CHART_WINDOWS.m6)
         : tpl === 'race' ? (v === 'y1' ? CHART_WINDOWS.y1 : v === 'y5' ? CHART_WINDOWS.y5 : CHART_WINDOWS.ytd)
         : tpl === 'benchmarks' ? (['m1', 'm3', 'm6', 'ytd', 'y1'].includes(v) ? CHART_WINDOWS[v] : CHART_WINDOWS.ytd)
-        : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
+        : (tpl === 'indspot' || tpl === 'secspot' || tpl === 'thmspot' || tpl === 'spotlight' || tpl === 'sparks') && v === 'ytd' ? CHART_WINDOWS.ytd : barWin(v);
       return win[0];
     }
 
@@ -2769,12 +2768,25 @@
     }
 
     function tplSparks() {
-      const [days, winLabel] = barWin(O.spkWin);
-      const d = getBasket(days);
-      if (!d || !d.dates || !d.dates.length) {
+      // Year to date the way the spotlight does it: the basket is fetched a
+      // year deep, sliced to the last session before 1 January and rebased
+      // there (basketDays lets 'ytd' through for this card too).
+      const win = O.spkWin === 'ytd' ? CHART_WINDOWS.ytd : barWin(O.spkWin);
+      const [days, winLabel] = win;
+      const raw = getBasket(days);
+      if (!raw || !raw.dates || !raw.dates.length) {
         return chromeTop() +
           '<div class="s-body"><div><span class="s-kick">Reading the archive</span>' +
           '<h2 class="s-title">Drawing<br><span class="dim">the shapes\u2026</span></h2></div></div>' + chromeFoot();
+      }
+      let d = raw;
+      if (O.spkWin === 'ytd') {
+        const i0 = winStart(win, raw.dates);
+        if (raw.dates.length - i0 < 2) {
+          return chromeTop() + '<div class="s-body"><div><p class="s-empty">The year has not opened yet \u2014 '
+            + 'there is no session since 31 December to draw.</p></div></div>' + chromeFoot();
+        }
+        d = sliceBasket(raw, i0);
       }
       const series = d.series || {};
       const scope = scopeOf('spkScope', 'spkSector');
@@ -2799,7 +2811,7 @@
       }
       const cols = items.length <= 4 ? 2 : 3;
       return chromeTop() +
-        `<div class="s-body"><div><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(winLabel)}</span>` +
+        `<div class="s-body"><div class="spk-in"><span class="s-kick">${esc(scope.label)} \u00b7 ${esc(winLabel)}</span>` +
         `<h2 class="s-title">${best ? 'The leaders' : 'The laggards'}<br><span class="dim">${esc(winLabel)}</span></h2>` +
         `<div class="spk" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">${items.map((it) => {
           const color = it.end >= 0 ? pal.up : pal.down;
@@ -14019,9 +14031,8 @@
     /* the sparkline grid stretches its rows, and the shapes stretch with
        them — the sparklines are drawn with preserveAspectRatio="none", so a
        taller tile is a taller chart rather than a distorted one */
-    .sz-story .spk { flex: 1; grid-auto-rows: 1fr; gap: 20px; }
-    .sz-story .spkt { display: flex; flex-direction: column; }
-    .sz-story .spkt svg { flex: 1; height: auto; min-height: 90px; }
+    .sz-story .spk { gap: 20px; }
+    .sz-story .spkt svg { min-height: 90px; }
     .sz-story .spkt .ss { font-size: 24px; }
     .sz-story .spkt .sv { font-size: 25px; }
 
@@ -14065,15 +14076,23 @@
        back clean while the other quietly held the line — which reads
        exactly like a guard that was never load-bearing. The floor goes on
        the TRACK, inline, where the column count is known. */
-    .spk { display: grid; gap: 16px; margin-top: 32px; }
+    /* THE GRID FILLS THE ARTBOARD ON EVERY SHAPE (owner, 2026-10-17, a 4:5
+       screenshot with bands above the kicker and under the note). The inner
+       block was a plain div whose height was its content and .s-body centres
+       it, so the slack split in two. The inner block is a full-height column
+       now, the grid takes what is left and the shapes stretch with their
+       tiles (preserveAspectRatio none): the story rule, applied to all three
+       shapes. */
+    .spk-in { height: 100%; display: flex; flex-direction: column; padding-bottom: 14px; box-sizing: border-box; }
+    .spk { display: grid; gap: 16px; margin-top: 32px; flex: 1; grid-auto-rows: 1fr; min-height: 0; }
     .spkt { padding: 16px 18px 12px; border-radius: 16px; border: 1px solid var(--hair);
-            background: rgba(255, 255, 255, 0.024); }
+            background: rgba(255, 255, 255, 0.024); display: flex; flex-direction: column; min-height: 0; }
     .spkt .sh { display: flex; align-items: baseline; gap: 10px; }
     .spkt .ss { font: 600 20px var(--sans); letter-spacing: -0.02em; min-width: 0;
                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .spkt .sv { margin-left: auto; font: 600 21px var(--mono); font-variant-numeric: tabular-nums; }
     .spkt .sv.pos { color: var(--green); } .spkt .sv.neg { color: var(--red); }
-    .spkt svg { display: block; width: 100%; height: 78px; margin-top: 10px; }
+    .spkt svg { display: block; width: 100%; flex: 1; height: auto; min-height: 78px; margin-top: 10px; }
 
     /* one company, in full: a grid of reported figures */
     /* ---- Size: companies as concentric discs --------------------------
