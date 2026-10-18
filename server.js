@@ -10,6 +10,9 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
+// The sign-in hardening's pure pieces: the asset gate's path, attempt limits,
+// session token hashing (backlog 44a/44c).
+const AuthSec = require('./authsec.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -134,6 +137,11 @@ const PROFILE_TTL_MS = FUND_ROTATION_DAYS * 24 * 60 * 60 * 1000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const AUTH_REQUIRED = !!ADMIN_PASSWORD;
 const ADMIN_COOKIE = 'st_admin';
+// NEVER OPEN ON VERCEL (backlog 44a). Open mode is for a laptop: with no
+// ADMIN_PASSWORD every visitor is the admin. A deployment that lost the
+// setting would hand the whole site to the public, so there the server
+// answers 503 to everything instead (the middleware right after the parsers).
+const OPEN_ON_VERCEL = !AUTH_REQUIRED && !!process.env.VERCEL;
 // /statistics (market cap, forward P/E, PEG, earnings growth) needs a Twelve Data
 // Pro+ plan. On lower tiers it 403s for real tickers (only the AAPL demo symbol is
 // allowed) and still costs credits, so it's OFF by default. Set ENABLE_FUNDAMENTALS
@@ -254,6 +262,28 @@ const route = (fn) => (req, res, next) =>
         : 'Server error. Please try again.' });
     }
   });
+
+// See OPEN_ON_VERCEL: a deployment with no ADMIN_PASSWORD serves nothing.
+if (OPEN_ON_VERCEL) {
+  app.use((req, res) => res.status(503).type('text').send('This deployment is missing its ADMIN_PASSWORD setting.'));
+}
+
+// THE SIGNING SECRET for the guest cookie and the Google sign-in carrier
+// (backlog 44a, confirmed by the VulnHunter scan, backlog 45). Both were HMACs
+// keyed on ADMIN_PASSWORD, and the guest cookie is handed to anyone who
+// clicks: a known message and its MAC, which is all an attacker needs to test
+// password guesses offline as fast as their hardware allows. The key is now
+// AUTH_SECRET when set, else a random value generated once and stored
+// (db.readAuthSecret). Loaded once per instance; a failed load leaves it
+// null, and every check that needs it then refuses rather than passes.
+let authKey = process.env.AUTH_SECRET && process.env.AUTH_SECRET.length >= 32 ? process.env.AUTH_SECRET : null;
+app.use(async (req, res, next) => {
+  if (!authKey && AUTH_REQUIRED) {
+    try { authKey = await store.readAuthSecret(); } catch (err) { console.error('auth secret load failed:', err.message); }
+  }
+  next();
+});
+const authMac = (label) => (authKey ? crypto.createHmac('sha256', authKey).update(label).digest('hex') : null);
 
 // THE TERMS GATE. A signed-in member who has not agreed to the current terms
 // gets one page -- /accept-terms -- and nothing else: a page request is
@@ -632,7 +662,13 @@ const gateAssets = route(async (req, res, next) => {
   // whole site, not just the gated part. Matching against the real file list
   // makes this middleware a no-op for anything that is a route.
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-  const rel = req.path === '/' ? 'index.html' : req.path.replace(/^\/+/, '');
+  // THE NAME THE FILE SERVER WILL OPEN, not the raw path (backlog 44c,
+  // confirmed by the VulnHunter scan): express.static decodes and normalises,
+  // so matching the raw path let a percent-encoded spelling of a private
+  // file's name past this gate. See AuthSec.assetRel. A path that cannot be
+  // decoded is refused here, never handed on.
+  const rel = AuthSec.assetRel(req.path);
+  if (rel == null) return res.status(400).json({ error: 'Bad path.' });
   if (!PRIVATE_FILES.has(rel)) return next();
   if (await isSignedIn(req)) {
     if (GUEST_BLOCKED_ASSET.test(rel) && (await isGuest(req))) {
@@ -647,7 +683,7 @@ const gateAssets = route(async (req, res, next) => {
   // "no price file yet" instead of sending anyone to sign in. Sec-Fetch-Dest is
   // set by the browser and says what the request is FOR; the extension is the
   // fallback for anything that does not send it.
-  const ext = path.extname(req.path).toLowerCase();
+  const ext = path.extname(rel).toLowerCase();
   const dest = String(req.get('sec-fetch-dest') || '').toLowerCase();
   const isPage = dest ? dest === 'document' : (ext === '' || ext === '.html');
   if (isPage) return res.redirect('/login');
@@ -1657,13 +1693,37 @@ app.get(['/compare', '/compare/:a', '/compare/:a/:b'], route(async (req, res) =>
   res.sendFile(path.join(__dirname, 'private', 'compare.html'));
 }));
 
-// ---- Admin auth (cookie-based, no DB) --------------------------------------
-// A deterministic token derived from the password (HMAC) is stored in an httpOnly
-// cookie; there's no separate secret to manage. When ADMIN_PASSWORD is unset the
-// app is fully open and everyone is treated as admin (local dev).
-
-function adminToken() {
-  return crypto.createHmac('sha256', ADMIN_PASSWORD).update('stock-tracker-admin-v1').digest('hex');
+// ---- Admin auth: the ADMIN_PASSWORD sign-in ---------------------------------
+// A server-side session since 2026-10-18 (backlog 44a). It was a fixed HMAC of
+// the password in a cookie: the same on every device, never expiring, and not
+// revocable short of changing the password. Now each sign-in gets a random
+// token, stored only as its hash in admin_sessions with an expiry; logout
+// deletes it. When ADMIN_PASSWORD is unset the app is fully open and everyone
+// is treated as admin (local dev only; see OPEN_ON_VERCEL).
+const ADMIN_SESSION_DAYS = 30;
+// Which password minted a session. Keyed with the signing secret, so the
+// stored value says nothing about the password; changing ADMIN_PASSWORD
+// changes it and ends every admin session.
+const adminFingerprint = () => authMac('admin-password-fp-v1.' + ADMIN_PASSWORD);
+// Checked on every admin request, so a valid session is remembered for a
+// minute per instance. A logout on another instance therefore takes up to a
+// minute to reach this one; on this one it is immediate.
+const adminSeen = new Map();
+const ADMIN_SEEN_MS = 60 * 1000;
+async function adminSessionValid(token) {
+  if (!token || !authKey) return false;
+  const h = AuthSec.tokenHash(token);
+  const now = Date.now();
+  const hit = adminSeen.get(h);
+  // Refusals are remembered too: a stale cookie (every browser that held the
+  // old fixed one) would otherwise cost a read on every request it makes.
+  if (hit && now - hit.at < ADMIN_SEEN_MS) return hit.ok && hit.exp > now;
+  const row = await store.readAdminSession(h);
+  const ok = !!row && row.expiresAt > now && safeEqual(row.fingerprint, adminFingerprint() || '');
+  if (row && row.expiresAt <= now) store.deleteAdminSession(h).catch(() => {});
+  if (adminSeen.size > 500) adminSeen.clear();
+  adminSeen.set(h, { at: now, exp: ok ? row.expiresAt : 0, ok });
+  return ok;
 }
 
 function parseCookies(req) {
@@ -1728,12 +1788,15 @@ function setSessionCookie(res, token) {
 const ROLE_ADMIN = 'admin';
 const isAdminRole = (role) => role === ROLE_ADMIN || role === 'owner';
 
-// Admin = the legacy ADMIN_PASSWORD cookie (kept so you can never lock yourself
-// out of your own instance) or a signed-in user holding the admin role.
+// Admin = an ADMIN_PASSWORD session (kept so you can never lock yourself out of
+// your own instance) or a signed-in user holding the admin role. The session
+// check is remembered on the request: isAdmin runs several times per request.
 async function isAdmin(req) {
   if (!AUTH_REQUIRED) return true; // no password configured → open (local dev)
-  const tok = parseCookies(req)[ADMIN_COOKIE];
-  if (tok && safeEqual(tok, adminToken())) return true;
+  if (req._adminSession === undefined) {
+    req._adminSession = await adminSessionValid(parseCookies(req)[ADMIN_COOKIE]);
+  }
+  if (req._adminSession) return true;
   const u = await currentUser(req);
   return !!u && isAdminRole(u.role);
 }
@@ -1745,8 +1808,7 @@ async function isSignedIn(req) {
   if (await currentUser(req)) return true;
   // The guest cookie opens the door too; what a guest may SEE is decided
   // per route, never here.
-  const tok = parseCookies(req)[GUEST_COOKIE];
-  return !!tok && safeEqual(tok, guestToken());
+  return guestCookieValid(req);
 }
 
 // ---- guest access -----------------------------------------------------
@@ -1754,8 +1816,10 @@ async function isSignedIn(req) {
 // no sessions row, 24 hours. Guests see GUEST_SYMBOLS and nothing else, and
 // every limit is enforced HERE, on the server — a limit enforced in the
 // browser is not a limit (the CDN incident's lesson). The token is shared by
-// design; it grants only this filtered read-only view, and rotating
-// ADMIN_PASSWORD revokes every outstanding guest cookie at once.
+// design and grants only this filtered read-only view. It is keyed with the
+// signing secret (see authKey), NEVER the admin password: everyone gets this
+// cookie, and one keyed on the password let anyone test password guesses
+// offline. Changing the secret revokes every outstanding guest cookie.
 const GUEST_COOKIE = 'st_guest';
 const GUEST_HOURS = 24;
 // TWENTY since 2026-09-26 (was five), chosen for SPREAD rather than fame:
@@ -1766,12 +1830,16 @@ const GUEST_HOURS = 24;
 const GUEST_SYMBOLS = String(process.env.GUEST_SYMBOLS || 'NVDA,GOOGL,JNJ,AAPL,AVGO,NFLX,AMZN,WELL,CAT,BRK.B,NEE,XOM,WMT,BHP,BDX,SSB,OLN,AIRO,TSLA,PLD')
   .split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
 const guestSet = new Set(GUEST_SYMBOLS);
-const guestToken = () =>
-  crypto.createHmac('sha256', ADMIN_PASSWORD || 'open').update('guest-access-v1').digest('hex');
+const guestToken = () => authMac('guest-access-v2');
+// Null when the secret could not be loaded, so the check refuses.
+function guestCookieValid(req) {
+  const tok = parseCookies(req)[GUEST_COOKIE];
+  const want = guestToken();
+  return !!tok && !!want && safeEqual(tok, want);
+}
 async function isGuest(req) {
   if (!AUTH_REQUIRED) return false;               // open mode is already open
-  const tok = parseCookies(req)[GUEST_COOKIE];
-  if (!tok || !safeEqual(tok, guestToken())) return false;
+  if (!guestCookieValid(req)) return false;
   if (await isAdmin(req)) return false;
   return !(await currentUser(req));               // a real login outranks the guest cookie
 }
@@ -2090,6 +2158,25 @@ app.post('/api/register', route(async (req, res) => {
   if (!REQUIRE_APPROVAL) sendSignupNotice(email, role, name, false).catch(() => {});
 }));
 
+// THE PASSWORD-ONLY ADMIN LOGIN'S ATTEMPT LIMIT (backlog 44a). It had none: a
+// member account locks after MAX_FAILED, but this branch has no account row,
+// so guesses were unlimited. Two counters in auth_throttle, because every
+// request may land on a fresh instance: one per address (a keyed hash of it,
+// so no address is stored), and one for everyone together, which an attacker
+// with many addresses meets instead. Only FAILURES count, so a correct
+// password never uses one up. The shared limit can be run down by a stranger;
+// an admin-role account signs in by email and is not affected.
+const ADMIN_TRY = { perAddr: 5, addrWindowMs: 15 * 60 * 1000, all: 30, allWindowMs: 60 * 60 * 1000 };
+const adminTryKeys = (req) => {
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  return { addr: 'admin-addr:' + (authMac('throttle-addr.' + ip) || 'nokey'), all: 'admin-all' };
+};
+// Compared as hashes so the comparison takes the same time whatever the
+// length of what was typed.
+const passwordMatches = (typed) => safeEqual(
+  crypto.createHash('sha256').update(String(typed)).digest('hex'),
+  crypto.createHash('sha256').update(ADMIN_PASSWORD).digest('hex'));
+
 // Sign in with an account. Passing only a password (no email) still works and
 // checks it against ADMIN_PASSWORD — that is the escape hatch that stops a
 // broken accounts table from locking you out of your own instance.
@@ -2100,13 +2187,31 @@ app.post('/api/login', route(async (req, res) => {
   const password = String(req.body?.password || '');
 
   if (!email) {
-    if (!safeEqual(password, ADMIN_PASSWORD)) {
+    // No secret, no session: refuse before looking at the password at all.
+    if (!authKey) return res.status(503).json({ error: 'Sign-in is unavailable right now. Please try again shortly.' });
+    const keys = adminTryKeys(req);
+    const now = Date.now();
+    const [addrRow, allRow] = await Promise.all([store.readAuthThrottle(keys.addr), store.readAuthThrottle(keys.all)]);
+    if (AuthSec.overLimit(addrRow, now, ADMIN_TRY.perAddr, ADMIN_TRY.addrWindowMs)
+      || AuthSec.overLimit(allRow, now, ADMIN_TRY.all, ADMIN_TRY.allWindowMs)) {
+      logAct(req, 'login', 'password-throttled');
+      return res.status(429).json({ error: 'Too many attempts. Please wait and try again later, or sign in with your account.' });
+    }
+    if (!passwordMatches(password)) {
+      // Bookkeeping that must not fail the answer, so each write is caught.
+      await Promise.all([
+        store.noteAuthFailure(keys.addr, now, ADMIN_TRY.addrWindowMs).catch(() => {}),
+        store.noteAuthFailure(keys.all, now, ADMIN_TRY.allWindowMs).catch(() => {}),
+      ]);
       return res.status(401).json({ error: 'Incorrect password.' });
     }
-    res.cookie(ADMIN_COOKIE, adminToken(), {
+    store.clearAuthThrottle(keys.addr).catch(() => {});
+    const token = AuthSec.newToken();
+    await store.createAdminSession(AuthSec.tokenHash(token), adminFingerprint(), now + ADMIN_SESSION_DAYS * 24 * 60 * 60 * 1000);
+    res.cookie(ADMIN_COOKIE, token, {
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: ADMIN_SESSION_DAYS * 24 * 60 * 60 * 1000,
       secure: req.secure, // set only over HTTPS (true behind an HTTPS proxy)
     });
     logAct(req, 'login', 'password', AUTH_REQUIRED ? 'admin' : 'open');
@@ -2170,6 +2275,13 @@ app.post('/api/logout', route(async (req, res) => {
   const token = parseCookies(req)[SESSION_COOKIE];
   logAct(req, 'account', 'logout');
   if (token) await store.deleteSession(token);
+  // The admin session ends on the server too, not only in this browser.
+  const atok = parseCookies(req)[ADMIN_COOKIE];
+  if (atok) {
+    const h = AuthSec.tokenHash(atok);
+    adminSeen.delete(h);
+    await store.deleteAdminSession(h);
+  }
   res.clearCookie(SESSION_COOKIE);
   res.clearCookie(ADMIN_COOKIE);
   res.clearCookie(GUEST_COOKIE);
@@ -2190,9 +2302,10 @@ app.post('/api/logout', route(async (req, res) => {
 // the password form stay the only way to that.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-// ADMIN_PASSWORD is in the list because it keys the HMAC below. Unset any of
-// them and the button never renders and every route here answers 404 — off is
-// the default, and no deploy can turn it on by accident.
+// ADMIN_PASSWORD is in the list because without it the site is in open mode,
+// where there is no signing secret for the carrier below. Unset any of them
+// and the button never renders and every route here answers 404 — off is the
+// default, and no deploy can turn it on by accident.
 const GOOGLE_READY = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && ADMIN_PASSWORD);
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -2215,12 +2328,13 @@ const gcookie = (maxAge) => ({
 // The carrier between "Google says this is jo@gmail.com" and "jo typed the
 // invite code". It rides in a cookie, so it MUST be signed: unsigned, anyone
 // could hand us an arbitrary verified-looking address and mint an account for
-// it. Keyed on ADMIN_PASSWORD, the guest cookie's trick — rotating the
-// password invalidates anything in flight, which for a 15-minute carrier is
-// free.
+// it. Keyed with the signing secret (see authKey), never the admin password
+// (backlog 44a): a MAC of known content keyed on the password is a way to
+// test password guesses offline. Without the secret nothing is signed or read.
 function signPending(obj) {
   const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
-  const mac = crypto.createHmac('sha256', ADMIN_PASSWORD).update('google-pending-v1.' + body).digest('hex');
+  const mac = authMac('google-pending-v2.' + body);
+  if (!mac) throw new Error('signing secret unavailable');
   return body + '.' + mac;
 }
 function readPending(raw) {
@@ -2228,8 +2342,8 @@ function readPending(raw) {
   const i = s.lastIndexOf('.');
   if (i < 1) return null;
   const body = s.slice(0, i);
-  const want = crypto.createHmac('sha256', ADMIN_PASSWORD).update('google-pending-v1.' + body).digest('hex');
-  if (!safeEqual(s.slice(i + 1), want)) return null;
+  const want = authMac('google-pending-v2.' + body);
+  if (!want || !safeEqual(s.slice(i + 1), want)) return null;
   let obj = null;
   try { obj = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { return null; }
   // Reject the empty before coercing: Number(undefined) is NaN and NaN > x is
@@ -2489,7 +2603,9 @@ app.post('/api/auth/google/finish', route(async (req, res) => {
 // whole ceremony. 24 hours, then the cookie lapses on its own.
 app.post('/api/guest', route(async (req, res) => {
   if (!AUTH_REQUIRED) return res.json({ ok: true });
-  res.cookie(GUEST_COOKIE, guestToken(), {
+  const gtok = guestToken();
+  if (!gtok) return res.status(503).json({ error: 'Guest access is unavailable right now. Please try again shortly.' });
+  res.cookie(GUEST_COOKIE, gtok, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',

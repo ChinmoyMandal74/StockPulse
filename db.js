@@ -497,6 +497,27 @@ const SCHEMA = [
      expires_at integer not null
    )`,
   `create index if not exists idx_sessions_user on sessions (user_id)`,
+  // The ADMIN_PASSWORD sign-in as a server-side session (backlog 44a, 2026-10-18).
+  // It was a fixed cookie derived from the password: never expiring, not
+  // revocable, and the same on every device. Now a random token per sign-in,
+  // stored only as its hash, with an expiry that logout ends. `fingerprint`
+  // is a keyed hash of the password that minted it, so changing ADMIN_PASSWORD
+  // ends every admin session at once.
+  `create table if not exists admin_sessions (
+     token_hash  text primary key,
+     fingerprint text not null,
+     created_at  integer not null,
+     expires_at  integer not null
+   )`,
+  // Attempt counters for sign-in paths that have no account row to hang a
+  // lockout on (the password-only admin login). One row per key; a row whose
+  // window has passed counts as empty, so nothing sweeps the table. Keys are
+  // keyed hashes, never an address.
+  `create table if not exists auth_throttle (
+     key          text primary key,
+     count        integer not null,
+     window_start integer not null
+   )`,
   // One row per symbol per trading day. The daily bars are already fetched on
   // every refresh and then thrown away, so keeping them costs no API credits and
   // turns a rolling 14-month window into an archive that only grows.
@@ -6852,6 +6873,67 @@ async function deleteSession(token) {
   await db.execute({ sql: 'delete from sessions where token = ?', args: [token] });
 }
 
+// ---- admin sessions and attempt counters (backlog 44a) ----------------------
+
+async function createAdminSession(tokenHash, fingerprint, expiresAt) {
+  await init();
+  await db.execute({
+    sql: 'insert into admin_sessions (token_hash, fingerprint, created_at, expires_at) values (?, ?, ?, ?)',
+    args: [tokenHash, fingerprint, Date.now(), expiresAt],
+  });
+}
+
+async function readAdminSession(tokenHash) {
+  await init();
+  const r = await db.execute({ sql: 'select fingerprint, expires_at from admin_sessions where token_hash = ?', args: [tokenHash] });
+  const row = r.rows[0];
+  return row ? { fingerprint: row.fingerprint, expiresAt: Number(row.expires_at) } : null;
+}
+
+async function deleteAdminSession(tokenHash) {
+  await init();
+  await db.execute({ sql: 'delete from admin_sessions where token_hash = ?', args: [tokenHash] });
+}
+
+async function readAuthThrottle(key) {
+  await init();
+  const r = await db.execute({ sql: 'select count, window_start from auth_throttle where key = ?', args: [key] });
+  const row = r.rows[0];
+  return row ? { count: Number(row.count), windowStart: Number(row.window_start) } : null;
+}
+
+// One statement, so two failures at once both count: a row whose window has
+// passed starts again at 1, otherwise it goes up by one.
+async function noteAuthFailure(key, now, windowMs) {
+  await init();
+  await db.execute({
+    sql: `insert into auth_throttle (key, count, window_start) values (?, 1, ?)
+          on conflict(key) do update set
+            count = case when auth_throttle.window_start <= ? then 1 else auth_throttle.count + 1 end,
+            window_start = case when auth_throttle.window_start <= ? then excluded.window_start else auth_throttle.window_start end`,
+    args: [key, now, now - windowMs, now - windowMs],
+  });
+}
+
+async function clearAuthThrottle(key) {
+  await init();
+  await db.execute({ sql: 'delete from auth_throttle where key = ?', args: [key] });
+}
+
+// The secret that signs the guest cookie and the Google sign-in carrier
+// (backlog 44a). Generated once and kept in app_meta, so no deployment
+// setting is needed; `insert or ignore` then read back, so two cold starts
+// racing agree on one value. Never derived from ADMIN_PASSWORD.
+async function readAuthSecret() {
+  await init();
+  await db.execute({
+    sql: "insert or ignore into app_meta (key, value) values ('auth_secret', ?)",
+    args: [crypto.randomBytes(32).toString('hex')],
+  });
+  const r = await db.execute("select value from app_meta where key = 'auth_secret'");
+  return r.rows[0] ? String(r.rows[0].value) : null;
+}
+
 // Wipes the log. The autoincrement is reset too, so ids start from 1 again
 // rather than carrying on from the deleted rows.
 async function clearVisitors() {
@@ -7348,6 +7430,7 @@ module.exports = {
   isNetDrop,
   init,
   readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone,
+  createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readFigure, writeFigures,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
