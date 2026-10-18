@@ -459,7 +459,11 @@
     </section>
   </main>
 
+  <script src="/consoledo.js"></script>
   <script>
+    // The "do this" links mark the click, so the page they open starts at once
+    // instead of asking (consoledo.js).
+    ConsoleDo.markLinks();
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

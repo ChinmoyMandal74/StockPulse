@@ -186,6 +186,7 @@
 
   <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
 
+  <script src="/consoledo.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -396,6 +397,8 @@
       if (q.get('do') !== 'refresh') return;
       // Out of the address bar before acting, so a reload cannot re-run it.
       history.replaceState(null, '', location.pathname);
+      // Straight away for a console click, asked otherwise (consoledo.js).
+      if (!ConsoleDo.allowed('refresh', 'Start a news batch now?')) return;
       setTimeout(refreshNews, 400);
     })();
 

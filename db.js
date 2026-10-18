@@ -411,6 +411,35 @@ const SCHEMA = [
      read_at   integer
    )`,
   `create index if not exists idx_alert_ev_user on alert_events (user_key, at)`,
+  // A DELETED ACCOUNT'S ALERTS, KEPT (2026-10-18, backlog 45d, the owner's choice
+  // to archive rather than delete). Alerts are keyed on the email, so they
+  // used to stay live after the account went and pass to whoever registered
+  // that address next. deleteUser moves them here in the same write, keyed to
+  // the deleted account's id and WITHOUT the email: kept, but tied to no one
+  // who can sign in, and no personal address outlives the account.
+  `create table if not exists alerts_archive (
+     id            integer primary key,
+     user_id       integer,
+     symbol        text not null,
+     kind          text not null,
+     params        text,
+     active        integer,
+     once          integer,
+     last_side     text,
+     last_fired_at integer,
+     created_at    integer not null,
+     archived_at   integer not null
+   )`,
+  `create table if not exists alert_events_archive (
+     id          integer primary key,
+     alert_id    integer not null,
+     user_id     integer,
+     symbol      text not null,
+     at          integer not null,
+     body        text not null,
+     read_at     integer,
+     archived_at integer not null
+   )`,
   `create table if not exists app_meta (
      key   text primary key,
      value text
@@ -1454,6 +1483,10 @@ const ADDED_COLUMNS = [
   // 'story' for a Story; absent on a feed post, which is what every row was
   // before Stories could be posted (2026-10-10).
   "alter table ig_posts add column kind text",
+  // A subscription request waiting for its confirmation link (2026-10-18,
+  // backlog 45b): JSON {topics, source, ip}. Held here instead of written over
+  // the row, so naming someone's address cannot change their row.
+  "alter table subscribers add column pending text",
   // Who added and who cut (2026-10-16): each stock's largest buyers and
   // sellers among 13F managers on the quarter, and each holder's buying and
   // selling in tracked stocks at constant prices. Null until the next load.
@@ -2375,15 +2408,19 @@ async function startSubscribe({ email, topics, source, ip }) {
 
   const token = crypto.randomBytes(32).toString('hex');
   if (existing) {
-    // Re-subscribing after an unsubscribe is allowed — it is their address and
-    // their choice — but it goes back through confirmation rather than simply
-    // flipping the row, and the unsubscribe token is REISSUED so links in old
-    // mail cannot unsubscribe the new subscription.
+    // NOTHING ON THE ROW CHANGES UNTIL THE LINK IS CLICKED (backlog 45b, found
+    // by the VulnHunter scan). This used to flip an unsubscribed row back to
+    // pending and overwrite its topics, its consent record (source, address)
+    // and its unsubscribe token on the spot, so anyone who typed someone's
+    // address could rewrite that person's row. Now the request waits in
+    // `pending` beside its confirmation hash, and confirmSubscribe applies it.
+    // Re-subscribing is still allowed (their address, their choice), through
+    // confirmation, and the unsubscribe token is still reissued, on confirm,
+    // so links in old mail cannot end the new subscription.
+    const pending = JSON.stringify({ topics: JSON.parse(want), source: String(source || '').slice(0, 60) || null, ip: String(ip || '').slice(0, 60) || null });
     await db.execute({
-      sql: `update subscribers set status = 'pending', topics = ?, confirm_hash = ?, confirm_sent_at = ?,
-              unsub_token = ?, source = ?, ip = ? where email = ?`,
-      args: [want, hashToken(token), now, crypto.randomBytes(24).toString('hex'),
-        String(source || '').slice(0, 60) || null, String(ip || '').slice(0, 60) || null, e],
+      sql: 'update subscribers set confirm_hash = ?, confirm_sent_at = ?, pending = ? where email = ?',
+      args: [hashToken(token), now, pending, e],
     });
   } else {
     await db.execute({
@@ -2407,6 +2444,21 @@ async function confirmSubscribe(token) {
   const sentAt = Number(r.rows[0].confirm_sent_at || 0);
   if (Date.now() - sentAt > SUB_CONFIRM_TTL_MS) return { expired: true, email: row.email };
   const now = Date.now();
+  // A waiting request (an address already on file) is applied now: its topics,
+  // its consent record, and a fresh unsubscribe token. A first subscription
+  // has none; its row was written with the request.
+  let p = null;
+  try { p = r.rows[0].pending ? JSON.parse(r.rows[0].pending) : null; } catch { p = null; }
+  if (p && typeof p === 'object') {
+    const topics = Array.isArray(p.topics) ? p.topics : row.topics;
+    const unsub = crypto.randomBytes(24).toString('hex');
+    await db.execute({
+      sql: `update subscribers set status = 'active', confirm_hash = null, confirmed_at = ?, unsubscribed_at = null,
+              topics = ?, source = ?, ip = ?, unsub_token = ?, pending = null where email = ?`,
+      args: [now, JSON.stringify(topics), p.source || null, p.ip || null, unsub, row.email],
+    });
+    return { ...row, status: 'active', confirmedAt: now, topics, source: p.source || null, unsubToken: unsub };
+  }
   await db.execute({
     sql: `update subscribers set status = 'active', confirm_hash = null, confirmed_at = ?,
             unsubscribed_at = null where email = ?`,
@@ -4568,15 +4620,19 @@ async function barsThrough(symbols) {
 // null when nothing is running, so callers can spread it straight into a payload.
 async function readRefreshState() {
   await init();
-  const r = await db.execute('select started_at, updated_at, loaded, total, actor, prices_at, priced, mode, run_id from refresh_state where id = 1');
+  const r = await db.execute('select started_at, updated_at, loaded, total, prices_at, priced, mode, run_id from refresh_state where id = 1');
   if (!r.rows.length) return null;
   const row = r.rows[0];
   if (Date.now() - Number(row.updated_at) > REFRESH_STALE_MS) return null;
+  // NO `actor` (backlog 45c, 2026-10-18). This object is sent as `refreshing`
+  // to every signed-in caller, guests included (/api/status, the screener's
+  // snapshot, the stand-aside 503), and the actor is the starter's email.
+  // Nothing on the client or the server read it from here; who started a run
+  // stays in refresh_runs, which only the admin pages read.
   return {
     startedAt: Number(row.started_at),
     loaded: row.loaded == null ? null : Number(row.loaded),
     total: row.total == null ? null : Number(row.total),
-    actor: row.actor || null,
     pricesAt: row.prices_at == null ? null : Number(row.prices_at),
     priced: row.priced == null ? 0 : Number(row.priced),
     mode: row.mode || null,
@@ -6812,6 +6868,17 @@ async function deleteUser(id) {
     stmts.push({ sql: 'delete from paper_trades where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from paper_accounts where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from column_views where scope = ?', args: [email] });
+    // Alerts and their notifications are ARCHIVED, not deleted (see
+    // alerts_archive): copied out without the email, then removed from the
+    // live tables in the same batch, so a re-registered address starts with
+    // none and nothing is lost.
+    const now = Date.now();
+    stmts.push({ sql: `insert or ignore into alerts_archive (id, user_id, symbol, kind, params, active, once, last_side, last_fired_at, created_at, archived_at)
+                        select id, ?, symbol, kind, params, active, once, last_side, last_fired_at, created_at, ? from alerts where user_key = ?`, args: [id, now, email] });
+    stmts.push({ sql: `insert or ignore into alert_events_archive (id, alert_id, user_id, symbol, at, body, read_at, archived_at)
+                        select id, alert_id, ?, symbol, at, body, read_at, ? from alert_events where user_key = ?`, args: [id, now, email] });
+    stmts.push({ sql: 'delete from alert_events where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from alerts where user_key = ?', args: [email] });
   }
   await db.batch(stmts, 'write');
 }

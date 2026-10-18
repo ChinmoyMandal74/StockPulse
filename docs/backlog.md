@@ -2172,7 +2172,7 @@ Each fix ships with a test that fails before it, per the house rule. Entry
 
 ## 45. Security findings from the VulnHunter scan — 2026-10-18
 
-*Area: Infrastructure · Status: Open · Note: a read-only automated scan of the code, nothing executed and no live probing; 56 findings (3 High, 19 Medium, 34 Low). The full report is kept off the public repository (docs/security-review-vulnhunt-2026-10-18.md, gitignored)*
+*Area: Infrastructure · Status: Partly done · Note: done 2026-10-18: the ?do= links (a), the invite code limit and subscriber rows (b), the refresh starter (c), a deleted account's alerts (d, archived); a read-only automated scan of the code, nothing executed and no live probing; 56 findings (3 High, 19 Medium, 34 Low). The full report is kept off the public repository (docs/security-review-vulnhunt-2026-10-18.md, gitignored)*
 
 The owner asked for a scan with Capital One's VulnHunter, an open-source
 tool that traces every input an outsider can send through to where it is

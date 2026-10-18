@@ -84,6 +84,35 @@ let keys = new Set();
 for (let d = 5; d <= 560; d += 0.5) keys.add(AuthSec.snapTo(SET, d, 90));
 check('1,111 different requests make at most six cache keys', keys.size <= SET.length, true);
 
+console.log('ConsoleDo: a ?do= link starts at once only after a console click');
+{
+  const vm = require('vm');
+  const store = {};
+  let asked = 0, answer = false;
+  const sandbox = {
+    window: { confirm: () => { asked++; return answer; } },
+    localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
+    location: { pathname: '/refreshes', href: 'https://www.tickrlab.com/refreshes', origin: 'https://www.tickrlab.com' },
+    document: { addEventListener: () => {} }, URL, Date, JSON, String, Number,
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'private', 'consoledo.js'), 'utf8'), sandbox);
+  const CD = sandbox.window.ConsoleDo;
+  const mark = (id, at) => sandbox.localStorage.setItem('consoleDo', JSON.stringify({ id, at }));
+  asked = 0; answer = false;
+  check('no console click: asked, and refused when declined', [CD.allowed('refreshall', 'Start?'), asked], [false, 1]);
+  asked = 0; answer = true;
+  check('no console click: asked, and allowed when accepted', [CD.allowed('refreshall', 'Start?'), asked], [true, 1]);
+  asked = 0; mark('/refreshes|refreshall', Date.now());
+  check('a fresh console click for this job: not asked', [CD.allowed('refreshall', 'Start?'), asked], [true, 0]);
+  check('the mark is used up', sandbox.localStorage.getItem('consoleDo'), null);
+  asked = 0; answer = false; mark('/refreshes|refresh', Date.now());
+  check('a click for a different job does not count', [CD.allowed('refreshall', 'Start?'), asked], [false, 1]);
+  asked = 0; mark('/refreshes|refreshall', Date.now() - 61000);
+  check('a click over a minute old does not count', [CD.allowed('refreshall', 'Start?'), asked], [false, 1]);
+  asked = 0; mark('/news-runs|refreshall', Date.now());
+  check('a click for another page does not count', [CD.allowed('refreshall', 'Start?'), asked], [false, 1]);
+}
+
 console.log('server.js signs nothing with the admin password');
 const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 check('no HMAC is keyed on ADMIN_PASSWORD', /createHmac\(\s*'sha256'\s*,\s*ADMIN_PASSWORD/.test(srv), false);

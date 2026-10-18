@@ -243,6 +243,7 @@
   <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
 
   <script src="/refresh-loop.js"></script>
+  <script src="/consoledo.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -741,7 +742,10 @@
     const doWhat = new URLSearchParams(location.search).get('do');
     if (['refresh', 'refreshall', 'refreshmissing', 'refreshfast'].includes(doWhat)) {
       history.replaceState(null, '', location.pathname);
-      startFromConsole(doWhat);
+      // Straight away for a console click; any other arrival is asked first,
+      // because a link from anywhere could otherwise start this (consoledo.js).
+      const name = { refresh: 'a price refresh', refreshall: 'a Refresh all', refreshmissing: 'Fill missing', refreshfast: 'a Fast refresh' }[doWhat];
+      if (ConsoleDo.allowed(doWhat, `Start ${name} now? It spends API credits and runs while this tab is open.`)) startFromConsole(doWhat);
     }
     const deepRun = Number(new URLSearchParams(location.search).get('run'));
     if (deepRun) openRun(deepRun);

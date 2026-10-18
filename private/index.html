@@ -1668,6 +1668,7 @@
 
   <script src="/action.js"></script>
   <script src="/filters.js"></script>
+  <script src="/consoledo.js"></script>
   <script src="/rowcard.js"></script>
   <script src="/newstype.js"></script>
   <script src="/drillpop.js"></script>
@@ -7041,6 +7042,11 @@
         // The server refuses either of these to anyone else; this only stops a
         // member's browser from asking and being told no.
         if (!isAdmin) return;
+        const names = { refresh: 'a price refresh', refreshall: 'a Refresh all', refreshmissing: 'Fill missing' };
+        if (!names[wantDo]) return;
+        // Straight away for a console click; any other arrival is asked first,
+        // because a link from anywhere could otherwise start this (consoledo.js).
+        if (!ConsoleDo.allowed(wantDo, `Start ${names[wantDo]} now? It spends API credits.`)) return;
         if (wantDo === 'refresh') refresh();
         else if (wantDo === 'refreshall') refreshAll();
         else if (wantDo === 'refreshmissing') refreshAll('missing');

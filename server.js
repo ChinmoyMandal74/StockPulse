@@ -2145,17 +2145,9 @@ app.post('/api/register', route(async (req, res) => {
   if (REQUIRE_TERMS && req.body?.terms !== true) {
     return res.status(400).json({ error: 'Please agree to the terms to create an account.' });
   }
-  // TRIMMED AND CASE-FOLDED before the compare. This is an invite code read
-  // off a phone screen and pasted out of WhatsApp, not a password: a mobile
-  // keyboard capitalises the first letter by default, and a paste carries a
-  // trailing space. Both would otherwise fail with "not valid", which the
-  // person reads as "you are not welcome" rather than "you have a space".
-  // Still constant-time, and the entropy lost to case-folding is nothing
-  // against a 5-per-IP-per-day ceiling.
-  const fold = (x) => String(x).trim().toLowerCase();
-  if (SIGNUP_CODE && !safeEqual(fold(code), fold(SIGNUP_CODE))) {
-    return res.status(403).json({ error: 'That invite code is not valid.' });
-  }
+  // The invite code, with its own attempt limit (see inviteCodeCheck).
+  const gate = await inviteCodeCheck(req, code);
+  if (!gate.ok) return res.status(gate.status).json({ error: gate.error });
   if (await store.findUserByEmail(email)) {
     return res.status(409).json({ error: 'An account with that email already exists.' });
   }
@@ -2225,6 +2217,37 @@ app.post('/api/register', route(async (req, res) => {
 // password never uses one up. The shared limit can be run down by a stranger;
 // an admin-role account signs in by email and is not affected.
 const ADMIN_TRY = { perAddr: 5, addrWindowMs: 15 * 60 * 1000, all: 30, allWindowMs: 60 * 60 * 1000 };
+
+// THE INVITE CODE'S OWN ATTEMPT LIMIT (backlog 45b, found by the VulnHunter
+// scan). Both registration paths compared the code first and counted the
+// sign-up throttle only afterwards, so wrong codes were never counted and
+// could be tried without end. Counted here, before the compare, in the same
+// table and the same keyed-hash way as the admin login: per address per day,
+// and for everyone together per hour. Only wrong codes count.
+const CODE_TRY = { perAddr: 10, addrWindowMs: 24 * 60 * 60 * 1000, all: 100, allWindowMs: 60 * 60 * 1000 };
+async function inviteCodeCheck(req, code) {
+  if (!SIGNUP_CODE) return { ok: true };
+  if (!authKey) return { ok: false, status: 503, error: 'Sign-up is unavailable right now. Please try again shortly.' };
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
+  const keys = { addr: 'code-addr:' + authMac('throttle-addr.' + ip), all: 'code-all' };
+  const now = Date.now();
+  const [a, b] = await Promise.all([store.readAuthThrottle(keys.addr), store.readAuthThrottle(keys.all)]);
+  if (AuthSec.overLimit(a, now, CODE_TRY.perAddr, CODE_TRY.addrWindowMs)
+    || AuthSec.overLimit(b, now, CODE_TRY.all, CODE_TRY.allWindowMs)) {
+    return { ok: false, status: 429, error: 'Too many invite codes tried. Please try again later.' };
+  }
+  // TRIMMED AND CASE-FOLDED before the compare: an invite code read off a phone
+  // screen and pasted out of WhatsApp, not a password. A mobile keyboard
+  // capitalises the first letter and a paste carries a trailing space; both
+  // would otherwise read as "you are not welcome". Still constant-time.
+  const fold = (x) => String(x == null ? '' : x).trim().toLowerCase();
+  if (safeEqual(fold(code), fold(SIGNUP_CODE))) return { ok: true };
+  await Promise.all([
+    store.noteAuthFailure(keys.addr, now, CODE_TRY.addrWindowMs).catch(() => {}),
+    store.noteAuthFailure(keys.all, now, CODE_TRY.allWindowMs).catch(() => {}),
+  ]);
+  return { ok: false, status: 403, error: 'That invite code is not valid.' };
+}
 const adminTryKeys = (req) => {
   const ip = String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
   return { addr: 'admin-addr:' + (authMac('throttle-addr.' + ip) || 'nokey'), all: 'admin-all' };
@@ -2592,12 +2615,9 @@ app.post('/api/auth/google/finish', route(async (req, res) => {
   const p = readPending(parseCookies(req)[GOOGLE_PENDING_COOKIE]);
   if (!p) return res.status(400).json({ error: 'That took too long. Please sign in with Google again.' });
 
-  // The same tolerant compare the register route uses, and for the same
-  // reason: this is read off a phone and pasted out of WhatsApp.
-  const fold = (x) => String(x).trim().toLowerCase();
-  if (SIGNUP_CODE && !safeEqual(fold(req.body && req.body.code), fold(SIGNUP_CODE))) {
-    return res.status(403).json({ error: 'That invite code is not valid.' });
-  }
+  // The same check the register route uses, limit included.
+  const gate = await inviteCodeCheck(req, req.body && req.body.code);
+  if (!gate.ok) return res.status(gate.status).json({ error: gate.error });
 
   const done = async (user) => {
     res.clearCookie(GOOGLE_PENDING_COOKIE);

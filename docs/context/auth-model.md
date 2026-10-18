@@ -134,3 +134,11 @@ Accounts live in Turso (`users`, `sessions`). Passwords are hashed with **`crypt
 - **Activity batches**: 1,000 a day per visitor key and 3,000 per address (`ACT_BATCHES_PER_DAY`); the tracker sends at most one per 20 seconds. Admin uncapped.
 - **The 4MB and 2MB parsers run only for an admin** (`adminJson`), loading the signing secret first since they sit above its middleware; everyone else meets the global 100KB parser.
 - `authsec-test.js` now 36 checks; reverting the email length cap fails 2.
+
+### Entry 45, first batch (2026-10-18)
+- **`refreshing` no longer carries `actor`** (`db.readRefreshState`): it went to every signed-in caller, guests included, through `/api/status`, the screener snapshot and the stand-aside 503. Who started a run stays in `refresh_runs`.
+- **The invite code has its own attempt limit** (`inviteCodeCheck`, `CODE_TRY`: 10 wrong per address a day, 100 for everyone an hour, in `auth_throttle` with keyed-hash keys), checked before the compare, on both `/api/register` and `/api/auth/google/finish`. The sign-up throttle had run only after the compare.
+- **`?do=` links ask unless the console sent you** (`private/consoledo.js`, the owner's choice): the console's click writes a one-minute mark to localStorage; `/`, `/refreshes` and `/news-runs` start at once only for a fresh mark for the same page and job, and otherwise `confirm()`. Marked after the link's own handler, so a Fill missing the console's confirm cancelled is not marked.
+- **A subscription request for an address on file changes nothing until confirmed**: it is held in `subscribers.pending` (JSON topics, source, ip) beside the confirmation hash; `confirmSubscribe` applies it and reissues the unsubscribe token.
+- **A deleted account's alerts and notifications are archived** (the owner's choice over deleting) into `alerts_archive` / `alert_events_archive`, keyed to the account id with no email, in the same batch that deletes the account.
+- `account-data-test.js` (23 checks) runs db.js's own functions on in-memory SQLite by replacing `store.db.execute`/`batch`; each of the three database fixes fails it when reverted. `authsec-test.js` is 43 checks with the `ConsoleDo` cases.
