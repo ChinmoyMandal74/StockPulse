@@ -629,8 +629,17 @@
                        font-size: 13px; color: var(--muted); }
     #tone .tone-week b { font: 600 22px var(--mono); color: var(--text); letter-spacing: -0.02em; }
     #tone .tone-week .tw-n { font-family: var(--mono); font-size: 12px; }
+    /* Two columns (owner, 2026-10-18: across the whole card the summaries
+       ran too wide to read). A grid rather than CSS columns, so the list
+       still reads newest first, left to right, row by row, and Show more
+       appends at the bottom rather than reflowing both columns. */
+    #tone .tone-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 30px; }
     #tone .tone-item { padding: 10px 0; border-top: 1px solid var(--hair); }
-    #tone .tone-item:first-child { border-top: 0; }
+    #tone .tone-item:nth-child(-n+2) { border-top: 0; }
+    @media (max-width: 1000px) {
+      #tone .tone-cols { grid-template-columns: minmax(0, 1fr); }
+      #tone .tone-item:nth-child(2) { border-top: 1px solid var(--hair); }
+    }
     #tone .ti-h { display: flex; gap: 12px; align-items: baseline; }
     #tone .ti-h a { color: var(--text); text-decoration: none; min-width: 0; font-weight: 500; }
     #tone .ti-h a:hover { text-decoration: underline; }
@@ -3162,7 +3171,7 @@
         toneHave = (more ? toneHave : []).concat((data.items || []).filter((x) => !seen.has(x.url)));
         if (!toneHave.length && !data.week) return;
         if (!more) document.getElementById('toneWeek').innerHTML = renderToneWeek(data.week);
-        document.getElementById('toneList').innerHTML = renderToneItems(toneHave)
+        document.getElementById('toneList').innerHTML = '<div class="tone-cols">' + renderToneItems(toneHave) + '</div>'
           + (data.more ? '<button type="button" class="rng newsmore" id="toneMore">Show more</button>' : '');
         const btn = document.getElementById('toneMore');
         if (btn) btn.addEventListener('click', () => { btn.disabled = true; btn.textContent = 'Loading…'; loadTone(true); });
