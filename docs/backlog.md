@@ -2170,6 +2170,87 @@ to change, not how each could be abused; the local write-up has that.
 Each fix ships with a test that fails before it, per the house rule. Entry
 40 (Strix) stays open for a test of a running copy once one exists.
 
+## 45. Security findings from the VulnHunter scan — 2026-10-18
+
+*Area: Infrastructure · Status: Open · Note: a read-only automated scan of the code, nothing executed and no live probing; 56 findings (3 High, 19 Medium, 34 Low). The full report is kept off the public repository (docs/security-review-vulnhunt-2026-10-18.md, gitignored)*
+
+The owner asked for a scan with Capital One's VulnHunter, an open-source
+tool that traces every input an outsider can send through to where it is
+used, then tries to disprove each candidate before keeping it. It ran on a
+clean export of the committed code with no secrets in it, about fifty
+agents over 351 inputs. This repository is public, so, as in entry 44, the
+items say what to change, not how each could be abused.
+
+**It confirms entry 44, and that work comes first.** The three findings
+rated High are all already in 44: the admin and guest cookies (44a: a
+separate secret, then change the admin password), the admin password login
+(44a: an attempt limit) and the private-file gate (44c: normalise the path
+before matching). Its cost and account findings overlap 44b and 44d as well: the
+email length limit, admin-only cache bypass, card window rounding, the
+subscription mail cap, paid admin routes on POST only, the activity-log
+cap, the lockout, timing, bounded caches and Google sign-in never linking
+to an admin account.
+
+**New beyond entry 44:**
+
+**a. Admin actions started by a link.**
+- The screener's, the refresh page's and the news-runs page's `?do=` links
+  ask for a click before they start a refresh, rather than starting on
+  load.
+- Every admin route that changes state or reads whole tables refuses GET,
+  including the `fresh=1` diagnostics and the cron-or-admin routes when
+  called with the admin cookie rather than the cron secret.
+- Logout is a POST that checks where the request came from.
+
+**b. Sign-up and the mailing list.**
+- Check the invite code only after the sign-up throttle, on both the email
+  form and the Google finish step.
+- Registration verifies the email address before the account can be used,
+  so a Google sign-in never links to an account someone else created with
+  that address.
+- A subscription for an address that is already pending or unsubscribed
+  cannot be rewritten by anyone who names it; only the confirmation link
+  changes it.
+- The subscribe, access-request and forgot-password limits count in one
+  database statement, so concurrent requests cannot slip past them.
+
+**c. What a response gives away.**
+- The status, screener and "a refresh is running" responses say that a
+  refresh is running, never who started it.
+
+**d. Data left behind and data written by others.**
+- Deleting an account deletes or archives its alerts and alert history,
+  so whoever registers the same address later does not inherit them.
+- Anonymous page views of the blog and the landing page write visitor and
+  activity rows only within a per-visitor cap, with long headers clipped.
+
+**e. Escaping on output.**
+- Escape portfolio, theme and screen names (sector, industry, signal) where
+  the screener draws them, and the saved backtest on its shared run page.
+  Only an admin writes these today, so it is defence in depth.
+- The blog's markdown renderer must not run its link rule over the
+  attributes its image rule has just written.
+
+**f. Concurrency and credits.**
+- One statement each for the alert cap and paper-position cash, so
+  simultaneous requests cannot exceed them.
+- The subscriber broadcast checks that it won the claim before sending, so
+  a post cannot go out twice.
+- Refresh rounds take their lock and cursor in one statement, and the
+  universe check stands aside for a running refresh and keeps under the
+  per-minute credit cap.
+
+**g. Robustness.**
+- The headline feed's entity decoder ignores an out-of-range character
+  code instead of throwing, which stalls that stock's news.
+
+**Not finished by the tool:** a safety filter stopped its proof-writing
+step twice, so each finding's proof is a written trace and its regression
+test is described rather than written as code. The tests are still owed,
+one per fix, failing before it. Whether the private-file gate can be
+bypassed through Vercel's edge, and not only in Express, was not tested on
+the live site; that waits for a running copy (entry 40).
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
