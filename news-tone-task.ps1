@@ -1,0 +1,64 @@
+# Register (or remove) the Windows scheduled task that reads the semiconductor
+# stocks' new articles for their tone, once a day. See docs/context/news-tone.md.
+#
+#   .\news-tone-task.ps1            register, or update an existing one
+#   .\news-tone-task.ps1 -Remove    take it away
+#   .\news-tone-task.ps1 -WhatIf    print what it would register and stop
+#
+# UNLIKE THE OTHER TASKS THIS IS NOT A PING. The article fetching has to run
+# from this machine (publishers refuse data-centre addresses), so the task runs
+# news-tone-load.js itself. It talks to the database through db.js and to the
+# Anthropic API; it never starts server.js.
+#
+# IT SPENDS MONEY: about a cent an article, a few dollars a week, and each run
+# stops at --max-usd. Removing the task stops the spending.
+#
+# 18:30 LOCAL, EVERY DAY: after the 17:00 headline slot, and an hour clear of
+# the 19:30 nightly rotation, which runs from this same laptop. It uses no
+# Twelve Data credits, so the price windows are not at stake, only the machine.
+param([switch]$Remove, [switch]$WhatIf)
+
+$ErrorActionPreference = 'Stop'
+$TaskName = 'TickrLab news tone'
+$Root     = $PSScriptRoot
+$Script   = Join-Path $Root 'news-tone-load.js'
+$Time     = '18:30'
+$MaxUsd   = '3'
+
+if ($Remove) {
+  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+  Write-Output "Removed '$TaskName'."
+  exit 0
+}
+
+if (-not (Test-Path $Script)) { throw "news-tone-load.js is not beside this script ($Script)." }
+$node = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $node) { throw 'node is not on PATH for this shell.' }
+
+# The script writes its own report to stdout; cmd redirects it to a log beside it.
+$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd >> news-tone.log 2>&1`""
+$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
+$trigger = New-ScheduledTaskTrigger -Daily -At $Time
+
+# A day's articles take minutes; the limit stops a run that has hung, and
+# IgnoreNew stops a slow run being doubled by the next day's.
+$settings = New-ScheduledTaskSettingsSet `
+  -StartWhenAvailable `
+  -AllowStartIfOnBatteries `
+  -DontStopIfGoingOnBatteries `
+  -MultipleInstances IgnoreNew `
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 50)
+
+if ($WhatIf) {
+  Write-Output "Would register '$TaskName'"
+  Write-Output "  run   : cmd.exe $cmdArgs"
+  Write-Output "  in    : $Root"
+  Write-Output "  daily : $Time, every day, stopping each run at `$$MaxUsd"
+  exit 0
+}
+
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+  -Settings $settings -Description 'Reads the semiconductor stocks new articles for their tone (news-tone-load.js). Spends Anthropic API credit.' -Force | Out-Null
+
+Write-Output "Registered '$TaskName' -- daily at $Time local time, at most `$$MaxUsd a run."
+Write-Output "Log: $(Join-Path $Root 'news-tone.log')"

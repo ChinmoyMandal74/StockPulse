@@ -45,6 +45,9 @@ const BIG = ['bars', 'fundamentals_history', 'earnings_history', 'news', 'activi
   'holder_books',
   // Headlines moved out of `news` rather than deleted (2026-10-16): it only grows.
   'news_archive',
+  // One row per article read for its tone (2026-10-18), kept forever like the
+  // archive beside it. Small at first; on the list from the day it shipped.
+  'news_tone',
   // Every quarter's 13F and N-PORT rows and every holder's book, kept (2026-10-16).
   'inst_history', 'fund_history', 'holder_history'];
 

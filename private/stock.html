@@ -623,6 +623,26 @@
     /* News by type (2026-10-16): a chip per type present, which filters the
        list, and the type beside each headline. Neutral colours: a type is a
        kind of story, not good or bad news. */
+    /* Article tone. Blue and orange, never green and red: those mean the
+       price went up or down, and a tone is a reading of words, not a move. */
+    #tone .tone-week { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 0 0 14px;
+                       font-size: 13px; color: var(--muted); }
+    #tone .tone-week b { font: 600 22px var(--mono); color: var(--text); letter-spacing: -0.02em; }
+    #tone .tone-week .tw-n { font-family: var(--mono); font-size: 12px; }
+    #tone .tone-item { padding: 10px 0; border-top: 1px solid var(--hair); }
+    #tone .tone-item:first-child { border-top: 0; }
+    #tone .ti-h { display: flex; gap: 12px; align-items: baseline; }
+    #tone .ti-h a { color: var(--text); text-decoration: none; min-width: 0; font-weight: 500; }
+    #tone .ti-h a:hover { text-decoration: underline; }
+    #tone .ti-chip { flex: none; font: 600 11px var(--mono); padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+                     border: 1px solid var(--hair-2); color: var(--muted); }
+    #tone .ti-chip.pos { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, transparent);
+                         background: color-mix(in srgb, var(--blue) 10%, transparent); }
+    #tone .ti-chip.neg { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 45%, transparent);
+                         background: color-mix(in srgb, var(--orange) 10%, transparent); }
+    #tone .ti-sum { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+    #tone .ti-meta { margin-top: 4px; font-size: 11.5px; color: var(--faint); }
+    #tone .tone-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
     .news-types { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
     .news-types button { border: 1px solid var(--hair-2); background: none; color: var(--muted); cursor: pointer;
       font: 500 11.5px var(--sans); padding: 4px 10px; border-radius: 999px; }
@@ -2609,6 +2629,29 @@
       return list + `<button type="button" class="rng newsmore" id="newsMore">` +
         `Show more — ${ok.length} of ${n}</button>`;
     }
+    // ---- article tone ---------------------------------------------------
+    // The readings come with their label from the server (newstone.js), so
+    // the bands live in one place. The chip carries the number as well as
+    // the word, because "Positive" alone hides whether it is +0.3 or +0.9.
+    const toneNum = (t) => (t == null || !isFinite(t) ? '' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
+    function renderToneWeek(w) {
+      if (!w) return '<div class="tone-week">No articles about the company read in the last seven days.</div>';
+      return '<div class="tone-week"><span>Last 7 days</span>'
+        + `<b>${esc(toneNum(w.avg))}</b><span>average tone over ${w.count} article${w.count === 1 ? '' : 's'}</span>`
+        + `<span class="tw-n">${w.positive} positive · ${w.neutral} neutral · ${w.negative} negative</span></div>`;
+    }
+    function renderToneItems(items) {
+      return (items || []).filter((x) => x && /^https?:\/\//i.test(x.url || '')).map((x) => {
+        const cls = x.label === 'Positive' ? 'pos' : x.label === 'Negative' ? 'neg' : '';
+        const meta = [newsAge(x.published_at), x.source, x.kindLabel, x.about === 'mentioned' ? 'mentions the company' : null,
+          x.complete === false ? 'partial text' : null].filter(Boolean).map(esc).join(' · ');
+        return '<div class="tone-item"><div class="ti-h">'
+          + `<span class="ti-chip ${cls}" title="Tone from −1 to +1">${esc(x.label || '')} ${esc(toneNum(x.tone))}</span>`
+          + `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.headline || '')}</a></div>`
+          + (x.summary ? `<p class="ti-sum">${esc(x.summary)}</p>` : '')
+          + `<div class="ti-meta">${meta}</div></div>`;
+      }).join('');
+    }
     // ---- end news renderers ---------------------------------------------
 
     // ---- earnings history ------------------------------------------------
@@ -3105,6 +3148,28 @@
       } finally { newsBusy = false; }
     }
 
+    // A guest is refused by the route and a stock nobody reads for has no
+    // rows: either way the card stays hidden rather than showing an empty box.
+    let toneHave = [];
+    async function loadTone(more) {
+      const card = document.getElementById('tone');
+      if (!card) return;
+      try {
+        const res = await fetch(`/api/news/tone?symbol=${encodeURIComponent(SYMBOL)}&limit=8&offset=${more ? toneHave.length : 0}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const seen = new Set(more ? toneHave.map((x) => x.url) : []);
+        toneHave = (more ? toneHave : []).concat((data.items || []).filter((x) => !seen.has(x.url)));
+        if (!toneHave.length && !data.week) return;
+        if (!more) document.getElementById('toneWeek').innerHTML = renderToneWeek(data.week);
+        document.getElementById('toneList').innerHTML = renderToneItems(toneHave)
+          + (data.more ? '<button type="button" class="rng newsmore" id="toneMore">Show more</button>' : '');
+        const btn = document.getElementById('toneMore');
+        if (btn) btn.addEventListener('click', () => { btn.disabled = true; btn.textContent = 'Loading…'; loadTone(true); });
+        card.hidden = false;
+      } catch (err) { /* a decoration: the page stands without it */ }
+    }
+
     async function loadNews(force) {
       const box = document.getElementById('newsList');
       if (!box) return;
@@ -3489,6 +3554,18 @@
             <button class="rng" id="newsBtn" type="button" title="Check the feed for this stock now, rather than waiting for the next refresh">Check now</button>
           </div>
           <div id="newsList"><div class="msg">Loading headlines…</div></div>
+        </div></section>
+
+        <!-- Article tone (2026-10-18): hidden until there is a reading, which
+             is only the semiconductor stocks, and only for members. -->
+        <section class="bezel card" id="tone" data-jump="Article tone" data-icon="i-pulse" hidden><div class="core">
+          <div class="sec-h"><h2>Article tone</h2></div>
+          <div id="toneWeek"></div>
+          <div id="toneList"></div>
+          <p class="tone-note">Each article in the stock's Yahoo Finance feed is read in full by an AI model
+            (<span id="toneModel">Claude Sonnet 5.5</span>), which says how its content leans towards the company and sums it up
+            in its own words. A description of what was written, not a forecast or a rating, and never an input to the Signal.
+            Articles that are not about the company, or that could not be read, are left out.</p>
         </div></section>
 
         <section class="bezel card" id="allfields" data-jump="All fields" data-icon="i-columns"><div class="core">
@@ -5359,6 +5436,7 @@
       // this only attaches the toggle and applies the remembered choice.
       wireAround();
       loadNews();          // after the chart: a decoration must not make the data wait
+      loadTone();
       loadSec();           // and the filings after that, for the same reason
       loadInsider();
       loadShortInt();

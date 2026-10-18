@@ -76,6 +76,9 @@ const Indicators = require('./private/indicators.js');
 // later personal profile can re-score locally without a second implementation.
 const Action = require('./private/action.js');
 const News = require('./news.js');
+// Article tone: a model's reading of each article in a stock's feed. Display
+// only; nothing here reaches the Signal. Filled by news-tone-load.js.
+const NewsTone = require('./newstone.js');
 // Pure: bars + earnings events -> the aggregate /stock draws. Required at the
 // top rather than beside the route, because /api/stock sits above the point
 // where secfacts.js and insider.js are pulled in.
@@ -14381,6 +14384,27 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
 // "nothing to report" from "we have not looked yet". Headlines are topped up 12
 // stocks a refresh round, so the second case is common and must not read as the
 // first. Three bounded reads, none of them per symbol.
+// Article tone for one stock (2026-10-18, newstone.js): the seven-day line
+// and a page of readings, newest first. MEMBERS AND ADMIN, never guests, by
+// the owner's decision. Stored rows only; the reading is done on the owner's
+// machine by news-tone-load.js, so a page view never calls the model.
+// `more` rather than a total: one extra row asked for is cheaper than a
+// count, and the page only needs to know whether to offer the next page.
+app.get('/api/news/tone', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!symbol) return res.status(400).json({ error: 'symbol required' });
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 8));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const [rows, week] = await Promise.all([
+    store.readNewsToneList(symbol, limit + 1, offset),
+    store.readNewsToneSince(symbol, weekAgo),
+  ]);
+  const items = rows.slice(0, limit).map((x) => Object.assign(x, { label: NewsTone.label(x.tone), kindLabel: NewsTone.KIND_LABEL[x.kind] || null }));
+  res.json({ symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND });
+}));
+
 app.get('/api/news/latest', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (NEWS_OFF) return res.json({ items: [], counts: {}, checked: {} });

@@ -716,6 +716,33 @@ const SCHEMA = [
      archived_at  integer not null
    )`,
   `create index if not exists idx_news_archive_symbol on news_archive (symbol, published_at)`,
+  // ARTICLE TONE (2026-10-18, see newstone.js): a model's reading of one
+  // article for one stock, from Yahoo Finance's per-ticker feed. Keyed by a
+  // hash of the symbol and the article's address, so the same article read
+  // for two stocks is two readings. Never deleted. A page that could not be
+  // read is a row too, with the reason, so it is not fetched again every
+  // run; its tone is null, never zero. No article text is stored.
+  `create table if not exists news_tone (
+     id           text primary key,
+     symbol       text not null,
+     published_at text not null,
+     headline     text,
+     source       text,
+     url          text not null,
+     status       text not null,
+     reason       text,
+     about        text,
+     kind         text,
+     tone         real,
+     summary      text,
+     complete     integer,
+     chars        integer,
+     host         text,
+     model        text,
+     attempts     integer not null default 1,
+     scored_at    integer not null
+   )`,
+  `create index if not exists idx_news_tone_symbol on news_tone (symbol, published_at)`,
   // The ticker asks for everything published in the last 12 hours across the
   // universe; without this it scanned the table (query-plan test, 2026-09-15).
   `create index if not exists idx_news_published on news (published_at)`,
@@ -5592,7 +5619,7 @@ async function readBarsFor(symbols, since) {
 
 // Every table keyed by symbol. `snapshot` is deliberately absent: it is one
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
-const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
+const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_tone', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
   'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
 
@@ -7043,6 +7070,66 @@ async function readNews(symbol, limit = 12, offset = 0) {
   return r.rows.map((x) => ({ published_at: x.published_at, source: x.source, headline: x.headline, url: x.url }));
 }
 
+// ---- article tone (newstone.js) ---------------------------------------------
+// One stock's readings, newest first: the stock page's list. A seek on
+// idx_news_tone_symbol. Only scored readings of articles about the company;
+// the unreadable and the off-topic rows are bookkeeping.
+async function readNewsToneList(symbol, limit = 20, offset = 0) {
+  await init();
+  const r = await db.execute({
+    sql: `select published_at, headline, source, url, about, kind, tone, summary, complete, model from news_tone
+           where symbol = ? and status = 'scored' and about <> 'not_about'
+           order by published_at desc limit ? offset ?`,
+    args: [symbol, Math.min(100, Math.max(1, Number(limit) || 20)), Math.max(0, Number(offset) || 0)],
+  });
+  return r.rows.map((x) => ({ published_at: x.published_at, headline: x.headline, source: x.source, url: x.url, about: x.about, kind: x.kind,
+    tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null, complete: x.complete == null ? null : Number(x.complete) === 1, model: x.model }));
+}
+
+// One stock's readings published since a date, for the seven-day line. The
+// same seek, bounded by a week of one stock's feed.
+async function readNewsToneSince(symbol, sinceIso) {
+  await init();
+  const r = await db.execute({
+    sql: 'select status, about, tone from news_tone where symbol = ? and published_at >= ?',
+    args: [symbol, sinceIso],
+  });
+  return r.rows.map((x) => ({ status: x.status, about: x.about, tone: x.tone == null ? null : Number(x.tone) }));
+}
+
+// What the loader already holds for one stock since a date: id -> status,
+// attempts and when. The same seek.
+async function readNewsToneKnown(symbol, sinceIso) {
+  await init();
+  const r = await db.execute({
+    sql: 'select id, status, attempts, scored_at from news_tone where symbol = ? and published_at >= ?',
+    args: [symbol, sinceIso],
+  });
+  const out = {};
+  for (const x of r.rows) out[x.id] = { status: x.status, attempts: Number(x.attempts || 0), scoredAt: Number(x.scored_at || 0) };
+  return out;
+}
+
+// One row. A scored row is final: a later write for the same id is ignored,
+// so a re-run can never overwrite a reading. A failure row is replaced by the
+// next attempt, keeping the count of attempts.
+async function writeNewsTone(row) {
+  await init();
+  await db.execute({
+    sql: `insert into news_tone (id, symbol, published_at, headline, source, url, status, reason, about, kind, tone, summary, complete, chars, host, model, attempts, scored_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          on conflict(id) do update set
+            status = excluded.status, reason = excluded.reason, about = excluded.about, kind = excluded.kind,
+            tone = excluded.tone, summary = excluded.summary, complete = excluded.complete, chars = excluded.chars,
+            host = excluded.host, model = excluded.model, attempts = news_tone.attempts + 1, scored_at = excluded.scored_at
+          where news_tone.status <> 'scored'`,
+    args: [row.id, row.symbol, row.published_at, row.headline || null, row.source || null, row.url,
+      row.status, row.reason || null, row.about || null, row.kind || null,
+      row.tone == null ? null : Number(row.tone), row.summary || null, row.complete == null ? null : (row.complete ? 1 : 0),
+      row.chars == null ? null : Number(row.chars), row.host || null, row.model || null, Date.now()],
+  });
+}
+
 // How many headlines are stored for one symbol, so a page can say "10 of 43"
 // and know when to stop asking. Bounded by the keep window and seeking on
 // idx_news_symbol, so it is a handful of rows rather than a count over the
@@ -7259,6 +7346,7 @@ module.exports = {
   // pressing Run again and a reader reporting a bug.
   isNetDrop,
   init,
+  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readFigure, writeFigures,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
