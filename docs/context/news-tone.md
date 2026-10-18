@@ -29,4 +29,4 @@ The owner's words: "it cannot be based just on the headline, it has to be based 
 node news-tone-load.js --commit                # last 7 days, newest first, stops at $8
 node news-tone-load.js --commit --only NVDA    # one stock
 ```
-Scheduling is `news-tone-task.ps1` (Windows Task Scheduler, once a day at 18:30 local, after the 17:00 news slot and clear of the 19:30 nightly).
+Scheduling is `news-tone-task.ps1` (Windows Task Scheduler, every six hours: 00:30, 06:30, 12:30, 18:30 local, each ending before the 07:30 and 19:30 nightly; owner, 2026-10-18). Yahoo's feed holds only the latest ~20 items per stock (NVDA's spanned under three hours, ACLS's six weeks), so a daily read missed most of the busy stocks. Each run reads only unseen articles.
