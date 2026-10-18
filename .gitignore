@@ -29,3 +29,6 @@ analysis.db-shm
 
 # the local intraday scheduler keeps its own log beside the script
 intraday-ping.log
+
+# Security review detail: the repository is public (backlog 44)
+docs/security-review-*.md

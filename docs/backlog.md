@@ -2102,6 +2102,74 @@ data sets run to 2013, at about 100MB and a minute each).
 older quarters miss a company whose security code changed; firms that
 changed their SEC filer id (BlackRock in 2024) break a holder's continuity.
 
+## 44. Security hardening from the code review — 2026-10-17
+
+*Area: Infrastructure · Status: Open · Note: a read-only review of the code, no live probing; the owner asked for the findings on the backlog. The full write-up, with file and line references, is kept off the public repository (docs/security-review-2026-10-17.md, gitignored)*
+
+The owner asked for a review "from a penetration-testing perspective". Four
+passes over the code: sign-in and sessions, who can reach what, injection
+and output, and outbound calls, secrets and cost. No route was found that
+lets a stranger in today without a secret, and no SQL injection, script
+injection a member can plant, open redirect, request forgery to other hosts,
+or secret leaking into a response. What was found is listed below as work,
+most important first. This repository is public, so the entries say what
+to change, not how each could be abused; the local write-up has that.
+
+**a. The admin sign-in (first).**
+- Sign the admin, guest and Google sign-in cookies with a separate random
+  secret (a new environment variable), never with the admin password, then
+  change the admin password. Changing it signs every admin device out.
+- Give the password-only admin login an attempt limit, as member accounts
+  have.
+- Make the admin login a server-side session with an expiry that logout
+  ends, instead of a fixed cookie.
+- Refuse to start in production when the admin password is missing, rather
+  than opening the site to everyone.
+
+**b. Cost and load limits.**
+- Per-stock routes that can call a paid or rate-limited source (filings
+  series, headlines) accept only symbols in the universe.
+- A length limit on email addresses before they are checked, on every form
+  that takes one.
+- Uncached whole-universe reads: only an admin may bypass a cache; card
+  windows are rounded to the ones the cards use; the basket read is cached.
+- A site-wide and per-address cap on subscription confirmation mail.
+- Admin routes that do paid work run only on POST.
+- A per-visitor cap on activity logging; parse large admin upload bodies
+  only after the admin check.
+
+**c. The private files.**
+- The research builders' output in `private/` (single-closes, the lab grid,
+  the strategy files) is tracked in git and so is public whatever the site's
+  gate says. Stop tracking it and serve it from the database. Removing it
+  from the repository's history is a separate, destructive step and the
+  owner's decision. The data is derived from Twelve Data prices; check the
+  licence.
+- The private-file gate normalises the path the way the file server does
+  before matching, and refuses anything it does not recognise.
+
+**d. Accounts.**
+- The same answer whether or not an email has an account, at sign-up, at a
+  locked login and in response time.
+- The lockout counts in one database statement and lapses on its own, so it
+  cannot be raced or held on someone else's account.
+- Password change counts failures like login; session tokens are stored
+  hashed (the auth notes say they are; they are not); Google sign-in never
+  links to an admin account; cookies are Secure on Vercel whatever NODE_ENV
+  says.
+
+**e. Smaller.**
+- The company website link accepts http and https only.
+- The spreadsheet export neutralises cells that begin with a formula sign.
+- The blog fills its template with a replacer function (a `$` in a post
+  currently garbles the page); internal links refuse `//`.
+- Bounded in-memory caches; security headers (content security policy,
+  nosniff, frame options); the cron secret's comment says how many routes it
+  opens (about twenty, not one).
+
+Each fix ships with a test that fails before it, per the house rule. Entry
+40 (Strix) stays open for a test of a running copy once one exists.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
