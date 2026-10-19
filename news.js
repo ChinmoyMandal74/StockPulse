@@ -41,7 +41,10 @@
       .replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')
       .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'")
-      .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+      // A code past U+10FFFF makes fromCodePoint THROW, and one crafted headline
+      // then failed its whole stock's feed on every fetch (backlog 45g). Such a
+      // reference is dropped instead.
+      .replace(/&#(\d+);/g, (_, n) => { const c = Number(n); return c > 0 && c <= 0x10FFFF ? String.fromCodePoint(c) : ''; })
       .trim();
   }
 

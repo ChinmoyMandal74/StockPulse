@@ -2192,14 +2192,25 @@ async function countAlerts(userKey) {
   return Number(r.rows[0].n);
 }
 
-async function createAlert({ userKey, symbol, kind, params, once }) {
+// With `max`, the cap is checked IN the insert (backlog 45f): it was counted
+// first and inserted after, so requests sent together could each see room and
+// all go in. Now a row is written only while the account has fewer than
+// `max`, in one statement; null means the cap was reached.
+async function createAlert({ userKey, symbol, kind, params, once, max }) {
   await init();
-  const r = await db.execute({
-    sql: `insert into alerts (user_key, symbol, kind, params, active, once, created_at)
-          values (?, ?, ?, ?, 1, ?, ?) returning *`,
-    args: [String(userKey), String(symbol).toUpperCase(), String(kind),
-      JSON.stringify(params || {}), once ? 1 : 0, Date.now()],
-  });
+  const vals = [String(userKey), String(symbol).toUpperCase(), String(kind),
+    JSON.stringify(params || {}), once ? 1 : 0, Date.now()];
+  const r = max == null
+    ? await db.execute({
+      sql: `insert into alerts (user_key, symbol, kind, params, active, once, created_at)
+            values (?, ?, ?, ?, 1, ?, ?) returning *`,
+      args: vals,
+    })
+    : await db.execute({
+      sql: `insert into alerts (user_key, symbol, kind, params, active, once, created_at)
+            select ?, ?, ?, ?, 1, ?, ? where (select count(*) from alerts where user_key = ?) < ? returning *`,
+      args: [...vals, String(userKey), Number(max)],
+    });
   return r.rows.length ? alertRow(r.rows[0]) : null;
 }
 
@@ -2531,14 +2542,20 @@ async function readSentFor(slug) {
 // Claimed BEFORE the send is attempted, so a function killed mid-batch cannot
 // cause a second copy on the retry. The cost is that a crash can lose a send
 // rather than duplicate one, which is the right way round for a newsletter.
+// RETURNS THE ADDRESSES THIS CALL CLAIMED (backlog 45f). `insert or ignore`
+// keeps the claim single, but the caller sent to every address it asked for,
+// so two batches running at once (a double click, a retried request) each
+// mailed the same people. Now only addresses whose row this call wrote come
+// back, and only those are sent to.
 async function claimSends(slug, emails) {
   await init();
   const now = Date.now();
-  if (!emails.length) return;
-  await db.batch(emails.map((e) => ({
+  if (!emails.length) return [];
+  const rs = await db.batch(emails.map((e) => ({
     sql: 'insert or ignore into post_sends (slug, email, sent_at, ok) values (?, ?, ?, 0)',
     args: [String(slug), subEmail(e), now],
   })), 'write');
+  return emails.filter((e, i) => rs && rs[i] && Number(rs[i].rowsAffected) > 0);
 }
 
 // Give a claim back, for the one case where the provider PROVED it sent
@@ -6320,7 +6337,10 @@ async function logVisit(entry) {
   await init();
   await db.execute({
     sql: 'insert into visitors (ts, ip, ua, ref, user_email) values (?, ?, ?, ?, ?)',
-    args: [entry.ts, entry.ip ?? null, entry.ua ?? null, entry.ref ?? null, entry.userEmail ?? null],
+    // CLIPPED (backlog 45d): the user agent and referrer are whatever the
+    // visitor sends, of any length, and the admin page groups and reads them.
+    args: [entry.ts, entry.ip ?? null, entry.ua == null ? null : String(entry.ua).slice(0, 300),
+      entry.ref == null ? null : String(entry.ref).slice(0, 500), entry.userEmail ?? null],
   });
 }
 
@@ -6601,12 +6621,29 @@ async function readPaper(userKey, startCash) {
 
 // One appended row. Never retried: a write that may have landed must not
 // land twice.
-async function addPaperTrade(userKey, t) {
+//
+// WRITTEN ONLY IF THE LEDGER IS AS IT WAS READ (backlog 45f). Cash and holdings
+// are worked out from the ledger, so two opens sent together each saw the
+// same cash and both went in, spending it twice (and two closes could sell
+// one position twice). `lastId` is the newest trade id the caller read (0 for
+// none); the row goes in only if that is still the newest, in one statement.
+// Returns false when another trade landed first; the caller asks again.
+async function addPaperTrade(userKey, t, lastId) {
   await init();
-  await db.execute({
-    sql: 'insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    args: [userKey, t.ts, t.kind, t.symbol, t.shares, t.price, t.priced_at ?? null, t.signal ?? null, t.note ?? null],
+  const vals = [userKey, t.ts, t.kind, t.symbol, t.shares, t.price, t.priced_at ?? null, t.signal ?? null, t.note ?? null];
+  if (lastId == null) {
+    await db.execute({
+      sql: 'insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      args: vals,
+    });
+    return true;
+  }
+  const r = await db.execute({
+    sql: `insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note)
+          select ?, ?, ?, ?, ?, ?, ?, ?, ? where coalesce((select max(id) from paper_trades where user_key = ?), 0) = ?`,
+    args: [...vals, userKey, Number(lastId)],
   });
+  return Number(r.rowsAffected) > 0;
 }
 
 // Start again: the ledger goes and the account restarts today. One batch, so

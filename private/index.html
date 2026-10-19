@@ -2495,7 +2495,7 @@
 
     function badges(names) {
       return (names || [])
-        .map((n) => `<span class="badge" style="color:${colorFor(n)};border-color:${colorFor(n)}">${n}</span>`)
+        .map((n) => `<span class="badge" style="color:${colorFor(n)};border-color:${colorFor(n)}">${we(n)}</span>`)
         .join('');
     }
     // The member's own memberships, dashed so shared and personal never read
@@ -2811,9 +2811,9 @@
       // so it gets no pencil.
       const item = (name, c, n, renamable) =>
         '<div class="pick-row">' +
-        `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${name}" role="option" ` +
+        `<button class="pick ${activeTab === name ? 'on' : ''}" data-tab="${we(name)}" role="option" ` +
         `aria-selected="${activeTab === name}" style="--tint:${c}">` +
-        dot(c) + `<span class="nm">${name}</span><span class="count">${n}</span></button>` +
+        dot(c) + `<span class="nm">${we(name)}</span><span class="count">${n}</span></button>` +
         `<a class="jump" href="/theme/${encodeURIComponent(name)}" target="_blank" rel="noopener" ` +
         `title="Open ${we(name)} aggregated ↗" style="transform:none">` +
         '<svg class="ic ic-sm" aria-hidden="true" style="transform:none"><use href="#i-chart" /></svg></a>' +
@@ -4075,8 +4075,12 @@
             : activeTab === 'All'
               ? 'No tickers yet — add one above.'
               : `No tickers in "${activeTab}" yet — add one above.`;
-        tbody.innerHTML = `<tr><td class="empty" colspan="115">${msg}</td></tr>`;
-        if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${msg}</div>`; }
+        // ESCAPED (backlog 45e): the message names the theme, sector, industry
+        // and signal in force, which come from saved screens and portfolio
+        // names, so a name carrying markup would otherwise run as markup here.
+        // The message itself is plain text, so escaping all of it loses nothing.
+        tbody.innerHTML = `<tr><td class="empty" colspan="115">${we(msg)}</td></tr>`;
+        if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
         applyGroups();

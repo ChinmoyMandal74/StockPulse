@@ -128,7 +128,7 @@
   // ---- the article's text --------------------------------------------------
   const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"', mdash: '—', ndash: '–', hellip: '…' };
   const unent = (s) => String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
-    if (e[0] === '#') { const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1)); return isFinite(n) && n > 0 ? String.fromCodePoint(n) : ' '; }
+    if (e[0] === '#') { const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1)); return isFinite(n) && n > 0 && n <= 0x10FFFF ? String.fromCodePoint(n) : ' '; }
     return ENT[e.toLowerCase()] != null ? ENT[e.toLowerCase()] : m;
   });
   // A page's structured data often carries the whole body as articleBody,

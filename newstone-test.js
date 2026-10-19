@@ -90,6 +90,18 @@ check('structured articleBody is used when present', NT.articleText(ld).startsWi
 check('repeated paragraphs kept once', NT.articleText(para(LONG) + para(LONG)).length, LONG.trim().length);
 check('entities decoded', NT.articleText(para('AT&amp;T and S&amp;P 500 moved &mdash; a sentence long enough to be kept.')).includes('AT&T and S&P 500 moved —'), true);
 
+console.log('an out-of-range character code never throws (backlog 45g)');
+let threw = false;
+try { NT.articleText(para('A paragraph long enough to keep, with &#99999999; in it and &#233; too.')); } catch (e) { threw = true; }
+check('articleText survives a code past U+10FFFF', threw, false);
+check('and keeps the valid one', NT.articleText(para('A paragraph long enough to keep, with &#99999999; in it and &#233; too.')).includes('é'), true);
+const News = require('./news.js');
+threw = false;
+let decoded = null;
+try { decoded = News.decodeEntities('Bad &#99999999; and good &#233;'); } catch (e) { threw = true; }
+check('the headline decoder survives it too', threw, false);
+check('dropping only the bad reference', decoded, 'Bad  and good é');
+
 console.log('does the page name the company');
 check('the ticker as a word', NT.namesCompany('Shares of MU fell', 'MU', 'Micron Technology, Inc.'), true);
 check('the ticker inside a word does not count', NT.namesCompany('MUCH ado about nothing', 'MU', ''), false);

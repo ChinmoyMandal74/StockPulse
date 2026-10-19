@@ -314,6 +314,22 @@ async function ensureAuthKey() {
 app.use((req, res, next) => { ensureAuthKey().then(() => next()); });
 const authMac = (label) => (authKey ? crypto.createHmac('sha256', authKey).update(label).digest('hex') : null);
 
+// NO /api/ REQUEST THAT ANOTHER SITE STARTED (backlog 45a). The site's pages
+// call the API from its own origin; the schedulers send no Sec-Fetch-Site at
+// all; nothing else is meant to call it (there is no CORS). A link, a form or
+// a redirect on someone else's page is the one thing that arrives marked
+// `cross-site`, and on the admin's Lax cookie that could start credit-spending
+// or table-scanning work, or sign someone out. Refused here once, rather than
+// route by route. The one exception is Google's sign-in redirect, which is
+// cross-site by nature and carries its own state check.
+const CROSS_SITE_OK = new Set(['/api/auth/google/callback']);
+app.use('/api/', (req, res, next) => {
+  if (AuthSec.crossSite(req.get('sec-fetch-site')) && !CROSS_SITE_OK.has(req.path === '/' ? req.baseUrl : req.baseUrl + req.path)) {
+    return res.status(403).json({ error: 'This has to be used from the site itself.' });
+  }
+  next();
+});
+
 // THE TERMS GATE. A signed-in member who has not agreed to the current terms
 // gets one page -- /accept-terms -- and nothing else: a page request is
 // redirected there and an API call answers 403. ENFORCED HERE rather than in
@@ -352,7 +368,7 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
   // the marketing page rather than a login form (2026-09-16) — the form asks
   // for a password before saying what the site is.
   if (!(await isSignedIn(req))) {
-    store.logVisit({
+    if (anonLogOk(req)) store.logVisit({
       ts: new Date().toISOString(), ip: req.ip || null,
       ua: req.headers['user-agent'] || null,
       ref: req.headers['referer'] || req.headers['referrer'] || null,
@@ -864,8 +880,21 @@ function renderMarkdown(src, skin) {
   const S = skin || PAGE_SKIN;
   const esc = (t) => String(t == null ? '' : t)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const inline = (t) => esc(t)
-    .replace(/`([^`]+)`/g, (_, c) => `<code${S.code}>${c}</code>`)
+  // GENERATED MARKUP IS PARKED while the later rules run (backlog 45e, found by
+  // the VulnHunter scan). The image rule writes alt text and a title into
+  // attributes, and the link rule then ran over that output too, so a
+  // `[text](url)` in an image's alt text became a link written inside the
+  // attribute and broke out of it. Code spans and figures are swapped for a
+  // placeholder (NUL bytes, which escaped text cannot contain) and put back
+  // after the link rule, so no rule ever reads another rule's markup.
+  const inline = (t) => {
+    const parked = [];
+    const park = (html) => `\u0000${parked.push(html) - 1}\u0000`;
+    return inlineRules(String(t == null ? '' : t).replace(/\u0000/g, ''), park)
+      .replace(/\u0000(\d+)\u0000/g, (_, i) => parked[Number(i)]);
+  };
+  const inlineRules = (t, park) => esc(t)
+    .replace(/`([^`]+)`/g, (_, c) => park(`<code${S.code}>${c}</code>`))
     .replace(/\*\*([^*]+)\*\*/g, `<strong${S.strong}>$1</strong>`)
     .replace(/(^|[^*])\*([^*]+)\*/g, `$1<em${S.em}>$2</em>`)
     // SIZE RIDES IN MARKDOWN'S OWN TITLE SLOT -- `![alt](src "small")` -- rather
@@ -883,7 +912,7 @@ function renderMarkdown(src, skin) {
       const t = String(title || '').trim().toLowerCase();
       const size = ['small', 'medium', 'wide'].includes(t) ? t : '';
       const attr = (!size && title) ? ` title="${title}"` : '';
-      return S.fig(src, alt, size, attr);
+      return park(S.fig(src, alt, size, attr));
     })
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
       (/^https?:\/\//i.test(href) || /^\//.test(href))
@@ -1021,7 +1050,7 @@ const postDate = (iso) => {
 };
 
 app.get('/blog', route(async (req, res) => {
-  logAct(req, 'page', 'blog');
+  if (anonLogOk(req)) logAct(req, 'page', 'blog');
   // The one caller that wants the bodies — see readPosts. It needs them only to
   // find each post's first picture, which never reaches the browser as markdown.
   const posts = await store.readPosts({ publishedOnly: true, withBody: true });
@@ -1200,7 +1229,7 @@ app.get('/blog/:slug', route(async (req, res, next) => {
   // One extra read of a table holding a dozen rows with no bodies selected —
   // the rail is worth that, and there is nothing here to cache against.
   const others = await store.readPosts({ publishedOnly: true }).catch(() => []);
-  logAct(req, 'page', 'post:' + String(req.params.slug).slice(0, 60));
+  if (anonLogOk(req)) logAct(req, 'page', 'post:' + String(req.params.slug).slice(0, 60));
   const base = APP_URL || `https://${req.headers.host}`;
   const meta = [postDate(p.publishedAt), p.author ? htmlEsc(p.author) : '', `${readingMinutes(p.body)} min read`]
     .filter(Boolean).join(' · ');
@@ -1970,6 +1999,29 @@ async function actKey(req) {
 // useless, and it would drag the per-kind summary into nonsense.
 const UNTIMED_ACT_KINDS = new Set(['page']);
 
+// A CAP ON LOG ROWS ANYONE CAN CAUSE WITHOUT SIGNING IN (backlog 45d): a visit
+// to the home page, the blog or a post, and a logout, each wrote a row with no
+// limit, and the admin's visitor and activity pages aggregate every row. At
+// most ANON_LOG_MAX rows per address per ANON_LOG_WINDOW_MS. Held in memory,
+// per instance, which costs nothing per request and is enough for the point
+// (keeping a flood out of the tables); a flood spread over many instances
+// still gets a few rows each through, which is acceptable for a log.
+const ANON_LOG_MAX = 60;
+const ANON_LOG_WINDOW_MS = 10 * 60 * 1000;
+const anonLogSeen = new Map();
+function anonLogOk(req) {
+  const ip = String(req.ip || 'unknown');
+  const now = Date.now();
+  let e = anonLogSeen.get(ip);
+  if (!e || now - e.at > ANON_LOG_WINDOW_MS) {
+    if (anonLogSeen.size > 5000) anonLogSeen.clear();
+    e = { at: now, n: 0 };
+    anonLogSeen.set(ip, e);
+  }
+  e.n++;
+  return e.n <= ANON_LOG_MAX;
+}
+
 function logAct(req, kind, detail, userKey) {
   const k = String(kind).slice(0, 16);
   const ms = UNTIMED_ACT_KINDS.has(k) || !req || !req._t0 ? null : Date.now() - req._t0;
@@ -2576,7 +2628,7 @@ app.post('/api/terms/accept', route(async (req, res) => {
 
 app.post('/api/logout', route(async (req, res) => {
   const token = parseCookies(req)[SESSION_COOKIE];
-  logAct(req, 'account', 'logout');
+  if (anonLogOk(req)) logAct(req, 'account', 'logout');
   if (token) await store.deleteSession(token);
   // The admin session ends on the server too, not only in this browser.
   const atok = parseCookies(req)[ADMIN_COOKIE];
@@ -6473,7 +6525,10 @@ app.post('/api/alerts', requireMember, route(async (req, res) => {
   if ((await store.countAlerts(key)) >= ALERTS_MAX) {
     return res.status(409).json({ error: `You can have ${ALERTS_MAX} alerts. Delete one to add another.` });
   }
-  const made = await store.createAlert({ userKey: key, symbol, ...clean });
+  // The count above answers the common case quickly; the insert itself holds
+  // the cap, so two requests at once cannot both slip under it (backlog 45f).
+  const made = await store.createAlert({ userKey: key, symbol, ...clean, max: ALERTS_MAX });
+  if (!made) return res.status(409).json({ error: `You can have ${ALERTS_MAX} alerts. Delete one to add another.` });
   logAct(req, 'alert', `add:${symbol}:${clean.kind}`);
   res.json({ ok: true, alert: alertOut(made) });
 }));
@@ -6585,8 +6640,12 @@ app.post('/api/paper/open', requireMember, route(async (req, res) => {
   const sum = Paper.summarise(account, trades, prices);
   const size = Paper.sizeOpen(req.body || {}, now.price, sum.cash);
   if (size.error) return res.status(400).json({ error: size.error });
-  await store.addPaperTrade(key, { ts: Date.now(), kind: 'open', symbol, shares: size.shares, price: now.price,
-    priced_at: now.pricedAt, signal: now.action });
+  // Only if no other trade landed since the ledger was read (backlog 45f).
+  const lastId = trades.length ? trades[trades.length - 1].id : 0;
+  if (!(await store.addPaperTrade(key, { ts: Date.now(), kind: 'open', symbol, shares: size.shares, price: now.price,
+    priced_at: now.pricedAt, signal: now.action }, lastId))) {
+    return res.status(409).json({ error: 'Another trade went through at the same moment. Please try again.' });
+  }
   logAct(req, 'paper', 'open:' + symbol);
   res.json({ ok: true, symbol, shares: size.shares, price: now.price, pricedAt: now.pricedAt });
 }));
@@ -6601,8 +6660,11 @@ app.post('/api/paper/close', requireMember, route(async (req, res) => {
   const size = Paper.sizeClose(req.body || {}, pos ? pos.shares : 0);
   if (size.error) return res.status(400).json({ error: size.error });
   // A stock no longer tracked closes at its last traded price, and says so.
-  await store.addPaperTrade(key, { ts: Date.now(), kind: 'close', symbol, shares: size.shares, price: pos.price,
-    priced_at: pos.pricedAt, note: pos.tracked ? null : 'no longer tracked: closed at its last traded price' });
+  const lastId = trades.length ? trades[trades.length - 1].id : 0;
+  if (!(await store.addPaperTrade(key, { ts: Date.now(), kind: 'close', symbol, shares: size.shares, price: pos.price,
+    priced_at: pos.pricedAt, note: pos.tracked ? null : 'no longer tracked: closed at its last traded price' }, lastId))) {
+    return res.status(409).json({ error: 'Another trade went through at the same moment. Please try again.' });
+  }
   logAct(req, 'paper', 'close:' + symbol);
   res.json({ ok: true, symbol, shares: size.shares, price: pos.price });
 }));
@@ -6973,8 +7035,16 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
   //
   // Only symbols NOT already tracked are asked about: re-confirming a stock
   // the screener already holds is a credit spent on nothing.
+  //
+  // WITHIN THE CREDIT LIMIT (backlog 45f): one credit a symbol, and a request
+  // could ask up to twice BULK_ADD_MAX, past the 610-a-minute cap, while a
+  // refresh was spending its own. So it stands aside for a running refresh,
+  // and asks about at most CHECK_PER_CALL; the rest come back as not checked,
+  // which the add routes let through, and the page can check them again.
+  if (await standAside(res)) return;
+  const CHECK_PER_CALL = 500;
   const ask = syms.filter((x) => !have.has(x));
-  const seen = await providerCheck(ask);
+  const seen = await providerCheck(ask.slice(0, CHECK_PER_CALL));
   const tradable = [];
   const unavailable = [];
   const unchecked = [];
@@ -6982,7 +7052,7 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
     const v = seen.get(s);
     if (v && v.state === 'ok') tradable.push({ symbol: s, name: v.name, exchange: v.exchange });
     else if (v && v.state === 'no') unavailable.push({ symbol: s, reason: v.reason });
-    else unchecked.push({ symbol: s, reason: (v && v.reason) || 'not checked' });
+    else unchecked.push({ symbol: s, reason: (v && v.reason) || (ask.indexOf(s) >= CHECK_PER_CALL ? 'over the per-minute credit limit: check again in a minute' : 'not checked') });
   }
 
   res.json({
@@ -6993,7 +7063,7 @@ app.post('/api/universe/check', requireAdmin, route(async (req, res) => {
     // able to say "could not check" rather than condemn a symbol over an
     // outage, and the add routes let these through.
     unchecked,
-    credits: ask.length,
+    credits: Math.min(ask.length, CHECK_PER_CALL),
     // null when the listing is unreadable, so the page can say "not
     // checked" rather than flagging everything as unknown. A symbol is
     // legitimately absent when it is an ETF, a share class or newly
@@ -10734,8 +10804,10 @@ async function sendPostToList(req, res, p) {
       total: subs.length, message: `All ${subs.length} subscribers already have this post.` });
   }
 
-  const batch = due.slice(0, MAIL_LIST_BATCH);
-  await store.claimSends(p.slug, batch.map((s) => s.email));
+  // Only the addresses this request actually claimed are mailed: another batch
+  // running at the same moment has claimed the rest (backlog 45f).
+  const claimed = new Set(await store.claimSends(p.slug, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)));
+  const batch = due.slice(0, MAIL_LIST_BATCH).filter((s) => claimed.has(s.email));
 
   const sent = [], failed = [], deferred = [], ids = [];
   let first = true;
@@ -17011,6 +17083,24 @@ app.post('/api/adjusted-backtest/runs', requireAdmin, route(async (req, res) => 
   // whose entire job is provenance. `savedAt` is added on read, not here.
   const payload = Object.assign({}, d);
   delete payload.cached;
+  // THE NUMBERS ARE STORED AS NUMBERS (backlog 45e). The shared run page puts
+  // these straight into its markup, as counts and percentiles; a string in one
+  // of them would be markup on a page anyone with the link can open. Each is
+  // coerced, and anything not a finite number becomes null (a dash on the
+  // page), never zero. Copies of the nested objects, so `d` is untouched.
+  const asNum = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const coerce = (obj, keys) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    const o = Object.assign({}, obj);
+    for (const k of keys) if (k in o) o[k] = asNum(o[k]);
+    return o;
+  };
+  Object.assign(payload, coerce(payload, ['top', 'topAsked']));
+  payload.basket = coerce(payload.basket, ['members']);
+  payload.market = coerce(payload.market, ['members']);
+  payload.counts = coerce(payload.counts, ['universe', 'picked', 'held', 'noFilings', 'noCik']);
+  payload.window = coerce(payload.window, ['shortLagDays']);
+  payload.result = coerce(payload.result, ['basket', 'market', 'rebalanced', 'spy', 'turnover', 'bandPct', 'bandTrials', 'bandLo', 'bandHi', 'rankable']);
   const json = JSON.stringify(payload);
   if (json.length > 2 * 1024 * 1024) {
     return res.status(413).json({ error: 'That run is too large to save.' });

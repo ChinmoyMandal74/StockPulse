@@ -138,6 +138,26 @@ const age = (email) => mem.prepare('update subscribers set confirm_sent_at = con
   await store.markVerified(Number(vic.id), 'pending');
   check('and markVerified does nothing to an account already active', one('select status from users where id = ?', Number(vic.id)).status, 'active');
 
+  console.log('caps and claims hold when requests arrive together (backlog 45f)');
+  const cap = 'cap@example.com';
+  for (let i = 0; i < 3; i++) await store.createAlert({ userKey: cap, symbol: 'S' + i, kind: 'price_above', params: { price: 1 }, max: 3 });
+  check('three alerts under a cap of three', one('select count(*) n from alerts where user_key = ?', cap).n, 3);
+  const extra = await Promise.all([1, 2].map((i) => store.createAlert({ userKey: cap, symbol: 'X' + i, kind: 'price_above', params: { price: 1 }, max: 3 })));
+  check('two more at once are both refused', [extra.every((x) => x === null), one('select count(*) n from alerts where user_key = ?', cap).n], [true, 3]);
+  const pk = 'paper@example.com';
+  check('a first trade against an empty ledger goes in', await store.addPaperTrade(pk, { ts: 1, kind: 'open', symbol: 'AAA', shares: 1, price: 10 }, 0), true);
+  const lastId = one('select max(id) id from paper_trades where user_key = ?', pk).id;
+  const both = [
+    await store.addPaperTrade(pk, { ts: 2, kind: 'open', symbol: 'BBB', shares: 1, price: 10 }, lastId),
+    await store.addPaperTrade(pk, { ts: 3, kind: 'open', symbol: 'CCC', shares: 1, price: 10 }, lastId),
+  ];
+  check('of two trades read against the same ledger, only the first lands', both, [true, false]);
+  check('so the ledger holds two trades, not three', one('select count(*) n from paper_trades where user_key = ?', pk).n, 2);
+  const claimA = await store.claimSends('post-1', ['a@example.com', 'b@example.com']);
+  const claimB = await store.claimSends('post-1', ['b@example.com', 'c@example.com']);
+  check('a broadcast batch gets back the addresses it claimed', claimA, ['a@example.com', 'b@example.com']);
+  check('a second batch at the same moment does not get b again', claimB, ['c@example.com']);
+
   console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
   process.exitCode = failed ? 1 : 0;
 })().catch((e) => { console.error('TEST HARNESS FAILED:', e.message); process.exitCode = 1; });

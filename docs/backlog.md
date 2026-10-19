@@ -2172,7 +2172,7 @@ Each fix ships with a test that fails before it, per the house rule. Entry
 
 ## 45. Security findings from the VulnHunter scan — 2026-10-18
 
-*Area: Infrastructure · Status: Partly done · Note: done 2026-10-18: the ?do= links (a), the invite code limit and subscriber rows (b), the refresh starter (c), a deleted account's alerts (d, archived); a read-only automated scan of the code, nothing executed and no live probing; 56 findings (3 High, 19 Medium, 34 Low). The full report is kept off the public repository (docs/security-review-vulnhunt-2026-10-18.md, gitignored)*
+*Area: Infrastructure · Status: Partly done · Note: all done 2026-10-18 except the refresh rounds' lock (f), left by the owner's choice (see below); a read-only automated scan of the code, nothing executed and no live probing; 56 findings (3 High, 19 Medium, 34 Low). The full report is kept off the public repository (docs/security-review-vulnhunt-2026-10-18.md, gitignored)*
 
 The owner asked for a scan with Capital One's VulnHunter, an open-source
 tool that traces every input an outsider can send through to where it is
@@ -2239,6 +2239,11 @@ to an admin account.
 - Refresh rounds take their lock and cursor in one statement, and the
   universe check stands aside for a running refresh and keeps under the
   per-minute credit cap.
+  **Left open by the owner (2026-10-18):** the refresh rounds' lock and
+  cursor. Only the admin starts a round and the cross-site way in is closed,
+  so what remains is two rounds overlapping (a double click, a manual refresh
+  during the nightly run). Not worth changing the machinery every nightly
+  refresh runs through. The universe check part is done.
 
 **g. Robustness.**
 - The headline feed's entity decoder ignores an out-of-range character
