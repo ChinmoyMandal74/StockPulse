@@ -33,3 +33,4 @@ news-tone.log
 
 # Security review detail: the repository is public (backlog 44)
 docs/security-review-*.md
+news-tone-shadow.jsonl

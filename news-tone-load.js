@@ -43,7 +43,22 @@ const DAYS = Math.max(1, Number(arg('--days')) || 7);
 const LIMIT = Number(arg('--limit')) || (COMMIT ? 0 : 5);
 const MAX_USD = Number(arg('--max-usd')) || 8;
 const MODEL = process.env.NEWS_TONE_MODEL || NewsTone.MODEL;
-const PRICE = { in: 2 / 1e6, out: 10 / 1e6 };          // Sonnet 5.5, per token
+// Per token, in and out, by model (published rates, 2026-10-19). Haiku 5.5's
+// is its rate for a prompt of 100K tokens or fewer, which an article always is.
+const PRICES = {
+  'claude-sonnet-5-5': { in: 2 / 1e6, out: 10 / 1e6 },
+  'claude-haiku-5-5': { in: 0.10 / 1e6, out: 0.50 / 1e6 },
+};
+const priceOf = (m) => PRICES[m] || PRICES['claude-sonnet-5-5'];
+// A SHADOW MODEL (2026-10-19, the owner: "try using a lower model and observe
+// for a few days and compare costs"). Every article the main model reads is
+// also sent to this one, the same instructions and the same fetched text, and
+// both answers are appended side by side to news-tone-shadow.jsonl (local,
+// gitignored). The shadow's answer is NEVER written to the database: members
+// see the main model's reading only. news-tone-compare.js reads the file.
+const SHADOW = arg('--shadow') || null;
+const SHADOW_MAX_USD = Number(arg('--shadow-max-usd')) || 1;
+const SHADOW_FILE = require('path').join(__dirname, 'news-tone-shadow.jsonl');
 const KEY = process.env.ANTHROPIC_API_KEY || '';
 const UA = 'Mozilla/5.0 (compatible; TickrLab/1.0; +https://www.tickrlab.com)';
 const SITE_GAP_MS = 3000;
@@ -109,8 +124,9 @@ async function readPage(url) {
 }
 
 class Stop extends Error {}
-let spent = 0;
-async function askModel(body) {
+let spent = 0, shadowSpent = 0, shadowN = 0, shadowFail = 0, shadowOff = false;
+// `shadow` puts the cost on the shadow's account, not the main budget's.
+async function askModel(body, shadow) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -127,13 +143,43 @@ async function askModel(body) {
       throw new Error(`Anthropic ${r.status} ${type || ''}`);
     }
     const u = data.usage || {};
-    spent += (Number(u.input_tokens) || 0) * PRICE.in + (Number(u.output_tokens) || 0) * PRICE.out;
-    if (data.stop_reason === 'refusal') return { refused: true };
+    const P = priceOf(body.model);
+    const inTok = Number(u.input_tokens) || 0, outTok = Number(u.output_tokens) || 0;
+    const usd = inTok * P.in + outTok * P.out;
+    if (shadow) shadowSpent += usd; else spent += usd;
+    const cost = { inTok, outTok, usd };
+    if (data.stop_reason === 'refusal') return { refused: true, cost };
     if (data.stop_reason === 'max_tokens') throw new Error('answer cut off at max_tokens');
     const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-    return { answer: JSON.parse(text) };
+    return { answer: JSON.parse(text), cost };
   }
   throw new Error('Anthropic kept answering 429');
+}
+
+// One article through the shadow model, and one line in the local file with
+// both readings. The main model's FIRST answer is the one compared (before any
+// re-ask), since the shadow is asked once too.
+const pick = (g, model) => {
+  if (!g) return null;
+  if (g.error) return { model, error: g.error };
+  if (g.refused) return { model, refused: true, cost: g.cost };
+  const a = g.answer || {};
+  const chk = NewsTone.check(a);
+  return { model, readable: a.readable, about: a.about, kind: a.kind, tone: a.tone, complete: a.complete,
+    summary: a.summary, problems: chk.ok ? [] : chk.problems, cost: g.cost };
+};
+async function shadowRead(h, input, main) {
+  let sh;
+  try { sh = await askModel(NewsTone.request(input, SHADOW), true); shadowN++; }
+  catch (err) {
+    sh = { error: String(err.message).slice(0, 120) }; shadowFail++;
+    // A fault that will not fix itself (a 400, an unknown model) stops the
+    // shadow for the rest of the run, never the main reading.
+    if (err instanceof Stop) { shadowOff = true; console.log('  shadow stopped: ' + err.message); }
+  }
+  const line = { at: new Date().toISOString(), id: h.id, symbol: h.symbol, url: h.url, headline: h.headline,
+    chars: input.text.length, main: pick(main, MODEL), shadow: pick(sh, SHADOW) };
+  try { require('fs').appendFileSync(SHADOW_FILE, JSON.stringify(line) + '\n'); } catch (e) { /* the file is a convenience */ }
 }
 
 // What a run should look at: no row yet, or a transient failure that has
@@ -168,8 +214,10 @@ const due = (k) => !k
   // covered the most recent news everywhere rather than one stock in depth.
   todo.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
   if (LIMIT) todo = todo.slice(0, LIMIT);
-  console.log(`${stocks.length} semiconductor stocks (${feedFail} feeds unavailable), ${todo.length} articles to read from the last ${DAYS} days; `
-    + `model ${MODEL}; stop at $${MAX_USD.toFixed(2)}. ` + (COMMIT ? 'COMMIT: writing news_tone' : 'DRY RUN: nothing will be written'));
+  // The run's start time, so the log says WHEN each run spent what it spent.
+  console.log(`[${new Date().toISOString()}] ${stocks.length} semiconductor stocks (${feedFail} feeds unavailable), ${todo.length} articles to read from the last ${DAYS} days; `
+    + `model ${MODEL}; stop at $${MAX_USD.toFixed(2)}. ` + (COMMIT ? 'COMMIT: writing news_tone' : 'DRY RUN: nothing will be written')
+    + (SHADOW ? `; shadow ${SHADOW} (local file only, stop at $${SHADOW_MAX_USD.toFixed(2)})` : ''));
 
   const t0 = Date.now();
   const tally = { scored: 0, skipped: 0, unreadable: 0, failed: 0 };
@@ -194,6 +242,9 @@ const due = (k) => !k
       if (!NewsTone.namesCompany(page.text, h.symbol, h.name)) { await write(h, Object.assign({ status: 'skipped', reason: 'company not named' }, base)); continue; }
       const input = { symbol: h.symbol, name: h.name, headline: h.headline, source: h.source, text: page.text };
       let got = await askModel(NewsTone.request(input, MODEL));
+      // The shadow reads the same article now, from the same text: its own
+      // budget, its own failures, and nothing it says reaches the database.
+      if (SHADOW && !shadowOff && shadowSpent < SHADOW_MAX_USD) await shadowRead(h, input, got);
       if (got.refused) { await write(h, Object.assign({ status: 'unreadable', reason: 'model declined' }, base)); continue; }
       let chk = NewsTone.check(got.answer);
       // One second asking when the answer breaks a rule: the instruction is
@@ -230,5 +281,6 @@ const due = (k) => !k
   }
   console.log(`\n${tally.scored} scored, ${tally.skipped} skipped (company not named), ${tally.unreadable} unreadable, ${tally.failed} failed; $${spent.toFixed(2)} spent; ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   for (const [k, n] of Object.entries(why).sort((a, b) => b[1] - a[1])) console.log(`  ${n} x ${k}`);
+  if (SHADOW) console.log(`  shadow ${SHADOW}: ${shadowN} read, ${shadowFail} failed, $${shadowSpent.toFixed(3)} spent (main ${MODEL}: $${spent.toFixed(3)})`);
   if (!COMMIT) console.log('DRY RUN: nothing written. Re-run with --commit.');
 })().catch((e) => { console.error('FAILED:', e.message); process.exitCode = 1; });

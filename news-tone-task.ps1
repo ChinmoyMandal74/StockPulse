@@ -23,7 +23,12 @@
 # hour before the 07:30 and 19:30 nightly rotations, which run from this same
 # laptop, and the 50-minute limit below makes sure of it. It uses no Twelve
 # Data credits, so the price windows are not at stake, only the machine.
-param([switch]$Remove, [switch]$WhatIf)
+# A SHADOW MODEL (2026-10-19, the owner: try a lower model for a few days and
+# compare costs). Each article the main model reads is also read by this one;
+# its answers go to news-tone-shadow.jsonl on this machine only, never the
+# database. node news-tone-compare.js reports the agreement and the cost.
+# -NoShadow registers the task without it.
+param([switch]$Remove, [switch]$WhatIf, [switch]$NoShadow, [string]$Shadow = 'claude-haiku-5-5')
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab news tone'
@@ -43,7 +48,8 @@ $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
 # The script writes its own report to stdout; cmd redirects it to a log beside it.
-$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd >> news-tone.log 2>&1`""
+$shadowArg = if ($NoShadow) { '' } else { " --shadow $Shadow --shadow-max-usd 1" }
+$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd$shadowArg >> news-tone.log 2>&1`""
 $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
 
@@ -61,6 +67,7 @@ if ($WhatIf) {
   Write-Output "  run   : cmd.exe $cmdArgs"
   Write-Output "  in    : $Root"
   Write-Output "  daily : $($Times -join ', '), stopping each run at `$$MaxUsd"
+  Write-Output "  shadow: $(if ($NoShadow) { 'none' } else { $Shadow + ', local file only, at most $1 a run' })"
   exit 0
 }
 
