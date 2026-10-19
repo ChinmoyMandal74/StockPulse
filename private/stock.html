@@ -1335,6 +1335,7 @@
   </main>
 
   <script src="/rowcard.js"></script>
+  <script src="/drillpop.js"></script>
   <script src="/newstype.js"></script>
   <script src="/glance.js"></script>
   <script src="/peertrend.js"></script>
@@ -3592,6 +3593,8 @@
           </div>
           <div class="fields">${RowCard.buildSections(stock, {
             colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS,
+            // The history behind a figure, as on the screener (drillpop.js).
+            drill: window.DrillPop ? DrillPop.FIELD_OF : null,
             // There is no table to hover here, so the scores would otherwise be
             // four bare numbers with nothing to explain them.
             tips: true,
@@ -4162,13 +4165,21 @@
       // and the promo studio makes the same card for the admin. What is left
       // is the link to the studio for this stock, hidden from a guest: the
       // studio refuses guests.
+      // THE HISTORY BEHIND A FIGURE (drillpop.js), as on the screener: a click
+      // on a row in "Everything the screener knows" that has one. Members and
+      // the admin, as there; off until /api/me says this is not a guest.
+      let drillOk = false;
+      const allf = document.getElementById('allfields');
+      const drill = window.DrillPop && allf ? DrillPop.attach({ root: allf, symbol: stock.symbol, row: stock, allowed: () => drillOk }) : null;
+      const drillAllow = (yes) => { drillOk = !!yes; if (drill) drill.refresh(); };
       fetch('/api/me', { cache: 'no-store' })
         .then((r) => r.json())
-        .then((me) => { const cl = document.getElementById('chartsLink'); if (cl && (!me || !me.guest)) cl.hidden = false;
+        .then((me) => { drillAllow(!me || !me.guest);
+          const cl = document.getElementById('chartsLink'); if (cl && (!me || !me.guest)) cl.hidden = false;
           const pl = document.getElementById('paperLink'); if (pl && me && !me.guest) pl.hidden = false;
           const rf = document.getElementById('rfBtn'); if (rf && me && me.admin) rf.hidden = false;
           const sb = document.getElementById('sumBtn'); if (sb && me && me.admin) sb.hidden = false; })
-        .catch(() => { const cl = document.getElementById('chartsLink'); if (cl) cl.hidden = false; });   // open mode, or /api/me down
+        .catch(() => { drillAllow(true); const cl = document.getElementById('chartsLink'); if (cl) cl.hidden = false; });   // open mode, or /api/me down
 
       // ---- write a Company summary (admin) -------------------------------------
       // The model writes a draft from this page's figures and the server saves

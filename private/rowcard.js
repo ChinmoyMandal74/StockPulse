@@ -1281,7 +1281,12 @@
           // extra row can have one, so the hover card is unchanged: a
           // tooltip inside a tooltip helps nobody.
           const ttl = r.title ? ` title="${esc(r.title)}"` : '';
-          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}>` +
+          // `drill` marks a row whose figure has a history behind it
+          // (drillpop.js FIELD_OF, keyed group|label). Opt-in like `links`:
+          // only /stock passes it, and only a row with a value is marked.
+          const dk = o.drill && r.t !== '—' ? o.drill[g + '|' + r.k] : null;
+          const drill = dk ? ` data-drill="${esc(dk)}"` : '';
+          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}${drill}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
             `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;
         }).join('');

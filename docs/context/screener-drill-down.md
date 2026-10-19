@@ -69,3 +69,16 @@ The route read the whole snapshot only to learn whether the symbol was on the sc
 - The indexes involved: `sec_facts` and `earnings_history` are sought on the leading column of their primary keys, `short_interest` on `idx_shortint_sym (symbol, d)`, `bars` on its primary key.
 - **The stored snapshot has grown to 5 MB.** Anything that reads it to look up one company pays 2.5 seconds for it. `snapshotCached()` hides that for 20 seconds within one instance, and no longer than that.
 - A function that has been idle also pays about half a second to connect and check the schema. That is not this route's to fix.
+
+## On the stock page too (2026-10-19)
+
+The owner: "enable this drill down feature on the individual stock page section exactly how it behaves on the screener".
+
+- **The same panel, endpoint and rule.** Rows in "Everything the screener knows" whose figure has a history open the screener's panel (`drillpop.js`), from `/api/drill`, members and the admin only. A guest's rows are not styled and a click asks for nothing.
+- **How a row is found.** The stock page's rows are rowcard's `FIELD_SPEC`, keyed `group|label`, where the screener's cells are keyed by the column's `data-key`. `DrillPop.FIELD_OF` is the one map between them, beside `KEYS` (every key has its row). `RowCard.buildSections` takes it as an opt-in `drill` option, like `links` and `extra`, and marks a row `data-drill="<key>"` only where it has a value; only `/stock` passes it, so the screener's hover card is unchanged.
+- **`DrillPop.attach({ root, symbol, row, allowed })`** is the second entry point (the screener keeps `init`). Rows look drillable (`.dp-on`, the screener's dotted underline) only once `/api/me` says the viewer is not a guest; `/api/me` failing is open mode and allows it, the rule the studio link on that page already follows. A link inside a row keeps its own click. On the stock page the panel's "Open SYM" link is left out (it would open the page it is on); "Open as a card" stays.
+- **Two faults found while building it, both fixed for the screener too:**
+  - **The panel was dark on the light theme.** Its background and hairlines were literal dark colours, so on a light page it drew dark text on a dark panel. They are `--glass` and `--wash` mixes now.
+  - **A tall panel could cover its own cell.** Where it fitted neither below nor above, it was clamped to the top of the window, over the row it came from (measured: row at 440 px, panel 8 to 548). It now goes on the side with more room and is capped to that room; it already scrolls inside.
+- The stock page scrolls as a whole and the panel is fixed, so a page scroll closes it, as a table scroll does on the screener.
+- Verified in headless Chrome against a static host with Coca-Cola's real filings through the real `drillhist.js`: 21 rows marked, a click opens the Revenue history (chart and eight quarters, one request), the same row again closes it, another row opens its own, a scroll closes it, the light theme draws white with dark text, a guest gets no styling and no request, and the screener's own Revenue cell still opens Revenue.

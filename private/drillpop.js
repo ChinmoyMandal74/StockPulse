@@ -22,6 +22,23 @@
     'trailingPe', 'peLive', 'priceToSales', 'priceToBook', 'shortPctFloat', 'shortPctOutstanding', 'shortRatio', 'lastEarningsDate',
     'revGrowth3y', 'revGrowth5y', 'niGrowth3y', 'niGrowth5y'];
   const DRILL = new Set(KEYS);
+  // THE SAME HISTORIES ON THE STOCK PAGE (2026-10-19, the owner: "enable this
+  // drill down feature on the individual stock page section exactly how it
+  // behaves on the screener"). Its "Everything the screener knows" rows are
+  // rowcard's FIELD_SPEC, keyed `group|label`, where the screener's cells are
+  // keyed by the column's data-key; this is the one map between the two, kept
+  // beside the list it answers to. Every key on KEYS has its row here.
+  const FIELD_OF = {
+    'size|Revenue TTM': 'revenueTtm', 'size|Gross profit': 'grossProfitTtm', 'size|Net income': 'netIncomeTtm',
+    'size|Operating cash': 'operatingCashFlowTtm', 'size|FCF TTM': 'fcfTtm', 'fund|Buyback yield': 'buybackYield',
+    'size|Gross margin': 'grossMargin', 'fund|Operating margin': 'operatingMargin', 'fund|Profit margin': 'profitMargin',
+    'fund|Margin change': 'netMarginChg', 'size|FCF margin': 'fcfMargin', 'fund|EPS TTM': 'dilutedEpsTtm',
+    'fund|Trailing P/E': 'trailingPe', 'fund|Live P/E': 'peLive', 'fund|P/S': 'priceToSales', 'fund|P/B': 'priceToBook',
+    'own|Short % float': 'shortPctFloat', 'own|Short % out': 'shortPctOutstanding', 'own|Short ratio': 'shortRatio',
+    'fund|Reported': 'lastEarningsDate',
+    'lrun|Revenue /yr 3Y': 'revGrowth3y', 'lrun|Revenue /yr 5Y': 'revGrowth5y',
+    'lrun|Net income /yr 3Y': 'niGrowth3y', 'lrun|Net income /yr 5Y': 'niGrowth5y',
+  };
   // Where the filings' newest trailing year can be set beside the cell's own
   // figure. The others are defined differently from their cell and say so in
   // their note instead.
@@ -110,11 +127,14 @@
   }
   // Two ways on: the stock's own page, and the same history as a card in
   // Visuals (only where there is something to draw).
-  const foot = (sym, field) => '<div class="dp-foot"><a href="/stock/' + encodeURIComponent(sym) + '" target="_blank" rel="noopener">Open ' + esc(sym) + ' →</a>'
+  // On the stock's own page the first link would open the page it is on, so
+  // there it is left out (`onPage`).
+  let onPage = false;
+  const foot = (sym, field) => '<div class="dp-foot">' + (onPage ? '<span></span>' : '<a href="/stock/' + encodeURIComponent(sym) + '" target="_blank" rel="noopener">Open ' + esc(sym) + ' →</a>')
     + (field ? '<a href="/promo?tpl=figure&amp;sym=' + encodeURIComponent(sym) + '&amp;field=' + encodeURIComponent(field) + '" target="_blank" rel="noopener">Open as a card →</a>' : '') + '</div>';
 
   const STYLE = '#drillPop{position:fixed;z-index:var(--z-tip);width:min(440px,calc(100vw - 24px));max-height:min(78vh,620px);overflow:auto;border-radius:16px;'
-    + 'border:1px solid var(--hair-2);background:rgba(10,12,17,0.97);backdrop-filter:blur(24px);box-shadow:0 30px 80px -24px rgba(0,0,0,0.95);padding:14px 16px;}'
+    + 'border:1px solid var(--hair-2);background:color-mix(in srgb,var(--glass) 97%,transparent);backdrop-filter:blur(24px);box-shadow:0 30px 80px -24px rgba(0,0,0,0.95);padding:14px 16px;}'
     + '#drillPop .dp-top{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;}'
     + '#drillPop h4{margin:0 0 2px;font-size:13px;font-weight:600;}'
     + '#drillPop .dp-sub{font-size:11px;color:var(--faint);}'
@@ -132,12 +152,16 @@
     + '#drillPop .dp-diff{margin:8px 0 0;padding:7px 10px;border-radius:9px;border:1px solid rgba(251,191,36,0.3);color:var(--amber);font-size:11.5px;line-height:1.5;}'
     + '#drillPop .dp-t{width:100%;border-collapse:collapse;margin:10px 0 0;font-size:11.5px;}'
     + '#drillPop .dp-t th{text-align:right;padding:5px 0 5px 10px;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);border-bottom:1px solid var(--hair);white-space:nowrap;}'
-    + '#drillPop .dp-t td{text-align:right;padding:5px 0 5px 10px;font-family:var(--mono);font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(255,255,255,0.04);white-space:nowrap;}'
+    + '#drillPop .dp-t td{text-align:right;padding:5px 0 5px 10px;font-family:var(--mono);font-variant-numeric:tabular-nums;border-bottom:1px solid color-mix(in srgb,var(--wash) 4%,transparent);white-space:nowrap;}'
     + '#drillPop .dp-t th:first-child,#drillPop .dp-t td:first-child{text-align:left;padding-left:0;font-family:var(--sans);color:var(--muted);}'
     + '#drillPop .dp-note{margin:10px 0 0;font-size:11px;line-height:1.55;color:var(--faint);}'
     + '#drillPop .dp-empty{font-size:12.5px;color:var(--muted);padding:12px 0 2px;line-height:1.5;}'
-    + '#drillPop .dp-foot{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,0.055);font-size:11.5px;display:flex;justify-content:space-between;gap:12px;}'
-    + '#drillPop .dp-foot a{color:var(--muted);text-decoration:none;}#drillPop .dp-foot a:hover{color:var(--text);text-decoration:underline;}';
+    + '#drillPop .dp-foot{margin-top:10px;padding-top:9px;border-top:1px solid color-mix(in srgb,var(--wash) 5.5%,transparent);font-size:11.5px;display:flex;justify-content:space-between;gap:12px;}'
+    + '#drillPop .dp-foot a{color:var(--muted);text-decoration:none;}#drillPop .dp-foot a:hover{color:var(--text);text-decoration:underline;}'
+    // A drillable row on the stock page looks like a drillable cell on the
+    // screener, and only once the viewer is allowed (attach adds dp-on).
+    + '.dp-on [data-drill] .rc-v{cursor:pointer;text-decoration:underline dotted color-mix(in srgb,var(--wash) 30%,transparent);text-underline-offset:3px;}'
+    + '.dp-on [data-drill]:hover .rc-v{text-decoration-color:var(--accent);}';
 
   let cfg = null, pop = null, mark = null, openFor = null, seq = 0;
 
@@ -183,24 +207,32 @@
     if (!cols.length || !cfg || !cfg.allowed()) { mark.textContent = ''; return; }
     const sel = [];
     cols.forEach((th, i) => { if (th.dataset && DRILL.has(th.dataset.key)) sel.push('#' + cfg.tbody.id + ' > tr > td:nth-child(' + (i + 1) + ')'); });
-    mark.textContent = sel.length ? sel.join(',') + '{cursor:pointer;text-decoration:underline dotted rgba(255,255,255,0.3);text-underline-offset:3px;}'
+    mark.textContent = sel.length ? sel.join(',') + '{cursor:pointer;text-decoration:underline dotted color-mix(in srgb,var(--wash) 30%,transparent);text-underline-offset:3px;}'
       + sel.map((s) => s + ':hover').join(',') + '{text-decoration-color:var(--accent);}' : '';
   }
 
   function close() { if (pop) pop.hidden = true; openFor = null; }
+  // Below the cell if it fits, else above; where it fits neither, on the side
+  // with more room and no taller than that room (the panel scrolls inside).
+  // It used to clamp to the top of the window, which put a tall panel over
+  // the very cell it was opened from.
   function place(cell) {
     const r = cell.getBoundingClientRect();
     pop.hidden = false;
+    pop.style.maxHeight = '';
     const w = pop.offsetWidth, h = pop.offsetHeight;
     const left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
-    let top = r.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
-    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    const below = window.innerHeight - r.bottom - 14, above = r.top - 14;
+    let top;
+    if (h <= below) top = r.bottom + 6;
+    else if (h <= above) top = r.top - h - 6;
+    else if (below >= above) { pop.style.maxHeight = Math.max(160, below) + 'px'; top = r.bottom + 6; }
+    else { const mh = Math.max(160, above); pop.style.maxHeight = mh + 'px'; top = r.top - 6 - Math.min(h, mh); }
+    pop.style.left = left + 'px'; pop.style.top = Math.max(8, top) + 'px';
   }
-  async function open(cell, sym, key) {
+  async function open(cell, sym, key, row) {
     const mine = ++seq;
     openFor = sym + '|' + key;
-    const row = cfg.rowOf(sym);
     pop.innerHTML = '<div class="dp-top"><div><h4>' + esc((row && (row.shortName || row.name)) || sym) + '</h4><div class="dp-sub">Reading the history…</div></div></div>';
     place(cell);
     let html;
@@ -215,14 +247,53 @@
     if (cell.isConnected) place(cell);
   }
 
-  // cfg: { tbody, rowOf(sym), allowed(), before() }
-  function init(c) {
-    cfg = c;
+  // The panel, its styles and the ways it closes: once per page, whichever
+  // entry point asks first.
+  function ui() {
+    if (pop) return;
     const st = document.createElement('style'); st.textContent = STYLE; document.head.appendChild(st);
     mark = document.createElement('style'); document.head.appendChild(mark);
     pop = document.createElement('div'); pop.id = 'drillPop'; pop.hidden = true;
     pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'History');
     document.body.appendChild(pop);
+    document.addEventListener('click', (e) => { if (pop && !pop.hidden && !(e.target.closest && e.target.closest('#drillPop'))) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    window.addEventListener('resize', close);
+  }
+
+  // THE STOCK PAGE: one company, rows marked data-drill="<key>" (rowcard's
+  // buildSections writes the mark from FIELD_OF, only where the row has a
+  // value). Same panel, same endpoint, same membership rule as the screener;
+  // the rows look drillable only once allowed() says so.
+  // c: { root, symbol, row, allowed() }. allowed may change after the call
+  // (the page learns who is looking from /api/me): call refresh() then.
+  function attach(c) {
+    ui();
+    onPage = true;
+    const refresh = () => c.root.classList.toggle('dp-on', !!c.allowed());
+    c.root.addEventListener('click', (e) => {
+      const el = e.target.closest && e.target.closest('[data-drill]');
+      if (!el || !c.root.contains(el) || !c.allowed()) return;
+      // A link inside the row (a filing, a group page) keeps its own click.
+      if (e.target.closest('a')) return;
+      const key = el.dataset.drill;
+      if (!DRILL.has(key)) return;
+      e.stopPropagation();
+      if (openFor === c.symbol + '|' + key) return close();
+      open(el.querySelector('.rc-v') || el, c.symbol, key, c.row);
+    });
+    // The panel is fixed and this page scrolls as a whole, so a scroll would
+    // leave it hanging away from its row: it closes, as the screener's does
+    // when its table scrolls.
+    window.addEventListener('scroll', close, { passive: true });
+    refresh();
+    return { refresh };
+  }
+
+  // cfg: { tbody, rowOf(sym), allowed(), before() }
+  function init(c) {
+    cfg = c;
+    ui();
     cfg.tbody.addEventListener('click', (e) => {
       const td = e.target.closest && e.target.closest('td');
       if (!td || td.parentNode.parentNode !== cfg.tbody || !cfg.allowed()) return;
@@ -236,17 +307,14 @@
       e.stopPropagation();
       if (cfg.before) cfg.before();
       if (openFor === sym + '|' + key) return close();
-      open(td, sym, key);
+      open(td, sym, key, cfg.rowOf(sym));
     });
-    document.addEventListener('click', (e) => { if (pop && !pop.hidden && !(e.target.closest && e.target.closest('#drillPop'))) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-    window.addEventListener('resize', close);
     const head = document.querySelector('thead');
     if (head && root.MutationObserver) new MutationObserver(restyle).observe(head, { childList: true, subtree: true });
     restyle();
   }
 
-  const api = { KEYS, init, close, restyle, fmt, chart, body, keyOf };
+  const api = { KEYS, FIELD_OF, init, attach, close, restyle, fmt, chart, body, keyOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.DrillPop = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this));
