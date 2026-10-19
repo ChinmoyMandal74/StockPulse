@@ -11242,6 +11242,17 @@
   // ones, a filed figure the quarterly ones.
   const winOk = (mk, w) => (mk === 'px' ? true : mk === 'vol' ? w[1] === 'd' : w[1] === 'q');
   const winDefault = (mk) => (mk === 'px' || mk === 'vol' ? 'm6' : 'q20');
+  // LONG DAILY WINDOWS, for ONE company's volatility only (the owner,
+  // 2026-10-19: "extend the time frame to 5 and 10 years"). The spotlight's
+  // Chart card reads one stock's own history, which the archive serves for
+  // years; the Lines card reads the whole screen's closes, capped at 400
+  // sessions, so it keeps a year. Kept out of CHART_WINDOWS on purpose: the
+  // Chart card accepts any key of that, and a hand-edited post must not ask
+  // the whole-screen basket for ten years.
+  const LONG_DAILY = { y5d: [1260, 'past five years'], y10d: [2520, 'past ten years'] };
+  const cwOf = (k) => CHART_WINDOWS[k] || LONG_DAILY[k];
+  const winsFor = (mk, single) => LINE_WINDOWS.filter((w) => winOk(mk, w))
+    .concat(single && mk === 'vol' ? [['y5d', 'd'], ['y10d', 'd']] : []);
   // coh   built on a reported absolute: a row whose own figures are not all
   //       in dollars is left out (the Bars card's measurement, 31 rows).
   // noFin means nothing for a lender.
@@ -11258,16 +11269,17 @@
   // The windows a measure can be drawn over, and the one it opens on. A
   // window the measure cannot use falls back to that measure's default, so
   // a hand-edited post can never ask for daily revenue.
-  function lineWindows(metricKey) {
+  // `single`: the one-company Chart card, which also takes the long daily windows.
+  function lineWindows(metricKey, single) {
     const mk = lineMetric(metricKey);
-    return LINE_WINDOWS.filter((w) => winOk(mk, w)).map((w) => {
-      const lab = w[1] === 'd' ? CHART_WINDOWS[w[0]][1] : w[3];
+    return winsFor(mk, single).map((w) => {
+      const lab = w[1] === 'd' ? cwOf(w[0])[1] : w[3];
       return [w[0], lab.charAt(0).toUpperCase() + lab.slice(1), w[0] === winDefault(mk)];
     });
   }
-  function lineWin(metricKey, v) {
+  function lineWin(metricKey, v, single) {
     const mk = lineMetric(metricKey);
-    const ok = LINE_WINDOWS.filter((w) => winOk(mk, w));
+    const ok = winsFor(mk, single);
     return ok.find((w) => w[0] === v) || ok.find((w) => w[0] === winDefault(mk));
   }
   // The daily paths read the basket; asked by basketDays for both hosts.
@@ -11355,7 +11367,7 @@
       // worked out over the basket's extra thirty sessions and then cut to the
       // window, so the first point is a full thirty days and not a stub.
       daily = true;
-      const cw = CHART_WINDOWS[win[0]];
+      const cw = cwOf(win[0]);
       winLabel = cw[1];
       const RC = (typeof globalThis !== 'undefined' && globalThis.RowCard) || null;
       if (!RC || !RC.volSeries) return shell('Nothing to chart', 'Volatility', 'not available here');
@@ -11378,7 +11390,7 @@
       }
     } else if (win[1] === 'd') {
       daily = true;
-      const cw = CHART_WINDOWS[win[0]];
+      const cw = cwOf(win[0]);
       winLabel = cw[1];
       let d = c.basket(cw[0]);
       if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
@@ -11452,7 +11464,10 @@
       // measures that band and builds again with it as cardFill.
       w: 952, h: Math.max(300, (LIN_H[size.id] || 600) + cardFill), left: story ? 110 : 92, right, stack: true,
       fs, nameMax: NAME_MAX, xLabels: 5, colors,
-      xLabel: daily ? (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + Number(String(d).slice(8, 10)) : null,
+      // Past a year, a daily axis names the month and year: "Dec 18" is
+      // ambiguous across five or ten of them.
+      xLabel: daily ? (xs.length > 400 ? (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + String(d).slice(0, 4)
+        : (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + Number(String(d).slice(8, 10))) : null,
     });
 
     // Two names at most, then a count: the note sits on a card that cannot scroll.
@@ -11510,9 +11525,9 @@
     const o = opts || {};
     const mk = lineMetric(o.sclMetric);
     if (mk !== 'px' && mk !== 'vol') return null;
-    const w = lineWin(mk, o.sclWin);
+    const w = lineWin(mk, o.sclWin, true);
     if (w[1] !== 'd') return null;
-    return { symbol: o.sclSym || null, days: CHART_WINDOWS[w[0]][0] + (mk === 'vol' ? VOL_PRE : 0) };
+    return { symbol: o.sclSym || null, days: cwOf(w[0])[0] + (mk === 'vol' ? VOL_PRE : 0) };
   }
   function tplStkChart() {
     const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
@@ -11523,7 +11538,7 @@
     if (!PT || !PT.LINE_METRICS) return shell('Nothing to chart', 'Chart', 'not available here');
     const mk = lineMetric(O.sclMetric);
     const f = LINE_FLAGS[mk] || {};
-    const win = lineWin(mk, O.sclWin);
+    const win = lineWin(mk, O.sclWin, true);
     const mLabel = (PT.LINE_METRICS.find((m) => m[0] === mk) || [])[1] || mk;
     const sym = O.sclSym || null;
     if (!sym) return shell('Stock spotlight', mLabel, 'pick a stock', 'Pick a stock or an index to chart.');

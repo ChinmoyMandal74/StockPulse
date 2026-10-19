@@ -3981,7 +3981,7 @@
     // frames follow the measure, on its own controls.
     function fillStkWindows() {
       const el = $('sclWin'); const keep = el.value;
-      const wins = Cards.lineWindows($('sclMetric').value);
+      const wins = Cards.lineWindows($('sclMetric').value, true);
       el.innerHTML = wins.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
       el.value = wins.some((w) => w[0] === keep) ? keep : (wins.find((w) => w[2]) || wins[0])[0];
     }
