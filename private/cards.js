@@ -11372,7 +11372,11 @@
       Math.max(nameEm(l.name), PT.fmt(model.unit, l.last.v).length * 0.62)));
     const right = Math.min(story ? 376 : 318, Math.max(120, Math.ceil(12 + longest * fs + 10)));
     const chart = PT.svg(model, {
-      w: 952, h: LIN_H[size.id] || 600, left: story ? 110 : 92, right, stack: true,
+      // LIN_H is sized for the LONGEST note a cut can produce, so a short note
+      // left a band of empty card above it (owner, 2026-10-19: "why is there
+      // such a big gap between the chart and the footnote"). The studio
+      // measures that band and builds again with it as cardFill.
+      w: 952, h: Math.max(300, (LIN_H[size.id] || 600) + cardFill), left: story ? 110 : 92, right, stack: true,
       fs, nameMax: NAME_MAX, xLabels: 5, colors,
       xLabel: daily ? (d) => LIN_MON[Number(String(d).slice(5, 7)) - 1] + ' ' + Number(String(d).slice(8, 10)) : null,
     });

@@ -3455,8 +3455,19 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines']), FILL_KEEP = 32;
     function fillGap(stage) {
+      // THE LINES CARD FILLS ITS BODY ALREADY (.pv-in is height 100%, the note
+      // pushed down by an auto margin), so the measure below would always find
+      // nothing. Its spare room is the band between the chart and the note,
+      // and that is measured on every shape, story included. offsetTop, not
+      // getBoundingClientRect: the stage may be scaled to fit the window.
+      if (tpl === 'lines') {
+        const chart = stage.querySelector('.ln-in .pv-chart'), note = stage.querySelector('.ln-in > .s-sub');
+        if (!chart || !note) return 0;
+        const gap = note.offsetTop - (chart.offsetTop + chart.offsetHeight) - FILL_KEEP / 2;
+        return gap > 3 ? gap : 0;
+      }
       // The 9:16 card stretches its body to full height already
       // (`.sz-story .s-body > div`), so there is nothing spare to measure.
       if (!FILL_TPLS.has(tpl) || size.id === 'story') return 0;
