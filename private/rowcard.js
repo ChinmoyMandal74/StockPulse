@@ -1521,9 +1521,40 @@
     return `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/`;
   }
 
+  // ---- Reuters, MarketWatch and the SEC (2026-10-19, the owner) ---------------
+  // Three more places to look a stock up, beside Google and Yahoo, here for the
+  // reason those two are: a third-party URL derived from a row belongs in one
+  // place. None of the three answers an automated request (401 and 403), so
+  // the shapes are the sites' own published conventions, not something this
+  // code could check; each falls back to nothing rather than a guessed page.
+  //
+  // REUTERS keys a page by RIC: the symbol and a venue suffix (.OQ Nasdaq, .N
+  // NYSE, .A NYSE American, .P NYSE Arca, .Z Cboe), a share class written as a
+  // lower-case letter (BRK.B is BRKb.N). No venue known, no link: a RIC without
+  // its suffix is a different instrument or none.
+  const RIC_SUFFIX = { NASDAQ: 'OQ', NYSE: 'N', NYSEAMERICAN: 'A', NYSEARCA: 'P', BATS: 'Z' };
+  function reutersUrl(s) {
+    const suf = RIC_SUFFIX[googleExchange(s)];
+    if (!suf || !s || !s.symbol) return null;
+    const ric = String(s.symbol).replace(/\.([A-Z])$/, (m, c) => c.toLowerCase());
+    return `https://www.reuters.com/markets/companies/${encodeURIComponent(ric)}.${suf}/`;
+  }
+  // MARKETWATCH: the symbol in lower case, a share class with its dot (brk.b),
+  // and a fund under /fund/ rather than /stock/.
+  function mwUrl(s) {
+    if (!s || !s.symbol) return null;
+    return `https://www.marketwatch.com/investing/${isFund(s) ? 'fund' : 'stock'}/${encodeURIComponent(String(s.symbol).toLowerCase())}`;
+  }
+  // THE SEC'S OWN PAGE FOR THE COMPANY, by its CIK: every filing, newest first.
+  // The CIK is the filings reader's (sec_state), not the price provider's.
+  function secUrl(cik) {
+    const n = Number(cik);
+    return n > 0 && Number.isInteger(n) ? `https://www.sec.gov/edgar/browse/?CIK=${n}` : null;
+  }
+
   global.RowCard = {
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
-    gfUrl, yfUrl, googleExchange, canHover,
+    gfUrl, yfUrl, reutersUrl, mwUrl, secUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,

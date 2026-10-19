@@ -3494,6 +3494,20 @@
             <a class="olink" href="${RowCard.yfUrl(stock)}" target="_blank" rel="noopener"
                title="Open ${esc(stock.symbol)} in Yahoo Finance — opens in a new tab">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>Yahoo Finance</a>
+            <!-- Reuters, MarketWatch and the SEC joined them on 2026-10-19 at
+                 the owner's request; the URLs are rowcard.js's too. Reuters
+                 needs the venue, so a stock without one has no Reuters link.
+                 The SEC link waits for /api/sec, which carries the company's
+                 CIK, and stays hidden where there is none (a fund). -->
+            ${RowCard.reutersUrl(stock) ? `<a class="olink" href="${RowCard.reutersUrl(stock)}" target="_blank" rel="noopener"
+               title="Open ${esc(stock.symbol)} on Reuters — opens in a new tab">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>Reuters</a>` : ''}
+            <a class="olink" href="${RowCard.mwUrl(stock)}" target="_blank" rel="noopener"
+               title="Open ${esc(stock.symbol)} on MarketWatch — opens in a new tab">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>MarketWatch</a>
+            <a class="olink" id="secLink" hidden target="_blank" rel="noopener"
+               title="Every filing ${esc(stock.symbol)} has made with the SEC, on EDGAR — opens in a new tab">
+              <svg class="ic ic-sm" aria-hidden="true"><use href="#i-out" /></svg>SEC EDGAR</a>
             <!-- Paper positions (2026-10-15): opens /paper with this stock chosen.
                  Members only; shown once /api/me says this is not the guest preview. -->
             <a class="olink" id="paperLink" hidden href="/paper?open=${encodeURIComponent(stock.symbol)}"
@@ -4804,6 +4818,12 @@
           // second copy: one read of sec_state already happened in here.
           stock.secLastResults = j.lastResults || null;
           paintAnnRow();
+          // The SEC EDGAR pill in the masthead: shown once the CIK is known,
+          // and before the return below, since a company with no tagged
+          // statements still has a page of filings at the SEC.
+          const secHref = RowCard.secUrl(j.cik);
+          const secA = document.getElementById('secLink');
+          if (secA && secHref) { secA.href = secHref; secA.hidden = false; }
           // Nothing filed is the normal answer for a fund. No card at all,
           // rather than a heading over an empty table.
           if (!(j.annual || []).length && !(j.quarterly || []).length) { drop(); return; }
