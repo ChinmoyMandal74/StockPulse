@@ -329,6 +329,10 @@
     // back noise (see docs/momentum-delta.md).
     ['rel',   'Steadiness',     (s) => V.num(s.steadiness, 0)],
     ['rel',   'Ulcer',          (s) => V.num(s.ulcer, 1)],
+    // How much it moves, and how much with the market (2026-10-19). Both a
+    // description of the past year, uncoloured.
+    ['rel',   'Volatility 1Y',  (s) => V.mag(s.vol1y)],
+    ['rel',   'Beta',           (s) => V.num(s.beta, 2)],
     ['rel',   'Crossings',      (s) => V.count(s.crossings)],
     ['rel',   'Band',           (s) => V.num(s.bandPct, 0)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
@@ -654,6 +658,30 @@
   // outside the visible range. Plain averages, so unlike RSI there is no
   // warm-up beyond the window itself.
   const AO_FAST = 5, AO_SLOW = 34;
+  // ROLLING VOLATILITY, for the stock page's Vol pane (2026-10-19): at each
+  // close, the standard deviation of the `n` daily moves ending there,
+  // annualised (times the square root of 252), in percent. Null until n moves
+  // are in hand, and across a sub-cent bar (the floor server.js keeps), which
+  // would otherwise be a 900% spike that is a bad print, not a volatile day.
+  // The same arithmetic as the screener's Vol 1Y, over a shorter window.
+  function volSeries(closes, n) {
+    const w = n || 30;
+    const out = new Array(closes.length).fill(null);
+    const r = new Array(closes.length).fill(null);
+    for (let i = 1; i < closes.length; i++) {
+      const a = closes[i], b = closes[i - 1];
+      if (a >= 0.01 && b >= 0.01) r[i] = a / b - 1;
+    }
+    for (let i = w; i < closes.length; i++) {
+      const win = r.slice(i - w + 1, i + 1);
+      if (win.some((v) => v == null)) continue;
+      const m = win.reduce((t, v) => t + v, 0) / w;
+      const v = win.reduce((t, x) => t + (x - m) * (x - m), 0) / (w - 1);
+      out[i] = Math.sqrt(v * 252) * 100;
+    }
+    return out;
+  }
+
   function aoSeries(mids) {
     const f = sma(mids, AO_FAST), s = sma(mids, AO_SLOW);
     return mids.map((_, k) => (f[k] == null || s[k] == null ? null : f[k] - s[k]));
@@ -741,6 +769,9 @@
     const vols = o.volumes && o.volumes.length === closes.length ? o.volumes : null;
     const rsis = o.rsi && o.rsi.length === closes.length ? o.rsi : null;
     const aos = o.ao && o.ao.length === closes.length && o.ao.some((v) => v != null) ? o.ao : null;
+    // The volatility pane (2026-10-19): rolling annualised volatility, with the
+    // stock's own long-run median as a dashed line (opts.volMed).
+    const vls = o.vol && o.vol.length === closes.length && o.vol.some((v) => v != null) ? o.vol : null;
     const W = 600;
 
     // Indicator panes stack below the price, in the order RSI then volume, each
@@ -752,7 +783,7 @@
     const PANE_GAP = 13;
     const PANE_H = 44;
     const RSI_H = 58;
-    const anyPane = vols || rsis || aos;
+    const anyPane = vols || rsis || aos || vls;
     // The price panel is taller than the panes under it, twice over at the
     // owner's request (2026-09-21): 150 -> 195 -> 254 viewBox units, each step
     // 30% on the one before and the volume and RSI bands left alone both times.
@@ -769,11 +800,13 @@
     // tile/phone stock card, which pass no panes and were not asked about.
     const PRICE_H = anyPane ? 254 : 104;
     let cursor = PRICE_H;
-    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0, aoTop = 0, aoBot = 0;
+    let rsiTop = 0, rsiBot = 0, volTop = 0, volBot = 0, aoTop = 0, aoBot = 0, vlTop = 0, vlBot = 0;
     if (rsis) { cursor += PANE_GAP; rsiTop = cursor; rsiBot = cursor + RSI_H; cursor = rsiBot; }
     // The oscillator sits between RSI and volume, at the RSI band height: it
     // needs room either side of a zero line.
     if (aos) { cursor += PANE_GAP; aoTop = cursor; aoBot = cursor + RSI_H; cursor = aoBot; }
+    // Volatility after the oscillator, at the same height.
+    if (vls) { cursor += PANE_GAP; vlTop = cursor; vlBot = cursor + RSI_H; cursor = vlBot; }
     if (vols) { cursor += PANE_GAP; volTop = cursor; volBot = cursor + PANE_H; cursor = volBot; }
     const H = anyPane ? cursor + 6 : 104;
     const PT = 12, PB = anyPane ? 8 : 12;
@@ -894,6 +927,27 @@
       }
     }
 
+    // Volatility pane: from zero to a little above the highest reading (or the
+    // median line, if that is higher), so the line and its usual level both fit.
+    let vlPane = '', vlAt = null;
+    if (vls) {
+      const seen = vls.filter((v) => v != null);
+      const med = o.volMed != null && isFinite(o.volMed) && o.volMed > 0 ? o.volMed : null;
+      const vHi = Math.max(Math.max.apply(null, seen), med || 0) * 1.1 || 1;
+      const pad = 3;
+      vlAt = (v) => vlBot - pad - (Math.max(0, v) / vHi) * (vlBot - vlTop - pad * 2);
+      vlPane += `<rect class="pane-bg" x="0" y="${vlTop}" width="${W}" height="${(vlBot - vlTop).toFixed(1)}"/>`;
+      if (med) vlPane += `<line class="vl-med" x1="0" y1="${vlAt(med).toFixed(1)}" x2="${W}" y2="${vlAt(med).toFixed(1)}"/>`;
+      let vd = '', pen = false;
+      for (let i = 0; i < vls.length; i++) {
+        const v = vls[i];
+        if (v == null) { pen = false; continue; }
+        vd += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + vlAt(v).toFixed(1);
+        pen = true;
+      }
+      if (vd) vlPane += `<path class="vl-ln" d="${vd}"/>`;
+    }
+
     const wantTicks = o.ticks || 0;
     // opts.pctBase: gridlines at round percentages from that price (pctTicks).
     const ticks = !wantTicks ? []
@@ -921,6 +975,7 @@
       rsi: rsis ? { top: rsiTop / H, bottom: rsiBot / H,
                     at: (v) => (rsiBot - (v / 100) * (rsiBot - rsiTop)) / H } : null,
       ao: aos ? { top: aoTop / H, bottom: aoBot / H, zero: aoZero / H, at: (v) => aoAt(v) / H } : null,
+      vol: vls ? { top: vlTop / H, bottom: vlBot / H, at: (v) => vlAt(v) / H } : null,
       volume: vols ? { top: volTop / H, bottom: volBot / H } : null,
     };
 
@@ -957,6 +1012,7 @@
       overlayPaths +
       rsiPane +
       aoPane +
+      vlPane +
       `<circle class="dot" cx="${x(closes.length - 1).toFixed(1)}" cy="${y(closes[closes.length - 1]).toFixed(1)}" r="2.6"/>` +
       bars +
       '</svg>';
@@ -1556,7 +1612,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, reutersUrl, mwUrl, secUrl, googleExchange, canHover,
     // used by the stock page
-    buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, stepSeries, fmtMktCap,
+    buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
     fieldCatalogue, fieldValues, fieldProps, isFund,

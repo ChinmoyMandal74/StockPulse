@@ -161,6 +161,31 @@
         basis: st && st.group });
     }
 
+    // Volatility (2026-10-19, the owner: "how do we show individual stock
+    // volatility"). How much it moves, against its industry; how much with the
+    // market; and whether the last three months were calmer or wilder than its
+    // year. The arrow is where the year's volatility sits in the group: up is
+    // MORE volatile, which is a description, not a warning. Funds are compared
+    // with nobody (standing() leaves them out), so a fund's card has no arrow.
+    {
+      const v = num(s.vol1y), v3 = num(s.vol3m), b = num(s.beta), bad = num(s.badDay);
+      // A fund is compared with nobody: an index fund among companies would
+      // read "less volatile than three quarters" for being diversified.
+      const st = isFund(s) ? null : standing(s, all, 'vol1y');
+      const bits = [];
+      if (v != null) bits.push('Moves about ' + pct(v, 0) + ' a year' + (st ? ', ' + st.words.replace(/^higher/, 'more volatile').replace(/^lower/, 'less volatile') : '') + '.');
+      if (v != null && v3 != null && v > 0) {
+        const r = v3 / v;
+        bits.push(r >= 1.25 ? 'Wilder lately: ' + pct(v3, 0) + ' a year over the last three months.'
+          : r <= 0.8 ? 'Calmer lately: ' + pct(v3, 0) + ' a year over the last three months.'
+          : 'The last three months about the same, at ' + pct(v3, 0) + '.');
+      }
+      if (b != null) bits.push('Beta ' + b.toFixed(2) + ': on a day the S&P 500 moved 1%, it has tended to move ' + Math.abs(b).toFixed(1) + '%' + (b < 0 ? ', the other way.' : '.'));
+      if (bad != null && bad < 0) bits.push('One day in twenty fell ' + pct(Math.abs(bad), 1) + ' or more.');
+      add({ id: 'vol', title: 'Volatility', jump: 'price', tone: 'neutral', arrow: arrowOf(st), text: join(bits),
+        basis: st && st.group });
+    }
+
     // Balance sheet
     {
       // Net cash means nothing for a lender, whose deposits are its debt: the

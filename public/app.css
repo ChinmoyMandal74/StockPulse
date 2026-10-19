@@ -428,6 +428,11 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-chart .aob.ad { fill: var(--red); }
 .rc-chart .ao-zero { stroke: color-mix(in srgb, var(--wash) 28%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
 
+/* Volatility pane: the rolling figure in orange (green and red are price
+   direction here), its own five-year median as a dashed line. */
+.rc-chart .vl-ln { fill: none; stroke: var(--orange); stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.rc-chart .vl-med { stroke: color-mix(in srgb, var(--wash) 40%, transparent); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+
 /* volume bars sit in their own band under the price; green on an up session,
    red on a down one, dimmed so they never compete with the price line */
 .rc-chart .vb { stroke: none; opacity: 0.55; }

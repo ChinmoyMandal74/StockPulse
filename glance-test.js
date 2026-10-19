@@ -57,6 +57,26 @@ check('an empty row renders nothing', G.render(empty) === '');
 const quiet = G.build(Object.assign({}, mu, { insiderBuyers: undefined, insiderSellers: undefined, insiderNet: null, insiderSince: '2026-07-17' }), all);
 check('no trades is said only when the file was read', /since Jul 17/.test(quiet.cards.find((c) => c.id === 'owners').text));
 
+// Volatility (2026-10-19): against the industry, lately against the year, beta.
+{
+  const vs = semis.map((r, i) => Object.assign({}, r, { vol1y: 30 + i * 3 }));
+  const wild = Object.assign({}, mu, { vol1y: 80, vol3m: 110, beta: 2.4, badDay: -5.2 });
+  const gv = G.build(wild, vs.concat([wild, bank, fund]));
+  const c = gv.cards.find((x) => x.id === 'vol');
+  check('the volatility card appears when the figures are there', !!c);
+  check('most volatile in its industry reads up, worded as volatility', c.arrow === 'up' && /more volatile than three quarters of Semiconductors/.test(c.text), c.text);
+  check('three months well above the year reads wilder lately', /Wilder lately: 110%/.test(c.text), c.text);
+  check('beta is explained in plain terms', /Beta 2\.40: on a day the S&P 500 moved 1%, it has tended to move 2\.4%\./.test(c.text), c.text);
+  check('the bad day is stated as a fall', /One day in twenty fell 5\.2% or more/.test(c.text), c.text);
+  const calm = G.build(Object.assign({}, wild, { vol1y: 31, vol3m: 20, beta: -0.3 }), vs.concat([bank]));
+  const cc = calm.cards.find((x) => x.id === 'vol');
+  check('three months well below reads calmer lately, and a low one reads down', /Calmer lately/.test(cc.text) && cc.arrow === 'down', cc.text + ' ' + cc.arrow);
+  check('a negative beta says it moved the other way', /the other way\./.test(cc.text), cc.text);
+  const fundCard = G.build(Object.assign({}, fund, { vol1y: 13, beta: 1 }), vs).cards.find((x) => x.id === 'vol');
+  check('a fund gets the figures but no comparison arrow', !!fundCard && fundCard.arrow === null, JSON.stringify(fundCard));
+  check('no volatility figures, no card', !G.build(mu, all).cards.some((x) => x.id === 'vol'));
+}
+
 // The words never advise.
 const html = G.render(g) + G.render(gb) + G.render(loss);
 check('no NaN or undefined drawn', !/NaN|undefined/.test(html));

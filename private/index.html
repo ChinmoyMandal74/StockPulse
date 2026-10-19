@@ -1519,7 +1519,7 @@
         <th class="group grp-short" data-group="short" colspan="8">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
-        <th class="group grp-rel" data-group="rel" colspan="19">Relative</th>
+        <th class="group grp-rel" data-group="rel" colspan="21">Relative</th>
         <th class="group grp-react" data-group="react" colspan="6">Reactions</th>
         <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
@@ -1580,6 +1580,8 @@
         <th class="grp-rel" data-key="range52Pos" title="Where the price sits in its 52-week range: 0 is on the low, 100 on the high.">52W<br>range</th>
         <th class="grp-rel" data-key="steadiness" title="How straight the last year's path was: the R² of log price against time, 0 to 100. 100 is a ruler-straight line, 0 is chop. DIRECTION-BLIND on purpose — a stock falling steadily also scores high, so read it beside the return and the trend columns. Signing it was measured and rejected: it takes the correlation with plain return from 0.34 to 0.89 and halves what the column adds. Needs a full year of bars.">Steadi-<br>ness</th>
         <th class="grp-rel" data-key="ulcer" title="Ulcer index: the root-mean-square drawdown from the running high over the last year, in percent. Depth AND time spent underwater, so a long shallow slide and one brief crash are told apart. Low is a calm ride. Descriptive, not a forecast.">Ulcer</th>
+        <th class="grp-rel" data-key="vol1y" title="Volatility over the last year: the standard deviation of the stock&#39;s daily moves, annualised, in percent. About 20% is a calm large company, 40% a lively one, 80% a wild one; the S&amp;P 500 itself ran about 13%. It counts moves up and down alike, so it is how much the price moves, not which way. Blank under 200 trading days. A description of the past year, not a forecast. The stock page can draw it over time against the stock&#39;s own usual level.">Vol<br>1Y</th>
+        <th class="grp-rel" data-key="beta" title="Beta to the S&amp;P 500 over the last year: how far the stock has tended to move on a day the index moved 1%, from the two sets of daily moves matched by date. 1.5 is half as far again as the index, 0.5 half as far, below zero against it. A low beta is not a low volatility: a stock can move a lot for its own reasons and little with the market, so read it beside Vol 1Y. A description of the past year, not a forecast. Blank under 120 shared trading days.">Beta</th>
         <th class="grp-rel" data-key="crossings" title="How many times the price crossed its own median over the last year. A trending stock crosses once or twice; something trading in a range crosses twenty-five to thirty-five times. Nearly independent of volatility (rank correlation 0.07), so it finds stocks that go back and forth rather than merely quiet ones. Needs a full year of bars.">Cross-<br>ings</th>
         <th class="grp-rel" data-key="bandPct" title="The width of the last year's range as a share of its median price. Not an independent reading — it is 0.89 correlated with volatility — but it is the constraint that separates a real range from a rollercoaster that oscillates across an 80% span.">Band</th>
         <th class="grp-rel" data-key="rsi" title="Relative Strength Index (14-day)">RSI</th>
@@ -2432,6 +2434,17 @@
       const t = `${v} of 9 tests passed` + (s.fScoreEnd ? ` on the annual report to ${s.fScoreEnd}` : '')
         + (pass.length ? `. Passed: ${pass.join(', ')}` : '') + (fail.length ? `. Not passed: ${fail.join(', ')}` : '');
       return `<td class="grp-lrun"${attr(t)}>${v}</td>`;
+    }
+    // A year's volatility, uncoloured: how much it moves, not which way.
+    function vol1yCell(s) {
+      if (s.vol1y == null || !isFinite(s.vol1y)) return `<td class="na grp-rel" title="Fewer than 200 trading days on file.">—</td>`;
+      return magPctCell(s.vol1y, 'grp-rel', `The daily moves over the last year, annualised: about ${s.vol1y.toFixed(0)}% a year`);
+    }
+    // Beta to the S&P 500, two places, uncoloured: a sensitivity, not a move.
+    function betaCell(s) {
+      const v = s.beta;
+      if (v == null || !isFinite(v)) return `<td class="na grp-rel" title="Fewer than 120 trading days shared with the S&amp;P 500, or the index itself.">—</td>`;
+      return `<td class="grp-rel"${attr(`On a day the S&P 500 moved 1%, it has tended to move ${v.toFixed(2)}% over the last year`)}>${v.toFixed(2)}</td>`;
     }
     function marginChgCell(s) {
       const v = s.netMarginChg;
@@ -3874,6 +3887,8 @@
           ${rangeCell(s.range52Pos, 'grp-rel', liveTitle)}
           ${rangeCell(s.steadiness, 'grp-rel', liveTitle)}
           ${numCell(s.ulcer, 'grp-rel', liveTitle)}
+          ${vol1yCell(s)}
+          ${betaCell(s)}
           ${rangeCell(s.crossings, 'grp-rel', liveTitle)}
           ${rangeCell(s.bandPct, 'grp-rel', liveTitle)}
           ${rsiCell(s.rsi, 'grp-rel', liveTitle)}
@@ -3967,7 +3982,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 128;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 130;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;

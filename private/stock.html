@@ -296,11 +296,24 @@
     #chart.rc-chart.has-rsi { height: 577px; }
     #chart.rc-chart.has-ao { height: 577px; }
     #chart.rc-chart.has-rsi.has-ao { height: 679px; }
+    /* The volatility pane is the oscillator's height, so it adds what AO adds. */
+    #chart.rc-chart.has-vol { height: 577px; }
+    #chart.rc-chart.has-rsi.has-vol, #chart.rc-chart.has-ao.has-vol { height: 679px; }
+    #chart.rc-chart.has-rsi.has-ao.has-vol { height: 781px; }
     #chart .cap { font-size: 12.5px; }
     #chart .cap.chg { font-size: 17px; }
     /* Pane labels sit against the geometry the chart reports, not a guessed
        percentage — turning RSI on moves the volume band down. */
-    #chart .cap.vol, #chart .cap.rsi, #chart .cap.ao {
+    /* The volatility pane's caption (.vlc: .vol is the volume band's) and the
+       label on its median line, in the volatility line's colour. */
+    #chart .cap.vlc { color: var(--orange); }
+    #chart .cap.vlc i { font-style: normal; letter-spacing: 0.04em; text-transform: none; color: var(--faint); }
+    #chart .vl-lbl {
+      position: absolute; right: 56px; transform: translateY(-50%);
+      font-family: var(--mono); font-size: 10.5px; color: var(--faint); pointer-events: none;
+      text-shadow: 0 0 4px color-mix(in srgb, var(--surface) 95%, transparent), 0 0 2px color-mix(in srgb, var(--surface) 95%, transparent);
+    }
+    #chart .cap.vol, #chart .cap.rsi, #chart .cap.ao, #chart .cap.vlc {
       left: 9px; bottom: auto; font-size: 11px;
       text-transform: uppercase; letter-spacing: 0.12em;
       transform: translateY(-125%);
@@ -1472,6 +1485,17 @@
     let showPct = false;
     try { showPct = localStorage.getItem(PCT_KEY) === '1'; } catch (e) { /* private window */ }
     try { showAO = localStorage.getItem(AO_KEY) === '1'; } catch (e) { /* private window */ }
+    // THE VOLATILITY PANE (2026-10-19, the owner: "how do we show individual
+    // stock volatility"). The rolling 30-day volatility (RowCard.volSeries, the
+    // screener's Vol 1Y over a shorter window) under the price, with a dashed
+    // line at the stock's OWN five-year median of the same figure, which is
+    // what answers "is it unusually wild right now": 35% is calm for one stock
+    // and wild for another. The median needs about five years of closes, so
+    // the pane asks for that history too, only while it is on. Off unless this
+    // device switched it on, like AO.
+    const VOL_KEY = 'stock.volpane', VOL_WIN = 30, VOL_MED_DAYS = 1260 + 30;
+    let showVol = false;
+    try { showVol = localStorage.getItem(VOL_KEY) === '1'; } catch (e) { /* private window */ }
     // THE RIBBON AND THE LINE ARE TWO THINGS, and only one of them is a
     // hypothesis. The ribbon is a reading of the bars — what the trend rules
     // said on each session — and is always drawn. The dashed trend-hold line
@@ -3230,6 +3254,10 @@
       box.dataset.range = range.id;
       box.classList.toggle('has-rsi', showRSI);
       box.classList.toggle('has-ao', showAO);
+      box.classList.toggle('has-vol', showVol);
+      // Five years of closes for the volatility pane's median line, only while
+      // the pane is on. Cached by loadHistory, so a range click does not refetch.
+      const volLongP = showVol ? RowCard.loadHistory(SYMBOL, VOL_MED_DAYS).catch(() => null) : Promise.resolve(null);
       // The chosen stock rides with the indices: one list, so the fetch, the
       // rebasing, the overlay paths and the legend all treat it identically.
       const wantBench = BENCH.filter((b) => b.on).concat(
@@ -3240,7 +3268,8 @@
         // — a guest is refused these symbols outright, and a fresh install has
         // no bars for them yet.
         ...wantBench.map((b) => RowCard.loadHistory(b.sym, range.days + REPLAY_PAD).catch(() => null)),
-      ]).then(([data, ...benchHist]) => {
+      ]).then(async ([data, ...benchHist]) => {
+        const volLong = await volLongP;
         if (box.dataset.range !== range.id) return;      // a later click won
         const all = (data && data.closes) || [];
         box.classList.remove('up', 'down');
@@ -3288,6 +3317,19 @@
         // Room is made only for a pane that will be drawn: a listing under 34
         // sessions has no reading, and the taller box would stretch every band.
         box.classList.toggle('has-ao', aoNow != null);
+        // Volatility: over everything fetched (the 260-session pre-roll covers
+        // the 30-day window), sliced to the view. The median is the stock's own
+        // over the five years fetched for it, needing at least two years of
+        // readings to be called a usual level.
+        const volAll = showVol ? RowCard.volSeries(all, VOL_WIN) : null;
+        const vol = volAll ? volAll.slice(from) : null;
+        const volNow = vol ? [...vol].reverse().find((v) => v != null) ?? null : null;
+        let volMed = null, volMedYears = 0;
+        if (showVol && volLong && Array.isArray(volLong.closes)) {
+          const lv = RowCard.volSeries(volLong.closes, VOL_WIN).filter((v) => v != null).sort((a, b) => a - b);
+          if (lv.length >= 504) { volMed = lv[Math.floor(lv.length / 2)]; volMedYears = Math.round(lv.length / 252); }
+        }
+        box.classList.toggle('has-vol', volNow != null);
         // ALWAYS computed: the ribbon is a reading of the bars, not an
         // option, and the crosshair's Trend row comes off the same words.
         // Thresholds follow the stock's current type — the classification is
@@ -3309,6 +3351,7 @@
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, ao, aoPrev: aoAll && from > 0 ? aoAll[from - 1] : null, band,
           pctBase: showPct ? closes[0] : null,
+          vol: volNow != null ? vol : null, volMed,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
             .concat(th ? [{ values: th.values, cls: 'th-ln' }] : [])
             .concat(drawnBench.map((b) => ({ values: b.values, cls: 'bm-ln ' + b.cls }))),
@@ -3357,6 +3400,12 @@
               ` <i>&middot; <span class="u">green</span> higher than the bar before, <span class="d">red</span> lower</i></span>` +
               `<span class="ao-lbl" style="top:${atY(c.panes.ao.zero)}">0</span>`
             : '') +
+          (c.panes.vol
+            ? `<span class="cap vlc" style="top:${atY(c.panes.vol.top)}">` +
+              `Volatility 30-day &middot; ${volNow.toFixed(0)}%` +
+              (volMed != null ? ` <i>&middot; dashed: its ${volMedYears}-year median, ${volMed.toFixed(0)}%</i>` : ' <i>&middot; too little history for a usual level</i>') + `</span>` +
+              (volMed != null ? `<span class="vl-lbl" style="top:${atY(c.panes.vol.at(volMed))}">${volMed.toFixed(0)}%</span>` : '')
+            : '') +
           `<span class="cap vol" style="top:${atY(c.panes.volume.top)}">Volume</span>` +
           `<span class="yaxis${showPct ? ' pct' : ''}">${yLabels}</span>` +
           `<span class="axis">${ticks.join('')}</span>` +
@@ -3403,7 +3452,7 @@
         }
 
         // Everything the crosshair needs, kept for the pointer handler.
-        hover = { dates, closes, volumes, rsi, ao, trend, th: th ? th.values : null,
+        hover = { dates, closes, volumes, rsi, ao, vol: volNow != null ? vol : null, trend, th: th ? th.values : null,
           verd: verds, pM: verds ? modelPositions(verds) : null, panes: c.panes };
       });
     }
@@ -3549,6 +3598,7 @@
               <button class="rng bb-toggle${showBands ? ' on' : ''}" id="bbBtn" title="Bollinger bands: the 20-day average plus and minus two standard deviations of the same 20 closes. Wide when the price has been moving a lot, narrow when it has been quiet.">Bands</button>
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
               <button class="rng${showAO ? ' on' : ''}" id="aoBtn" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint less the 34-day average">AO</button>
+              <button class="rng${showVol ? ' on' : ''}" id="volBtn" title="Volatility: the last 30 days&#39; daily moves, annualised, drawn over time under the price, with a dashed line at this stock&#39;s own five-year median of the same figure, so you can see whether it is calmer or wilder than usual for it">Vol</button>
               <!-- FIRST of the three layer toggles, matching the order they
                    are drawn in below the chart (the owner, 2026-09-29).
                    Self-gating: no filings, or no trailing year inside the
@@ -4045,6 +4095,7 @@
           // the chart rather than in whatever order the fields were added.
           (r == null ? '' : `<span class="k">RSI</span> <span class="v rsi">${r.toFixed(1)}</span>`) +
           (hover.ao && hover.ao[i] != null ? `<span class="k">AO</span> <span class="v">${hover.ao[i] >= 0 ? '+' : ''}${hover.ao[i].toFixed(2)}</span>` : '') +
+          (hover.vol && hover.vol[i] != null ? `<span class="k">Vol 30D</span> <span class="v">${hover.vol[i].toFixed(0)}%</span>` : '') +
           `<span class="k">Vol</span> <span class="v">${fmtVol(hover.volumes[i])}</span>` +
           (hover.trend && hover.trend[i] && hover.trend[i] !== 'No data'
             ? `<span class="k">Trend</span> <span class="v">${esc(hover.trend[i])}</span>` : '') +
@@ -4122,6 +4173,14 @@
           try { localStorage.setItem(AO_KEY, showAO ? '1' : '0'); } catch (e) { /* private window */ }
           window.track && track('chart', 'pane:ao:' + (showAO ? 'on' : 'off'));
           b.classList.toggle('on', showAO);
+          paintChart();
+          return;
+        }
+        if (b.id === 'volBtn') {
+          showVol = !showVol;
+          try { localStorage.setItem(VOL_KEY, showVol ? '1' : '0'); } catch (e) { /* private window */ }
+          window.track && track('chart', 'pane:vol:' + (showVol ? 'on' : 'off'));
+          b.classList.toggle('on', showVol);
           paintChart();
           return;
         }

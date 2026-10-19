@@ -5286,6 +5286,51 @@ function realisedVol(values, lookback = 126) {
   return Math.sqrt(varc * 252) * 100;
 }
 
+// BETA TO THE S&P 500 (2026-10-19, the owner: "how do we show individual
+// stock volatility"): the slope of the stock's daily moves on the index's over
+// the last year, matched BY DATE (two maps from chipReturns, so a stock with a
+// halt or a different calendar is not sheared against the index by position).
+// 1.5 means it has tended to move one and a half times as far as the index on
+// the same day; 0.5 half as far; below zero, against it. A description of the
+// past year's co-movement, not a forecast. Null under 120 shared days: a slope
+// over a few weeks is mostly the weeks.
+const BETA_MIN_DAYS = 120;
+function betaOf(stockRet, mktRet) {
+  if (!stockRet || !mktRet || !stockRet.size || !mktRet.size) return null;
+  const xs = [], ys = [];
+  for (const [d, m] of mktRet) {
+    const s = stockRet.get(d);
+    if (s != null && isFinite(s) && isFinite(m)) { xs.push(m); ys.push(s); }
+  }
+  if (xs.length < BETA_MIN_DAYS) return null;
+  const mx = xs.reduce((t, v) => t + v, 0) / xs.length, my = ys.reduce((t, v) => t + v, 0) / ys.length;
+  let cov = 0, vx = 0;
+  for (let i = 0; i < xs.length; i++) { cov += (xs[i] - mx) * (ys[i] - my); vx += (xs[i] - mx) ** 2; }
+  if (!(vx > 0)) return null;
+  const b = cov / vx;
+  return isFinite(b) ? Math.round(b * 100) / 100 : null;
+}
+
+// A YEAR'S VOLATILITY: the standard deviation of the daily moves over the last
+// year, annualised (times the square root of 252), in percent. "It moves about
+// 35% a year" is this figure. Null under 200 days: a listing of a few months
+// would otherwise print a "one-year" figure over weeks.
+// `last` keeps only the newest that many moves (chipReturns fills its map
+// newest first): the three-month figure the At a glance card sets beside the
+// year's, with its own minimum.
+const VOL_MIN_DAYS = 200;
+function volOf(ret, last, minDays) {
+  const need = minDays || VOL_MIN_DAYS;
+  if (!ret || ret.size < need) return null;
+  let r = [...ret.values()].filter((v) => isFinite(v));
+  if (last) r = r.slice(0, last);
+  if (r.length < need) return null;
+  const m = r.reduce((t, v) => t + v, 0) / r.length;
+  const v = r.reduce((t, x) => t + (x - m) ** 2, 0) / (r.length - 1);
+  const out = Math.sqrt(v * 252) * 100;
+  return isFinite(out) ? Math.round(out * 10) / 10 : null;
+}
+
 // A BAD DAY, as this stock has actually had them: the 5th percentile of its
 // own daily moves over the last year. One session in twenty was worse than
 // this.
@@ -8307,6 +8352,9 @@ async function computeStocks(asOf, opts = {}) {
       }
     }
 
+    // The index's daily moves, once, for every row's beta. Not in the as-of
+    // view: there a year means the as-of date's year, the 5Y column's reason.
+    const spyRet = asOf ? null : chipReturns(series[BENCHMARK] && series[BENCHMARK].values);
     const stocks = symbols.map((sym) => {
       const s = series[sym] || {};
       const full = s.values;
@@ -8335,6 +8383,9 @@ async function computeStocks(asOf, opts = {}) {
       const ok = Array.isArray(values) && values.length > 0;
       const prof = profiles[sym] || {};
       const rvol = realisedVol(values); // one pass, reused by every risk-adjusted factor
+      // The year's daily moves by date, for vol1y and beta (chipReturns: the
+      // sub-cent floor is applied, so a bad bar cannot print a 900% volatility).
+      const ownRet = asOf ? null : chipReturns(values);
       // Same window, already in memory: the refresh reads ~470 sessions per
       // symbol for the long returns, so this costs a sort and no query.
       const bad = badDay(values);
@@ -8526,6 +8577,12 @@ async function computeStocks(asOf, opts = {}) {
         crossings: medianCrossings(values),  // times the price crossed its own 1y median
         bandPct: bandPct(values),            // (high-low)/median over the year, %
         realisedVol: rvol,
+        // A year's volatility (the six-month one above feeds the scores and is
+        // left as it is) and beta to the S&P 500: the Relative group's two
+        // volatility columns, display only. A fund has both; they mean the same.
+        vol1y: asOf ? null : volOf(ownRet),
+        vol3m: asOf ? null : volOf(ownRet, 63, 55),
+        beta: asOf || sym === BENCHMARK ? null : betaOf(ownRet, spyRet),
         badDay: bad,
         chipSelloff: chip,
         marketSelloff: mktDown,
