@@ -108,3 +108,16 @@ The owner asked for "Bollinger style bands ... as an option". A **Bands** button
 
 ## YTD on the chart (2026-10-16)
 The owner: "Add YTD as a period option on the individual stock chart". `RANGES` gains `{ id: 'ytd', ytd: true }` between 6M and 1Y. Its `days` is a getter: the weekdays since 31 December plus 10, only as the fetch size. `paintChart` then sets `from` to the last session before 1 January of the newest bar's year (the data's year, not the reader's clock), so the first point is last year's close and the corner figure is the year's move, the promo cards' YTD rule. Before the year's first session it keeps the last two closes rather than drawing nothing. The averages, the bands, RSI and the benchmarks all slice by the same `from`. Checked in the harness: 209 points from 2025-12-31, a corner move equal to the close-to-close change over the same request, and 6M unchanged at 126.
+
+## The % view (2026-10-19)
+
+The owner, of Macrotrends' percentage chart: "I like this percentage chart". A **%** toggle beside Bands on the stock page's price chart.
+
+- **The lines do not change; only the axis does.** Every overlay on this chart (the indices, a compared stock, the Trend-held line) is already rebased to the stock's price at the left edge, so one price axis serves them all and a percent axis is the same axis labelled differently. The flat line at the first close (`line.base`) is 0%. Moving averages and the bands stay in price space and read correctly against it.
+- **`RowCard.pctTicks(lo, hi, base, useLog, n)`** chooses the gridlines: round percentages (a step of 1, 2, 2.5 or 5 times a power of ten) on a linear axis; on a log axis, the log ticks of the index that starts at 100. Each tick keeps `v` as a price, so `chartSVG` places it exactly as before; `opts.pctBase` switches it on. `pctLabel` writes +20%, 0%, −10%.
+- The crosshair readout adds **From start**, the hovered close against the first, to one decimal.
+- Remembered per device (`localStorage` `stock.pct`), off by default, like the bands.
+- **The edge nudge.** The first and last y labels are shifted inward because price ticks fall on the chart's top and bottom edges; percent ticks are inside the range, so `.yaxis.pct` centres every label on its line.
+- **An older fault found on the way, fixed for both views**: every y label sat above its gridline, by more the lower it was (9 px at the lowest middle label). `atY` subtracts the x-axis strip from the chart's height, which is right for things placed against `#chart`, but the labels sit inside `.yaxis`, which already stops above that strip, so it came off twice. They are placed as a plain percentage of their box now; measured after, every middle label 0 px from its line in both views.
+- Verified in headless Chrome on Coca-Cola's real bars (served from the local research copy, no production server): 5Y in price reads 52 to 92; in % reads 0% to +60%, +75% with SPY on, the 0% label on the first-close line, the readout "From start +29.1%", the choice kept across a reload and the price axis back when switched off.
+- Not taken from Macrotrends: their from/to date boxes and the range slider under the chart. The range buttons cover the same ground here.

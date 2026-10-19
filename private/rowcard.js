@@ -677,6 +677,28 @@
     return out;
   }
 
+  // THE SAME AXIS IN PERCENT FROM `base` (the stock page's % view, 2026-10-19,
+  // the owner liking Macrotrends' percentage chart). The lines are not
+  // touched: every overlay on that chart is already rebased to the stock's
+  // price at the left edge, so one price axis serves them all, and only the
+  // gridlines are chosen differently: at round percentages (a step of 1, 2,
+  // 2.5 or 5 times a power of ten) on a linear axis, and on a log axis at the
+  // log ticks of the index that starts at 100. `pct` is the label; `v` stays a
+  // price, so the rest of chartSVG places them exactly as before.
+  function pctTicks(lo, hi, base, useLog, n) {
+    if (useLog) return priceTicks(lo / base * 100, hi / base * 100, true, n).map((tk) => ({ v: tk.v / 100 * base, pct: tk.v - 100, f: tk.f }));
+    const pLo = (lo / base - 1) * 100, pHi = (hi / base - 1) * 100;
+    const raw = (pHi - pLo) / Math.max(1, n - 1) || 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw * 0.999);
+    const out = [];
+    for (let p = Math.ceil(pLo / step - 1e-9) * step; p <= pHi + 1e-9; p += step) {
+      const pct = Math.round(p * 1000) / 1000;
+      out.push({ v: base * (1 + pct / 100), pct: pct === 0 ? 0 : pct });   // never -0
+    }
+    return out;
+  }
+
   // A sparkline: the line and nothing else. Deliberately not chartSVG with
   // flags — at 72x20 there is no room for a baseline, an end dot or padding,
   // and a function that draws "everything except" is harder to reason about
@@ -873,7 +895,9 @@
     }
 
     const wantTicks = o.ticks || 0;
-    const ticks = wantTicks ? priceTicks(lo, hi, useLog, wantTicks) : [];
+    // opts.pctBase: gridlines at round percentages from that price (pctTicks).
+    const ticks = !wantTicks ? []
+      : (o.pctBase > 0 ? pctTicks(lo, hi, o.pctBase, useLog, wantTicks) : priceTicks(lo, hi, useLog, wantTicks));
     let grid = '';
     for (const tk of ticks) {
       const gy = y(tk.v);
@@ -1501,7 +1525,7 @@
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, googleExchange, canHover,
     // used by the stock page
-    buildSections, chartSVG, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, stepSeries, fmtMktCap,
+    buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
     fieldCatalogue, fieldValues, fieldProps, isFund,

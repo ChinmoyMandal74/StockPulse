@@ -365,6 +365,9 @@
        overflow:hidden ate it. */
     #chart .ytick:first-child { transform: translateY(-100%); }
     #chart .ytick:last-child { transform: translateY(0); }
+    /* The % view's ticks are round percentages INSIDE the range, not its two
+       edges, so the edge nudge above would lift the 0% label off its line. */
+    #chart .yaxis.pct .ytick { transform: translateY(-50%); }
 
     /* crosshair */
     #chart .xhair {
@@ -1458,6 +1461,16 @@
     const BB_KEY = 'stock.bands', BB_LEN = 20, BB_K = 2;
     let showBands = false;
     try { showBands = localStorage.getItem(BB_KEY) === '1'; } catch (e) { /* private window */ }
+    // THE AXIS IN PERCENT (2026-10-19, the owner, of Macrotrends' percentage
+    // chart: "I like this"). The same lines, read as the change from the first
+    // close in the window: the flat line at that close is 0%, and the axis says
+    // +40% where it said $180. Every overlay is already rebased to this stock's
+    // price at the left edge, so an index or a compared stock reads in percent
+    // too, and the gap between two lines is their difference in return. Off
+    // unless this device switched it on, like the bands.
+    const PCT_KEY = 'stock.pct';
+    let showPct = false;
+    try { showPct = localStorage.getItem(PCT_KEY) === '1'; } catch (e) { /* private window */ }
     try { showAO = localStorage.getItem(AO_KEY) === '1'; } catch (e) { /* private window */ }
     // THE RIBBON AND THE LINE ARE TWO THINGS, and only one of them is a
     // hypothesis. The ribbon is a reading of the bars — what the trend rules
@@ -1506,6 +1519,13 @@
 
     // Axis labels want to be scannable, not precise: decimals on a gridline are
     // noise, but a $2 stock still needs them.
+    // A percent tick: signed, 0% plain, and no decimals unless the step has them.
+    function pctLabel(p) {
+      if (p === 0) return '0%';
+      const a = Math.abs(p);
+      const txt = Number.isInteger(Math.round(a * 1000) / 1000) ? String(Math.round(a)) : a >= 10 ? a.toFixed(0) : a.toFixed(1);
+      return (p > 0 ? '+' : '−') + txt + '%';
+    }
     function tickLabel(v) {
       const a = Math.abs(v);
       if (a >= 100) return String(Math.round(v));
@@ -3288,6 +3308,7 @@
         paintCtx = { all, from, closes, dates, trend, rsiAll: rsiAllFull };
         const c = RowCard.chartSVG(closes, {
           volumes, ticks: 5, rsi, ao, aoPrev: aoAll && from > 0 ? aoAll[from - 1] : null, band,
+          pctBase: showPct ? closes[0] : null,
           overlays: series.map((x) => ({ values: x.values, cls: x.ma.cls }))
             .concat(th ? [{ values: th.values, cls: 'th-ln' }] : [])
             .concat(drawnBench.map((b) => ({ values: b.values, cls: 'bm-ln ' + b.cls }))),
@@ -3308,7 +3329,11 @@
         // Only ticks that actually got a gridline: one outside the band is a
         // price label hanging beside nothing.
         const yLabels = c.ticks.filter((tk) => tk.drawn).map((tk) =>
-          `<span class="ytick" style="top:${atY(tk.top)}">${esc(tickLabel(tk.v))}</span>`
+          // A plain percentage, NOT atY: these sit inside .yaxis, which already
+          // stops AXIS_H above the bottom, so atY took the axis off twice and
+          // every label drifted up from its gridline, by more the lower it sat
+          // (measured 2026-10-19: 9 px at the lowest middle label).
+          `<span class="ytick" style="top:${(tk.top * 100).toFixed(3)}%">${esc(tk.pct != null ? pctLabel(tk.pct) : tickLabel(tk.v))}</span>`
         ).join('');
 
         box.innerHTML = c.svg +
@@ -3333,7 +3358,7 @@
               `<span class="ao-lbl" style="top:${atY(c.panes.ao.zero)}">0</span>`
             : '') +
           `<span class="cap vol" style="top:${atY(c.panes.volume.top)}">Volume</span>` +
-          `<span class="yaxis">${yLabels}</span>` +
+          `<span class="yaxis${showPct ? ' pct' : ''}">${yLabels}</span>` +
           `<span class="axis">${ticks.join('')}</span>` +
           // Overlaid rather than drawn into the svg: preserveAspectRatio="none"
           // would stretch a dot into an ellipse and distort any text.
@@ -3506,6 +3531,7 @@
               ${MAS.map((m) =>
                 `<button class="rng ma-toggle ${m.cls}${m.on ? ' on' : ''}" data-ma="${m.len}">${m.label}</button>`
               ).join('')}
+              <button class="rng${showPct ? ' on' : ''}" id="pctBtn" title="Read the chart as the percentage change from the first close in the window: the flat line there is 0%. Indices and a compared stock read the same way, so the gap between two lines is the difference in their returns.">%</button>
               <button class="rng bb-toggle${showBands ? ' on' : ''}" id="bbBtn" title="Bollinger bands: the 20-day average plus and minus two standard deviations of the same 20 closes. Wide when the price has been moving a lot, narrow when it has been quiet.">Bands</button>
               <button class="rng rsi-toggle${showRSI ? ' on' : ''}" id="rsiBtn">RSI</button>
               <button class="rng${showAO ? ' on' : ''}" id="aoBtn" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint less the 34-day average">AO</button>
@@ -3997,6 +4023,9 @@
 
         out.innerHTML =
           `<span class="k">Price</span> <span class="v">${RowCard.fmtPrice(close)}</span>` +
+          // In the % view, where that close stands against the first one.
+          (showPct && hover.closes[0] > 0 ? (() => { const p = (close / hover.closes[0] - 1) * 100, t = Math.abs(p).toFixed(1);
+            return ` <span class="k">From start</span> <span class="v">${Number(t) === 0 ? '0.0' : (p > 0 ? '+' : '−') + t}%</span>`; })() : '') +
           (chg == null ? '' : ` <span class="${chg >= 0 ? 'pos' : 'neg'}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>`) +
           // Ordered to match the panes top to bottom, so the readout reads down
           // the chart rather than in whatever order the fields were added.
@@ -4079,6 +4108,14 @@
           try { localStorage.setItem(AO_KEY, showAO ? '1' : '0'); } catch (e) { /* private window */ }
           window.track && track('chart', 'pane:ao:' + (showAO ? 'on' : 'off'));
           b.classList.toggle('on', showAO);
+          paintChart();
+          return;
+        }
+        if (b.id === 'pctBtn') {
+          showPct = !showPct;
+          try { localStorage.setItem(PCT_KEY, showPct ? '1' : '0'); } catch (e) { /* private window */ }
+          window.track && track('chart', 'pct:' + (showPct ? 'on' : 'off'));
+          b.classList.toggle('on', showPct);
           paintChart();
           return;
         }
