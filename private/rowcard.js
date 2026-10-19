@@ -474,12 +474,18 @@
     // quarter end, and the change in their combined shares on the quarter before.
     ['own',   '13F holders',    (s) => (ok(s.instManagers) ? { t: Number(s.instManagers).toLocaleString('en-US'), c: '' } : null)],
     ['own',   '13F shares chg', (s) => V.smag(s.instChange)],
+    // The Long run group (2026-10-19): growth a year, compounded, from the
+    // company's own filings. Signed and uncoloured, like the screener cells.
+    ['lrun',  'Revenue /yr 3Y', (s) => V.smag(s.revGrowth3y)],
+    ['lrun',  'Revenue /yr 5Y', (s) => V.smag(s.revGrowth5y)],
+    ['lrun',  'Net income /yr 3Y', (s) => V.smag(s.niGrowth3y)],
+    ['lrun',  'Net income /yr 5Y', (s) => V.smag(s.niGrowth5y)],
     // Put options open for every call open, from the clearing house's count.
     ['own',   'Put/call OI',    (s) => (ok(s.optPcr) ? { t: Number(s.optPcr).toFixed(2), c: '' } : null)],
     ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'own'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'lrun', 'own'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
@@ -491,14 +497,14 @@
     info: 'var(--accent, #7c9cff)', rank: 'var(--lime, #a3e635)', act: 'var(--teal, #5eead4)',
     short: 'var(--green, #34d399)', long: 'var(--accent-2, #a78bfa)', fwd: 'var(--orange, #fb923c)',
     rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)',
-    size: 'var(--steel, #94a3b8)', fund: 'var(--red, #fb7185)', own: 'var(--orchid, #f0abfc)',
+    size: 'var(--steel, #94a3b8)', fund: 'var(--red, #fb7185)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)',
   };
   // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
   // band). The group ID is unchanged, so every saved key that names it still
   // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Relative', react: 'Reactions', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', own: 'Ownership',
+    rel: 'Relative', react: 'Reactions', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', lrun: 'Long run', own: 'Ownership',
   };
 
   // ---- price history -------------------------------------------------------

@@ -7350,6 +7350,13 @@
     ['fm', 'fcfMargin', 'free cash flow margin', 'pct', 'Margins and growth', { sg: 1, co: 1, coh: 1, words: ['Highest', 'Lowest'], note: 'Free cash flow over revenue, trailing twelve months.' }],
     ['rg', 'revenueGrowthYoY', 'revenue growth', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest quarter against the same quarter a year earlier.' }],
     ['eg', 'earningsGrowthYoY', 'earnings growth', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest quarter against the same quarter a year earlier.' }],
+    // The Long run group (longrun.js, 2026-10-19): growth a year, compounded,
+    // from the company's own filings. A ratio within one company, so a foreign
+    // filer stays in (measured in its own currency) and needs no coh.
+    ['rg3', 'revGrowth3y', 'revenue growth a year over three years', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest four quarters against the same four three years earlier, compounded a year, from the company’s own filings.' }],
+    ['rg5', 'revGrowth5y', 'revenue growth a year over five years', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'The latest four quarters against the same four five years earlier, compounded a year, from the company’s own filings.' }],
+    ['ng3', 'niGrowth3y', 'net income growth a year over three years', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'Compounded a year from the company’s own filings. A company with a loss at either end has no rate and is left out.' }],
+    ['ng5', 'niGrowth5y', 'net income growth a year over five years', 'pct', 'Margins and growth', { sg: 1, plus: 1, co: 1, words: ['Fastest', 'Slowest'], note: 'Compounded a year from the company’s own filings. A company with a loss at either end has no rate and is left out.' }],
     ['roe', 'roe', 'return on equity', 'pct', 'Margins and growth', { sg: 1, co: 1, words: ['Highest', 'Lowest'], note: 'As the data provider reports it.' }],
     ['roa', 'roa', 'return on assets', 'pct', 'Margins and growth', { sg: 1, co: 1, words: ['Highest', 'Lowest'], note: 'As the data provider reports it.' }],
 
@@ -7603,6 +7610,8 @@
     ebitda: 'EBITDA', ocf: 'Operating cash flow', cash: 'Net cash', debt: 'Debt',
     gm: 'Gross margin', om: 'Operating margin', pm: 'Profit margin', fm: 'Free cash flow margin',
     rg: 'Revenue growth', eg: 'Earnings growth', roe: 'Return on equity', roa: 'Return on assets',
+    rg3: 'Revenue growth a year, 3 years', rg5: 'Revenue growth a year, 5 years',
+    ng3: 'Net income growth a year, 3 years', ng5: 'Net income growth a year, 5 years',
     fpe: 'Forward P/E', tpe: 'Trailing P/E', lpe: 'P/E at today’s price', ppe: 'P/E relative to the industry',
     peg: 'PEG', ps: 'Price to sales', eve: 'EV / EBITDA', fy: 'Free cash flow yield',
     shrt: 'Short interest', sbld: 'Short interest change', insn: 'Insider net buying', d2c: 'Days to cover',

@@ -5779,7 +5779,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 9;          // bumped when the stored value gains a part
+const FLOWS_V = 10;         // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5816,7 +5816,7 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll, optAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll, optAll, lrAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
@@ -5827,6 +5827,7 @@ async function buildFlows() {
     store.readSecHoldersSince(new Date(Date.now() - EVENT_RECENT_DAYS * 86400000).toISOString().slice(0, 10)).catch(() => null),
     store.readInstSummaries().catch(() => null),
     store.readOptionsAll().catch(() => null),
+    store.readLongRun().catch(() => null),
   ]);
   // 13F: { SYM: [managers, shares, sharesPrev, period] }.
   const inst = {};
@@ -5882,6 +5883,9 @@ async function buildFlows() {
     // the latest twelve months from the cash-flow statements, as stored
     // beside the margins by the same daily pass.
     cr: mgAll && mgAll.cr ? mgAll.cr : null,
+    // { SYM: [rev3, rev5, ni3, ni5, end, basis] }, growth from the filings
+    // (longrun.js), as stored by the same daily pass.
+    lg: lrAll && lrAll.g ? lrAll.g : null,
     ev: evAll ? ev : null,
     hd: hdAll ? hd : null,
     inst: instAll ? inst : null,
@@ -5903,6 +5907,7 @@ async function flowsNow() {
     if (f && !fresh.dd) fresh.dd = f.dd || null;
     if (f && !fresh.mg) fresh.mg = f.mg || null;
     if (f && !fresh.cr) fresh.cr = f.cr || null;
+    if (f && !fresh.lg) fresh.lg = f.lg || null;
     if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.hd) fresh.hd = f.hd || null;
     if (f && !fresh.inst) fresh.inst = f.inst || null;
@@ -5924,8 +5929,19 @@ function flowsOf(row, f) {
     lastEvent: null, lastEventDate: null, lastEventNotable: null,
     lastHolder: null, lastHolderDate: null, lastHolderActive: null,
     instManagers: null, instChange: null, instPeriod: null,
-    optCalls: null, optPuts: null, optPcr: null, optDate: null };
+    optCalls: null, optPuts: null, optPcr: null, optDate: null,
+    revGrowth3y: null, revGrowth5y: null, niGrowth3y: null, niGrowth5y: null, growthEnd: null, growthBasis: null };
   if (!row || !f) return out;
+  // Growth over three and five years from the filings, each figure on its
+  // own: a bank has net income growth and no revenue line, a company with a
+  // loss at either end has a revenue rate and no net income one.
+  const lg = f.lg ? f.lg[String(row.symbol).toUpperCase()] : null;
+  if (lg) {
+    const n = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    out.revGrowth3y = n(lg[0]); out.revGrowth5y = n(lg[1]);
+    out.niGrowth3y = n(lg[2]); out.niGrowth5y = n(lg[3]);
+    out.growthEnd = lg[4] || null; out.growthBasis = lg[5] || null;
+  }
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
   // The trailing year's net margin less the year before it, in points. Both
@@ -6040,6 +6056,12 @@ async function stampFlows(rows) {
     r.sharesChg = v.sharesChg;
     r.instChange = v.instChange;
     r.instPeriod = v.instPeriod;
+    r.revGrowth3y = v.revGrowth3y;
+    r.revGrowth5y = v.revGrowth5y;
+    r.niGrowth3y = v.niGrowth3y;
+    r.niGrowth5y = v.niGrowth5y;
+    r.growthEnd = v.growthEnd;
+    r.growthBasis = v.growthBasis;
   }
 }
 
@@ -11157,7 +11179,8 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // ...and Chip selloff moved from Relative to the Reactions group on 2026-10-10.
 const FIELD_KEY_MOVED = { 'act|Advice': 'act|Signal', 'rel|Chip selloff': 'react|Chip selloff' };
 const fieldKeyNow = (f) => (Object.prototype.hasOwnProperty.call(FIELD_KEY_MOVED, f) ? FIELD_KEY_MOVED[f] : f);
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|react|trend|size|fund|own)\|[^|]{1,32}$/;
+// `lrun` is the Long run group, 2026-10-19.
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|react|trend|size|fund|lrun|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];
@@ -13030,6 +13053,9 @@ const Inst13f = require('./inst13f.js');
 const Segments = require('./segments.js');
 const Nport = require('./nport.js');
 const CapReturns = require('./capreturns.js');
+// Growth over three and five years (and the rest of the Long run group) from
+// the filings: arithmetic only, built by marginChangeBuild's pass.
+const LongRun = require('./longrun.js');
 const OptionsOI = require('./optionsoi.js');
 const HolderBook = require('./holderbook.js');
 const Summary = require('./summary.js');
@@ -13225,8 +13251,30 @@ app.get('/api/margins', requireMember, route(async (req, res) => {
 async function marginChangeBuild(opts = {}) {
   const universe = await store.readUniverse();
   const since = new Date(Date.now() - 2.7 * 365 * 86400000).toISOString().slice(0, 10);
-  const facts = await store.readSecFactsSince(universe, since);
+  // ONE READ, WIDE ENOUGH FOR THE LONG-RUN GROWTH TOO (2026-10-19). Growth
+  // over five years needs about 6.8 years of filings; a second read beside
+  // this one would have cost ~50,000 rows a day for nothing. The builders
+  // below this point are handed exactly the 2.7 years they always had,
+  // filtered in memory on period end, which is the read's own condition.
+  const wideSince = new Date(Date.now() - LongRun.GROWTH_YEARS * 365 * 86400000).toISOString().slice(0, 10);
+  const wide = await store.readSecFactsSince(universe, wideSince);
+  const facts = new Map();
+  for (const [sym, rows] of wide) {
+    const f = rows.filter((r) => String(r.periodEnd) >= since);
+    if (f.length) facts.set(sym, f);
+  }
   const today = new Date().toISOString().slice(0, 10);
+  // { SYM: [rev3, rev5, ni3, ni5, end, basis] }: longrun.js, display only.
+  const lg = {};
+  for (const sym of universe) {
+    const rows = wide.get(String(sym).toUpperCase());
+    if (!rows) continue;
+    try {
+      const g = LongRun.growth(SecFacts.latestFilled(rows), today);
+      if (g) lg[String(sym).toUpperCase()] = [g.rev3, g.rev5, g.ni3, g.ni5, g.end, g.basis];
+    } catch (e) { /* one company's figures never stop the pass */ }
+  }
+  if (!opts.dry && Object.keys(lg).length) await store.writeLongRun({ at: Date.now(), g: lg });
   const m = {};
   // Capital returns ride the same pass, since it already holds every
   // company's rows: { SYM: [bought back, dividends, share change %, end, basis] }.
@@ -13258,7 +13306,8 @@ async function marginChangeBuild(opts = {}) {
     if (!opts.dry && facts.size) await store.writeSecQuality({ at: Date.now(), summary: built.summary, rows: built.rows });
     quality = built.summary;
   } catch (e) { /* the margins are the payload */ }
-  return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length, quality };
+  return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length,
+    growth: Object.keys(lg).length, quality };
 }
 
 app.get('/api/earnings-growth', requireMember, route(async (req, res) => {

@@ -48,6 +48,17 @@ const FIELDS = {
   netMarginChg:         { src: 'filings', over: 'netIncome', kind: 'pct', title: 'Profit margin',
     say: 'The cell is the latest point less the one four quarters before it.' },
   fcfMargin:            { src: 'filings', over: 'freeCashFlow', kind: 'pct', title: 'Free cash flow margin' },
+  // The Long run group (longrun.js): a growth rate is the trailing year now
+  // against the same year three or five back, so the history behind it is
+  // that trailing year at every quarter end.
+  revGrowth3y:          { src: 'filings', key: 'revenue', kind: 'money', title: 'Revenue',
+    say: 'The cell is the yearly rate from the trailing year three years back to the latest one. A foreign filer is measured on its annual reports, in its own currency.' },
+  revGrowth5y:          { src: 'filings', key: 'revenue', kind: 'money', title: 'Revenue',
+    say: 'The cell is the yearly rate from the trailing year five years back to the latest one. A foreign filer is measured on its annual reports, in its own currency.' },
+  niGrowth3y:           { src: 'filings', key: 'netIncome', kind: 'money', title: 'Net income',
+    say: 'The cell is the yearly rate from the trailing year three years back to the latest one, and is blank where either end is a loss.' },
+  niGrowth5y:           { src: 'filings', key: 'netIncome', kind: 'money', title: 'Net income',
+    say: 'The cell is the yearly rate from the trailing year five years back to the latest one, and is blank where either end is a loss.' },
   dilutedEpsTtm:        { src: 'eps', kind: 'eps', title: 'Diluted earnings per share' },
   trailingPe:           { src: 'value', series: 'pe', kind: 'ratio', title: 'Price to earnings' },
   peLive:               { src: 'value', series: 'pe', kind: 'ratio', title: 'Price to earnings' },

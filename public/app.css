@@ -84,6 +84,7 @@ select option, select optgroup {
      bands at once (peer charts, revenue mix). */
   --lime: #a3e635;
   --orchid: #f0abfc;
+  --sand: #d6c58b;
   --steel: #94a3b8;
   --sky: #38bdf8;
   --slate: #cbd5e1;
@@ -157,6 +158,7 @@ select option, select optgroup {
   --teal: #0f766e;
   --lime: #4a770e;
   --orchid: #a21caf;
+  --sand: #6f6118;
   --steel: #475569;
   --sky: #0369a1;
   --slate: #64748b;

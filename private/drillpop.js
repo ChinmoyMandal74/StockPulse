@@ -19,7 +19,8 @@
   'use strict';
   const KEYS = ['revenueTtm', 'grossProfitTtm', 'netIncomeTtm', 'operatingCashFlowTtm', 'fcfTtm', 'buybackYield',
     'grossMargin', 'operatingMargin', 'profitMargin', 'netMarginChg', 'fcfMargin', 'dilutedEpsTtm',
-    'trailingPe', 'peLive', 'priceToSales', 'priceToBook', 'shortPctFloat', 'shortPctOutstanding', 'shortRatio', 'lastEarningsDate'];
+    'trailingPe', 'peLive', 'priceToSales', 'priceToBook', 'shortPctFloat', 'shortPctOutstanding', 'shortRatio', 'lastEarningsDate',
+    'revGrowth3y', 'revGrowth5y', 'niGrowth3y', 'niGrowth5y'];
   const DRILL = new Set(KEYS);
   // Where the filings' newest trailing year can be set beside the cell's own
   // figure. The others are defined differently from their cell and say so in

@@ -56,6 +56,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `summary.js` | The Company summary: one stock written up by an AI model from a fact sheet and saved as a blog draft. The fact sheet, the instructions, the checks on what came back, and the post body |
 | `newstone.js`, `news-tone-load.js` | **Article tone** for the semiconductor stocks: a model (Sonnet 5.5) reads each article in the stock's Yahoo Finance feed and stores its kind, tone (−1 to +1) and a two-sentence summary. Rules, prompt and checks; the local loader (spends API credit; `news-tone-task.ps1` schedules it). Members only, never the Signal; `newstone-test.js` |
 | `earndate.js`, `earndate-load.js` | The next report date when the provider gives none (nearly always): the same quarter last year plus 52 weeks, else the last report plus 91. **It feeds the Signal's Earnings soon rule.** The re-estimate script needs no API calls |
+| `longrun.js` | **The Long run group**: growth over three and five years from the filings (and, as built, P/E against its own ten-year median, the dividend record, interest coverage, Piotroski). Arithmetic only; `longrun-test.js` |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
@@ -156,7 +157,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Accounts and mail** — `auth-model` · `request-access` · `email` · `alerts` · `the-admin-announcement` · `activity-logging` · `visitor-logging` · `member-portfolios` · `paper-positions` · `saved-column-layout`
 
-**Screener front end** — `frontend-layout` · `design-system` · `themes` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
+**Screener front end** — `frontend-layout` · `design-system` · `themes` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `long-run` (growth over years, the long-run figures from filings) · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 
 **Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
 

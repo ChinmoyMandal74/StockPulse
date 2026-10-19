@@ -3309,6 +3309,25 @@ async function writeMarginChange(obj) {
   });
 }
 
+// The long-run figures from the filings (longrun.js), as one stored value:
+// { at, g: { SYM: [rev3, rev5, ni3, ni5, end, basis] } }. Built by the same
+// daily pass as the margin change, from the same read, and folded into the
+// screener's stored readings. Derived from sec_facts, so a rebuild restores it.
+async function readLongRun() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'long_run'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeLongRun(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('long_run', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 async function readIgToken() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'ig_token'");
@@ -7823,7 +7842,7 @@ module.exports = {
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
-  readMarginChange, writeMarginChange,
+  readMarginChange, writeMarginChange, readLongRun, writeLongRun,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,
