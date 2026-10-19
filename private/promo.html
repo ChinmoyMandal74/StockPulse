@@ -1164,6 +1164,20 @@
           largest buyers and sellers among managers that filed in both quarters.
           Months old by the time it is public, and the card says so.</p>
       </div>
+      <!-- Chart, any measure (2026-10-19): one company on any of the Lines
+           card's measures. The Time frame list follows the measure. -->
+      <div id="sclBox">
+        <label>Stock or index fund</label>
+        <select id="sclSym"></select>
+        <label>Measure</label>
+        <select id="sclMetric"></select>
+        <label>Time frame</label>
+        <select id="sclWin"></select>
+        <p class="hint">The Lines card's measures for one company: its share
+          price rebased, its 30-day volatility, or a figure from its own
+          filings. A price or volatility can be drawn day by day up to a year;
+          a filed figure and a longer price line, one point per quarter end.</p>
+      </div>
       <!-- Bollinger bands (2026-10-16): one stock in its 20-day band. -->
       <div id="bndBox">
         <label>Stock or index fund</label>
@@ -2090,6 +2104,7 @@
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
+      { id: 'stkchart', name: 'Chart — any measure', note: 'One company on any measure the Lines card draws — its share price, its volatility, or a figure from its filings — over the time frame you pick' },
       { id: 'bands', name: 'Bollinger bands', note: 'One stock in its 20-day band: the close, the average and two standard deviations either side, with where it sits and how wide the band is' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
       { id: 'margins', name: 'Margins', note: 'An index’s profit as a share of its revenue — its combined margin over four years from the filings, and each sector now against a year ago' },
@@ -2178,6 +2193,7 @@
       ['months', 'Month by month', 'monSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
+      ['stkchart', 'Chart — any measure', 'sclSym'],
       ['bands', 'Bollinger bands', 'bndSym'],
       ['instflow', 'Who added, who cut', 'iflSym'],
       ['holders', 'Large holders', 'lhSym'],
@@ -2697,7 +2713,7 @@
           delete linPending[key];
           if (!d || !Array.isArray(d.quarters)) return;
           linCache[key] = d;
-          if (tpl === 'lines' || tpl === 'thmgrowth') render();
+          if (tpl === 'lines' || tpl === 'thmgrowth' || tpl === 'stkchart') render();
         })
         .catch(() => { delete linPending[key]; });
       return null;
@@ -2891,7 +2907,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3455,14 +3471,14 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines', 'stkchart']), FILL_KEEP = 32;
     function fillGap(stage) {
       // THE LINES CARD FILLS ITS BODY ALREADY (.pv-in is height 100%, the note
       // pushed down by an auto margin), so the measure below would always find
       // nothing. Its spare room is the band between the chart and the note,
       // and that is measured on every shape, story included. offsetTop, not
       // getBoundingClientRect: the stage may be scaled to fit the window.
-      if (tpl === 'lines') {
+      if (tpl === 'lines' || tpl === 'stkchart') {
         const chart = stage.querySelector('.ln-in .pv-chart'), note = stage.querySelector('.ln-in > .s-sub');
         if (!chart || !note) return 0;
         const gap = note.offsetTop - (chart.offsetTop + chart.offsetHeight) - FILL_KEEP / 2;
@@ -3562,6 +3578,7 @@
       $('imgBox').style.display = tpl === 'indmargin' ? 'block' : 'none';
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('bndBox').style.display = tpl === 'bands' ? 'block' : 'none';
+      $('sclBox').style.display = tpl === 'stkchart' ? 'block' : 'none';
       $('iflBox').style.display = tpl === 'instflow' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
@@ -3960,6 +3977,29 @@
       fillLineWindows();
     }());
     $('linMetric').addEventListener('change', () => { fillLineWindows(); if (tpl === 'lines') render(); });
+    // Chart, any measure: the same catalogue and the same rule that the time
+    // frames follow the measure, on its own controls.
+    function fillStkWindows() {
+      const el = $('sclWin'); const keep = el.value;
+      const wins = Cards.lineWindows($('sclMetric').value);
+      el.innerHTML = wins.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+      el.value = wins.some((w) => w[0] === keep) ? keep : (wins.find((w) => w[2]) || wins[0])[0];
+    }
+    (function fillStkControls() {
+      const sel = $('sclMetric');
+      const groups = new Map();
+      for (const [v, label, grp] of Cards.lineMetrics()) {
+        if (!groups.has(grp)) {
+          const og = document.createElement('optgroup');
+          og.label = grp; groups.set(grp, og); sel.appendChild(og);
+        }
+        groups.get(grp).appendChild(new Option(label, v));
+      }
+      fillStkWindows();
+    }());
+    $('sclMetric').addEventListener('change', () => { fillStkWindows(); if (tpl === 'stkchart') render(); });
+    ['sclSym', 'sclWin'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'stkchart') render(); }));
     // Scatter: both measure lists from the Bars catalogue, grouped as there.
     (function fillScatterControls() {
       for (const id of ['sctX', 'sctY']) {
@@ -4800,6 +4840,8 @@
           $('shwSym').value = [...$('shwSym').options].some((o) => o.value === keep) ? keep : ([...$('shwSym').options].some((o) => o.value === 'NVDA') ? 'NVDA' : $('shwSym').value); }
         { const keep = $('bndSym').value; $('bndSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('bndSym').options].some((o) => o.value === keep)) $('bndSym').value = keep; }
+        { const keep = $('sclSym').value; $('sclSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('sclSym').options].some((o) => o.value === keep)) $('sclSym').value = keep; }
         // Two pickers from the one list, each keeping its choice across a
         // reload of the rows. The second opens on the SECOND company: a
         // pair that starts as one stock twice is not a comparison.

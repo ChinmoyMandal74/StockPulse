@@ -10642,7 +10642,7 @@
   // repaints on its reply, /api/m/post reads it. A list kept in a host left the
   // Showcase phone and the What we measure trend stuck on "Reading prices" (2026-10-17).
   function historyNeed(tpl, opts) {
-    return drawdownNeed(tpl, opts) || bandsNeed(tpl, opts) || showcaseNeed(tpl, opts) || readingsNeed(tpl, opts);
+    return drawdownNeed(tpl, opts) || bandsNeed(tpl, opts) || showcaseNeed(tpl, opts) || readingsNeed(tpl, opts) || stkChartNeed(tpl, opts);
   }
   function drawdownNeed(tpl, opts) {
     if (tpl !== 'drawdown') return null;
@@ -11283,8 +11283,9 @@
   // made from the rows and the cut, so the card is built once with a getter
   // that only records what it was asked for.
   function linesNeed(tpl, ctx) {
-    // The theme Growth card asks the same channel for its companies.
-    if (tpl !== 'lines' && tpl !== 'thmgrowth') return null;
+    // The theme Growth card asks the same channel for its companies, and the
+    // spotlight's Chart card for its one.
+    if (tpl !== 'lines' && tpl !== 'thmgrowth' && tpl !== 'stkchart') return null;
     let want = null;
     try {
       global.Cards.build(tpl, Object.assign({}, ctx || {}, {
@@ -11332,6 +11333,19 @@
         + ' that can be drawn on this measure. Widen the cut.');
     }
 
+    return linesCore({ PT, shell, mk, f, win, mLabel, pick, out, scLabel: sc.label, basket: getBasket, single: false });
+  }
+
+  // THE SERIES AND THE DRAWING, shared by the Lines card (the largest few in a
+  // cut) and the Stock spotlight's Chart card (one company, 2026-10-19). What
+  // differs is who is on it, where the daily closes come from (the whole-screen
+  // basket, or one stock's history shaped like it), and the words: one line has
+  // no "gap between two lines" and no "largest in the cut".
+  //   c: { PT, shell, mk, f, win, mLabel, pick, out, scLabel, basket(days), single, kick }
+  function linesCore(c) {
+    const { PT, shell, mk, f, win, mLabel, pick, out } = c;
+    const sc = { label: c.scLabel };
+    const single = !!c.single;
     // ---- the series ------------------------------------------------------------
     let xs, data = null, daily = false, winLabel;
     const vals = {}, late = [];
@@ -11345,7 +11359,7 @@
       winLabel = cw[1];
       const RC = (typeof globalThis !== 'undefined' && globalThis.RowCard) || null;
       if (!RC || !RC.volSeries) return shell('Nothing to chart', 'Volatility', 'not available here');
-      const d = getBasket(cw[0] + VOL_PRE);
+      const d = c.basket(cw[0] + VOL_PRE);
       if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
       const i0 = cw[2] === 'ytd' ? winStart(cw, d.dates) : Math.max(0, d.dates.length - cw[0]);
       if (d.dates.length - i0 < 2) {
@@ -11366,7 +11380,7 @@
       daily = true;
       const cw = CHART_WINDOWS[win[0]];
       winLabel = cw[1];
-      let d = getBasket(cw[0]);
+      let d = c.basket(cw[0]);
       if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
       const i0 = winStart(cw, d.dates);
       if (d.dates.length - i0 < 2) {
@@ -11403,10 +11417,12 @@
       companies: kept.map((r) => ({ symbol: r.symbol, name: nameOf(r) })),
       series: { [mk]: vals },
     }, mk, 'value', PT.LINE_METRICS, { grid: 4 });
-    if (model.lines.length < 2) {
-      return shell(sc.label, mLabel, 'not enough on record',
-        'Fewer than two of the ' + pick.length + ' largest companies in ' + sc.label + ' have '
-        + model.lower + ' on record over the ' + winLabel + '.');
+    if (model.lines.length < (single ? 1 : 2)) {
+      return shell(sc.label, mLabel, 'not enough on record', single
+        ? sc.label + ' has no ' + model.lower + ' on record over the ' + winLabel + '.'
+          + (late.length ? ' The price history held here starts after the window does.' : '')
+        : 'Fewer than two of the ' + pick.length + ' largest companies in ' + sc.label + ' have '
+          + model.lower + ' on record over the ' + winLabel + '.');
     }
     // On the chart = has a line. A company with no figure anywhere in the
     // window is named in the note rather than left to look like an omission.
@@ -11446,7 +11462,8 @@
     const what = mk === 'vol'
       ? 'Each point is the last thirty sessions’ daily moves, annualised: how much the price was moving then, up or down alike. '
       : mk === 'px'
-      ? 'Price only, each line rebased to the first close of the window, so the gap between two lines is the difference in their returns. '
+      ? (single ? 'Price only, rebased to the first close of the window, so the line reads as the return since then. '
+        : 'Price only, each line rebased to the first close of the window, so the gap between two lines is the difference in their returns. ')
         + (daily ? '' : 'One point per quarter end. ')
       : mk === 'rg' ? 'Each point is the trailing twelve months of revenue against the twelve months before it, from the company’s own filings. '
         + (model.pinned ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + PT.fmt('ret', model.ceil)
@@ -11459,18 +11476,80 @@
       + (blank.length ? names(blank) + (blank.length === 1 ? ' has' : ' have') + ' no ' + model.lower + ' on file. ' : '')
       + (out.fin ? 'Lenders are left out: this measure means nothing for one. ' : '')
       + (out.mixed ? 'Companies whose reported figures are not all in dollars are left out. ' : '')
-      + 'Today’s largest by market value in the cut. '
+      + (single ? '' : 'Today’s largest by market value in the cut. ')
       + (mk === 'px' || mk === 'vol' ? 'A record, not a forecast.' : 'A record, not a recommendation.');
 
     const sub = (f.flow ? 'trailing twelve months, ' : mk === 'px' ? 'rebased, ' : mk === 'vol' ? '30-day, ' : '')
       + (win[0] === 'ytd' ? 'so far this year' : 'over the ' + winLabel);
     return chromeTop()
       + '<div class="s-body"><div class="pv-in ln-in">'
-      + '<span class="s-kick">' + esc(sc.label + ' · the ' + model.lines.length + ' largest by market value') + '</span>'
+      + '<span class="s-kick">' + esc(single ? (c.kick || sc.label) : sc.label + ' · the ' + model.lines.length + ' largest by market value') + '</span>'
       + '<h2 class="s-title">' + esc(mLabel) + '<span class="dim">' + esc(sub) + '</span></h2>'
       + '<div class="pv-chart">' + chart + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Chart, any measure: one company, the Lines card's measures ------------
+  //
+  // (2026-10-19, the owner, of the Lines card: "create a new visual similar to
+  // this one under Stock Spotlight, you can call it chart - Any measure".) One
+  // company on any measure the Lines card draws: its share price, rebased; its
+  // 30-day volatility; or a figure from its filings (revenue, the margins,
+  // market value, P/E and the rest). Same windows, same arithmetic, same
+  // drawing (linesCore), so the two cards cannot disagree about a number.
+  //
+  // WHERE ITS CLOSES COME FROM: the stock's own history (historyNeed, the
+  // channel the Bands and Drawdowns cards use), not the whole-screen basket,
+  // which would read every stock to draw one. The filed figures come through
+  // getLineSeries for the one symbol, as the Lines card asks for its few.
+  // An index or a fund can be charted on price and volatility; it files no
+  // statements, so a filed measure says there is nothing on record.
+  function stkChartNeed(tpl, opts) {
+    if (tpl !== 'stkchart') return null;
+    const o = opts || {};
+    const mk = lineMetric(o.sclMetric);
+    if (mk !== 'px' && mk !== 'vol') return null;
+    const w = lineWin(mk, o.sclWin);
+    if (w[1] !== 'd') return null;
+    return { symbol: o.sclSym || null, days: CHART_WINDOWS[w[0]][0] + (mk === 'vol' ? VOL_PRE : 0) };
+  }
+  function tplStkChart() {
+    const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!PT || !PT.LINE_METRICS) return shell('Nothing to chart', 'Chart', 'not available here');
+    const mk = lineMetric(O.sclMetric);
+    const f = LINE_FLAGS[mk] || {};
+    const win = lineWin(mk, O.sclWin);
+    const mLabel = (PT.LINE_METRICS.find((m) => m[0] === mk) || [])[1] || mk;
+    const sym = O.sclSym || null;
+    if (!sym) return shell('Stock spotlight', mLabel, 'pick a stock', 'Pick a stock or an index to chart.');
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell(sym, mLabel, 'not in the screener', sym + ' is not on the screen today.');
+    const label = IS_BENCH.has(row.symbol) ? ((BENCH.find((b) => b[0] === row.symbol) || [])[1] || row.symbol) : nameOf(row);
+    // The Lines card's own guards, for one company: a measure that means
+    // nothing for it is said, not drawn.
+    if (f.noFin && row.sector === 'Financial Services') return shell(label, mLabel, 'not for a lender', mLabel + ' means nothing for a lender, whose costs are not a cost of sales.');
+    if (f.coh && ((row.currency && row.currency !== 'USD') || barMixed(row))) return shell(label, mLabel, 'figures not in dollars', label + ' reports figures that are not all in dollars, so ' + mLabel.toLowerCase() + ' is not drawn.');
+    // One stock's closes in the basket's shape: rebased to the first close,
+    // which sliceBasket and the volatility arithmetic both expect.
+    const basket = (days) => {
+      const h = getHistory(sym, days);
+      if (!h || !Array.isArray(h.dates)) return null;
+      const dates = [], vals = [];
+      for (let i = 0; i < h.dates.length; i++) {
+        const v = h.closes ? Number(h.closes[i]) : NaN;
+        dates.push(String(h.dates[i]).slice(0, 10));
+        vals.push(h.closes && h.closes[i] != null && v > 0 && isFinite(v) ? v : null);
+      }
+      const base = vals.find((v) => v != null);
+      return { dates, series: { [sym]: base ? vals.map((v) => (v == null ? null : v / base)) : vals.map(() => null) } };
+    };
+    return linesCore({ PT, shell, mk, f, win, mLabel, pick: [row], out: { fin: 0, mixed: 0 },
+      scLabel: label, kick: label + ' · ' + row.symbol, basket, single: true });
   }
 
   // ---- Month by month: one company's returns, year by month ---------------
@@ -11979,6 +12058,7 @@
     sectors: tplSectors,
     secspot: tplSecSpot,
     lines: tplLines,
+    stkchart: tplStkChart,
     scatter: tplScatter,
     months: tplMonths,
     peertrend: tplPeerTrend,
