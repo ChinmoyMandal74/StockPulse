@@ -55,3 +55,14 @@ Phase 1 is growth (daily, from the margins pass). Phase 2 is the rest, built a s
 - On real filings: Coca-Cola 18 straight raises since 2007 (its 2009 figure, 1.64 from a report filed before the 2012 split, becomes 0.82, below 2010's 0.88), coverage 8.8×, F-score 7 of 9; JPMorgan a 15-year streak since its 2010 cut, no coverage and no F-score (a lender).
 - Each of the eleven new row fields scored against the 1,280 real rows absent, present and lying: identical verdicts.
 - The screener rendered with all nine columns: 128 header columns, 128 cells a row, every cell's group equal to its header's.
+
+### The first fill (2026-10-19)
+- `sec-reread.js --commit`: 1,281 companies in 23 minutes, 1,245 ok (the rest funds and companies with no SEC filer), no refusals.
+- The slice, 200 a call: about 15 seconds each, seven calls for all 1,257 companies. Coverage: **P/E vs median 705, dividend record 624, interest coverage 690, F-score 665**. F-scores run 1 to 9, most at 5 to 8 (28 at 9). The longest streaks read 18, the filings' depth; 149 companies paid and did not raise last year.
+- **Found on the first fill and fixed the same day**: a year with no dividend counted as a raise to the next (Apple's record read "since 2011"; it resumed dividends in 2012). A zero year now ends the record; a test plants it.
+- **Blanks that are the data, not the code**:
+  - **Banks have no P/E vs median**: `SecFacts.ttm` needs a revenue line for a trailing year, and a bank files none, so trendSeries has no P/E points for it (the Lines card's documented lender gap).
+  - **Applied Materials** has 12 complete trailing years in 17 years of quarters (gaps in its quarterly data break the four-quarter sums), short of the 20 a median needs.
+  - **Exxon has nothing**: its `sec_state` carries CIK 2115436 with 4 rows of filings, not the long-standing 34088. Reported to the owner, not changed: the mapping is the filings refresh's.
+  - **Procter & Gamble's streak starts in 2018** because its filings state 3.00 for fiscal 2017, between 2.66 and 2.79. One odd filed figure breaks a streak; it is shown as filed rather than second-guessed.
+  - Apple, Johnson & Johnson and others have no interest coverage: their filings carry no interest expense tag in recent years (Apple reports it inside other income).

@@ -178,6 +178,11 @@ const fyRow = (y, dps, filed, extra) => Object.assign({ periodType: 'FY', period
   check('a spin-off factor does not turn a cut into a raise', LR.dividends(rows, [{ d: '2021-06-01', f: 1.05 }], '2022-10-19').streak, 0);
 }
 check('no split history held: no record at all', LR.dividends([fyRow(2025, 2), fyRow(2024, 1.9)], null, TODAY), null);
+{
+  // Started paying in 2023: a zero year before it is the start, not a raise.
+  const d = LR.dividends([fyRow(2025, 1.2), fyRow(2024, 1.1), fyRow(2023, 1.0), fyRow(2022, 0)], [], TODAY);
+  check('a year of no dividend ends the record: starting is not a raise', [d.streak, d.since, d.years], [2, '2023', 3]);
+}
 check('no dividend on the latest report: no record (not zero)', LR.dividends([fyRow(2025, null), fyRow(2024, 1.9)], [], TODAY), null);
 {
   const rows = [fyRow(2025, 2.0), fyRow(2024, 1.9), fyRow(2022, 1.5), fyRow(2021, 1.4)];

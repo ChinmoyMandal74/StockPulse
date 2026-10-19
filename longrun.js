@@ -284,7 +284,9 @@ function dividends(filled, splitList, today) {
     const gap = daysBetween(fy[i].periodEnd, fy[i - 1].periodEnd);
     if (gap < 330 || gap > 400) break;            // a hole in the reports ends the record
     const v = dps(fy[i]);
-    if (v == null) break;
+    // A year with no dividend ends the record: going from nothing to a
+    // dividend is starting one, not raising it (Apple's 2011 read as a raise).
+    if (v == null || !(v > 0)) break;
     series.push({ d: fy[i].periodEnd, v });
     // Higher by more than rounding: a dividend held flat is not a raise.
     if (!broke && series[i - 1].v > v * 1.001) { streak++; since = fy[i].periodEnd.slice(0, 4); }
