@@ -8153,6 +8153,7 @@ async function computeStocks(asOf, opts = {}) {
     const FIVE_YEAR_GRACE_MS = 30 * 86400000;
     const YTD_GRACE_MS = 10 * 86400000;
     let fiveYearAnchor = {};
+    let tenYearAnchor = {};
     let ytdAnchor = {};
     if (!asOf) {
       // Skipped in the forward-returns view for the reason 5Y is: "this year"
@@ -8161,22 +8162,33 @@ async function computeStocks(asOf, opts = {}) {
       const at = new Date();
       at.setFullYear(at.getFullYear() - 5);
       const fiveBound = at.toISOString().slice(0, 10);
+      // 10Y, the same anchored read five years further back (owner,
+      // 2026-10-19, for the promo bar card). Its blanks are mostly ARCHIVE
+      // DEPTH, not listing date: measured that day, 908 of 1,280 live symbols
+      // reach ten years, and AIG, ALL and AJG are among the rest because
+      // their stored bars begin in 2021. A dash, never a shorter window.
+      at.setFullYear(at.getFullYear() - 5);
+      const tenBound = at.toISOString().slice(0, 10);
       // The LOCAL year, not UTC's. On 1 January the two disagree west of
       // Greenwich, and `toISOString` would ask for last year's boundary — the
       // card-dating lesson, which this file records three times.
       const ytdBound = `${new Date().getFullYear()}-01-01`;
       try {
-        const [five, ytd] = await store.closesBefore([fiveBound, ytdBound], symbols);
+        const [five, ytd, ten] = await store.closesBefore([fiveBound, ytdBound, tenBound], symbols);
         for (const [sym, a] of Object.entries(five || {})) {
           if (Date.parse(fiveBound) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
+        }
+        for (const [sym, a] of Object.entries(ten || {})) {
+          if (Date.parse(tenBound) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) tenYearAnchor[sym] = a;
         }
         for (const [sym, a] of Object.entries(ytd || {})) {
           if (Date.parse(ytdBound) - Date.parse(a.d) <= YTD_GRACE_MS) ytdAnchor[sym] = a;
         }
       } catch (err) {
         // A column must never fail a refresh — the bars rule.
-        console.warn('5Y/YTD anchors skipped:', err.message);
+        console.warn('5Y/10Y/YTD anchors skipped:', err.message);
         fiveYearAnchor = {};
+        tenYearAnchor = {};
         ytdAnchor = {};
       }
     }
@@ -8393,6 +8405,7 @@ async function computeStocks(asOf, opts = {}) {
         ytdPct: anchored(ytdAnchor[sym], price),
         oneYearPct: pctChange(values, ONE_YEAR),
         fiveYearPct: anchored(fiveYearAnchor[sym], price),
+        tenYearPct: anchored(tenYearAnchor[sym], price),
         relStrength,
         pctFromHigh: pctFromHigh(values, 252),
         vs50ma: pctVsMA(values, 50),

@@ -352,6 +352,11 @@ At 1,000 symbols the 650-day window becomes ~440k rows a round, which is what to
 
 **It is blank for most of the universe until the archive is deepened**: measured 2026-09-15, **82 of 271 symbols have five years of bars** (the 2021 deep backfill covered the universe as it was then), 182 have one to two years — those arrived through refreshes, which keep ~300 bars. `backfill-bars.js --commit --depth 1300` fills the rest at **1 credit a symbol**; the cost is rows written to Turso, not credits.
 
+### 10Y — a figure, not a screener column (2026-10-19, owner's request)
+**`tenYearPct` joins the snapshot row, for the promo studio's Bars card** (the owner wanted a "10 year stock returns" bar chart like one seen on Instagram, and chose the nightly figure over a card-only lookup). Same anchored read as 5Y: a third boundary on the one `closesBefore` call (one more seek per symbol, ~1,280 rows a round), the same 30-day grace, the same `anchored()` floor, blank in the as-of view. It reaches the Bars card (`y10`, "over the past ten years"), the Scatter card's axis list, and `FIELD_SPEC` row `long|10Y` (hover card, stock page, tiles, phone, `/compare`). **No screener column**: none was asked for, and a column is the eight-place edit.
+- **Its blanks are archive depth, not listing date.** Measured on the local copy that day: **908 of 1,280** live symbols have a bar within 30 days of ten years back. 714 archives start in 2006, but some long-listed companies start in 2021 (AIG, ALL, AJG, at 1,316 bars) or 2025 (ACLS, AIR, at 308). `backfill-bars.js --commit --only ...` at 1 credit a symbol would deepen them; that replaces each symbol's bars wholesale, so `--only` and full depth, and the owner's call.
+- **Display only.** All 1,280 real rows score the same verdicts with `tenYearPct` absent, realistic and ±1e9; the same check on `vs200ma`, which the rules read, does change verdicts, so the check can fail.
+
 ### YTD — the one return a bar COUNT cannot express (2026-10-01, owner's request)
 **A `YTD` column in the Long-term group between 6M and 1Y, and the same row in `FIELD_SPEC`, so it reaches the hover card, the stock page, the tiles, the phone and `/compare` at once.** The owner's words: *"in screener and everywhere else we should add a new column for Year to date (YTD) between 6M and 1Y"*.
 

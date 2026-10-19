@@ -7315,6 +7315,7 @@
     ['ytd', 'ytdPct', 'this year', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Since last year’s final close, price only.' }],
     ['y1', 'oneYearPct', 'over the past year', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends.' }],
     ['y5', 'fiveYearPct', 'over the past five years', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends. A company listed for less than five years has no reading.' }],
+    ['y10', 'tenYearPct', 'over the past ten years', 'pct', 'Price moves', { sg: 1, plus: 1, words: BAR_GAIN, note: 'Price only, no dividends, splits adjusted. A stock with less than ten years of prices on file has no reading.' }],
     ['va', 'capChangeToday', 'value added today', 'money', 'Price moves', { sg: 1, plus: 1, co: 1, words: ['Most', 'Least'], note: 'Market value times today’s move — where the money went, which a percentage cannot say.' }],
 
     ['v50', 'vs50ma', 'their 50-day average', 'pct', 'Trend and position', { sg: 1, plus: 1, words: ['Furthest above', 'Furthest below'], note: 'The latest close against the average of the last 50 sessions.' }],
@@ -7592,7 +7593,7 @@
   // the attribute draws anything, so the downloaded picture is the dots alone.
   const SCT_AXIS = {
     d: 'Today', w1: 'Past week', w2: 'Past two weeks', m1: 'Past month', m3: 'Past three months',
-    m6: 'Past six months', ytd: 'Year to date', y1: 'Past year', y5: 'Past five years',
+    m6: 'Past six months', ytd: 'Year to date', y1: 'Past year', y5: 'Past five years', y10: 'Past ten years',
     va: 'Value added today', v50: 'Distance from the 50-day average', v200: 'Distance from the 200-day average',
     rsi: 'RSI', r52: 'Place in the 52-week range', hi52: 'Distance from the 52-week high',
     ath: 'Distance from the record close', rs: 'Relative strength', chip: 'Move on chip selloff days',
