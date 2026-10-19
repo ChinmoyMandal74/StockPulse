@@ -113,6 +113,20 @@ console.log('ConsoleDo: a ?do= link starts at once only after a console click');
   check('a click for another page does not count', [CD.allowed('refreshall', 'Start?'), asked], [false, 1]);
 }
 
+console.log('security headers: one policy, two places (backlog 44e)');
+{
+  const vj = JSON.parse(fs.readFileSync(path.join(__dirname, 'vercel.json'), 'utf8'));
+  const rule = (vj.headers || []).find((h) => h.source === '/(.*)');
+  const got = rule ? Object.fromEntries(rule.headers.map((h) => [h.key, h.value])) : {};
+  check('vercel.json carries exactly the headers the app sends', got, AuthSec.SECURITY_HEADERS);
+  const csp = AuthSec.CSP;
+  check('no other origin may frame the site', /frame-ancestors 'none'/.test(csp), true);
+  check('no plugins', /object-src 'none'/.test(csp), true);
+  check('scripts only from this site (plus its inline ones)', /script-src 'self' 'unsafe-inline'(;|$)/.test(csp), true);
+  check('the promo studio may fetch Google Fonts', /connect-src[^;]*fonts\.googleapis\.com[^;]*fonts\.gstatic\.com/.test(csp), true);
+  check('server.js sends them on every response', /res\.set\(AuthSec\.SECURITY_HEADERS\)/.test(fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8')), true);
+}
+
 console.log('server.js signs nothing with the admin password');
 const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 check('no HMAC is keyed on ADMIN_PASSWORD', /createHmac\(\s*'sha256'\s*,\s*ADMIN_PASSWORD/.test(srv), false);

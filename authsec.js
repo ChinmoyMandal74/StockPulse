@@ -62,4 +62,39 @@ function snapTo(list, v, fallback) {
   return list.reduce((best, d) => (Math.abs(d - n) < Math.abs(best - n) ? d : best), list[0]);
 }
 
-module.exports = { assetRel, overLimit, tokenHash, newToken, EMAIL_RE, isEmail, crossSite, snapTo };
+// ---- security headers (backlog 44e, the owner's choice: enforced) ----------------
+// Sent by server.js on every response it makes, and repeated in vercel.json for
+// the files Vercel serves from public/ without running the app (the login page
+// among them); authsec-test.js checks the two copies agree.
+//
+// 'unsafe-inline' for scripts and styles is not a choice but a fact: every page
+// is a static file with its own inline <script> and <style> (no build step), so
+// a nonce would mean rewriting each on the way out. What the policy still
+// does: no script, frame, plugin or form target from any other origin, no
+// <base> hijack, no framing of this site anywhere, and network calls only to
+// this site and Google Fonts (which the promo studio fetches to draw cards).
+// Images: any https (blog posts may show one), plus data: and blob: (the card
+// rasteriser and downloads).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' https: data: blob:",
+  "media-src 'self' blob: data:",
+  "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
+  "worker-src 'self' blob:",
+  "frame-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+module.exports = { assetRel, overLimit, tokenHash, newToken, EMAIL_RE, isEmail, crossSite, snapTo, CSP, SECURITY_HEADERS };

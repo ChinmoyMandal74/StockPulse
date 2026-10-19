@@ -51,6 +51,8 @@ check('an internal link', md('[blog](/blog)'), '<p><a href="/blog">blog</a></p>'
 check('a javascript: link keeps its words only', md('[x](javascript:void)'), '<p>x</p>');
 check('an image (a line of its own is a figure, not a paragraph)', md('![A chart](https://example.com/c.png)'), '<figure class="pimg"><img src="https://example.com/c.png" alt="A chart" loading="lazy" /><figcaption>A chart</figcaption></figure>');
 check('a sized image', md('![A](https://e.com/a.png "small")').includes('class="pimg small"'), true);
+check('a protocol-relative link is not treated as internal', md('[x](//evil.example/a)'), '<p>x</p>');
+check('nor a backslash one', md('[x](/\\evil.example/a)'), '<p>x</p>');
 check('code is literal', md('`<b>` and `[x](https://e.com)`'), '<p><code>&lt;b&gt;</code> and <code>[x](https://e.com)</code></p>');
 check('raw HTML is escaped', md('<script>alert(1)</script>'), '<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>');
 

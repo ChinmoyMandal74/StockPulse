@@ -239,6 +239,9 @@ const MAX_FAILED = 8;
 const LOCK_MS = 15 * 60 * 1000;
 
 app.set('trust proxy', 1); // so req.secure reflects an HTTPS reverse proxy when published
+// Security headers on every response this app makes (backlog 44e; see
+// AuthSec.SECURITY_HEADERS, and vercel.json for the files the CDN serves).
+app.use((req, res, next) => { res.set(AuthSec.SECURITY_HEADERS); next(); });
 // ONE ROUTE MAY SEND MORE THAN 100kb, and it has to be mounted ahead of the
 // global parser rather than on the route itself: `express.json()` below runs
 // first for every request, so a picture would be rejected with an HTML error
@@ -375,7 +378,7 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
       userEmail: null,
     }).catch(() => { /* a logging failure must never block the page */ });
     return res.type('html').send(
-      pageTemplate('landing.html').replace('%SUBSCRIBE%', subscribeBox('home')));
+      pageTemplate('landing.html').replace('%SUBSCRIBE%', () => subscribeBox('home')));
   }
   // isSignedIn() above already resolved and cached the user on req, so this
   // costs nothing extra. Null means either a pre-accounts row or someone signed
@@ -915,7 +918,10 @@ function renderMarkdown(src, skin) {
       return park(S.fig(src, alt, size, attr));
     })
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, href) =>
-      (/^https?:\/\//i.test(href) || /^\//.test(href))
+      // An internal link is one slash then a path: `//host/...` is another site
+      // wearing an internal link's clothes (it would open in the same tab,
+      // without noopener), so it is refused like any unknown scheme (44e).
+      (/^https?:\/\//i.test(href) || /^\/(?![\/\\])/.test(href))
         ? S.link(href, text, /^https?:/i.test(href))
         : text);   // anything else (javascript:, data:) loses its link, keeps its words
   const out = [];
@@ -1074,8 +1080,8 @@ app.get('/blog', route(async (req, res) => {
       '</div></a>';
   }).join('\n') : '<div class="empty">No posts yet. The first one is being written.</div>';
   res.type('html').send(pageTemplate('blog.html')
-    .replace('%POSTS%', list)
-    .replace('%SUBSCRIBE%', subscribeBox('blog')));
+    .replace('%POSTS%', () => list)
+    .replace('%SUBSCRIBE%', () => subscribeBox('blog')));
 }));
 
 // Public, because the blog is. The id is a content hash, so these bytes can
@@ -1237,9 +1243,9 @@ app.get('/blog/:slug', route(async (req, res, next) => {
   const html = pageTemplate('post.html')
     .split('%TITLE%').join(htmlEsc(p.title))
     .split('%DESC%').join(htmlEsc(summary || p.title))
-    .replace('%CANONICAL%', htmlEsc(`${base}/blog/${p.slug}`))
-    .replace('%META%', meta)
-    .replace('%SUMMARY%', htmlEsc(summary))
+    .replace('%CANONICAL%', () => htmlEsc(`${base}/blog/${p.slug}`))
+    .replace('%META%', () => meta)
+    .replace('%SUMMARY%', () => htmlEsc(summary))
     // ?guides=1 draws the column boundaries over the real page at the real
     // width, which is the only place the allocation can be seen honestly -- the
     // editor's preview box is a different width, so its proportions would be a
@@ -1248,14 +1254,14 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     //
     // It sits on the SHELL rather than on the body, because there are three
     // columns to describe now and the third one is the body's sibling.
-    .replace('%SHELLCLASS%', 'shell' + (req.query.guides === '1' ? ' guides' : ''))
-    .replace('%RECENT%', recentRail(others, p.slug))
+    .replace('%SHELLCLASS%', () => 'shell' + (req.query.guides === '1' ? ' guides' : ''))
+    .replace('%RECENT%', () => recentRail(others, p.slug))
     // Which post the subscribe box was filled in from, kept as the consent
     // record's `source`. Escaped like everything else, though a slug is already
     // [a-z0-9-] by the time it is stored.
     .split('%SLUG%').join(htmlEsc(p.slug))
-    .replace('%SUBSCRIBE%', subscribeBox('post:' + p.slug))
-    .replace('%BODY%', renderMarkdown(p.body));
+    .replace('%SUBSCRIBE%', () => subscribeBox('post:' + p.slug))
+    .replace('%BODY%', () => renderMarkdown(p.body));
   res.type('html').send(summary ? html : html.replace('<p class="summary"></p>', ''));
 }));
 
@@ -1824,9 +1830,13 @@ function safeEqual(a, b) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
-// The nightly job's credential. Deliberately not admin: it satisfies exactly
-// one route, /api/cron/refresh, so a leak cannot delete a portfolio. Unset means
-// the route is closed entirely rather than open.
+// The schedulers' credential (the nightly, intraday and news pings, and
+// Vercel's watchdog cron). Deliberately not admin: it opens the scheduled
+// jobs and nothing else, so a leak cannot delete a portfolio, edit a user or
+// read the admin pages. It is not ONE route, as this said until 2026-10-18
+// (backlog 44e): five answer to it alone (`isCron`) and fourteen more accept it
+// or an admin (`cronOrAdmin`), every one a job that refreshes, rebuilds or
+// re-reads data. Unset means all of them are closed to it rather than open.
 const CRON_SECRET = process.env.CRON_SECRET || '';
 
 function isCron(req) {
@@ -4301,7 +4311,14 @@ async function fetchProfile(symbol) {
       if (p.description) out.description = String(p.description).slice(0, 4000);
       const emp = Number(p.employees);
       if (isFinite(emp) && emp > 0) out.employees = Math.round(emp);
-      if (p.website) out.website = String(p.website).slice(0, 300);
+      // HTTP(S) ONLY (backlog 44e): it becomes a link on the stock page, and
+      // the provider's value was stored as it came. A bare domain gets
+      // https://; anything else with a scheme (javascript:, data:) is dropped.
+      if (p.website) {
+        const w = String(p.website).trim().slice(0, 300);
+        if (/^https?:\/\//i.test(w)) out.website = w;
+        else if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(w)) out.website = 'https://' + w;
+      }
     }
   } catch {
     out.fetchOk = false;
@@ -10473,11 +10490,15 @@ app.get('/api/export/download', requireAdmin, route(async (req, res) => {
   logAct(req, 'export', `${dsId}:${format}:${cols.length}f:${rows.length}r`);
 
   if (format === 'csv') {
-    // Quote everything that could be misread: a comma, a quote, a newline, and
-    // a leading = + - @, which a spreadsheet would treat as a formula.
+    // Quote what a comma, a quote or a newline would split. A TEXT cell that
+    // starts with = + - @ (or a tab or CR) also gets a leading apostrophe
+    // (backlog 44e): quoting alone does not stop a spreadsheet reading it as a
+    // formula, and company names and descriptions come from outside. Numbers
+    // are left alone, so a negative return stays a number.
     const q = (v) => {
       if (v == null) return '';
-      const s = String(v);
+      let s = String(v);
+      if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?%?$/.test(s)) s = "'" + s;
       const risky = /^[=+\-@]/.test(s) || /[",\n\r]/.test(s);
       return risky ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
@@ -12700,6 +12721,17 @@ app.get('/api/sec/coverage', requireAdmin, route(async (req, res) => {
 // against the real payload, because an EDGAR series reaching the Signal
 // column is the one thing this class of feature must never do.
 const EVO_YEARS = { 5: 5, 10: 10, 0: 0 };          // 0 = everything stored
+// A CEILING ON THE PER-SYMBOL CACHES (backlog 44e): each one was a Map that
+// only grew, keyed by whatever symbol a caller asked about, so a long-lived
+// instance could be walked into memory trouble. At most CACHE_MAX entries;
+// the oldest written goes first (a Map keeps insertion order). Well above
+// the universe, so normal use never evicts.
+const CACHE_MAX = 2000;
+function boundedSet(map, key, value) {
+  if (map.has(key)) map.delete(key);
+  else if (map.size >= CACHE_MAX) map.delete(map.keys().next().value);
+  map.set(key, value);
+}
 const evoCache = new Map();
 const EVO_CACHE_MS = 10 * 60 * 1000;
 
@@ -12819,7 +12851,7 @@ async function evolutionFor(symbol, years) {
     // the window it drew is the whole of what was filed rather than a cut.
     total: out.points.length,
   };
-  evoCache.set(key, { at: Date.now(), body });
+  boundedSet(evoCache, key, { at: Date.now(), body });
   return body;
 }
 
@@ -13529,7 +13561,7 @@ async function perfFor(symbol) {
   const hit = perfCache.get(symbol);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
   const body = Object.assign({ symbol }, perfOf(await store.readSecFacts(symbol)));
-  perfCache.set(symbol, { at: Date.now(), body });
+  boundedSet(perfCache, symbol, { at: Date.now(), body });
   return body;
 }
 // The studio's fetch. Members only, like the studio itself.
@@ -13552,7 +13584,7 @@ async function monthsFor(symbol) {
   const [bars, bench] = await Promise.all([
     store.readBars(symbol, 2600), benchMonthEnds().catch(() => [])]);
   const body = { symbol, stock: monthEnds(bars), bench };
-  monthsCache.set(symbol, { at: Date.now(), body });
+  boundedSet(monthsCache, symbol, { at: Date.now(), body });
   return body;
 }
 app.get('/api/months', requireAuth, route(async (req, res) => {

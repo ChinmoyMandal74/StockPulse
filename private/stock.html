@@ -1875,7 +1875,9 @@
       if (c.employees != null && isFinite(c.employees)) {
         rows.push({ k: 'Employees', t: Number(c.employees).toLocaleString() });
       }
-      if (c.website) {
+      // A link only for an http(s) address (backlog 44e): values stored before
+      // the server checked them may still carry another scheme.
+      if (c.website && /^https?:\/\//i.test(String(c.website))) {
         rows.push({ k: 'Website', t: String(c.website).replace(/^https?:\/\//, '').replace(/\/$/, ''),
                     href: c.website });
       }
