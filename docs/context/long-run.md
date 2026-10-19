@@ -2,7 +2,7 @@
 
 **A screener group, `lrun`, between Fundamentals and Ownership: figures that take years of a company's own filings to measure.** Asked for on 2026-10-19 after the owner looked at Macrotrends' screener; the four pieces quoted that day and all four agreed: growth over several years, P/E against its own ten-year median, the dividend record, and financial health (interest coverage and the Piotroski F-score). The owner's choices: **net income, not EPS**, for growth; **no P/S** beside the P/E; **Piotroski yes**; on the **screener, the stock page and the promo cards**.
 
-Phase 1 (this section) is growth. The rest is built on the filings re-read and is documented below as it lands.
+Phase 1 is growth (daily, from the margins pass). Phase 2 is the rest, built a slice of companies a night from each company's full filings, after four new filing fields and one re-read of every company.
 
 ## Growth over three and five years (phase 1)
 
@@ -26,3 +26,32 @@ Phase 1 (this section) is growth. The rest is built on the filings re-read and i
 ### Verified
 - `longrun-test.js`, 29 checks. Every guard proved by reverting it: the positive base, the own-currency division, the quarter staleness, the 1,000% cap, the positive revenue quarter, the annual date match and the annual staleness.
 - The screener rendered in headless Chrome from a static host with a 1,280-row fixture: 123 header columns, 123 cells on every row, every cell's group class equal to its header's. Dropping one growth cell made 30 of 31 rows fail the check (NI 5Y showed a share count), so it can fail.
+
+## Phase 2: P/E against its median, the dividend record, interest coverage, Piotroski
+
+### Four new filing fields
+- `secfacts.js` reads `dividendsPerShare` (`CommonStockDividendsPerShareDeclared`, then `...CashPaid`; IFRS `DividendsRecognisedAsDistributionsToOwnersPerShare`), `interestExpense` (`InterestExpense`, `InterestExpenseNonoperating`, `InterestExpenseDebt`, `InterestAndDebtExpense`; IFRS `InterestExpense`, `FinanceCosts`), `currentAssets` and `currentLiabilities` (`AssetsCurrent`, `LiabilitiesCurrent`; IFRS `CurrentAssets`, `CurrentLiabilities`).
+- The two positions are `INSTANT`; dividends per share and interest expense are converted with the other flows (`FLOWS`); dividends per share is in `NO_DIFF` (not subtracted into quarters; its user reads annual reports). All four are `FILLABLE`; the three money ones are `CHECKED` by the restatement scale check.
+- Four `sec_facts` columns (`ADDED_COLUMNS`, `SEC_COLS`, `SEC_FIELD`). A row written before the company's next re-read holds null in them, so `sec-reread.js --commit` was run once after the deploy.
+- Probed before the re-read on three real filings (read only): Coca-Cola's dividends per share 1.76, 1.84, 1.94, 2.04 for 2022 to 2025 (its real dividends), interest expense and current positions present; JPMorgan's "interest expense" is $26B to $81B a year (deposit interest), which is why lenders are excluded; Spotify (IFRS) files finance costs and current positions and no dividend.
+
+### The arithmetic (longrun.js)
+- **`peVsHistory`**: today's market value over the newest trailing year's net income, against the median of the quarter-end P/Es over 41 quarter ends (`trendSeries`, the Lines card's own series, so the share-count and split rules are the same). A loss quarter has no multiple (trendSeries withholds it) and is not in the median; the median needs 20 quarters; a multiple past 1,000 is near-zero earnings and is left out; a loss now, or a trailing year more than 230 days old, gives no reading. **Filings-based at both ends on purpose**: the screener's Trail P/E is the provider's, and a provider figure against a filings median compares two sources.
+- **`dividends`**: dividends declared per share in each annual report, **in today's shares** (a figure from a report filed before a split is divided by every split since; `sourceFiled` finds the filing a filled figure came from) and in the company's own currency. `streak` counts consecutive fiscal years, ending with the newest, in which it was higher than the year before (by more than 0.1%); 0 is a real reading (paid, not raised). A missing year ends the record. `g5` is the five-year growth a year. **Only a factor of 1.5 or more (or its inverse) is a split**: the provider's list also carries spin-off price factors such as 1.05, and dividing by one turns a small cut into a raise (a test plants exactly that). **No split history held, no record**: guessing is worse than blank. **The filings start about 2009**, so Coca-Cola reads 18 years since 2007 where its real record is decades; the tooltip names the start year.
+- **`coverage`**: operating income over interest expense, trailing four quarters (dollar filers) or the newest annual report (own currency). No interest expense filed, or a negative one (net interest income), is blank, never "infinitely covered"; an operating loss reads negative; past 999 is blank.
+- **`piotroski`**: the nine tests (Piotroski 2000) on the newest annual report against the one before; return on assets and asset turnover over the year's opening assets, so three consecutive annual reports. **Every test must be scorable or there is no score**: a missing current ratio counted as a fail would make the score a measure of tagging. Shares in today's units through the split history (a split is not dilution); no split history, no score. No long-term debt tagged in either year passes the leverage test; tagged in one year only cannot be compared and gives no score.
+- **Lenders** (Financial Services in Banks, Mortgage Finance, Capital Markets, Credit Services) get no coverage and no F-score. Visa and Mastercard sit in Credit Services and go with the card lenders: the conservative side of the line. Insurers keep a coverage and mostly have no F-score because they file no current positions.
+
+### Built and stored
+- **`longRunSlice`** in server.js: companies never built first, then the longest since, 200 a night in chunks of 20 within its own clock (25 seconds on the daily check, raced at 45). Per company: its full filings, its split history and 41 quarter-end closes. Funds are skipped. A failed filings read is left for the next night rather than stored empty.
+- `trendSeries` gained an optional `pre` argument (filings and split history already read), so the slice reads each company's filings once.
+- Stored as `app_meta` `long_slice`: `{ at, s: { SYM: { t, pe: [now, med, n, vsMed], dv: [streak, since, years, g5, end], cv: [cover, end, basis], f: [score, bits, end] } } }`. Companies that leave the universe are dropped from it (derived; their filings are kept). Folded into rows by `flowsOf` (`FLOWS_V` 10 → 11).
+- **`POST /api/long-run/slice?limit=&budgetMs=`** (cron secret or admin, stands aside for a refresh): one bounded batch a request for the first fill, the caller looping.
+- Screener: five more columns in the group (`peVsMed`, `divStreak`, `divGrowth5y`, `intCover`, `fScore`), colspan 4 → 9, `PAD_SPAN` 123 → 128, fund `naRun(9)`. The F-score tooltip lists which tests passed. Seven `FIELD_SPEC` rows; Bars and Scatter measures `pemd`, `divs`, `dvg5`, `icov`, `fsc`. **No drill on P/E vs median**: the drill's P/E history is five years (`PEER_TREND_QUARTERS`), and a five-year chart under a ten-year cell would contradict it.
+- `FUND_NA_GROUPS` gained `lrun`, so a fund's hover card reads NA there.
+
+### Verified
+- `longrun-test.js`, 66 checks. Every phase 2 guard proved by reverting it; two were not caught at first (the spin-off filter, whose planted case broke the streak either way, and the positive interest guard, which a zero already fails through the cap) and each got the case that bites.
+- On real filings: Coca-Cola 18 straight raises since 2007 (its 2009 figure, 1.64 from a report filed before the 2012 split, becomes 0.82, below 2010's 0.88), coverage 8.8×, F-score 7 of 9; JPMorgan a 15-year streak since its 2010 cut, no coverage and no F-score (a lender).
+- Each of the eleven new row fields scored against the 1,280 real rows absent, present and lying: identical verdicts.
+- The screener rendered with all nine columns: 128 header columns, 128 cells a row, every cell's group equal to its header's.

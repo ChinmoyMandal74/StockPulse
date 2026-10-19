@@ -5779,7 +5779,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 10;         // bumped when the stored value gains a part
+const FLOWS_V = 11;         // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5816,7 +5816,7 @@ let flowsMem = null;
 let flowsMemAt = 0;
 async function buildFlows() {
   const since = new Date(Date.now() - INSIDER_NET_DAYS * 86400000).toISOString().slice(0, 10);
-  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll, optAll, lrAll] = await Promise.all([
+  const [sm, ids, net, secState, ddAll, mgAll, evAll, hdAll, instAll, optAll, lrAll, lsAll] = await Promise.all([
     shortMovesPayload().catch(() => null),
     filerIds().catch(() => ({})),
     store.readInsiderNetSince(since).catch(() => null),
@@ -5828,6 +5828,7 @@ async function buildFlows() {
     store.readInstSummaries().catch(() => null),
     store.readOptionsAll().catch(() => null),
     store.readLongRun().catch(() => null),
+    store.readLongSlice().catch(() => null),
   ]);
   // 13F: { SYM: [managers, shares, sharesPrev, period] }.
   const inst = {};
@@ -5886,6 +5887,8 @@ async function buildFlows() {
     // { SYM: [rev3, rev5, ni3, ni5, end, basis] }, growth from the filings
     // (longrun.js), as stored by the same daily pass.
     lg: lrAll && lrAll.g ? lrAll.g : null,
+    // { SYM: { t, pe, dv, cv, f } }, the Long run slice (longRunSlice), as stored.
+    ls: lsAll && lsAll.s ? lsAll.s : null,
     ev: evAll ? ev : null,
     hd: hdAll ? hd : null,
     inst: instAll ? inst : null,
@@ -5908,6 +5911,7 @@ async function flowsNow() {
     if (f && !fresh.mg) fresh.mg = f.mg || null;
     if (f && !fresh.cr) fresh.cr = f.cr || null;
     if (f && !fresh.lg) fresh.lg = f.lg || null;
+    if (f && !fresh.ls) fresh.ls = f.ls || null;
     if (f && !fresh.ev) fresh.ev = f.ev || null;
     if (f && !fresh.hd) fresh.hd = f.hd || null;
     if (f && !fresh.inst) fresh.inst = f.inst || null;
@@ -5930,8 +5934,22 @@ function flowsOf(row, f) {
     lastHolder: null, lastHolderDate: null, lastHolderActive: null,
     instManagers: null, instChange: null, instPeriod: null,
     optCalls: null, optPuts: null, optPcr: null, optDate: null,
-    revGrowth3y: null, revGrowth5y: null, niGrowth3y: null, niGrowth5y: null, growthEnd: null, growthBasis: null };
+    revGrowth3y: null, revGrowth5y: null, niGrowth3y: null, niGrowth5y: null, growthEnd: null, growthBasis: null,
+    peNowFiled: null, peMed10y: null, peMedN: null, peVsMed: null,
+    divStreak: null, divSince: null, divYears: null, divGrowth5y: null, divEnd: null,
+    intCover: null, intCoverEnd: null, intCoverBasis: null, fScore: null, fScoreBits: null, fScoreEnd: null };
   if (!row || !f) return out;
+  // The Long run slice: each part on its own, and a part the slice could not
+  // read is null, never zero. A streak of 0 is a real reading (it paid and did
+  // not raise last year); a missing record is null.
+  const ls = f.ls ? f.ls[String(row.symbol).toUpperCase()] : null;
+  if (ls) {
+    const n = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    if (Array.isArray(ls.pe)) { out.peNowFiled = n(ls.pe[0]); out.peMed10y = n(ls.pe[1]); out.peMedN = n(ls.pe[2]); out.peVsMed = n(ls.pe[3]); }
+    if (Array.isArray(ls.dv)) { out.divStreak = n(ls.dv[0]); out.divSince = ls.dv[1] || null; out.divYears = n(ls.dv[2]); out.divGrowth5y = n(ls.dv[3]); out.divEnd = ls.dv[4] || null; }
+    if (Array.isArray(ls.cv)) { out.intCover = n(ls.cv[0]); out.intCoverEnd = ls.cv[1] || null; out.intCoverBasis = ls.cv[2] || null; }
+    if (Array.isArray(ls.f)) { out.fScore = n(ls.f[0]); out.fScoreBits = /^[01]{9}$/.test(String(ls.f[1])) ? String(ls.f[1]) : null; out.fScoreEnd = ls.f[2] || null; }
+  }
   // Growth over three and five years from the filings, each figure on its
   // own: a bank has net income growth and no revenue line, a company with a
   // loss at either end has a revenue rate and no net income one.
@@ -6062,6 +6080,21 @@ async function stampFlows(rows) {
     r.niGrowth5y = v.niGrowth5y;
     r.growthEnd = v.growthEnd;
     r.growthBasis = v.growthBasis;
+    r.peNowFiled = v.peNowFiled;
+    r.peMed10y = v.peMed10y;
+    r.peMedN = v.peMedN;
+    r.peVsMed = v.peVsMed;
+    r.divStreak = v.divStreak;
+    r.divSince = v.divSince;
+    r.divYears = v.divYears;
+    r.divGrowth5y = v.divGrowth5y;
+    r.divEnd = v.divEnd;
+    r.intCover = v.intCover;
+    r.intCoverEnd = v.intCoverEnd;
+    r.intCoverBasis = v.intCoverBasis;
+    r.fScore = v.fScore;
+    r.fScoreBits = v.fScoreBits;
+    r.fScoreEnd = v.fScoreEnd;
   }
 }
 
@@ -13310,6 +13343,82 @@ async function marginChangeBuild(opts = {}) {
     growth: Object.keys(lg).length, quality };
 }
 
+// THE LONG RUN FIGURES THAT NEED A COMPANY'S WHOLE HISTORY, a slice a night
+// (longrun.js): P/E against its own ten-year median, the dividend record,
+// interest coverage and the Piotroski F-score. Each company costs its full
+// filings (a few hundred rows), its split history and 41 quarter-end closes,
+// so the universe is a week of nights, not one pass -- and none of these moves
+// faster than a filing lands. The order is the drawdown slice's: companies
+// never built first, then the longest since.
+//
+// A LENDER gets no interest coverage and no F-score: its interest expense is
+// the cost of its product (JPMorgan's runs to tens of billions) and its
+// balance sheet has no current assets. Visa sits in Credit Services with the
+// card lenders and goes with them, the conservative side of the line.
+const LONG_RUN_QUARTERS = 41;            // ten years of quarter ends, the Lines card's longest window
+const LONG_RUN_SLICE = 200;
+const LONG_RUN_CHUNK = 20;
+const LENDER_INDUSTRY = /^(Banks\b|Mortgage Finance|Capital Markets|Credit Services)/;
+async function longRunSlice(opts = {}) {
+  const t0 = Date.now();
+  const budget = Math.max(5000, Number(opts.budgetMs) || 25000);
+  const limit = Math.max(1, Math.min(1000, Number(opts.limit) || LONG_RUN_SLICE));
+  const [universe, snap, stored] = await Promise.all([store.readUniverse(), snapshotCached(), store.readLongSlice().catch(() => null)]);
+  const s = (stored && stored.s && typeof stored.s === 'object') ? stored.s : {};
+  const rowsBy = {};
+  for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol) rowsBy[String(r.symbol).toUpperCase()] = r;
+  // Companies only: a fund files no statements.
+  const want = universe.map((x) => String(x).toUpperCase())
+    .filter((sym) => rowsBy[sym] && !RowCard.isFund(rowsBy[sym]))
+    .sort((a, b) => ((s[a] && s[a].t) || 0) - ((s[b] && s[b].t) || 0))
+    .slice(0, limit);
+  const quarters = quarterEndsBefore(LONG_RUN_QUARTERS, new Date());
+  const today = new Date().toISOString().slice(0, 10);
+  let done = 0;
+  for (let i = 0; i < want.length; i += LONG_RUN_CHUNK) {
+    if (Date.now() - t0 > budget) break;
+    const chunk = want.slice(i, i + LONG_RUN_CHUNK);
+    const [facts, held] = await Promise.all([
+      Promise.all(chunk.map((sym) => store.readSecFacts(sym).catch(() => null))),
+      Promise.all(chunk.map((sym) => store.readSplits(sym).catch(() => null))),
+    ]);
+    // A failed read is left for the next night rather than stored as nothing.
+    const ok = chunk.map((sym, k) => facts[k] != null);
+    const trend = await trendSeries(chunk, quarters, chunk.map((sym) => rowsBy[sym]), false,
+      { facts: facts.map((f) => f || []), held }).catch(() => null);
+    chunk.forEach((sym, k) => {
+      if (!ok[k]) return;
+      const row = rowsBy[sym];
+      const lender = row.sector === 'Financial Services' && LENDER_INDUSTRY.test(String(row.industry || ''));
+      const out = { t: Date.now(), pe: null, dv: null, cv: null, f: null };
+      try {
+        const filled = SecFacts.latestFilled(facts[k]);
+        const ttm = SecFacts.ttmSeries(filled.filter((r) => r.periodType === 'Q'));
+        const last = ttm.length ? ttm[ttm.length - 1] : null;
+        const pe = trend ? LongRun.peVsHistory(trend.series.pe[sym], row.marketCap, last ? { netIncome: last.netIncome, d: last.d } : null, today) : null;
+        if (pe) out.pe = [pe.now, pe.med, pe.n, pe.vsMed];
+        const splits = held[k] ? held[k].splits : null;
+        const dv = LongRun.dividends(filled, splits, today);
+        if (dv) out.dv = [dv.streak, dv.since, dv.years, dv.g5, dv.end];
+        const cv = LongRun.coverage(filled, today, lender);
+        if (cv) out.cv = [cv.cover, cv.end, cv.basis];
+        const f = LongRun.piotroski(filled, splits, today, lender);
+        if (f) out.f = [f.score, f.bits, f.end];
+      } catch (e) { /* one company's figures never stop the slice */ }
+      s[sym] = out;
+      done++;
+    });
+  }
+  // Companies that have left the universe are dropped from the stored value:
+  // it is derived, and the filings they were built from are kept.
+  const live = new Set(universe.map((x) => String(x).toUpperCase()));
+  for (const k of Object.keys(s)) if (!live.has(k)) delete s[k];
+  if (!opts.dry && done) await store.writeLongSlice({ at: Date.now(), s });
+  const built = Object.keys(s).length;
+  const companies = universe.filter((x) => rowsBy[String(x).toUpperCase()] && !RowCard.isFund(rowsBy[String(x).toUpperCase()])).length;
+  return { done, built, companies, never: Math.max(0, companies - built), ms: Date.now() - t0 };
+}
+
 app.get('/api/earnings-growth', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const cut = String(req.query.cut || 'in');
@@ -13361,17 +13470,20 @@ function quarterEndsBefore(n, today) {
 // "a quarter's trailing year" would drift, and the share-count rules below
 // took three corrections to get right. `full` adds every measure that has a
 // history; the peer chart passes false and gets exactly what it always did.
-async function trendSeries(syms, quarters, stocks, full) {
+async function trendSeries(syms, quarters, stocks, full, pre) {
   // closesBefore answers "the last close BEFORE this date", so the day after
   // each quarter end is asked for.
   const dayAfter = quarters.map((q) => new Date(Date.parse(q + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10));
+  // `pre` hands over filings and split history the caller has already read
+  // (the Long run slice, which needs them for more than this), so they are
+  // not read twice. Same arrays, same order as `syms`.
   const [facts, held, closes] = await Promise.all([
-    Promise.all(syms.map((sym) => store.readSecFacts(sym).catch(() => []))),
+    pre && pre.facts ? pre.facts : Promise.all(syms.map((sym) => store.readSecFacts(sym).catch(() => []))),
     // Split history as STORED, never fetched here: seven cold lookups is 140
     // credits in one request, on top of whatever a price round is spending
     // that minute. A company whose history is not held stays on today's
     // count, and the payload says how many are on which.
-    Promise.all(syms.map((sym) => store.readSplits(sym).catch(() => null))),
+    pre && pre.held ? pre.held : Promise.all(syms.map((sym) => store.readSplits(sym).catch(() => null))),
     store.closesBefore(dayAfter, syms).catch(() => quarters.map(() => ({}))),
   ]);
   const bySym = {};
@@ -14811,6 +14923,17 @@ app.post('/api/edgar-quality/rebuild', route(async (req, res) => {
   if (await standAside(res)) return;
   const out = await marginChangeBuild();
   res.json({ ok: true, companies: out.universe, quality: out.quality });
+}));
+
+// The Long run slice by hand (longRunSlice): the first fill, and after the
+// filings re-read. One bounded batch a request, the caller loops (the
+// drawdown-load shape). The cron secret or an admin; stands aside for a refresh.
+app.post('/api/long-run/slice', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  const limit = Math.max(1, Math.min(400, Number(req.query.limit) || LONG_RUN_SLICE));
+  const budgetMs = Math.max(5000, Math.min(240000, Number(req.query.budgetMs) || 60000));
+  res.json(Object.assign({ ok: true }, await longRunSlice({ limit, budgetMs })));
 }));
 
 app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
@@ -18346,6 +18469,15 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
         new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
     } catch (err) { console.warn('watchdog: margin change skipped:', err.message); }
   }
+  // The Long run slice (longRunSlice): a slice of companies a night, bounded
+  // and swallowed like the two above.
+  let longRun = null;
+  if (req.query.dry !== '1') {
+    try {
+      longRun = await Promise.race([longRunSlice({ budgetMs: 25000 }),
+        new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
+    } catch (err) { console.warn('watchdog: long run slice skipped:', err.message); }
+  }
   // The Instagram token, on the same daily pass: igToken refreshes it when a
   // week has gone by, so sixty days never run out between posts. A refresh
   // that fails is worth a letter -- the alternative is finding out from a
@@ -18377,7 +18509,7 @@ app.get('/api/cron/watchdog', route(async (req, res) => {
         new Promise((ok) => setTimeout(() => ok({ timedOut: true }), 45000))]);
     } catch (err) { console.warn('watchdog: SEC data set check skipped:', err.message); }
   }
-  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns, margins, secSets });
+  res.json({ ok: true, ...today, alert: bad, mailed, instagram, drawdowns, margins, longRun, secSets });
 }));
 
 // NEW 13F AND N-PORT DATA (2026-10-17, the owner: "Can I get an alert when the

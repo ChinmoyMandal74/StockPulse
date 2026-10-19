@@ -1510,6 +1510,14 @@ const ADDED_COLUMNS = [
   "alter table sec_facts add column buybacks real",
   "alter table sec_facts add column dividends_paid real",
   "alter table sec_facts add column stock_comp real",
+  // The Long run group (2026-10-19): dividends declared per share (the
+  // dividend record), interest expense (interest coverage), and current
+  // assets and liabilities (the Piotroski F-score). Null on every row written
+  // before the company was next re-read (sec-reread.js).
+  "alter table sec_facts add column dividends_per_share real",
+  "alter table sec_facts add column interest_expense real",
+  "alter table sec_facts add column current_assets real",
+  "alter table sec_facts add column current_liabilities real",
   // The newest STATEMENT filing (10-K/10-Q/20-F/40-F) we hold for a symbol,
   // recorded by writeSecFacts, which already has the rows. It exists so the
   // vendor-vs-filings staleness check never has to ask sec_facts for a
@@ -2789,7 +2797,8 @@ const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
   // when read: which currency, and the two rates used (see secfacts.js,
   // toDollars). Null on every dollar filer, which is nearly all of them.
   'currency', 'fx_avg', 'fx_end',
-  'buybacks', 'dividends_paid', 'stock_comp'];
+  'buybacks', 'dividends_paid', 'stock_comp',
+  'dividends_per_share', 'interest_expense', 'current_assets', 'current_liabilities'];
 // camelCase on the row -> snake_case in the table, named once.
 const SEC_FIELD = {
   cost_of_revenue: 'costOfRevenue', gross_profit: 'grossProfit',
@@ -2799,6 +2808,8 @@ const SEC_FIELD = {
   period_start: 'periodStart', period_end: 'periodEnd', period_type: 'periodType',
   derived_fields: 'derivedFields', fx_avg: 'fxAvg', fx_end: 'fxEnd',
   dividends_paid: 'dividendsPaid', stock_comp: 'stockComp',
+  dividends_per_share: 'dividendsPerShare', interest_expense: 'interestExpense',
+  current_assets: 'currentAssets', current_liabilities: 'currentLiabilities',
 };
 const secVal = (row, col) => {
   const v = row[SEC_FIELD[col] || col];
@@ -3318,6 +3329,26 @@ async function readLongRun() {
   const r = await db.execute("select value from app_meta where key = 'long_run'");
   if (!r.rows.length) return null;
   try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+// The Long run figures that need a company's whole filing history (P/E
+// against its ten-year median, the dividend record, interest coverage,
+// Piotroski), built a slice of companies a night: { at, s: { SYM: { t, pe,
+// dv, cv, f } } }. One value, read and rewritten by each slice; derived, so a
+// rebuild restores it.
+async function readLongSlice() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'long_slice'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeLongSlice(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('long_slice', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
 }
 
 async function writeLongRun(obj) {
@@ -7842,7 +7873,7 @@ module.exports = {
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
-  readMarginChange, writeMarginChange, readLongRun, writeLongRun,
+  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

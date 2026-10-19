@@ -480,6 +480,13 @@
     ['lrun',  'Revenue /yr 5Y', (s) => V.smag(s.revGrowth5y)],
     ['lrun',  'Net income /yr 3Y', (s) => V.smag(s.niGrowth3y)],
     ['lrun',  'Net income /yr 5Y', (s) => V.smag(s.niGrowth5y)],
+    // Against its own ten-year median P/E, both from the filings.
+    ['lrun',  'P/E vs 10Y median', (s) => V.smag(s.peVsMed)],
+    ['lrun',  'P/E 10Y median', (s) => (ok(s.peMed10y) ? { t: Number(s.peMed10y).toFixed(1) + '×', c: '', n: Number(s.peMed10y), u: 'num' } : null)],
+    ['lrun',  'Dividend raises', (s) => (ok(s.divStreak) ? { t: String(s.divStreak) + (s.divStreak > 0 && s.divSince ? ' since ' + s.divSince : ''), c: '', n: Number(s.divStreak), u: 'num' } : null)],
+    ['lrun',  'Dividend /yr 5Y', (s) => V.smag(s.divGrowth5y)],
+    ['lrun',  'Interest cover', (s) => (ok(s.intCover) ? { t: Number(s.intCover).toFixed(1) + '×', c: '', n: Number(s.intCover), u: 'num' } : null)],
+    ['lrun',  'F-score',        (s) => (ok(s.fScore) ? { t: s.fScore + ' of 9', c: '', n: Number(s.fScore), u: 'num' } : null)],
     // Put options open for every call open, from the clearing house's count.
     ['own',   'Put/call OI',    (s) => (ok(s.optPcr) ? { t: Number(s.optPcr).toFixed(2), c: '' } : null)],
     ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
@@ -1124,7 +1131,7 @@
   // XLK 41.5). A distribution yield is one of the most-read numbers about an
   // ETF; NA there would destroy a true figure to satisfy a rule about the
   // group it happens to sit in.
-  const FUND_NA_GROUPS = ['size', 'own', 'fund'];
+  const FUND_NA_GROUPS = ['size', 'own', 'fund', 'lrun'];
   const FUND_HAS = new Set([
     'fund|Trailing P/E', 'fund|Dividend yield', 'fund|Dividend rate',
     'fund|Ex-dividend', 'fund|Last split',

@@ -1524,7 +1524,7 @@
         <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
         <th class="group grp-size" data-group="size" colspan="11">Scale</th>
         <th class="group grp-fund" data-group="fund" colspan="24">Fundamentals</th>
-        <th class="group grp-lrun" data-group="lrun" colspan="4">Long run</th>
+        <th class="group grp-lrun" data-group="lrun" colspan="9">Long run</th>
         <th class="group grp-own" data-group="own" colspan="11">Ownership</th>
         <th rowspan="2"></th>
       </tr>
@@ -1638,6 +1638,11 @@
         <th class="grp-lrun" data-key="revGrowth5y" title="Revenue growth a year, compounded, over five years: the latest four quarters against the same four quarters five years earlier, from the company's own SEC filings. A company that files in another currency is measured on its annual reports in that currency. Blank where five years are not on file, where the newest quarter is not recent, and for a bank. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>5Y</th>
         <th class="grp-lrun" data-key="niGrowth3y" title="Net income growth a year, compounded, over three years: the latest four quarters' net income against the same four quarters three years earlier, from the company's own SEC filings. Blank where either end is a loss, since from a loss there is no rate, and where three years are not on file. A rate past 1,000% a year is a base too small to measure from and is left blank too. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>3Y</th>
         <th class="grp-lrun" data-key="niGrowth5y" title="Net income growth a year, compounded, over five years: the latest four quarters' net income against the same four quarters five years earlier, from the company's own SEC filings. Blank where either end is a loss and where five years are not on file. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>5Y</th>
+        <th class="grp-lrun" data-key="peVsMed" title="Today's price/earnings against the median of its own price/earnings at each of the last 41 quarter ends, about ten years: +30.0 means it is priced 30% above its typical multiple of the decade, -20.0 means 20% below. Both are market value over the trailing year's net income from the company's own SEC filings, the same arithmetic as the Lines card, so the now figure can differ from the Trail P/E column, which is the price provider's. A quarter with a loss has no multiple and is left out of the median; the median needs twenty quarters with one. Blank where the company loses money now. A description of where it sits against its own past, not a call on whether that is cheap: a business can change in ten years. Rebuilt about weekly.">P/E vs<br>10Y med</th>
+        <th class="grp-lrun" data-key="divStreak" title="Consecutive fiscal years, up to the latest annual report, in which the dividend declared per share was higher than the year before, from the company's own SEC filings, in today's shares (a year reported before a split is divided by it). 0 means it paid a dividend and did not raise it last year. The filings start about 2009, so a long record is capped at the years on file; hover a figure for the year it starts. Blank where the company pays no dividend or its split history is not held. Rebuilt about weekly.">Div<br>raises</th>
+        <th class="grp-lrun" data-key="divGrowth5y" title="The dividend declared per share, growth a year over five years, compounded, from the annual reports in today's shares and in the company's own currency. Blank where five years of dividends are not on file. Rebuilt about weekly.">Div /yr<br>5Y</th>
+        <th class="grp-lrun" data-key="intCover" title="Interest coverage: operating income over interest expense, the latest four quarters (or the latest annual report for a company filing in another currency), from the company's own SEC filings. 8.0× means the year's operating profit would pay the year's interest eight times over; below 1× it would not. Negative is an operating loss. Blank for a lender (banks, brokers, card and mortgage lenders), whose interest expense is the cost of its product, and where no interest expense is filed. Rebuilt about weekly.">Int<br>cover</th>
+        <th class="grp-lrun" data-key="fScore" title="The Piotroski F-score: how many of nine yes-or-no tests the latest annual report passes against the one before, from the company's own SEC filings. Profitability: net income above zero, operating cash flow above zero, return on assets up, cash flow above net income. Balance sheet: long-term debt to assets down, current ratio up, no new shares (in today's shares, so a split is not counted). Efficiency: gross margin up, asset turnover up. A count of tests passed, not a rating; hover a figure for which. Blank unless all nine can be scored, and for a lender. Rebuilt about weekly.">F-<br>score</th>
         <th class="grp-own" data-key="sharesOutstanding" title="Shares outstanding. Watching it fall is a buyback; watching it rise is dilution — and this is the only column that shows either, since market cap mixes the count with the price.">Shares<br>Out</th>
         <th class="grp-own" data-key="floatShares" title="Shares available to trade — outstanding minus closely-held stock.">Float</th>
         <th class="grp-own" data-key="shortRatio" title="Days to cover: shares short ÷ average daily volume. How long the shorts would take to buy back.">Short<br>Ratio</th>
@@ -2390,6 +2395,43 @@
         + (s.growthEnd ? `, to ${s.growthEnd}` : '')
         + (s.growthBasis === 'fy' ? ', from the annual reports in the company’s own currency' : ', trailing four quarters');
       return signedPctCell(v, 'grp-lrun', t);
+    }
+    // P/E against its own ten-year median, in percent above or below it.
+    // Uncoloured: above its usual multiple is a position, not a move, and not
+    // a verdict on value either.
+    function peMedCell(s) {
+      if (s.peVsMed == null || !isFinite(s.peVsMed)) {
+        return `<td class="na grp-lrun" title="A loss now, fewer than twenty profitable quarters in ten years, or not yet built.">—</td>`;
+      }
+      return signedPctCell(s.peVsMed, 'grp-lrun', `P/E ${Number(s.peNowFiled).toFixed(1)}× now, median ${Number(s.peMed10y).toFixed(1)}× over ${s.peMedN} quarters with a multiple`);
+    }
+    // Consecutive years of dividend raises. A count, uncoloured.
+    function divStreakCell(s) {
+      const v = s.divStreak;
+      if (v == null || !isFinite(v)) return `<td class="na grp-lrun" title="No dividend on the latest annual report, or its split history is not held.">—</td>`;
+      const t = v === 0 ? 'Paid a dividend and did not raise it in the latest year'
+        : `Raised every year since ${s.divSince} (${v} ${v === 1 ? 'raise' : 'raises'})` + (s.divYears ? `; ${s.divYears} years of dividends on file` : '');
+      return `<td class="grp-lrun"${attr(t)}>${v}</td>`;
+    }
+    // Interest coverage, in times.
+    function coverCell(s) {
+      const v = s.intCover;
+      if (v == null || !isFinite(v)) return `<td class="na grp-lrun" title="A lender, no interest expense filed, or not yet built.">—</td>`;
+      const t = `Operating income covers interest expense ${v.toFixed(1)} times` + (s.intCoverEnd ? `, to ${s.intCoverEnd}` : '')
+        + (s.intCoverBasis === 'fy' ? ', from the annual report' : ', trailing four quarters');
+      return `<td class="grp-lrun"${attr(t)}>${v.toFixed(1)}×</td>`;
+    }
+    // The Piotroski F-score: the count, with which tests passed in the tooltip.
+    const F_TESTS = ['net income above zero', 'operating cash flow above zero', 'return on assets up', 'cash flow above net income',
+      'long-term debt to assets down', 'current ratio up', 'no new shares', 'gross margin up', 'asset turnover up'];
+    function fScoreCell(s) {
+      const v = s.fScore;
+      if (v == null || !isFinite(v)) return `<td class="na grp-lrun" title="Not all nine tests can be scored from the filings, a lender, or not yet built.">—</td>`;
+      const bits = String(s.fScoreBits || '');
+      const pass = F_TESTS.filter((_, i) => bits[i] === '1'), fail = F_TESTS.filter((_, i) => bits[i] === '0');
+      const t = `${v} of 9 tests passed` + (s.fScoreEnd ? ` on the annual report to ${s.fScoreEnd}` : '')
+        + (pass.length ? `. Passed: ${pass.join(', ')}` : '') + (fail.length ? `. Not passed: ${fail.join(', ')}` : '');
+      return `<td class="grp-lrun"${attr(t)}>${v}</td>`;
     }
     function marginChgCell(s) {
       const v = s.netMarginChg;
@@ -3889,11 +3931,16 @@
           ${isFund ? naRun(1, 'grp-fund') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-fund') : reportedCell(s)}
           ${resultsCell(s)}
-          ${isFund ? naRun(4, 'grp-lrun') : `
+          ${isFund ? naRun(9, 'grp-lrun') : `
           ${growthCell(s, 'revGrowth3y')}
           ${growthCell(s, 'revGrowth5y')}
           ${growthCell(s, 'niGrowth3y')}
-          ${growthCell(s, 'niGrowth5y')}`}
+          ${growthCell(s, 'niGrowth5y')}
+          ${peMedCell(s)}
+          ${divStreakCell(s)}
+          ${signedPctCell(s.divGrowth5y, 'grp-lrun', s.divGrowth5y == null ? 'Five years of dividends are not on file.' : 'Dividend per share, growth a year over five years' + (s.divEnd ? ', to ' + s.divEnd : ''))}
+          ${coverCell(s)}
+          ${fScoreCell(s)}`}
           ${isFund ? naRun(10, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
@@ -3920,7 +3967,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 123;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 128;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;

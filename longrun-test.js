@@ -129,5 +129,107 @@ console.log('a foreign filer: annual reports, in its own currency');
   check('a dollar filer with annual reports only falls back to them', [g.basis, near(g.rev3, 20), near(g.rev5, 20)], ['fy', true, true]);
 }
 
+// ---- phase 2 ------------------------------------------------------------------
+console.log('P/E against its own ten-year median');
+{
+  const pts = Array.from({ length: 40 }, (_, i) => (i % 2 ? 20 : 10));      // median 15 over 40
+  const ttm = { netIncome: 100, d: '2026-06-30' };
+  const r = LR.peVsHistory(pts, 3000, ttm, TODAY);
+  check('now is market value over the newest trailing year', r.now, 30);
+  check('the median of the quarter-end multiples', [r.med, r.n], [15, 40]);
+  check('vsMed is percent above the median', r.vsMed, 100);
+  const nineteen = pts.slice(0, 19).concat(Array(21).fill(null));
+  check('nineteen quarters with a multiple: no median', LR.peVsHistory(nineteen, 3000, ttm, TODAY), null);
+  check('twenty is enough', LR.peVsHistory(pts.slice(0, 20), 3000, ttm, TODAY) != null, true);
+  check('a loss now has no P/E', LR.peVsHistory(pts, 3000, { netIncome: -5, d: '2026-06-30' }, TODAY), null);
+  check('a trailing year 292 days old is stale', LR.peVsHistory(pts, 3000, { netIncome: 100, d: '2025-12-31' }, TODAY), null);
+  check('a multiple past 1,000 is left out of the median', LR.peVsHistory(pts.concat([5000, 5000, 5000]), 3000, ttm, TODAY).n, 40);
+  check('no market value, no reading', LR.peVsHistory(pts, null, ttm, TODAY), null);
+}
+
+console.log('the dividend record');
+// fy(year, dps, filed, extra): an annual row.
+const fyRow = (y, dps, filed, extra) => Object.assign({ periodType: 'FY', periodEnd: y + '-12-31', filed: filed || (y + 1) + '-02-20', dividendsPerShare: dps }, extra || {});
+{
+  const rows = [fyRow(2025, 2.0), fyRow(2024, 1.9), fyRow(2023, 1.8), fyRow(2022, 1.8), fyRow(2021, 1.7)];
+  const d = LR.dividends(rows, [], TODAY);
+  check('raised 2024 and 2025, held flat in 2023: a streak of 2 since 2023', [d.streak, d.since], [2, '2023']);
+  check('years of dividends on file', d.years, 5);
+}
+{
+  const rows = [fyRow(2025, 1.9), fyRow(2024, 2.0), fyRow(2023, 1.8)];
+  check('a cut in the latest year is a streak of 0, a real reading', LR.dividends(rows, [], TODAY).streak, 0);
+}
+{
+  // A 4-for-1 split in August 2020: the 2019 report (filed Feb 2020) states
+  // 3.00; in today's shares that is 0.75, below 2020's 0.80.
+  const rows = [fyRow(2021, 0.85), fyRow(2020, 0.80), fyRow(2019, 3.00, '2020-02-20'), fyRow(2018, 2.80, '2019-02-20')];
+  const d = LR.dividends(rows, [{ d: '2020-08-31', f: 4 }], TODAY.replace('2026', '2022'));
+  check('a report filed before a split is put in today’s shares', [d.streak, d.years], [3, 4]);
+  const noAdj = LR.dividends(rows, [], TODAY.replace('2026', '2022'));
+  check('...and without the split the record would break at the split', noAdj.streak, 1);
+  const spin = LR.dividends(rows, [{ d: '2020-08-31', f: 1.05 }], TODAY.replace('2026', '2022'));
+  check('a spin-off price factor (1.05) is not a split', spin.streak, 1);
+}
+{
+  // A 1.05 spin-off price factor after the 2020 report: divided as if it were
+  // a split, a cut from 1.02 to 1.00 would read as a raise (1.02 / 1.05 = 0.97).
+  const rows = [fyRow(2021, 1.00), fyRow(2020, 1.02, '2021-02-20')];
+  check('a spin-off factor does not turn a cut into a raise', LR.dividends(rows, [{ d: '2021-06-01', f: 1.05 }], '2022-10-19').streak, 0);
+}
+check('no split history held: no record at all', LR.dividends([fyRow(2025, 2), fyRow(2024, 1.9)], null, TODAY), null);
+check('no dividend on the latest report: no record (not zero)', LR.dividends([fyRow(2025, null), fyRow(2024, 1.9)], [], TODAY), null);
+{
+  const rows = [fyRow(2025, 2.0), fyRow(2024, 1.9), fyRow(2022, 1.5), fyRow(2021, 1.4)];
+  check('a missing year ends the record', [LR.dividends(rows, [], TODAY).streak, LR.dividends(rows, [], TODAY).years], [1, 2]);
+}
+{
+  const rows = [2025, 2024, 2023, 2022, 2021, 2020].map((y, i) => fyRow(y, 2 / Math.pow(1.1, i)));
+  check('dividend growth over five years', near(LR.dividends(rows, [], TODAY).g5, 10), true);
+  const eur = [2025, 2024, 2023, 2022, 2021, 2020].map((y, i) => fyRow(y, 1 * (1.3 - i * 0.05), null, { currency: 'EUR', fxAvg: 1.3 - i * 0.05 }));
+  check('in its own currency: a flat euro dividend is no raise, though the dollar figure rose', LR.dividends(eur, [], TODAY).streak, 0);
+}
+
+console.log('interest coverage');
+{
+  const rows = company(null, null).map((r) => Object.assign(r, { operatingIncome: 50, interestExpense: 10 }));
+  check('trailing operating income over trailing interest', LR.coverage(rows, TODAY, false).cover, 5);
+  check('a lender has none', LR.coverage(rows, TODAY, true), null);
+  const none = company(null, null).map((r) => Object.assign(r, { operatingIncome: 50, interestExpense: null }));
+  check('no interest expense filed: blank, not infinitely covered', LR.coverage(none, TODAY, false), null);
+  const netIncome = company(null, null).map((r) => Object.assign(r, { operatingIncome: 50, interestExpense: -5 }));
+  check('a negative interest expense (net interest income) is no coverage', LR.coverage(netIncome, TODAY, false), null);
+  const loss = company(null, null).map((r) => Object.assign(r, { operatingIncome: -20, interestExpense: 10 }));
+  check('an operating loss reads negative', LR.coverage(loss, TODAY, false).cover, -2);
+}
+
+console.log('the Piotroski F-score');
+// Three annual reports where every test passes.
+const good = () => [
+  { periodType: 'FY', periodEnd: '2025-12-31', filed: '2026-02-20', netIncome: 120, operatingCashFlow: 150, assets: 1000, revenue: 900, grossProfit: 450, currentAssets: 300, currentLiabilities: 150, debt: 100, sharesDiluted: 100 },
+  { periodType: 'FY', periodEnd: '2024-12-31', filed: '2025-02-20', netIncome: 100, operatingCashFlow: 120, assets: 1000, revenue: 800, grossProfit: 380, currentAssets: 280, currentLiabilities: 160, debt: 120, sharesDiluted: 101 },
+  { periodType: 'FY', periodEnd: '2023-12-31', filed: '2024-02-20', netIncome: 80, operatingCashFlow: 90, assets: 1000, revenue: 700, grossProfit: 320, currentAssets: 250, currentLiabilities: 160, debt: 130, sharesDiluted: 102 },
+];
+{
+  check('every test passes: 9', LR.piotroski(good(), [], TODAY), { score: 9, bits: '111111111', end: '2025-12-31' });
+  const g = good(); g[0].netIncome = -10;
+  const r = LR.piotroski(g, [], TODAY);
+  check('a loss fails net income and return on assets up, and passes cash flow above net income', [r.score, r.bits], [7, '010111111']);
+  const noCa = good(); noCa[0].currentAssets = null;
+  check('a test that cannot be scored means no score, not a fail', LR.piotroski(noCa, [], TODAY), null);
+  check('a lender has none', LR.piotroski(good(), [], TODAY, true), null);
+  check('two annual reports are not enough', LR.piotroski(good().slice(0, 2), [], TODAY), null);
+  check('no split history held: no score', LR.piotroski(good(), null, TODAY), null);
+  const split = good(); split[0].sharesDiluted = 400;           // a 4-for-1 split after the 2024 report
+  check('a split is not new shares', LR.piotroski(split, [{ d: '2025-06-01', f: 4 }], TODAY).bits[6], '1');
+  check('...and without the split history it would read as dilution', LR.piotroski(split, [], TODAY).bits[6], '0');
+  const nodebt = good(); nodebt[0].debt = null; nodebt[1].debt = null;
+  check('no long-term debt in either year passes the leverage test', LR.piotroski(nodebt, [], TODAY).bits[4], '1');
+  const oneDebt = good(); oneDebt[1].debt = null;
+  check('debt tagged in one year only cannot be compared', LR.piotroski(oneDebt, [], TODAY), null);
+  const gap = good(); gap[2].periodEnd = '2022-12-31';
+  check('the reports must be consecutive years', LR.piotroski(gap, [], TODAY), null);
+}
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

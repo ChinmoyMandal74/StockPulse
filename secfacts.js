@@ -58,6 +58,17 @@ const CONCEPTS = {
   buybacks: ['PaymentsForRepurchaseOfCommonStock', 'PaymentsForRepurchaseOfEquity'],
   dividendsPaid: ['PaymentsOfDividendsCommonStock', 'PaymentsOfDividends', 'PaymentsOfOrdinaryDividends'],
   stockComp: ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense'],
+  // THE LONG RUN GROUP (2026-10-19, longrun.js). Dividends DECLARED per share
+  // for the dividend record: per share, so a buyback does not read as a
+  // dividend rise the way total dividends paid would. Interest expense for
+  // interest coverage, in order of how plainly the tag says it. Current
+  // assets and liabilities, positions, for the Piotroski F-score's liquidity
+  // test. All four are read from the annual report by their user; a 10-Q's
+  // year-to-date figure is not subtracted into quarters for the per-share one.
+  dividendsPerShare: ['CommonStockDividendsPerShareDeclared', 'CommonStockDividendsPerShareCashPaid'],
+  interestExpense: ['InterestExpense', 'InterestExpenseNonoperating', 'InterestExpenseDebt', 'InterestAndDebtExpense'],
+  currentAssets: ['AssetsCurrent'],
+  currentLiabilities: ['LiabilitiesCurrent'],
 };
 const CONCEPT_KEYS = Object.keys(CONCEPTS);
 
@@ -102,6 +113,10 @@ const IFRS_CONCEPTS = {
   buybacks: ['PaymentsToAcquireOrRedeemEntitysShares'],
   dividendsPaid: ['DividendsPaidClassifiedAsFinancingActivities', 'DividendsPaidToEquityHoldersOfParentClassifiedAsFinancingActivities', 'DividendsPaid'],
   stockComp: ['AdjustmentsForSharebasedPayments'],
+  dividendsPerShare: ['DividendsRecognisedAsDistributionsToOwnersPerShare'],
+  interestExpense: ['InterestExpense', 'FinanceCosts'],
+  currentAssets: ['CurrentAssets'],
+  currentLiabilities: ['CurrentLiabilities'],
 };
 
 // Which taxonomy speaks for this company. US GAAP where it carries any of
@@ -170,7 +185,8 @@ function currencyOf(facts) {
 // That is true of the dollar figure and is not the company's own growth;
 // margins, being a ratio inside one period, are untouched.
 const FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'netIncome',
-  'epsDiluted', 'operatingCashFlow', 'capex', 'buybacks', 'dividendsPaid', 'stockComp'];
+  'epsDiluted', 'operatingCashFlow', 'capex', 'buybacks', 'dividendsPaid', 'stockComp',
+  'dividendsPerShare', 'interestExpense'];
 function toDollars(rows, currency, fx) {
   const out = [];
   for (const r of rows) {
@@ -191,7 +207,7 @@ function toDollars(rows, currency, fx) {
 // start — where an income or cash-flow fact covers a span. They live in the
 // same filing and belong on the same row, so the instants are matched to the
 // duration row whose period ends on the same day.
-const INSTANT = new Set(['assets', 'liabilities', 'equity', 'cash', 'debt']);
+const INSTANT = new Set(['assets', 'liabilities', 'equity', 'cash', 'debt', 'currentAssets', 'currentLiabilities']);
 
 // ---- how long is a period -------------------------------------------------
 //
@@ -347,7 +363,7 @@ function fill(r) {
 // snapshots. A weighted-average share count does not subtract either, and
 // neither does a per-share figure computed on a different denominator each
 // quarter — those stay blank rather than being invented.
-const NO_DIFF = new Set([...INSTANT, 'sharesDiluted', 'epsDiluted']);
+const NO_DIFF = new Set([...INSTANT, 'sharesDiluted', 'epsDiluted', 'dividendsPerShare']);
 
 function deriveQuarters(rows) {
   // The filing that speaks for each distinct (start, end) — a restatement
@@ -541,7 +557,8 @@ function latestPerPeriod(rows) {
 const FILLABLE = ['periodStart', 'revenue', 'costOfRevenue', 'grossProfit',
   'operatingIncome', 'netIncome', 'epsDiluted', 'operatingCashFlow', 'capex',
   'freeCashFlow', 'assets', 'liabilities', 'equity', 'cash', 'debt',
-  'sharesDiluted', 'buybacks', 'dividendsPaid', 'stockComp'];
+  'sharesDiluted', 'buybacks', 'dividendsPaid', 'stockComp',
+  'dividendsPerShare', 'interestExpense', 'currentAssets', 'currentLiabilities'];
 
 function latestFilled(rows) {
   const list = Array.isArray(rows) ? rows : [];
@@ -603,7 +620,7 @@ const SCALE_HI = 3000;
 const NEAR = 4;            // periods either side used to arbitrate
 const CHECKED = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome',
   'netIncome', 'operatingCashFlow', 'freeCashFlow', 'assets', 'liabilities',
-  'equity', 'cash', 'debt'];
+  'equity', 'cash', 'debt', 'interestExpense', 'currentAssets', 'currentLiabilities'];
 
 function reconcile(picked) {
   // Same period type only: a quarter is not evidence about the scale of an
