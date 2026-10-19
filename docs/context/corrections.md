@@ -59,3 +59,7 @@ The owner, of the stock page table: "The median days to recover can be calculate
 ## Not built
 
 The rest of piece d (deepest drawdown in a year) and piece e (the market's own correction history as a table). Neither card was rendered in a browser by the build; tests were Node suites on fixtures plus the read-only check above.
+
+## Renamed: Drawdowns in the Market picker (2026-10-19)
+
+The owner looked for a visual of the screener's Drawdown column under Market and did not find one: the card that counts its four states was called Corrections. It reads **Drawdowns** in the Market group's picker now, and **Market drawdowns** in the template list and on the phone, where the Stock spotlight's one-company Drawdowns card already has the plain name. The template id stays `corrections`, so saved posts and links still open it; the card's own heading ("Who is in a correction") is unchanged. The two history ideas offered the same day (an index's own drawdowns over the years; the share of stocks in a correction week by week) were not asked for and are not built.

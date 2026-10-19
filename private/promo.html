@@ -2092,7 +2092,7 @@
       { id: 'optthm', name: 'Theme options', note: 'Open options contracts across one theme’s companies, puts against calls' },
       { id: 'thmmonths', name: 'Theme, month by month', note: 'One theme year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
-      { id: 'corrections', name: 'Corrections', note: 'How many companies are in a pullback, a correction or a bear market — beside how far each index is from its own high' },
+      { id: 'corrections', name: 'Market drawdowns', note: 'How many companies are near their high, in a pullback, a correction or a bear market (the screener’s Drawdown column, counted) — beside how far each index is from its own high' },
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
@@ -2221,7 +2221,9 @@
       ['mktmonths', 'Month by month'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
-      ['corrections', 'Corrections'],
+      // Called Corrections until 2026-10-19 (the owner): renamed to match the
+      // screener's Drawdown column, whose four states it counts. The id stays.
+      ['corrections', 'Drawdowns'],
       ['margins', 'Margins'],
       ['idxpe', 'Valuation'],
       ['pullback', 'Pulled back'],
