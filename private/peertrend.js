@@ -41,6 +41,9 @@
   // one card that wants it.
   const LINE_METRICS = [
     ['px', 'Share price', 'ret'],
+    // Rolling 30-day volatility from the daily closes (2026-10-19): the Lines
+    // card draws it over its daily windows only.
+    ['vol', 'Volatility', 'pct'],
     ['rev', 'Revenue', 'money'],
     ['gp', 'Gross profit', 'money'],
     ['oi', 'Operating income', 'money'],

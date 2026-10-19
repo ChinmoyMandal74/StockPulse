@@ -11230,13 +11230,24 @@
     ['q8', 'q', 9, 'past two years'], ['q12', 'q', 13, 'past three years'],
     ['q20', 'q', 21, 'past five years'], ['q40', 'q', 41, 'past ten years'],
   ];
-  const LINE_GROUP = { px: 'Price', cap: 'Valuation', pe: 'Valuation', ps: 'Valuation' };
+  const LINE_GROUP = { px: 'Price', vol: 'Price', cap: 'Valuation', pe: 'Valuation', ps: 'Valuation' };
+  // VOLATILITY (2026-10-19, the owner: "can you add volatility on this promo
+  // card"): each company's rolling 30-day volatility, the daily moves
+  // annualised (RowCard.volSeries, the stock page's Vol pane and the
+  // screener's Vol 1Y arithmetic). It needs daily closes, so it is drawn over
+  // the DAILY windows only, and the basket is asked for VOL_PRE more sessions
+  // than the window so the first point already has thirty days behind it.
+  const VOL_PRE = 30;
+  // Which windows a measure takes: price both kinds, volatility the daily
+  // ones, a filed figure the quarterly ones.
+  const winOk = (mk, w) => (mk === 'px' ? true : mk === 'vol' ? w[1] === 'd' : w[1] === 'q');
+  const winDefault = (mk) => (mk === 'px' || mk === 'vol' ? 'm6' : 'q20');
   // coh   built on a reported absolute: a row whose own figures are not all
   //       in dollars is left out (the Bars card's measurement, 31 rows).
   // noFin means nothing for a lender.
   // flow  a trailing-twelve-month sum, which the subtitle says.
   const LINE_FLAGS = {
-    px: {}, rev: { coh: 1, flow: 1 }, gp: { coh: 1, noFin: 1, flow: 1 }, oi: { coh: 1, flow: 1 },
+    px: {}, vol: {}, rev: { coh: 1, flow: 1 }, gp: { coh: 1, noFin: 1, flow: 1 }, oi: { coh: 1, flow: 1 },
     ni: { coh: 1, flow: 1 }, fcf: { coh: 1, flow: 1 }, gm: { noFin: 1 }, om: {}, pm: {}, fm: {}, rg: {},
     cap: {}, pe: { coh: 1 }, ps: { coh: 1 },
   };
@@ -11248,23 +11259,25 @@
   // window the measure cannot use falls back to that measure's default, so
   // a hand-edited post can never ask for daily revenue.
   function lineWindows(metricKey) {
-    const px = lineMetric(metricKey) === 'px';
-    return LINE_WINDOWS.filter((w) => px || w[1] === 'q').map((w) => {
+    const mk = lineMetric(metricKey);
+    return LINE_WINDOWS.filter((w) => winOk(mk, w)).map((w) => {
       const lab = w[1] === 'd' ? CHART_WINDOWS[w[0]][1] : w[3];
-      return [w[0], lab.charAt(0).toUpperCase() + lab.slice(1), w[0] === (px ? 'm6' : 'q20')];
+      return [w[0], lab.charAt(0).toUpperCase() + lab.slice(1), w[0] === winDefault(mk)];
     });
   }
   function lineWin(metricKey, v) {
-    const px = lineMetric(metricKey) === 'px';
-    const ok = LINE_WINDOWS.filter((w) => px || w[1] === 'q');
-    return ok.find((w) => w[0] === v) || ok.find((w) => w[0] === (px ? 'm6' : 'q20'));
+    const mk = lineMetric(metricKey);
+    const ok = LINE_WINDOWS.filter((w) => winOk(mk, w));
+    return ok.find((w) => w[0] === v) || ok.find((w) => w[0] === winDefault(mk));
   }
-  // The daily price path reads the basket; asked by basketDays for both hosts.
+  // The daily paths read the basket; asked by basketDays for both hosts.
+  // Volatility asks for its thirty sessions of run-up as well.
   function lineBasketDays(opts) {
     const o = opts || {};
-    if (lineMetric(o.linMetric) !== 'px') return 0;
-    const w = lineWin('px', o.linWin);
-    return w[1] === 'd' ? CHART_WINDOWS[w[0]][0] : 0;
+    const mk = lineMetric(o.linMetric);
+    if (mk !== 'px' && mk !== 'vol') return 0;
+    const w = lineWin(mk, o.linWin);
+    return w[1] === 'd' ? CHART_WINDOWS[w[0]][0] + (mk === 'vol' ? VOL_PRE : 0) : 0;
   }
   // WHAT THE PHONE HAS TO FETCH. Which companies is this card's own decision,
   // made from the rows and the cut, so the card is built once with a getter
@@ -11323,7 +11336,33 @@
     let xs, data = null, daily = false, winLabel;
     const vals = {}, late = [];
     const r2 = (v) => Math.round(v * 100) / 100;
-    if (win[1] === 'd') {
+    if (mk === 'vol') {
+      // VOLATILITY over a daily window: each company's rolling 30-day figure,
+      // worked out over the basket's extra thirty sessions and then cut to the
+      // window, so the first point is a full thirty days and not a stub.
+      daily = true;
+      const cw = CHART_WINDOWS[win[0]];
+      winLabel = cw[1];
+      const RC = (typeof globalThis !== 'undefined' && globalThis.RowCard) || null;
+      if (!RC || !RC.volSeries) return shell('Nothing to chart', 'Volatility', 'not available here');
+      const d = getBasket(cw[0] + VOL_PRE);
+      if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
+      const i0 = cw[2] === 'ytd' ? winStart(cw, d.dates) : Math.max(0, d.dates.length - cw[0]);
+      if (d.dates.length - i0 < 2) {
+        return shell(sc.label, mLabel, 'this year',
+          'The year has not opened yet — there is no session since 31 December to chart.');
+      }
+      xs = d.dates.slice(i0);
+      for (const r of pick) {
+        const S = (d.series || {})[r.symbol];
+        // The rebased closes are ratios to one origin, which is all a daily
+        // move needs. No figure at the window's start (a recent listing, or a
+        // short archive) is left out and named, as a price line is.
+        const v = S ? RC.volSeries(S.map((x) => (x == null ? null : Number(x))), VOL_PRE).slice(i0) : null;
+        if (!v || v[0] == null) { late.push(r); continue; }
+        vals[r.symbol] = v.map((x) => (x == null ? null : r2(x)));
+      }
+    } else if (win[1] === 'd') {
       daily = true;
       const cw = CHART_WINDOWS[win[0]];
       winLabel = cw[1];
@@ -11404,7 +11443,9 @@
     const short = (r) => { const n = nameOf(r); return n.length > 28 ? n.slice(0, 27).trimEnd() + '…' : n; };
     const names = (list) => list.slice(0, 2).map(short).join(', ')
       + (list.length > 2 ? ' and ' + (list.length - 2) + (list.length === 3 ? ' other' : ' others') : '');
-    const what = mk === 'px'
+    const what = mk === 'vol'
+      ? 'Each point is the last thirty sessions’ daily moves, annualised: how much the price was moving then, up or down alike. '
+      : mk === 'px'
       ? 'Price only, each line rebased to the first close of the window, so the gap between two lines is the difference in their returns. '
         + (daily ? '' : 'One point per quarter end. ')
       : mk === 'rg' ? 'Each point is the trailing twelve months of revenue against the twelve months before it, from the company’s own filings. '
@@ -11413,15 +11454,15 @@
         : PT.measureNote(model, data);
     const note = what
       + (model.log ? 'Log scale, so equal distances are equal ratios. ' : '')
-      + (model.gaps && mk !== 'px' && mk !== 'pe' ? 'A break in a line is a quarter with no figure on record. ' : '')
+      + (model.gaps && mk !== 'px' && mk !== 'pe' && mk !== 'vol' ? 'A break in a line is a quarter with no figure on record. ' : '')
       + (late.length ? names(late) + (late.length === 1 ? ' is' : ' are') + ' left out: the price history held here starts after the window does. ' : '')
       + (blank.length ? names(blank) + (blank.length === 1 ? ' has' : ' have') + ' no ' + model.lower + ' on file. ' : '')
       + (out.fin ? 'Lenders are left out: this measure means nothing for one. ' : '')
       + (out.mixed ? 'Companies whose reported figures are not all in dollars are left out. ' : '')
       + 'Today’s largest by market value in the cut. '
-      + (mk === 'px' ? 'A record, not a forecast.' : 'A record, not a recommendation.');
+      + (mk === 'px' || mk === 'vol' ? 'A record, not a forecast.' : 'A record, not a recommendation.');
 
-    const sub = (f.flow ? 'trailing twelve months, ' : mk === 'px' ? 'rebased, ' : '')
+    const sub = (f.flow ? 'trailing twelve months, ' : mk === 'px' ? 'rebased, ' : mk === 'vol' ? '30-day, ' : '')
       + (win[0] === 'ytd' ? 'so far this year' : 'over the ' + winLabel);
     return chromeTop()
       + '<div class="s-body"><div class="pv-in ln-in">'
