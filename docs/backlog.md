@@ -2256,6 +2256,55 @@ one per fix, failing before it. Whether the private-file gate can be
 bypassed through Vercel's edge, and not only in Express, was not tested on
 the live site; that waits for a running copy (entry 40).
 
+## 46. Gaps found while filling the Long run group — 2026-10-19
+
+*Area: Data · Status: Open · Note: found on the first fill of the Long run group (docs/context/long-run.md); the owner asked for them on the backlog; nothing was changed*
+
+The first fill of the Long run columns (growth over years, P/E against its
+ten-year median, the dividend record, interest coverage, the Piotroski
+F-score) left blanks and odd readings that trace back to the stored data,
+not to the new arithmetic. Each is a company's own filings or the way they
+are mapped, which is why none was patched from the Long run side.
+
+- **a. Exxon has no filings history.** Its `sec_state` row carries CIK
+  2115436 with 4 rows of filings; Exxon's long-standing CIK is 34088. Either
+  the company re-registered under a new holding company (and the history
+  sits under the old CIK) or the mapping is wrong. Every filings-fed column
+  is blank for XOM, not only the Long run ones. First step: look up both
+  CIKs at the SEC and see which one carries the 10-K history; if it is a
+  re-registration, the reader would need to stitch the two. Worth a sweep of
+  `sec_state` for other companies with a very low row count.
+- **b. One odd filed figure breaks a dividend streak.** Procter & Gamble's
+  filings state dividends per share of 3.00 for fiscal 2017, between 2.66
+  (2016) and 2.79 (2018), so its run of raises reads from 2018 where its real
+  record is decades. Shown as filed for now. A neighbour check like
+  `reconcile`'s scale check (a value out of line with the years either side,
+  and with the trail of filings for that year) could catch this kind, but it
+  must not "correct" a real special dividend; measure how many companies it
+  would touch before deciding.
+- **c. Gaps in quarterly data leave too few trailing years.** Applied
+  Materials has 12 complete trailing years in 17 years of quarters, short of
+  the 20 profitable quarters the P/E median needs; the Lines card's P/E has
+  the same holes. Measure how many companies are short for this reason
+  rather than for losses, and trace one: is it a missing fourth quarter (a
+  52/53-week year outside `TTM_MIN_DAYS`/`TTM_MAX_DAYS`), or a quarter with
+  no revenue in any filing?
+- **d. Banks have no P/E history.** `SecFacts.ttm` needs a revenue line for
+  a trailing year and a bank files none (the known lender gap), so there is
+  no P/E vs median for any bank, and no P/E line on the Lines card either. A
+  net-income-only trailing year for P/E would fill it; it would have to stay
+  out of everything that divides by revenue.
+- **e. No interest expense tag for some large companies.** Apple, Johnson &
+  Johnson, KLA and others have no interest coverage because their recent
+  filings carry none of the four tags read (Apple reports interest inside
+  other income). Check which tags they do use before adding any, and whether
+  the figure is really interest expense.
+- **f. Visa and Mastercard lose interest coverage and the F-score.** They
+  sit in Credit Services with the card lenders, and lenders are excluded as
+  a group (`LENDER_INDUSTRY`). Telling a payment network from a lender would
+  need a rule that is not the industry name (for example interest expense
+  as a share of revenue), measured on the whole sector first.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
