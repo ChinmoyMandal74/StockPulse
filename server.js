@@ -15703,23 +15703,41 @@ app.get('/api/news/tone', requireMember, route(async (req, res) => {
 // One seek per stock on idx_news_tone_symbol, ten at a time: about fifty
 // stocks, each bounded by its feed over the window. Names are not sent; the
 // card has the snapshot rows and names them itself.
+// Since 2026-10-20 a group may also be the S&P 500 ('sp') or one of its
+// sectors ('sp:<sector>'), cut on the stored SPY holdings file. The whole
+// index is about five hundred seeks, so a board is kept ten minutes.
+const toneBoardCache = new Map();
 async function toneBoardPayload(group, days) {
-  const inds = group === 'all' ? NewsTone.INDUSTRIES : NewsTone.INDUSTRIES.filter((i) => i === group);
+  const key = group + '|' + days;
+  const hit = toneBoardCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
   const snap = await readSnapshot();
-  const syms = ((snap && snap.stocks) || []).filter((s) => inds.includes(s.industry)).map((s) => s.symbol);
+  const all = (snap && snap.stocks) || [];
+  let syms;
+  if (group === 'sp' || String(group).startsWith('sp:')) {
+    const sp = await spMembers().catch(() => ({ set: null }));
+    const sector = String(group).startsWith('sp:') ? String(group).slice(3) : null;
+    syms = sp.set ? all.filter((s) => sp.set.has(s.symbol) && (!sector || s.sector === sector)).map((s) => s.symbol) : [];
+  } else {
+    const inds = group === 'all' ? NewsTone.INDUSTRIES : NewsTone.INDUSTRIES.filter((i) => i === group);
+    syms = all.filter((s) => inds.includes(s.industry)).map((s) => s.symbol);
+  }
   const since = new Date(Date.now() - days * 86400000).toISOString();
-  const all = [];
+  const readings = [];
   const rows = [];
   for (let i = 0; i < syms.length; i += 10) {
     const part = syms.slice(i, i + 10);
     const got = await Promise.all(part.map((s) => store.readNewsToneSince(s, since)));
     got.forEach((r, k) => {
-      all.push(...r);
+      readings.push(...r);
       const w = NewsTone.summarise(r);
       if (w) rows.push(Object.assign({ symbol: part[k] }, w));
     });
   }
-  return { group, days, stocks: syms.length, rows, total: NewsTone.summarise(all), band: NewsTone.BAND };
+  const body = { group, days, stocks: syms.length, rows, total: NewsTone.summarise(readings), band: NewsTone.BAND };
+  if (toneBoardCache.size > 60) toneBoardCache.clear();
+  toneBoardCache.set(key, { at: Date.now(), body });
+  return body;
 }
 app.get('/api/news/tone/board', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

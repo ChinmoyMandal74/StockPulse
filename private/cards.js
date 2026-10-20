@@ -9372,7 +9372,11 @@
   // THE BAND IS RESTATED HERE because cards.js has no requires and the phone
   // does not load newstone.js; newstone-test.js asserts the two agree.
   const TONE_BAND = 0.25;
-  const TONE_GROUPS = [['all', 'Semiconductors, all'], ['Semiconductors', 'Semiconductors'], ['Semiconductor Equipment & Materials', 'Equipment & materials']];
+  // The groups a board can be drawn for: the two semiconductor industries
+  // (where article tone began), and since 2026-10-20 the S&P 500, whole or a
+  // sector at a time ('sp:<sector>'), the sectors being the eleven GICS names.
+  const TONE_GROUPS = [['all', 'Semiconductors, all'], ['Semiconductors', 'Semiconductors'], ['Semiconductor Equipment & Materials', 'Equipment & materials'],
+    ['sp', 'S&P 500, all']].concat(SECTOR_ETF.map(([sec]) => ['sp:' + sec, 'S&P 500 · ' + sec]));
   const TONE_WINS = [['7', 'Past 7 days'], ['30', 'Past 30 days']];
   const TONE_COUNTS = [8, 12, 16];
   const TONE_ROWS = { portrait: 16, square: 10, story: 16 };
@@ -9380,7 +9384,7 @@
   const TONE_WORDS = /\b(buy|sell|hold|bullish|bearish|outperform|underperform|overweight|underweight|price target|target price)\b/i;
   const toneLabel = (t) => (t == null || !isFinite(t) ? '' : t >= TONE_BAND ? 'Positive' : t <= -TONE_BAND ? 'Negative' : 'Neutral');
   const toneNum = (t) => (t == null || !isFinite(t) ? '—' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
-  const TONE_NOTE = 'An AI model (Claude Sonnet 5.5) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
+  const TONE_NOTE = 'An AI model (Claude Haiku 5.5; Claude Sonnet 5.5 before 20 October 2026) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
     + 'Only articles mainly about the company are counted; one that names it in passing, or that could not be read, is left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
   function toneBoardNeed(tpl, opts) {
     if (tpl !== 'indtone') return null;
@@ -9406,7 +9410,7 @@
     const need = toneBoardNeed('indtone', O);
     // "Semiconductors, all" is the picker's word for both industries; on the
     // card itself the plain name reads better.
-    const gLabel = need.group === 'all' ? 'Semiconductors' : (TONE_GROUPS.find(([k]) => k === need.group) || TONE_GROUPS[0])[1];
+    const gLabel = need.group === 'all' ? 'Semiconductors' : need.group === 'sp' ? 'S&P 500' : (TONE_GROUPS.find(([k]) => k === need.group) || TONE_GROUPS[0])[1];
     const wLabel = need.days === 30 ? 'past 30 days' : 'past 7 days';
     const data = getToneBoard(need.group, need.days);
     if (!data) return toneShell('Reading the articles', 'Finding', 'the readings…');

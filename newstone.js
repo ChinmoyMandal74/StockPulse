@@ -6,6 +6,7 @@
 // (2026-10-18, the owner: "it cannot be based just on the headline, it has
 // to be based on the content", then: the semiconductor stocks only, Claude
 // Sonnet 5.5, shown to members.)
+// (2026-10-20: Claude Haiku 5.5, and every S&P 500 member as well.)
 //
 // WHAT IS STORED: the tone, the kind, whether the article is about the
 // company, a summary in the model's own words, and the publisher's address.
@@ -24,8 +25,17 @@
 
   // The two industries this runs for. A list rather than a test on the word
   // "semi", so a new industry name joins on purpose.
+  // WHICH STOCKS: the two semiconductor industries (where this began), and
+  // since 2026-10-20 every S&P 500 member too (the owner: "Lets remove Sonnet
+  // but extend to all s&p 500 stocks"). The S&P list is the stored SPY
+  // holdings file, the screener's own; inScope says whether a row is covered.
   const INDUSTRIES = ['Semiconductors', 'Semiconductor Equipment & Materials'];
-  const MODEL = 'claude-sonnet-5-5';
+  const inScope = (row, spSet) => !!row && (INDUSTRIES.includes(row.industry) || !!(spSet && spSet.has(String(row.symbol).toUpperCase())));
+  // THE MODEL: Claude Haiku 5.5 since 2026-10-20, after a shadow comparison
+  // with Sonnet 5.5 over 882 articles (shown-or-not agreed 94.6%, the tone's
+  // word 82.0%, about a twentieth of the cost). Readings made before then
+  // carry 'claude-sonnet-5-5' in their own model column.
+  const MODEL = 'claude-haiku-5-5';
   // About 3,000 tokens of article. A cost ceiling, and the model is told
   // when the text it was given stops early.
   const MAX_CHARS = 12000;
@@ -280,7 +290,7 @@
   }
 
   return {
-    INDUSTRIES, MODEL, MAX_CHARS, MIN_CHARS, BAND, KINDS, KIND_LABEL, SCHEMA, SYSTEM,
+    INDUSTRIES, inScope, MODEL, MAX_CHARS, MIN_CHARS, BAND, KINDS, KIND_LABEL, SCHEMA, SYSTEM,
     label, feedUrl, canonUrl, parseFeed, sourceOf, robotsRules, robotsAllows,
     articleText, namesCompany, userPrompt, request, check, summarise, BANNED,
   };

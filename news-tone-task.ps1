@@ -1,5 +1,6 @@
-# Register (or remove) the Windows scheduled task that reads the semiconductor
-# stocks' new articles for their tone, every six hours. See docs/context/news-tone.md.
+# Register (or remove) the Windows scheduled task that reads new articles for
+# their tone, every six hours: the semiconductor stocks and, since 2026-10-20,
+# every S&P 500 member. See docs/context/news-tone.md.
 #
 #   .\news-tone-task.ps1            register, or update an existing one
 #   .\news-tone-task.ps1 -Remove    take it away
@@ -23,12 +24,15 @@
 # hour before the 07:30 and 19:30 nightly rotations, which run from this same
 # laptop, and the 50-minute limit below makes sure of it. It uses no Twelve
 # Data credits, so the price windows are not at stake, only the machine.
-# A SHADOW MODEL (2026-10-19, the owner: try a lower model for a few days and
-# compare costs). Each article the main model reads is also read by this one;
-# its answers go to news-tone-shadow.jsonl on this machine only, never the
-# database. node news-tone-compare.js reports the agreement and the cost.
-# -NoShadow registers the task without it.
-param([switch]$Remove, [switch]$WhatIf, [switch]$NoShadow, [string]$Shadow = 'claude-haiku-5-5')
+# THE MODEL IS CLAUDE HAIKU 5.5 since 2026-10-20 (the owner: "Lets remove
+# Sonnet"), set in newstone.js. The shadow comparison that decided it is off
+# by default; -Shadow <model> registers the task with a second model reading
+# beside it again, its answers in news-tone-shadow.jsonl on this machine only.
+#
+# A TIME BUDGET: with the S&P 500 a run has about ten times the articles, so
+# the loader stops itself after 45 minutes (--max-minutes), inside the task's
+# 50-minute limit, and leaves the rest for the next run, newest first.
+param([switch]$Remove, [switch]$WhatIf, [string]$Shadow = '')
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab news tone'
@@ -36,6 +40,7 @@ $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'news-tone-load.js'
 $Times    = @('00:30', '06:30', '12:30', '18:30')
 $MaxUsd   = '3'
+$MaxMin   = '45'
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -48,8 +53,8 @@ $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
 # The script writes its own report to stdout; cmd redirects it to a log beside it.
-$shadowArg = if ($NoShadow) { '' } else { " --shadow $Shadow --shadow-max-usd 1" }
-$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd$shadowArg >> news-tone.log 2>&1`""
+$shadowArg = if ($Shadow) { " --shadow $Shadow --shadow-max-usd 1" } else { '' }
+$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd --max-minutes $MaxMin$shadowArg >> news-tone.log 2>&1`""
 $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
 
@@ -66,13 +71,13 @@ if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run   : cmd.exe $cmdArgs"
   Write-Output "  in    : $Root"
-  Write-Output "  daily : $($Times -join ', '), stopping each run at `$$MaxUsd"
-  Write-Output "  shadow: $(if ($NoShadow) { 'none' } else { $Shadow + ', local file only, at most $1 a run' })"
+  Write-Output "  daily : $($Times -join ', '), stopping each run at `$$MaxUsd or $MaxMin minutes"
+  Write-Output "  shadow: $(if ($Shadow) { $Shadow + ', local file only, at most $1 a run' } else { 'none' })"
   exit 0
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
-  -Settings $settings -Description 'Reads the semiconductor stocks new articles for their tone (news-tone-load.js), every six hours. Spends Anthropic API credit.' -Force | Out-Null
+  -Settings $settings -Description 'Reads new articles for their tone (news-tone-load.js): the semiconductor stocks and the S&P 500, every six hours. Spends Anthropic API credit.' -Force | Out-Null
 
-Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, at most `$$MaxUsd a run."
+Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, at most `$$MaxUsd or $MaxMin minutes a run."
 Write-Output "Log: $(Join-Path $Root 'news-tone.log')"

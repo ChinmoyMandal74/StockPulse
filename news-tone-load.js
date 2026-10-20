@@ -42,6 +42,13 @@ const ONLY = arg('--only') ? new Set(String(arg('--only')).toUpperCase().split('
 const DAYS = Math.max(1, Number(arg('--days')) || 7);
 const LIMIT = Number(arg('--limit')) || (COMMIT ? 0 : 5);
 const MAX_USD = Number(arg('--max-usd')) || 8;
+// A TIME BUDGET (2026-10-20): with the S&P 500 in scope a run has about ten
+// times the articles, and the scheduled task is stopped at 50 minutes. The run
+// stops itself first, cleanly, after the article in hand; what is left is read
+// next run, newest first, since every run reads only articles it has not seen.
+const MAX_MINUTES = Number(arg('--max-minutes')) || 0;
+const STARTED = Date.now();
+const outOfTime = () => MAX_MINUTES > 0 && Date.now() - STARTED > MAX_MINUTES * 60000;
 const MODEL = process.env.NEWS_TONE_MODEL || NewsTone.MODEL;
 // Per token, in and out, by model (published rates, 2026-10-19). Haiku 5.5's
 // is its rate for a prompt of 100K tokens or fewer, which an article always is.
@@ -227,7 +234,14 @@ async function shadowBackfill(stocks) {
 (async () => {
   if (!KEY) throw new Error('ANTHROPIC_API_KEY is not set in .env');
   const snap = await store.readSnapshot();
-  const stocks = ((snap && snap.stocks) || []).filter((s) => NewsTone.INDUSTRIES.includes(s.industry))
+  // The S&P 500 from the stored SPY holdings file: the newest day's rows.
+  let spSet = null;
+  try {
+    const st = await store.fundNewest('spy');
+    if (st && st.asOf) spSet = new Set(((await store.readFundHoldings('spy', st.asOf)).holdings || []).map((r) => String(r.symbol).toUpperCase()));
+  } catch (e) { spSet = null; }
+  if (!spSet) console.log('  no S&P 500 holdings file could be read: the semiconductor stocks only this run');
+  const stocks = ((snap && snap.stocks) || []).filter((s) => NewsTone.inScope(s, spSet))
     .filter((s) => !ONLY || ONLY.has(String(s.symbol).toUpperCase()));
   if (process.argv.includes('--shadow-backfill')) {
     if (!SHADOW) throw new Error('--shadow-backfill needs --shadow <model>');
@@ -257,7 +271,7 @@ async function shadowBackfill(stocks) {
   todo.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
   if (LIMIT) todo = todo.slice(0, LIMIT);
   // The run's start time, so the log says WHEN each run spent what it spent.
-  console.log(`[${new Date().toISOString()}] ${stocks.length} semiconductor stocks (${feedFail} feeds unavailable), ${todo.length} articles to read from the last ${DAYS} days; `
+  console.log(`[${new Date().toISOString()}] ${stocks.length} stocks, the semiconductor industries and the S&P 500 (${feedFail} feeds unavailable), ${todo.length} articles to read from the last ${DAYS} days; `
     + `model ${MODEL}; stop at $${MAX_USD.toFixed(2)}. ` + (COMMIT ? 'COMMIT: writing news_tone' : 'DRY RUN: nothing will be written')
     + (SHADOW ? `; shadow ${SHADOW} (local file only, stop at $${SHADOW_MAX_USD.toFixed(2)})` : ''));
 
@@ -278,6 +292,7 @@ async function shadowBackfill(stocks) {
   for (let i = 0; i < todo.length; i++) {
     const h = todo[i];
     if (spent >= MAX_USD) { console.log(`Stopping: $${spent.toFixed(2)} spent, the --max-usd ceiling.`); break; }
+    if (outOfTime()) { console.log(`Stopping: ${MAX_MINUTES} minutes, the --max-minutes budget; ${todo.length - i} articles left for the next run.`); break; }
     try {
       const page = await readPage(h.url);
       if (!page.text) { await write(h, { status: page.status, reason: page.reason, host: page.host, chars: page.chars }); continue; }

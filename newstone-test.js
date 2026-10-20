@@ -131,7 +131,7 @@ check('only-summary problems are labelled as such', NT.check(Object.assign({}, g
 
 console.log('the request');
 const req = NT.request({ symbol: 'MU', name: 'Micron', headline: 'H', source: 'S', text: 'x'.repeat(NT.MAX_CHARS + 50) });
-check('the model is Sonnet 5.5', req.model, 'claude-sonnet-5-5');
+check('the model is Haiku 5.5 (since 2026-10-20)', req.model, 'claude-haiku-5-5');
 check('JSON schema output', req.output_config.format.type, 'json_schema');
 check('every schema object forbids extra keys', req.output_config.format.schema.additionalProperties, false);
 check('text past the ceiling is cut, and the model is told', req.messages[0].content.includes('was cut to its first') && !req.messages[0].content.includes('x'.repeat(NT.MAX_CHARS + 1)), true);
@@ -195,6 +195,16 @@ for (const [what, extra] of [
   ['present and favourable', { tone: 0.9, toneAvg: 0.9, newsTone: { avg: 0.9, count: 12 } }],
   ['present and lying', { tone: -1, toneAvg: -1, newsTone: { avg: -1, count: 99, positive: 0, negative: 99 } }],
 ]) check(`same verdict with tone fields ${what}`, verdict(Object.assign({}, base, extra)), plain);
+
+// Which stocks are read (2026-10-20): the two semiconductor industries, and every S&P 500 member.
+const SP = new Set(['AAPL', 'JPM', 'NVDA']);
+check('scope: a semiconductor stock outside the S&P 500', NewsTone.inScope({ symbol: 'ACLS', industry: 'Semiconductor Equipment & Materials' }, SP), true);
+check('scope: an S&P 500 member in any industry', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, SP), true);
+check('scope: lower-case symbols match', NewsTone.inScope({ symbol: 'aapl', industry: 'Consumer Electronics' }, SP), true);
+check('scope: neither, not read', NewsTone.inScope({ symbol: 'ROKU', industry: 'Entertainment' }, SP), false);
+check('scope: no S&P file, the semiconductors still', NewsTone.inScope({ symbol: 'MU', industry: 'Semiconductors' }, null), true);
+check('scope: no S&P file, nothing else', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, null), false);
+check('scope: no row', NewsTone.inScope(null, SP), false);
 
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;
