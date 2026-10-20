@@ -12164,6 +12164,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const egNeed = Cards.earnGrowthNeed(post.tpl, post.opts || {});
   if (egNeed) { try { egrow = await earnGrowthFor(egNeed.cut); } catch { egrow = null; } }
 
+  // The Sector and Industry Lines cards: their groups' lines, only when asked for.
+  let glines = null;
+  const glNeed = Cards.groupLinesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
+  if (glNeed) { try { glines = await groupLinesFor(glNeed.dim, glNeed.names, glNeed.nq, glNeed.m); } catch { glines = null; } }
+
   // The Filed yesterday card: one day's filings, only when asked for.
   let fld = null;
   const fldNeed = Cards.filedNeed(post.tpl, post.opts || {});
@@ -12192,6 +12197,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
       getFiled: () => fld,
+      getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
       getIndexPe: () => ipe,
       getHolders: () => lholders,
@@ -13698,8 +13704,16 @@ async function longRunSlice(opts = {}) {
     ]);
     // A failed read is left for the next night rather than stored as nothing.
     const ok = chunk.map((sym, k) => facts[k] != null);
-    const trend = await trendSeries(chunk, quarters, chunk.map((sym) => rowsBy[sym]), false,
+    // FULL series (2026-10-20): the group Lines cards keep each company's
+    // quarterly figures (line_series) from this same pass, so a sector's line
+    // costs no read of its members' filings when it is drawn.
+    const trend = await trendSeries(chunk, quarters, chunk.map((sym) => rowsBy[sym]), true,
       { facts: facts.map((f) => f || []), held }).catch(() => null);
+    if (trend && !opts.dry) {
+      const rows = chunk.filter((sym, k) => ok[k]).map((sym) => ({ symbol: sym, at: Date.now(), quarters,
+        body: Object.fromEntries(GroupLines.KEYS.map((key) => [key, (trend.series[key] && trend.series[key][sym]) || []])) }));
+      try { await store.writeLineSeries(rows); } catch (e) { /* the long-run figures still land */ }
+    }
     chunk.forEach((sym, k) => {
       if (!ok[k]) return;
       const row = rowsBy[sym];
@@ -14014,6 +14028,67 @@ app.get('/api/line-series', requireMember, route(async (req, res) => {
     return res.status(400).json({ error: 'Between one and ' + LINE_MAX_SYMS + ' symbols.' });
   }
   res.json(await lineSeriesFor(syms, req.query.q));
+}));
+
+// ---- Sector and Industry Lines: a line a group (2026-10-20, grouplines.js) ----
+// The owner, of the Lines card: "Can I get this visual under sector where
+// every line represents one sector ... The same should be under the Industry
+// template". The FILED measures and the price over years come from each
+// member's stored quarterly series (line_series, the Long run slice's own
+// pass) summed or averaged by GroupLines.aggregate; the daily price and
+// volatility windows are drawn by the card from the studio's basket. Up to
+// eight groups a request; the members' rows by primary key. Kept ten minutes.
+const GroupLines = require('./grouplines.js');
+const GL_MEASURES = new Set(['px', 'rev', 'gp', 'oi', 'ni', 'fcf', 'gm', 'om', 'pm', 'fm', 'rg', 'cap', 'pe', 'ps']);
+const GL_MAX = 8;
+const glCache = new Map();
+async function groupLinesFor(dim, names, nqIn, mk) {
+  const nq = LINE_QUARTERS.includes(Number(nqIn)) ? Number(nqIn) : 21;
+  const key = dim + '|' + names.join('\u0001') + '|' + nq + '|' + mk;
+  const hit = glCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const snap = await snapshotCached();
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error && !RowCard.isFund(r));
+  // A lender has no cost of sales: left out of gross profit and gross margin.
+  const lenderOut = GroupLines.NO_FIN.has(mk);
+  const membersOf = (name) => rows.filter((r) => String(r[dim] || '') === name && !(lenderOut && r.sector === 'Financial Services'));
+  const want = names.map((n) => ({ name: n, members: membersOf(n) }));
+  const series = await store.readLineSeries([...new Set(want.flatMap((g) => g.members.map((r) => String(r.symbol).toUpperCase())))]);
+  // THE QUARTERS DRAWN end at the newest quarter end most members hold: a
+  // member rebuilt before the quarter rolled over holds the list a quarter
+  // behind, and must not pull every line's end back with it.
+  const ends = {};
+  for (const v of Object.values(series)) { const q = v.quarters[v.quarters.length - 1]; if (q) ends[q] = (ends[q] || 0) + 1; }
+  const total = Object.values(series).length;
+  const sortedEnds = Object.keys(ends).sort();
+  let end = sortedEnds[sortedEnds.length - 1] || null;
+  for (let i = sortedEnds.length - 1; i >= 0; i--) {
+    const held = sortedEnds.slice(i).reduce((n, q) => n + ends[q], 0);
+    if (held * 2 >= total) { end = sortedEnds[i]; break; }
+  }
+  const quarters = end ? quarterEndsBefore(nq, new Date(Date.parse(end + 'T12:00:00Z') + 86400000)) : [];
+  const groups = want.map((g) => {
+    const ms = g.members.map((r) => series[String(r.symbol).toUpperCase()]).filter(Boolean)
+      .map((v, k) => ({ symbol: k, quarters: v.quarters, body: v.body }));
+    const a = quarters.length ? GroupLines.aggregate(ms, quarters, mk) : { values: null, used: 0, of: ms.length };
+    return { name: g.name, values: a.values, used: a.used, of: g.members.length, withSeries: ms.length };
+  });
+  const body = { dim, measure: mk, quarters, groups, lenderOut };
+  if (glCache.size > 200) glCache.clear();
+  glCache.set(key, { at: Date.now(), body });
+  return body;
+}
+function glParams(q) {
+  const dim = q.dim === 'industry' ? 'industry' : q.dim === 'sector' ? 'sector' : null;
+  const mk = GL_MEASURES.has(String(q.m)) ? String(q.m) : null;
+  const names = String(q.names || '').split('|').map((x) => x.trim()).filter((x) => x && x.length <= 80).slice(0, GL_MAX);
+  return dim && mk && names.length ? { dim, mk, names, nq: q.nq } : null;
+}
+app.get('/api/group-lines', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const p = glParams(req.query || {});
+  if (!p) return res.status(400).json({ error: 'A dimension (sector or industry), a measure and one to ' + GL_MAX + ' names.' });
+  res.json(await groupLinesFor(p.dim, p.names, p.nq, p.mk));
 }));
 
 // ---- Growth and profitability: revenue, net income and net margin -----------

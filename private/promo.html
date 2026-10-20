@@ -144,6 +144,15 @@
        post. No shape to choose and nothing to download. */
     body.mem #sizeLab, body.mem #sizeList, body.mem #dlBtn, body.mem #dlMsg { display: none; }
     body.mem #vidBox { display: none; }
+    /* Sector and Industry Lines (2026-10-20): the groups to draw, ticked. */
+    #glnBox .gl-chips, #ilnBox .gl-chips { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto;
+      margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
+    #glnBox .gl-chip, #ilnBox .gl-chip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+    #glnBox .gl-chip:hover, #ilnBox .gl-chip:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    #glnBox .gl-chip span.n, #ilnBox .gl-chip span.n { margin-left: auto; color: var(--faint); font: 500 11px var(--mono, monospace); }
+    #glnBox .gl-chip.off, #ilnBox .gl-chip.off { opacity: 0.45; }
+    #glnBox .gl-acts, #ilnBox .gl-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    #glnBox .gl-acts span, #ilnBox .gl-acts span { font-size: 12px; color: var(--faint); }
     #vidBox { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--hair); }
     #vidList { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
     #vidList .vid-it { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center;
@@ -1188,6 +1197,34 @@
           filings. A price or volatility can be drawn day by day up to a year;
           a filed figure and a longer price line, one point per quarter end.</p>
       </div>
+      <!-- Sector and Industry Lines (2026-10-20): the Lines card, a line a group. -->
+      <div id="glnBox">
+        <label>Measure</label>
+        <select id="glnMetric"></select>
+        <label>Time frame</label>
+        <select id="glnWin"></select>
+        <label>Sectors (up to 8)</label>
+        <input type="hidden" id="glnPick" />
+        <div class="gl-acts"><button class="btn" type="button" data-gl="gln:top">Five largest</button><button class="btn" type="button" data-gl="gln:all">All</button><button class="btn" type="button" data-gl="gln:none">Clear</button><span id="glnCount"></span></div>
+        <div class="gl-chips" id="glnChips"></div>
+        <p class="hint">Each line is one sector. A share price is the equal-weight average of its companies' returns;
+          revenue, income and market value are the sums of its companies'; margins, P/E and P/S are those sums over
+          one another. Only companies with a figure in every point drawn are counted.</p>
+      </div>
+      <div id="ilnBox">
+        <label>Measure</label>
+        <select id="ilnMetric"></select>
+        <label>Time frame</label>
+        <select id="ilnWin"></select>
+        <label>Industries (up to 8)</label>
+        <input type="hidden" id="ilnPick" />
+        <select id="ilnSector" aria-label="Show the industries in one sector"><option value="">Every sector's industries</option></select>
+        <input type="search" id="ilnFind" placeholder="Find an industry" aria-label="Find an industry" style="margin-top:6px" />
+        <div class="gl-acts" style="margin-top:6px"><button class="btn" type="button" data-gl="iln:top">Five largest</button><button class="btn" type="button" data-gl="iln:none">Clear</button><span id="ilnCount"></span></div>
+        <div class="gl-chips" id="ilnChips"></div>
+        <p class="hint">Each line is one industry, worked out as on the Sector lines card. An industry needs at least
+          three companies with figures to draw a line.</p>
+      </div>
       <!-- Filed yesterday (2026-10-20, Market): one day's 13D/13G and 8-K filings. -->
       <div id="fldBox">
         <label>Day</label>
@@ -2187,6 +2224,8 @@
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
+      { id: 'seclines', name: 'Sector lines', note: 'The Lines card a line a sector: share price, volatility or any filed measure, for the sectors you tick' },
+      { id: 'indlines', name: 'Industry lines', note: 'The Lines card a line an industry: share price, volatility or any filed measure, for the industries you tick' },
       { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
       { id: 'reel', name: 'Reel (video)', note: 'One stock as a 22-second 9:16 video for an Instagram Reel: an opening line, its twelve figures, the Signal with its rule, a year of its price, and the end card' },
       { id: 'stkchart', name: 'Chart — any measure', note: 'One company on any measure the Lines card draws — its share price, its volatility, or a figure from its filings — over the time frame you pick' },
@@ -2378,6 +2417,7 @@
       ['secmargin', 'Margins'],
       ['optsec', 'Options'],
       ['secmonths', 'Month by month'],
+      ['seclines', 'Lines — any measure'],
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
     // template for Theme"). One view to begin with; others can join it.
@@ -2398,6 +2438,7 @@
     const IND_VIEWS = [
       ['industries', 'Ranking'],
       ['indspot', 'Spotlight'],
+      ['indlines', 'Lines — any measure'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
       ['indtone', 'Article tone'],
@@ -2945,6 +2986,65 @@
         .catch(() => { mgPending[cut] = false; });
       return null;
     }
+    // The group Lines cards' filed lines, by what was asked: the groups, the
+    // measure and the quarters. The daily windows come from the basket.
+    const glCache = {};
+    const glPending = {};
+    function getGroupLines(need) {
+      const k = need.dim + '|' + need.names.join('|') + '|' + need.nq + '|' + need.m;
+      if (glCache[k]) return glCache[k];
+      if (glPending[k]) return null;
+      glPending[k] = true;
+      fetch('/api/group-lines?dim=' + encodeURIComponent(need.dim) + '&m=' + encodeURIComponent(need.m) + '&nq=' + encodeURIComponent(need.nq)
+        + '&names=' + encodeURIComponent(need.names.join('|')), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { glPending[k] = false; if (!d || !d.quarters) return; glCache[k] = d; if (tpl === 'seclines' || tpl === 'indlines') render(); })
+        .catch(() => { glPending[k] = false; });
+      return null;
+    }
+    // The groups to tick: built from the rows, largest first; the ticked ones
+    // live in the hidden `glnPick` / `ilnPick`, '|'-joined, which is what a
+    // saved post keeps. None ticked yet: the five largest are ticked for you.
+    function paintGroupChips(p) {
+      const dim = p === 'gln' ? 'sector' : 'industry';
+      const all = Cards.groupNames(dim, stocks);
+      const max = Cards.groupLinesMax();
+      const pickEl = $(p + 'Pick');
+      const known = new Set(all.map((g) => g.name));
+      let picked = String(pickEl.value || '').split('|').filter((x) => known.has(x));
+      if (!picked.length && all.length) { picked = all.slice(0, 5).map((g) => g.name); pickEl.value = picked.join('|'); }
+      if (p === 'iln' && $('ilnSector').options.length <= 1) {
+        const secs = [...new Set(all.map((g) => g.sector).filter(Boolean))].sort();
+        for (const sname of secs) $('ilnSector').add(new Option(sname, sname));
+      }
+      const sec = p === 'iln' ? $('ilnSector').value : '';
+      const find = p === 'iln' ? $('ilnFind').value.trim().toLowerCase() : '';
+      const shown = all.filter((g) => picked.includes(g.name) || ((!sec || g.sector === sec) && (!find || g.name.toLowerCase().includes(find))));
+      const full = picked.length >= max;
+      $(p + 'Chips').innerHTML = shown.map((g) => {
+        const on = picked.includes(g.name);
+        return '<label class="gl-chip' + (!on && full ? ' off' : '') + '"><input type="checkbox" data-g="' + esc(g.name) + '"' + (on ? ' checked' : '') + (!on && full ? ' disabled' : '') + '> '
+          + esc(g.name) + '<span class="n">' + g.n + '</span></label>';
+      }).join('') || '<span class="hint">Nothing matches.</span>';
+      $(p + 'Count').textContent = picked.length + ' of ' + max + ' chosen';
+      $(p + 'Chips').querySelectorAll('input[data-g]').forEach((cb) => cb.addEventListener('change', () => {
+        const cur = String(pickEl.value || '').split('|').filter(Boolean);
+        const next = cb.checked ? cur.concat([cb.dataset.g]).slice(0, max) : cur.filter((x) => x !== cb.dataset.g);
+        // Never empty: the last one cannot be unticked (an empty pick means the five largest).
+        pickEl.value = (next.length ? next : cur).join('|');
+        render();
+      }));
+    }
+    document.querySelectorAll('[data-gl]').forEach((b) => b.addEventListener('click', () => {
+      const [p, what] = b.dataset.gl.split(':');
+      const all = Cards.groupNames(p === 'gln' ? 'sector' : 'industry', stocks);
+      const max = Cards.groupLinesMax();
+      $(p + 'Pick').value = (what === 'all' ? all.slice(0, max) : what === 'none' ? all.slice(0, 1) : all.slice(0, 5)).map((g) => g.name).join('|');
+      render();
+    }));
+    $('ilnSector').addEventListener('change', () => { if (tpl === 'indlines') paintGroupChips('iln'); });
+    $('ilnFind').addEventListener('input', () => { if (tpl === 'indlines') paintGroupChips('iln'); });
+
     // One day's filings (the Filed yesterday card), by the day asked for ('' is
     // the newest the daily check has read). The reply names the recent days,
     // which fill the Day picker.
@@ -3023,7 +3123,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3070,7 +3170,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -3886,6 +3986,9 @@
       $('sclBox').style.display = tpl === 'stkchart' ? 'block' : 'none';
       $('rlBox').style.display = tpl === 'reel' ? 'block' : 'none';
       $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
+      $('glnBox').style.display = tpl === 'seclines' ? 'block' : 'none';
+      $('ilnBox').style.display = tpl === 'indlines' ? 'block' : 'none';
+      if (tpl === 'seclines' || tpl === 'indlines') paintGroupChips(tpl === 'seclines' ? 'gln' : 'iln');
       $('iflBox').style.display = tpl === 'instflow' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
@@ -4289,6 +4392,25 @@
       fillLineWindows();
     }());
     $('linMetric').addEventListener('change', () => { fillLineWindows(); if (tpl === 'lines') render(); });
+    // The group Lines cards: the same catalogue, and the windows follow the measure.
+    for (const p of ['gln', 'iln']) {
+      const sel = $(p + 'Metric');
+      const groups = new Map();
+      for (const [v, label, grp] of Cards.lineMetrics()) {
+        if (!groups.has(grp)) { const og = document.createElement('optgroup'); og.label = grp; groups.set(grp, og); sel.appendChild(og); }
+        groups.get(grp).appendChild(new Option(label, v));
+      }
+      const fillWins = () => {
+        const el = $(p + 'Win'); const keep = el.value;
+        const wins = Cards.lineWindows($(p + 'Metric').value);
+        el.innerHTML = wins.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join('');
+        el.value = wins.some((w) => w[0] === keep) ? keep : (wins.find((w) => w[2]) || wins[0])[0];
+      };
+      fillWins();
+      const mine = p === 'gln' ? 'seclines' : 'indlines';
+      sel.addEventListener('change', () => { fillWins(); if (tpl === mine) render(); });
+      $(p + 'Win').addEventListener('change', () => { if (tpl === mine) render(); });
+    }
     // Chart, any measure: the same catalogue and the same rule that the time
     // frames follow the measure, on its own controls.
     function fillStkWindows() {

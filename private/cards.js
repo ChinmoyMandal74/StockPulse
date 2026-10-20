@@ -53,6 +53,8 @@
   let getMargins = () => null;
   // One day's 13D/13G and 8-K filings (the Filed yesterday card), or null while it loads.
   let getFiled = () => null;
+  // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
+  let getGroupLines = () => null;
   let getHolders = () => null;
   let getSegments = () => null;
   let getFundHolders = () => null;
@@ -1519,6 +1521,8 @@
       // that is depends on its measure as well as its window, so it answers
       // for itself.
       if (tpl === 'lines') return lineBasketDays(opts);
+      if (tpl === 'seclines') return lineBasketDays(opts, 'gln');
+      if (tpl === 'indlines') return lineBasketDays(opts, 'iln');
       if (tpl === 'race' && RACE_MEASURES[(opts || {}).racMeasure]) return 0;
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
@@ -11297,11 +11301,12 @@
   }
   // The daily paths read the basket; asked by basketDays for both hosts.
   // Volatility asks for its thirty sessions of run-up as well.
-  function lineBasketDays(opts) {
+  function lineBasketDays(opts, prefix) {
     const o = opts || {};
-    const mk = lineMetric(o.linMetric);
+    const p = prefix || 'lin';
+    const mk = lineMetric(o[p + 'Metric']);
     if (mk !== 'px' && mk !== 'vol') return 0;
-    const w = lineWin(mk, o.linWin);
+    const w = lineWin(mk, o[p + 'Win']);
     return w[1] === 'd' ? CHART_WINDOWS[w[0]][0] + (mk === 'vol' ? VOL_PRE : 0) : 0;
   }
   // WHAT THE PHONE HAS TO FETCH. Which companies is this card's own decision,
@@ -11375,7 +11380,14 @@
     let xs, data = null, daily = false, winLabel;
     const vals = {}, late = [];
     const r2 = (v) => Math.round(v * 100) / 100;
-    if (mk === 'vol') {
+    // THE GROUP CARDS (2026-10-20) hand over their lines ready made, a line a
+    // sector or industry; everything below the series is the same drawing.
+    const grp = c.group || null;
+    if (c.prebuilt) {
+      xs = c.prebuilt.xs; daily = !!c.prebuilt.daily; winLabel = c.prebuilt.winLabel; data = c.prebuilt.data || null;
+      for (const [k, v] of Object.entries(c.prebuilt.vals || {})) vals[k] = v;
+      for (const r of c.prebuilt.late || []) late.push(r);
+    } else if (mk === 'vol') {
       // VOLATILITY over a daily window: each company's rolling 30-day figure,
       // worked out over the basket's extra thirty sessions and then cut to the
       // window, so the first point is a full thirty days and not a stub.
@@ -11442,7 +11454,10 @@
       companies: kept.map((r) => ({ symbol: r.symbol, name: nameOf(r) })),
       series: { [mk]: vals },
     }, mk, 'value', PT.LINE_METRICS, { grid: 4 });
-    if (model.lines.length < (single ? 1 : 2)) {
+    if (grp && !model.lines.length) {
+      return shell(sc.label, mLabel, 'not enough on record', 'None of the ' + grp.many + ' chosen has ' + model.lower + ' for at least three of its companies over the ' + winLabel + '.');
+    }
+    if (!grp && model.lines.length < (single ? 1 : 2)) {
       return shell(sc.label, mLabel, 'not enough on record', single
         ? sc.label + ' has no ' + model.lower + ' on record over the ' + winLabel + '.'
           + (late.length ? ' The price history held here starts after the window does.' : '')
@@ -11487,7 +11502,7 @@
     const short = (r) => { const n = nameOf(r); return n.length > 28 ? n.slice(0, 27).trimEnd() + '…' : n; };
     const names = (list) => list.slice(0, 2).map(short).join(', ')
       + (list.length > 2 ? ' and ' + (list.length - 2) + (list.length === 3 ? ' other' : ' others') : '');
-    const what = mk === 'vol'
+    const what = grp ? grp.what : mk === 'vol'
       ? 'Each point is the last thirty sessions’ daily moves, annualised: how much the price was moving then, up or down alike. '
       : mk === 'px'
       ? (single ? 'Price only, rebased to the first close of the window, so the line reads as the return since then. '
@@ -11504,14 +11519,14 @@
       + (blank.length ? names(blank) + (blank.length === 1 ? ' has' : ' have') + ' no ' + model.lower + ' on file. ' : '')
       + (out.fin ? 'Lenders are left out: this measure means nothing for one. ' : '')
       + (out.mixed ? 'Companies whose reported figures are not all in dollars are left out. ' : '')
-      + (single ? '' : 'Today’s largest by market value in the cut. ')
+      + (grp ? grp.note : single ? '' : 'Today’s largest by market value in the cut. ')
       + (mk === 'px' || mk === 'vol' ? 'A record, not a forecast.' : 'A record, not a recommendation.');
 
     const sub = (f.flow ? 'trailing twelve months, ' : mk === 'px' ? 'rebased, ' : mk === 'vol' ? '30-day, ' : '')
       + (win[0] === 'ytd' ? 'so far this year' : 'over the ' + winLabel);
     return chromeTop()
       + '<div class="s-body"><div class="pv-in ln-in">'
-      + '<span class="s-kick">' + esc(single ? (c.kick || sc.label) : sc.label + ' · the ' + model.lines.length + ' largest by market value') + '</span>'
+      + '<span class="s-kick">' + esc(grp ? grp.kick : single ? (c.kick || sc.label) : sc.label + ' · the ' + model.lines.length + ' largest by market value') + '</span>'
       + '<h2 class="s-title">' + esc(mLabel) + '<span class="dim">' + esc(sub) + '</span></h2>'
       + '<div class="pv-chart">' + chart + '</div>'
       + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
@@ -11578,6 +11593,136 @@
     };
     return linesCore({ PT, shell, mk, f, win, mLabel, pick: [row], out: { fin: 0, mixed: 0 },
       scLabel: label, kick: label + ' · ' + row.symbol, basket, single: true });
+  }
+
+  // ---- Sector and Industry Lines: a line a group (2026-10-20) -----------------
+  //
+  // The owner, of the Lines card: "Can I get this visual under sector where
+  // every line represents one sector, I should be able to plot this against
+  // these same measures, Ideally it will be good to have option to multi-select
+  // sectors, The same should be under the Industry template as well".
+  //
+  // The Lines card's own measures, windows and drawing (linesCore), with one
+  // line a group, up to eight (the palette). Picked groups are a '|'-joined
+  // list in `glnPick` / `ilnPick`; none picked draws the five largest by
+  // market value.
+  //   - A DAILY window (share price up to a year, volatility): drawn here from
+  //     the whole-screen basket, each group the equal-weight average of its
+  //     companies' prices rebased to the window's first close (the group pages'
+  //     rule); volatility is that average's own 30-day figure.
+  //   - A FILED measure, or the price over years: from the server
+  //     (/api/group-lines), which sums or averages each member's stored
+  //     quarterly series by grouplines.js, the same companies in every quarter.
+  // Funds are never a member. Lenders are left out of gross profit and gross
+  // margin, as on the Lines card.
+  const GLN = { seclines: { p: 'gln', G: GROUPING.sector }, indlines: { p: 'iln', G: GROUPING.industry } };
+  const GLN_MAX = 8, GLN_DEFAULT = 5, GLN_MIN = 3;
+  const glnPicks = (tpl, o, all) => {
+    const T = GLN[tpl];
+    const known = new Set(all.map((g) => g.name));
+    const picked = String((o || {})[T.p + 'Pick'] || '').split('|').map((x) => x.trim()).filter((x) => known.has(x));
+    return (picked.length ? [...new Set(picked)] : all.slice(0, GLN_DEFAULT).map((g) => g.name)).slice(0, GLN_MAX);
+  };
+  // What the phone has to fetch: the card is built once with a getter that
+  // only records what it asked for (linesNeed's way), since the default picks
+  // depend on the rows.
+  function groupLinesNeed(tpl, ctx) {
+    if (!GLN[tpl]) return null;
+    let want = null;
+    try {
+      global.Cards.build(tpl, Object.assign({}, ctx || {}, { getGroupLines: (need) => { want = need; return null; } }));
+    } catch (e) { want = null; }
+    return want;
+  }
+  // How each measure is one figure for a group, in words for the note.
+  const GLN_HOW = {
+    rev: 'the sum of its companies’ trailing twelve months of revenue', gp: 'the sum of its companies’ trailing twelve months of gross profit',
+    oi: 'the sum of its companies’ trailing twelve months of operating income', ni: 'the sum of its companies’ trailing twelve months of net income, losses included',
+    fcf: 'the sum of its companies’ trailing twelve months of free cash flow', cap: 'the sum of its companies’ market value at each quarter end',
+    gm: 'its companies’ summed gross profit over their summed revenue', om: 'its companies’ summed operating income over their summed revenue',
+    pm: 'its companies’ summed net income over their summed revenue', fm: 'its companies’ summed free cash flow over their summed revenue',
+    pe: 'its companies’ summed market value over their summed net income (none where that is not positive)',
+    ps: 'its companies’ summed market value over their summed revenue',
+    rg: 'its companies’ summed revenue against the same companies’ revenue a year earlier',
+    px: 'the equal-weight average of its companies’ returns since the first quarter end, price only',
+  };
+  function tplGroupLines(tpl) {
+    const T = GLN[tpl], G = T.G, p = T.p;
+    const PT = (typeof globalThis !== 'undefined' && globalThis.PeerTrend) || null;
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!PT || !PT.LINE_METRICS) return shell('Nothing to chart', 'Lines', 'not available here');
+    const mk = lineMetric(O[p + 'Metric']);
+    const f = LINE_FLAGS[mk] || {};
+    const win = lineWin(mk, O[p + 'Win']);
+    const mLabel = (PT.LINE_METRICS.find((m) => m[0] === mk) || [])[1] || mk;
+    const all = groupList(stocks, 'All', G);
+    if (!all.length) return shell(G.Many, mLabel, 'nothing to draw', 'No ' + G.many + ' on the screen yet.');
+    const picks = glnPicks(tpl, O, all);
+    const label = G.Many;
+    const kick = G.Many + ' · ' + picks.length + ' shown';
+    const daily = mk === 'vol' || win[1] === 'd';
+    const vals = {}, used = {};
+    let xs, winLabel, data = null;
+    if (daily) {
+      const cw = cwOf(win[0]);
+      winLabel = cw[1];
+      const pre = mk === 'vol' ? VOL_PRE : 0;
+      const d = getBasket(cw[0] + pre);
+      if (!d || !d.dates || !d.dates.length) return shell('Reading the archive', 'Drawing', 'the lines…');
+      const i0 = mk === 'vol' ? (cw[2] === 'ytd' ? winStart(cw, d.dates) : Math.max(0, d.dates.length - cw[0])) : winStart(cw, d.dates);
+      if (d.dates.length - i0 < 2) return shell(label, mLabel, 'this year', 'The year has not opened yet — there is no session since 31 December to chart.');
+      xs = d.dates.slice(i0);
+      const RC = (typeof globalThis !== 'undefined' && globalThis.RowCard) || null;
+      if (mk === 'vol' && (!RC || !RC.volSeries)) return shell('Nothing to chart', 'Volatility', 'not available here');
+      const from = mk === 'vol' ? 0 : i0;
+      for (const name of picks) {
+        const members = stocks.filter((r) => r && !r.error && !isFundRow(r) && !IS_BENCH.has(r.symbol) && inGroup(r, G.field, name));
+        // Each member against its own first close in the span read; members
+        // with no close there are left out, and a missing day carries the last.
+        const S = members.map((r) => (d.series || {})[r.symbol]).filter((x) => x && x[from] != null && Number(x[from]) > 0);
+        used[name] = [S.length, members.length];
+        if (S.length < GLN_MIN) continue;
+        const last = S.map((x) => Number(x[from]));
+        const base = last.slice();
+        const avg = [];
+        for (let t = from; t < d.dates.length; t++) {
+          let sum = 0;
+          S.forEach((x, k) => { const v = x[t]; if (v != null && Number(v) > 0) last[k] = Number(v); sum += last[k] / base[k]; });
+          avg.push(sum / S.length);
+        }
+        if (mk === 'vol') {
+          const v = RC.volSeries(avg, VOL_PRE).slice(i0);
+          if (v[0] == null) continue;
+          vals[name] = v.map((x) => (x == null ? null : Math.round(x * 100) / 100));
+        } else vals[name] = avg.map((x) => Math.round((x - 1) * 10000) / 100);
+      }
+    } else {
+      winLabel = win[3];
+      data = getGroupLines({ dim: G.field, names: picks, nq: win[2], m: mk });
+      if (!data || !Array.isArray(data.quarters)) return shell('Reading the filings', 'Drawing', 'the lines…');
+      xs = data.quarters;
+      for (const g of data.groups || []) { used[g.name] = [g.used, g.of]; if (g.values) vals[g.name] = g.values; }
+    }
+    // The coverage, said once for all the groups shown: companies with a figure
+    // in every point drawn, out of the companies in them.
+    const u = picks.reduce((a, n) => (used[n] ? [a[0] + used[n][0], a[1] + used[n][1]] : a), [0, 0]);
+    const thin = picks.filter((n) => !vals[n]);
+    const how = daily
+      ? (mk === 'vol' ? 'Each line is the 30-day volatility of the ' + G.one + '’s equal-weight average price: each point the last thirty sessions’ daily moves of that average, annualised. '
+        : 'Each line is the equal-weight average of the ' + G.one + '’s companies’ prices, each rebased to the first close of the window, so the gap between two lines is the difference in their returns. ')
+      : 'Each line is ' + (GLN_HOW[mk] || 'the ' + G.one + '’s figure') + (mk === 'px' ? '. One point per quarter end. ' : ', from the filings. ');
+    const note = 'Built from ' + u[0].toLocaleString('en-US') + ' of the ' + u[1].toLocaleString('en-US') + ' companies in the ' + G.many + ' shown'
+      + (daily ? ' (those priced at the start of the window). ' : ', those with a figure in every quarter drawn. ')
+      + (thin.length ? thin.slice(0, 2).join(', ') + (thin.length > 2 ? ' and ' + (thin.length - 2) + ' more' : '') + (thin.length === 1 ? ' has' : ' have') + ' too few companies with figures to draw. ' : '')
+      + (data && data.lenderOut ? 'Lenders are left out: this measure means nothing for one. ' : '')
+      + 'Funds are not counted. ';
+    return linesCore({ PT, shell, mk, f, win, mLabel, pick: picks.map((n) => ({ symbol: n, name: n, shortName: n })), out: { fin: 0, mixed: 0 },
+      scLabel: label, basket: () => null,
+      prebuilt: { xs, vals, daily, winLabel, data },
+      group: { kick, what: how, note, many: G.many } });
   }
 
   // ---- Reel: one stock as a 22-second video (2026-10-19, admin only) -------
@@ -12241,6 +12386,8 @@
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     filed: tplFiled,
+    seclines: () => tplGroupLines('seclines'),
+    indlines: () => tplGroupLines('indlines'),
     secmargin: () => marginsCard('secmargin'),
     thmmargin: () => marginsCard('thmmargin'),
     thmrank: tplThmRank,
@@ -14913,6 +15060,9 @@
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
+    groupLinesNeed, groupLinesMax: () => GLN_MAX,
+    // The sectors or industries a group Lines card can draw, largest first.
+    groupNames: (dim, rows) => groupList(rows || [], 'All', GROUPING[dim === 'industry' ? 'industry' : 'sector']),
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
@@ -15056,6 +15206,7 @@
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
       getFiled = c.getFiled || (() => null);
+      getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);

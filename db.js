@@ -475,6 +475,17 @@ const SCHEMA = [
      note      text
    )`,
   `create index if not exists idx_paper_trades_user on paper_trades (user_key, id)`,
+  // Each company's quarterly series for the group Lines cards (2026-10-20,
+  // grouplines.js): trailing-year revenue, gross profit, operating income,
+  // net income and free cash flow, market value and the quarter-end close,
+  // at the quarter ends in `quarters`, as the Long run slice builds them a
+  // slice a night. Derived from the filings and the bars, one row a company.
+  `create table if not exists line_series (
+     symbol   text primary key,
+     at       integer not null,
+     quarters text not null,
+     body     text not null
+   )`,
   `create table if not exists user_themes (
      user_key text not null,
      name     text not null,
@@ -3378,6 +3389,33 @@ async function readLongSlice() {
   try { return JSON.parse(r.rows[0].value); } catch { return null; }
 }
 
+// The group Lines cards' per-company series (line_series): written by the
+// Long run slice, a chunk at a time; read for the members of the groups a card
+// asks for, by primary key.
+async function writeLineSeries(rows) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && Array.isArray(r.quarters) && r.body);
+  if (!list.length) return 0;
+  await db.batch(list.map((r) => ({
+    sql: 'insert or replace into line_series (symbol, at, quarters, body) values (?, ?, ?, ?)',
+    args: [String(r.symbol).toUpperCase(), Number(r.at) || Date.now(), JSON.stringify(r.quarters), JSON.stringify(r.body)],
+  })), 'write');
+  return list.length;
+}
+async function readLineSeries(symbols) {
+  await init();
+  const syms = [...new Set((symbols || []).map((x) => String(x).toUpperCase()))];
+  const out = {};
+  for (let i = 0; i < syms.length; i += 400) {
+    const part = syms.slice(i, i + 400);
+    const r = await db.execute({ sql: 'select symbol, at, quarters, body from line_series where symbol in (' + part.map(() => '?').join(',') + ')', args: part });
+    for (const x of r.rows) {
+      try { out[String(x.symbol)] = { at: Number(x.at), quarters: JSON.parse(x.quarters), body: JSON.parse(x.body) }; } catch (e) { /* a bad row is skipped */ }
+    }
+  }
+  return out;
+}
+
 async function writeLongSlice(obj) {
   await init();
   await db.execute({
@@ -5805,7 +5843,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_tone', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state'];
+  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series'];
 
 // Remove a symbol from the database entirely.
 //
@@ -7957,7 +7995,7 @@ module.exports = {
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
-  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice, readSecDaily, writeSecDaily,
+  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice, readSecDaily, writeSecDaily, writeLineSeries, readLineSeries,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,
