@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Video from images — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* VIDEO FROM IMAGES (2026-10-20, admin only). Everything here is rm-
+       prefixed: an unscoped class has captured later markup nine times. */
+    body { min-height: 100dvh; margin: 0; background: var(--void); color: var(--text); font-family: Geist, system-ui, sans-serif; }
+    .rm-page { max-width: 1240px; margin: 0 auto; padding: 28px 28px 80px; }
+    .rm-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    .rm-top h1 { margin: 0; font-size: 28px; letter-spacing: -0.03em; }
+    .rm-top a { color: var(--muted); font-size: 14px; text-decoration: none; }
+    .rm-top a:hover { color: var(--text); }
+    .rm-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 28px; align-items: start; }
+    @media (max-width: 900px) { .rm-grid { grid-template-columns: minmax(0, 1fr); } }
+    .rm-panel { background: var(--surface); border: 1px solid var(--hair); border-radius: 18px; padding: 20px 22px; }
+    .rm-panel + .rm-panel { margin-top: 16px; }
+    .rm-h { margin: 0 0 12px; font: 600 12px/1 "Geist Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .rm-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+    .rm-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+               min-height: 110px; border: 1.5px dashed var(--hair-2); border-radius: 14px; color: var(--muted);
+               font-size: 14px; text-align: center; padding: 16px; cursor: pointer; }
+    .rm-drop.rm-over { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .rm-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .rm-item { display: grid; grid-template-columns: 30px 64px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+               background: var(--surface-2); border: 1px solid var(--hair); border-radius: 12px; padding: 8px 10px; }
+    .rm-num { font: 600 15px "Geist Mono", monospace; color: var(--faint); text-align: center; }
+    .rm-thumb { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; background: var(--void); }
+    .rm-cap { width: 100%; min-width: 0; box-sizing: border-box; background: var(--void); color: var(--text);
+              border: 1px solid var(--hair-2); border-radius: 8px; padding: 9px 10px; font: 500 14px Geist, sans-serif; }
+    .rm-cap::placeholder { color: var(--faint); }
+    .rm-acts { display: flex; gap: 4px; }
+    .rm-acts button { width: 32px; height: 32px; padding: 0; }
+    .rm-end { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .rm-sw { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px;
+             border: 1px solid var(--hair-2); background: transparent; color: var(--text); font: 500 13px Geist, sans-serif; cursor: pointer; }
+    .rm-sw.rm-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .rm-dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hair-2); }
+    .rm-sw input[type=color] { width: 26px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+    .rm-shapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 560px) { .rm-shapes { grid-template-columns: minmax(0, 1fr); } }
+    .rm-shape { text-align: left; background: var(--surface-2); border: 1px solid var(--hair); border-radius: 12px;
+                padding: 12px 14px; color: var(--text); cursor: pointer; font: inherit; }
+    .rm-shape.rm-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .rm-shape b { display: block; font: 700 18px Geist, sans-serif; }
+    .rm-shape span { display: block; margin-top: 2px; font: 500 12px "Geist Mono", monospace; color: var(--faint); }
+    .rm-shape p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+    .rm-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .rm-row label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+    .rm-row select { background: var(--void); color: var(--text); border: 1px solid var(--hair-2); border-radius: 8px; padding: 8px 10px; font: 500 14px Geist, sans-serif; }
+    .rm-go { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+    .rm-msg { margin: 10px 0 0; font-size: 13px; color: var(--muted); min-height: 1.4em; }
+    .rm-msg.rm-warn { color: var(--amber); }
+    .rm-stagewrap { position: sticky; top: 20px; }
+    /* Sized by the canvas, which is held under 64% of the window so Play and
+       Record stay in view beside a 9:16 preview. */
+    .rm-stage { position: relative; width: fit-content; max-width: 100%; margin: 0 auto; border-radius: 14px; overflow: hidden; background: var(--shade); border: 1px solid var(--hair); }
+    .rm-stage canvas { display: block; max-width: 100%; max-height: 64vh; width: auto; height: auto; }
+    .rm-ov { position: absolute; background: color-mix(in srgb, var(--red) 22%, transparent); pointer-events: none;
+             display: flex; align-items: center; justify-content: center; font: 600 11px "Geist Mono", monospace; color: var(--strong); text-transform: uppercase; letter-spacing: 0.06em; }
+    .rm-scrub { width: 100%; margin-top: 12px; accent-color: var(--accent); }
+    .rm-time { display: flex; justify-content: space-between; font: 500 12px "Geist Mono", monospace; color: var(--faint); }
+    .rm-check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .rm-denied { padding: 60px 20px; text-align: center; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="rm-page">
+    <div class="rm-top">
+      <h1>Video from images</h1>
+      <a href="/promo">&larr; Promo studio</a>
+    </div>
+    <div class="rm-grid" id="rmApp" hidden>
+      <div>
+        <section class="rm-panel">
+          <h2 class="rm-h">1 · Images, up to four</h2>
+          <label class="rm-drop" id="rmDrop">
+            <span>Drop images here, or click to choose</span>
+            <span style="font-size:12px;color:var(--faint)">PNG, JPG or WebP. Promo card downloads work well.</span>
+            <input type="file" id="rmFile" accept="image/png,image/jpeg,image/webp" multiple hidden />
+          </label>
+          <div class="rm-list" id="rmList"></div>
+          <p class="rm-hint">The images stay in this browser: nothing is uploaded or stored. A caption is optional,
+            typed onto the image as it arrives; keep it short, most Reels are watched with the sound off.</p>
+        </section>
+
+        <section class="rm-panel">
+          <h2 class="rm-h">2 · Shape</h2>
+          <div class="rm-shapes" id="rmShapes"></div>
+          <p class="rm-hint">Instagram posts every new video as a Reel. A 9:16 video fills the Reels screen; a 4:5 or
+            square one plays at its own shape in the feed and with space around it in the Reels screen. An image of a
+            different shape sits whole in the middle, over a blurred copy of itself, so nothing is cut off.</p>
+        </section>
+
+        <section class="rm-panel">
+          <h2 class="rm-h">3 · Pace and the end card</h2>
+          <div class="rm-row">
+            <label>Transition
+              <select id="rmTrans">
+                <option value="fade" selected>Crossfade</option>
+                <option value="slide">Slide</option>
+                <option value="zoom">Slow zoom, crossfade</option>
+              </select>
+            </label>
+            <label>Each image on screen
+              <select id="rmPer">
+                <option value="2500">2.5 seconds</option>
+                <option value="3000">3 seconds</option>
+                <option value="4000" selected>4 seconds</option>
+                <option value="5000">5 seconds</option>
+              </select>
+            </label>
+          </div>
+          <h2 class="rm-h" style="margin-top:18px">End card colour</h2>
+          <div class="rm-end" id="rmEnd"></div>
+          <p class="rm-hint">The last slide is the Tickr Lab mark, tickrlab.com and the not-investment-advice line,
+            on the colour picked here. The four named colours are the promo cards' own grounds.</p>
+        </section>
+      </div>
+
+      <div class="rm-stagewrap">
+        <section class="rm-panel">
+          <div class="rm-stage" id="rmStage"><canvas id="rmCv"></canvas></div>
+          <input class="rm-scrub" type="range" id="rmScrub" min="0" max="1000" value="0" />
+          <div class="rm-time"><span id="rmAt">0.0 s</span><span id="rmLen"></span></div>
+          <label class="rm-check" id="rmOvWrap"><input type="checkbox" id="rmOv" /> Show where Instagram's own buttons and caption sit</label>
+          <div class="rm-go" style="margin-top:14px">
+            <button class="btn" id="rmPlay" type="button">Play</button>
+            <button class="btn" id="rmRec" type="button">Record video</button>
+          </div>
+          <p class="rm-msg" id="rmMsg">Add at least one image.</p>
+          <p class="rm-hint">Recording runs in real time and saves an MP4 (in Chrome) at 1080 pixels wide. Keep this tab
+            in front while it records. Add music in Instagram when you post.</p>
+        </section>
+      </div>
+    </div>
+    <div class="rm-denied" id="rmDenied" hidden>This tool is for the admin.</div>
+  </div>
+
+  <script src="/filters.js"></script>
+  <script src="/action.js"></script>
+  <script src="/cards.js"></script>
+  <script src="/reel.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const MAX = 4;
+    // What each shape is for, in the page's own words. The pixel sizes come
+    // from Reel.SHAPES, the list the painter draws at.
+    const SHAPE_USE = {
+      story: ['Reel or Story', 'Full screen on a phone. Your profile grid shows the middle 3:4 of it.'],
+      portrait: ['Feed post', 'The tallest shape the feed shows, so it takes the most room as people scroll.'],
+      square: ['Square post', 'Fits every place Instagram shows a post, at the smallest size on screen.'],
+    };
+    // The end card's colours: the promo cards' four grounds, and one picked by hand.
+    const GROUNDS = [['dark', 'Dark'], ['navy', 'Navy'], ['light', 'Light'], ['sky', 'Sky']];
+    const state = { slides: [], shape: 'story', trans: 'fade', per: 4000, ground: 'dark', custom: '#7c3aed', busy: false };
+    let plan = null;
+
+    const msg = (t, warn) => { $('rmMsg').textContent = t; $('rmMsg').className = 'rm-msg' + (warn ? ' rm-warn' : ''); };
+    const shape = () => Reel.SHAPES.find((s) => s.id === state.shape);
+    const inkNow = () => (state.ground === 'custom' ? Reel.customInk(state.custom) : Cards.reelInk(state.ground));
+
+    // ---- images: read locally, decoded once ---------------------------------
+    async function addFiles(files) {
+      const imgs = [...files].filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type));
+      const room = MAX - state.slides.length;
+      if (!imgs.length) { msg('Those are not PNG, JPG or WebP images.', true); return; }
+      for (const f of imgs.slice(0, room)) {
+        try {
+          const bmp = await createImageBitmap(f);
+          state.slides.push({ bmp, url: URL.createObjectURL(f), caption: '' });
+        } catch (e) { msg('Could not read ' + f.name + '.', true); }
+      }
+      if (imgs.length > room) msg('Four images at most: ' + (imgs.length - room) + ' left out.', true);
+      else msg('');
+      paintList(); rebuild();
+    }
+    function paintList() {
+      const L = $('rmList');
+      L.innerHTML = '';
+      state.slides.forEach((s, i) => {
+        const row = document.createElement('div');
+        row.className = 'rm-item';
+        row.innerHTML = '<span class="rm-num"></span><img class="rm-thumb" alt=""><input class="rm-cap" maxlength="90" placeholder="Caption (optional)">'
+          + '<span class="rm-acts"><button class="btn" type="button" title="Earlier">&uarr;</button><button class="btn" type="button" title="Later">&darr;</button><button class="btn" type="button" title="Remove">&times;</button></span>';
+        row.querySelector('.rm-num').textContent = i + 1;
+        row.querySelector('img').src = s.url;
+        const cap = row.querySelector('.rm-cap');
+        cap.value = s.caption;
+        cap.addEventListener('input', () => { s.caption = cap.value; rebuild(true); });
+        const [up, down, del] = row.querySelectorAll('.rm-acts button');
+        up.disabled = i === 0; down.disabled = i === state.slides.length - 1;
+        up.addEventListener('click', () => { move(i, -1); });
+        down.addEventListener('click', () => { move(i, 1); });
+        del.addEventListener('click', () => { URL.revokeObjectURL(s.url); s.bmp.close && s.bmp.close(); state.slides.splice(i, 1); paintList(); rebuild(); });
+        L.appendChild(row);
+      });
+      $('rmDrop').style.display = state.slides.length >= MAX ? 'none' : '';
+    }
+    function move(i, d) {
+      const j = i + d, S = state.slides;
+      if (j < 0 || j >= S.length) return;
+      [S[i], S[j]] = [S[j], S[i]];
+      paintList(); rebuild();
+    }
+
+    // ---- the plan and the preview -------------------------------------------
+    // `keepImages` when only a caption changed: the composed images stand.
+    function rebuild(keepImages) {
+      const sh = shape();
+      const cv = $('rmCv');
+      cv.width = sh.w; cv.height = sh.h;
+      const prev = plan;
+      plan = {
+        w: sh.w, h: sh.h, per: state.per, trans: state.trans, ink: inkNow(),
+        slides: state.slides.map((s, i) => ({
+          canvas: keepImages && prev && prev.slides[i] && prev.slides[i].src === s.bmp && prev.w === sh.w && prev.h === sh.h ? prev.slides[i].canvas : Reel.composeImage(s.bmp, sh.w, sh.h),
+          src: s.bmp, caption: s.caption.trim(),
+        })),
+      };
+      const len = Reel.slidesDuration(plan);
+      $('rmScrub').max = String(len);
+      if (Number($('rmScrub').value) > len) $('rmScrub').value = String(len);
+      $('rmLen').textContent = (len / 1000).toFixed(1) + ' s';
+      $('rmPlay').disabled = $('rmRec').disabled = state.busy || !state.slides.length;
+      $('rmOvWrap').style.display = state.shape === 'story' ? '' : 'none';
+      paintOverlay();
+      showAt(Number($('rmScrub').value));
+    }
+    function showAt(t) {
+      if (!plan) return;
+      Reel.paintSlides($('rmCv').getContext('2d'), plan, t);
+      $('rmAt').textContent = (t / 1000).toFixed(1) + ' s';
+    }
+    // Instagram's own layer over a 9:16 Reel: the header, the caption and
+    // buttons along the foot, the like and share column on the right. Drawn
+    // over the preview only, never into the video.
+    function paintOverlay() {
+      const st = $('rmStage');
+      st.querySelectorAll('.rm-ov').forEach((n) => n.remove());
+      if (state.shape !== 'story' || !$('rmOv').checked) return;
+      const H = 1920, W = 1080;
+      for (const [x, y, w, h, t] of [[0, 0, W, 250, 'Header'], [0, 1560, W, H - 1560, 'Caption and buttons'], [940, 250, W - 940, 1310, '']]) {
+        const d = document.createElement('div');
+        d.className = 'rm-ov';
+        Object.assign(d.style, { left: (x / W * 100) + '%', top: (y / H * 100) + '%', width: (w / W * 100) + '%', height: (h / H * 100) + '%' });
+        d.textContent = t;
+        st.appendChild(d);
+      }
+    }
+
+    // ---- controls -------------------------------------------------------------
+    function paintShapes() {
+      $('rmShapes').innerHTML = '';
+      for (const s of Reel.SHAPES) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'rm-shape' + (state.shape === s.id ? ' rm-on' : '');
+        b.innerHTML = '<b></b><span></span><p></p>';
+        b.querySelector('b').textContent = s.label + ' · ' + SHAPE_USE[s.id][0];
+        b.querySelector('span').textContent = s.w + ' × ' + s.h;
+        b.querySelector('p').textContent = SHAPE_USE[s.id][1];
+        b.addEventListener('click', () => { state.shape = s.id; paintShapes(); rebuild(); });
+        $('rmShapes').appendChild(b);
+      }
+    }
+    function paintEnd() {
+      const E = $('rmEnd');
+      E.innerHTML = '';
+      for (const [id, name] of GROUNDS) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'rm-sw' + (state.ground === id ? ' rm-on' : '');
+        b.innerHTML = '<span class="rm-dot"></span><span></span>';
+        b.querySelector('.rm-dot').style.background = Cards.reelInk(id).ground;
+        b.lastChild.textContent = name;
+        b.addEventListener('click', () => { state.ground = id; paintEnd(); rebuild(true); showEnd(); });
+        E.appendChild(b);
+      }
+      const c = document.createElement('label');
+      c.className = 'rm-sw' + (state.ground === 'custom' ? ' rm-on' : '');
+      c.innerHTML = '<input type="color" aria-label="Pick a colour"><span>Your colour</span>';
+      const inp = c.querySelector('input');
+      inp.value = state.custom;
+      inp.addEventListener('input', () => { state.custom = inp.value; state.ground = 'custom'; paintEnd(); rebuild(true); showEnd(); });
+      inp.addEventListener('click', () => { if (state.ground !== 'custom') { state.ground = 'custom'; paintEnd(); rebuild(true); showEnd(); } });
+      E.appendChild(c);
+    }
+    // After a colour change, show the end card so the choice is visible.
+    function showEnd() {
+      if (!plan || state.busy) return;
+      const t = Reel.slidesDuration(plan) - 200;
+      $('rmScrub').value = String(t);
+      showAt(t);
+    }
+
+    async function go(record) {
+      if (state.busy || !plan || !state.slides.length) return;
+      if (record && !Reel.mime()) { msg('This browser cannot record video. Use Chrome.', true); return; }
+      state.busy = true; rebuild(true);
+      const g = $('rmCv').getContext('2d');
+      const len = Reel.slidesDuration(plan);
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        msg(record ? 'Recording — keep this tab in front for ' + Math.ceil(len / 1000) + ' seconds.' : 'Playing…');
+        const out = await Reel.run($('rmCv'), len, (t) => { Reel.paintSlides(g, plan, t); $('rmScrub').value = String(Math.min(t, len)); $('rmAt').textContent = (Math.min(t, len) / 1000).toFixed(1) + ' s'; }, record);
+        if (out) {
+          const name = 'tickrlab-' + state.slides.length + '-images-' + shape().label.replace(':', 'x') + '.' + out.ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(out.blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          msg('Saved ' + name + ' (' + (out.blob.size / 1e6).toFixed(1) + ' MB' + (out.ext === 'webm' ? '; this browser records WebM, which Instagram does not take — use Chrome for MP4' : '') + ').', out.ext === 'webm');
+        } else msg('Played. Record to save it as a video.');
+      } catch (e) {
+        msg('Could not make the video: ' + (e && e.message ? e.message : e), true);
+      } finally {
+        state.busy = false; rebuild(true);
+      }
+    }
+
+    $('rmFile').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
+    const drop = $('rmDrop');
+    ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('rm-over'); }));
+    ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('rm-over'); }));
+    drop.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+    $('rmTrans').addEventListener('change', (e) => { state.trans = e.target.value; rebuild(true); });
+    $('rmPer').addEventListener('change', (e) => { state.per = Number(e.target.value); rebuild(true); });
+    $('rmScrub').addEventListener('input', (e) => { if (!state.busy) showAt(Number(e.target.value)); });
+    $('rmOv').addEventListener('change', paintOverlay);
+    $('rmPlay').addEventListener('click', () => go(false));
+    $('rmRec').addEventListener('click', () => go(true));
+
+    // The route already refused anyone but the admin; this says so on the page
+    // too, should the file be opened some other way.
+    fetch('/api/me', { cache: 'no-store' }).then((r) => r.json()).catch(() => ({ admin: true })).then((me) => {
+      if (!me || !me.admin) { $('rmDenied').hidden = false; return; }
+      $('rmApp').hidden = false;
+      paintShapes(); paintEnd(); rebuild();
+    });
+  </script>
+</body>
+</html>

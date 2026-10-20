@@ -1189,6 +1189,8 @@
         <p class="hint" id="rlMsg">The card is the reel's cover. Play runs the video in
           the stage; Record saves it as an MP4 (Chrome) at 1080 by 1920. It records in
           real time, about 23 seconds, so keep the tab in front. Add music in Instagram.</p>
+        <p class="hint"><a href="/reelmaker" style="color:var(--accent)">Video from images</a>: up to four of your own images
+          (promo card downloads, say) made into a video with transitions and the Tickr Lab end card.</p>
       </div>
       <!-- Bollinger bands (2026-10-16): one stock in its 20-day band. -->
       <div id="bndBox">
@@ -3197,8 +3199,7 @@
       const M = fr.model;
       if (!M) { reelMsg('Pick a stock on the screen first.', 'warn'); return; }
       if (M.chartPending) { reelMsg('The year of prices is still loading \u2014 try again in a moment.', 'warn'); return; }
-      const mime = record ? raceMime() : '';
-      if (record && !mime) { reelMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      if (record && !Reel.mime()) { reelMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
       reelBusy = true;
       $('rlPlay').disabled = $('rlRec').disabled = true;
       const stage = $('stage');
@@ -3211,28 +3212,10 @@
         stage.innerHTML = '';
         stage.appendChild(cv);
         const g = cv.getContext('2d');
-        Reel.paint(g, M, 0);
-        let rec = null; const chunks = [];
-        if (record) {
-          rec = new MediaRecorder(cv.captureStream(RACE_FPS), { mimeType: mime, videoBitsPerSecond: 10e6 });
-          rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-          rec.start(250);
-        }
         reelMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.round(Reel.DURATION / 1000) + ' seconds.' : 'Playing\u2026');
-        await new Promise((resolve) => {
-          const t0 = performance.now();
-          const step = (now) => {
-            const t = now - t0;
-            Reel.paint(g, M, t);
-            if (t < Reel.DURATION + 400) requestAnimationFrame(step); else resolve();
-          };
-          requestAnimationFrame(step);
-        });
-        if (rec) {
-          await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
-          const type = mime.split(';')[0];
-          const blob = new Blob(chunks, { type });
-          const ext = type === 'video/mp4' ? 'mp4' : 'webm';
+        const out = await Reel.run(cv, Reel.DURATION, (t) => Reel.paint(g, M, t), record);
+        if (out) {
+          const { blob, ext } = out;
           const name = 'reel-' + M.sym.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob); a.download = name;

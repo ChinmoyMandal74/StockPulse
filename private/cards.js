@@ -11596,6 +11596,13 @@
   //
   // The closes are the stock's own history (historyNeed), a year deep.
   const REEL_DAYS = 253;
+  // A card ground's colours as the video painter takes them. Shared with the
+  // admin's Video from images tool (/reelmaker), whose end card is the Reel's.
+  function reelInk(p, tint) {
+    const ink = p.ink;
+    return { ground: p.ground, text: ink('#e9ecf2'), dim: ink('#cfd6e2'), axis: p.axis, grid: p.grid,
+      accent: ink('#7c9cff'), up: p.up, down: p.down, flat: p.flat, tint: tint || p.flat };
+  }
   function reelNeed(tpl, opts) {
     if (tpl !== 'reel') return null;
     return { symbol: (opts && opts.rlSym) || null, days: REEL_DAYS };
@@ -11631,7 +11638,6 @@
     }
     const move = chart && chart.closes.length > 1 ? (chart.closes[chart.closes.length - 1] / chart.closes[0] - 1) * 100 : null;
     if (reelCap) {
-      const ink = pal.ink;
       reelCap.model = {
         sym, name: nm, kick, price: priceStr,
         today: row.todayPct != null && isFinite(row.todayPct) ? pct(row.todayPct, 2) : null,
@@ -11641,8 +11647,7 @@
         ladder: ActionRules.ACTIONS.slice().reverse().map((w) => ({ word: w, color: pal.tints[w] || pal.flat })),
         chart, chartPending: !chart, move: move == null ? null : pct(move), moveUp: move == null ? null : move >= 0,
         date: dateStr().split(' · ')[0],
-        ink: { ground: pal.ground, text: ink('#e9ecf2'), dim: ink('#cfd6e2'), axis: pal.axis, grid: pal.grid,
-          accent: ink('#7c9cff'), up: pal.up, down: pal.down, flat: pal.flat, tint },
+        ink: reelInk(pal, tint),
       };
     }
     const tCls = nm.length > 60 ? ' t4' : nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
@@ -14823,6 +14828,8 @@
     // Takes the TEMPLATE as well as the options, because which control
     // holds the ground depends on which card is being drawn.
     themeClass: (tpl, opts) => themeOf(tpl, opts).cls,
+    // The video painter's colours for a card ground (dark, light, sky, navy).
+    reelInk: (ground) => reelInk(themeOf('reel', { cardTheme: ground })),
     sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
     // The S&P 500 cut as [value, label] pairs, for the studio's pickers.
     spCuts: () => SP_CUTS.map((c) => c.slice()),

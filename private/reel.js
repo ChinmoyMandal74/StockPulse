@@ -73,27 +73,29 @@
   }
 
   // ---- the ground, the grid, the brand ------------------------------------
-  function ground(g, M, t) {
-    const I = M.ink;
+  function ground(g, M, t) { groundOf(g, M.ink, t, W, H); }
+  // Any of the three sizes: the Video from images tool paints its end card
+  // at 4:5 and 1:1 as well as 9:16.
+  function groundOf(g, I, t, w, h) {
     g.globalAlpha = 1;
-    g.fillStyle = I.ground; g.fillRect(0, 0, W, H);
+    g.fillStyle = I.ground; g.fillRect(0, 0, w, h);
     // A slow glow in the accent, drifting, so even a held frame breathes.
-    const gx = 220 + 120 * Math.sin(t / 4200), gy = 520 + 160 * Math.cos(t / 5300);
+    const gx = 220 + 120 * Math.sin(t / 4200), gy = h * 0.27 + 160 * Math.cos(t / 5300);
     const glow = g.createRadialGradient(gx, gy, 0, gx, gy, 900);
     glow.addColorStop(0, I.accent); glow.addColorStop(1, I.ground);
-    g.globalAlpha = 0.10; g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    g.globalAlpha = 0.10; g.fillStyle = glow; g.fillRect(0, 0, w, h);
     // The grid, a chart's own paper.
     g.globalAlpha = 1; g.strokeStyle = I.grid; g.lineWidth = 1;
     g.beginPath();
-    for (let x = 0; x <= W; x += 60) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, H); }
-    for (let y = 0; y <= H; y += 60) { g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); }
+    for (let x = 0; x <= w; x += 60) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); }
+    for (let y = 0; y <= h; y += 60) { g.moveTo(0, y + 0.5); g.lineTo(w, y + 0.5); }
     g.stroke();
     // Fade the grid out towards the foot, where Instagram's caption sits.
-    const foot = g.createLinearGradient(0, H * 0.55, 0, H);
+    const foot = g.createLinearGradient(0, h * 0.55, 0, h);
     // From the ground itself at no opacity: from transparent BLACK, a light
     // ground fades through grey.
     foot.addColorStop(0, clear(I.ground)); foot.addColorStop(1, I.ground);
-    g.fillStyle = foot; g.fillRect(0, H * 0.55, W, H * 0.45);
+    g.fillStyle = foot; g.fillRect(0, h * 0.55, w, h * 0.45);
   }
   // The site's glyph: a line that dips and climbs, with its arrowhead.
   function glyph(g, x, y, s, color, lw) {
@@ -308,22 +310,26 @@
   }
 
   // ---- 5. the end card ----------------------------------------------------
-  function sceneEnd(g, M, t, A) {
-    const I = M.ink;
+  function sceneEnd(g, M, t, A) { endCard(g, M.ink, t, A, W, H, M.date); }
+  // At any of the three sizes, centred on the card. `date` is the day the
+  // readings describe, and is left off when there are none (an image reel).
+  function endCard(g, I, t, A, w, h, date) {
     const p = easeOut(prog(t, 0, 600));
-    const cx = W / 2;
+    const cx = w / 2, cy = h / 2;
     g.globalAlpha = A * p;
-    glyph(g, cx - 80, 560 - (1 - p) * 30, 160, I.accent, 7);
+    glyph(g, cx - 80, cy - 400 - (1 - p) * 30, 160, I.accent, 7);
     font(g, 800, 104, SANS); g.fillStyle = I.text; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-    g.fillText('Tickr Lab', cx, 860);
+    g.fillText('Tickr Lab', cx, cy - 100);
     const p2 = easeOut(prog(t, 350, 500));
     g.globalAlpha = A * p2;
     font(g, 600, 46, MONO); g.fillStyle = I.accent;
-    g.fillText('tickrlab.com', cx, 950);
+    g.fillText('tickrlab.com', cx, cy - 10);
     font(g, 500, 34, SANS); g.fillStyle = I.dim;
-    ['Every stock on the screen, measured', 'the same way after every close.'].forEach((ln, i) => g.fillText(ln, cx, 1060 + i * 48));
-    font(g, 500, 24, MONO); g.fillStyle = I.axis;
-    g.fillText('Readings to the close of ' + (M.date || ''), cx, 1210);
+    ['Every stock on the screen, measured', 'the same way after every close.'].forEach((ln, i) => g.fillText(ln, cx, cy + 100 + i * 48));
+    if (date) {
+      font(g, 500, 24, MONO); g.fillStyle = I.axis;
+      g.fillText('Readings to the close of ' + date, cx, cy + 250);
+    }
     g.textAlign = 'left'; g.globalAlpha = 1;
   }
 
@@ -344,5 +350,183 @@
     g.restore();
   }
 
-  global.Reel = { W, H, DURATION, SCENES, paint, countUp };
+  // ---- VIDEO FROM IMAGES (2026-10-20, admin only, /reelmaker) -------------
+  //
+  // The owner: "a seperate tool only for the admin wherein admin can select
+  // upto 4 images and the app create a video, adds the 5th Tickr Lab mark and
+  // adds all the transitions", then "include all 3 sizes ... Also include the
+  // color for the 5th slide". Up to four images, each held for `per`
+  // milliseconds, a transition into the next, and the Reel's end card last.
+  //
+  // THE THREE SHAPES Instagram takes for a video, all 1080 wide. 9:16 is the
+  // full-screen Reel and Story; 4:5 is the tallest a feed post goes; 1:1 is
+  // the square post. The page explains which is for what.
+  const SHAPES = [
+    { id: 'story', label: '9:16', w: 1080, h: 1920 },
+    { id: 'portrait', label: '4:5', w: 1080, h: 1350 },
+    { id: 'square', label: '1:1', w: 1080, h: 1080 },
+  ];
+  const TRANS_MS = 650, END_MS = 3400, CAP_IN = 300;
+  // Each image composed ONCE onto a canvas of the video's own shape: an image
+  // of another shape sits whole in the middle, over a blurred, darkened copy
+  // of itself filling the frame, so a square card in a 9:16 video has no bars.
+  // Blurring 1080x1920 on every frame would stall the recording; done here it
+  // costs once per image.
+  function composeImage(img, w, h) {
+    const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const g = c.getContext('2d');
+    const iw = img.width || img.naturalWidth, ih = img.height || img.naturalHeight;
+    const cover = Math.max(w / iw, h / ih), contain = Math.min(w / iw, h / ih);
+    const same = Math.abs(iw / ih - w / h) / (w / h) < 0.03;
+    if (same) {
+      g.drawImage(img, (w - iw * cover) / 2, (h - ih * cover) / 2, iw * cover, ih * cover);
+      return c;
+    }
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    g.filter = 'blur(48px) brightness(0.5)';
+    const k = cover * 1.15;
+    g.drawImage(img, (w - iw * k) / 2, (h - ih * k) / 2, iw * k, ih * k);
+    g.filter = 'none';
+    g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = 60; g.shadowOffsetY = 18;
+    g.drawImage(img, (w - iw * contain) / 2, (h - ih * contain) / 2, iw * contain, ih * contain);
+    return c;
+  }
+  // The plan: S = { w, h, per, trans ('fade'|'slide'|'zoom'), ink, slides:
+  // [{ canvas (from composeImage), caption }] }. Its length in milliseconds:
+  const slidesDuration = (S) => S.slides.length * S.per + END_MS;
+  // One caption: white on a dark band, typed in as the image settles. Inside
+  // the 9:16 safe area (clear of Instagram's caption and buttons), and near
+  // the foot on the two feed shapes, which carry no overlay.
+  function caption(g, S, text, t) {
+    if (!text) return;
+    const p = prog(t, CAP_IN, 700);
+    if (p <= 0) return;
+    const maxW = S.w - 2 * L - 60;
+    font(g, 700, 50, SANS);
+    const lines = wrap(g, text, maxW).slice(0, 3);
+    const lh = 64, padX = 30, padY = 24;
+    const boxH = lines.length * lh + padY * 2 - 14;
+    const bottom = S.h === 1920 ? 1530 : S.h - 90;
+    const y0 = bottom - boxH;
+    const boxW = Math.min(S.w - 2 * L, Math.max(...lines.map((l) => g.measureText(l).width)) + padX * 2);
+    const a = easeOut(prog(t, CAP_IN, 350));
+    g.globalAlpha = a * 0.72; g.fillStyle = '#000';
+    rrect(g, L, y0 + (1 - a) * 20, boxW, boxH, 18); g.fill();
+    g.globalAlpha = a; g.fillStyle = '#fff'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    const total = lines.join(' ').length;
+    let left = Math.round(total * p);
+    lines.forEach((ln, i) => {
+      g.fillText(ln.slice(0, Math.max(0, left)), L + padX, y0 + (1 - a) * 20 + padY + 44 + i * lh);
+      left -= ln.length + 1;
+    });
+    g.globalAlpha = 1;
+  }
+  // Item i at its own local time: an image (with its slow zoom when asked) or,
+  // past the last image, the end card on its ground.
+  function item(g, S, i, local) {
+    const n = S.slides.length;
+    if (i >= n) {
+      groundOf(g, S.ink, local, S.w, S.h);
+      endCard(g, S.ink, local, 1, S.w, S.h, null);
+      g.globalAlpha = 0.85;
+      font(g, 500, 22, MONO); g.fillStyle = S.ink.axis; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+      g.fillText('Mechanical readings — not investment advice', S.w / 2, S.h === 1920 ? 1548 : S.h - 60);
+      g.textAlign = 'left'; g.globalAlpha = 1;
+      return;
+    }
+    const sl = S.slides[i];
+    if (S.trans === 'zoom') {
+      // From 100% to 108% over the image's time on screen and its way out.
+      const z = 1 + 0.08 * clamp(local / (S.per + TRANS_MS), 0, 1);
+      g.save(); g.translate(S.w / 2, S.h / 2); g.scale(z, z); g.translate(-S.w / 2, -S.h / 2);
+      g.drawImage(sl.canvas, 0, 0, S.w, S.h); g.restore();
+    } else g.drawImage(sl.canvas, 0, 0, S.w, S.h);
+    caption(g, S, sl.caption, local);
+  }
+  // The frame at t: the current item, and over the last TRANS_MS of its time
+  // the next one coming in -- faded in, or pushed in from the right.
+  function paintSlides(g, S, t) {
+    const n = S.slides.length;
+    t = clamp(t, 0, slidesDuration(S));
+    const i = Math.min(n, Math.floor(t / S.per));
+    const local = t - i * S.per;
+    g.save();
+    g.globalAlpha = 1;
+    g.fillStyle = '#000'; g.fillRect(0, 0, S.w, S.h);
+    const into = i < n ? local - (S.per - TRANS_MS) : -1;
+    if (into <= 0) item(g, S, i, local);
+    else {
+      const p = easeInOut(clamp(into / TRANS_MS, 0, 1));
+      if (S.trans === 'slide') {
+        g.save(); g.translate(-p * S.w, 0); item(g, S, i, local); g.restore();
+        g.save(); g.translate((1 - p) * S.w, 0); item(g, S, i + 1, into - TRANS_MS); g.restore();
+      } else {
+        item(g, S, i, local);
+        // The incoming item drawn whole on its own canvas, then laid over at
+        // p: drawing it straight at partial alpha would let its own layers
+        // (the ground, the grid) show through one another.
+        const off = S._off || (S._off = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(S.w, S.h) : Object.assign(document.createElement('canvas'), { width: S.w, height: S.h }));
+        const og = off.getContext('2d');
+        og.clearRect(0, 0, S.w, S.h);
+        item(og, S, i + 1, into - TRANS_MS);
+        g.globalAlpha = p; g.drawImage(off, 0, 0); g.globalAlpha = 1;
+      }
+    }
+    g.restore();
+  }
+  // A colour picked by hand for the end card: dark or light ink by its
+  // brightness. The accent there is the ink itself, because the site's blue
+  // can vanish on a ground somebody chose (a blue one, say).
+  function customInk(hex) {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex));
+    const [r, gg, b] = m ? [1, 2, 3].map((k) => parseInt(m[k], 16) / 255) : [0, 0, 0];
+    const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const lum = 0.2126 * lin(r) + 0.7152 * lin(gg) + 0.0722 * lin(b);
+    const ground = m ? '#' + m[1] + m[2] + m[3] : '#050505';
+    return lum > 0.4
+      ? { ground, text: '#0d1017', dim: '#2a313c', axis: '#3a4350', grid: 'rgba(13,16,23,0.10)', accent: '#0d1017' }
+      : { ground, text: '#ffffff', dim: '#e9ecf2', axis: '#cfd6e2', grid: 'rgba(255,255,255,0.08)', accent: '#ffffff' };
+  }
+
+  // ---- recording, shared by the Reel and Video from images -----------------
+  // H.264 MP4 where the browser offers it (Chrome does), which is what
+  // Instagram takes; WebM otherwise, and the caller says so.
+  function mime() {
+    if (typeof MediaRecorder === 'undefined') return '';
+    for (const m of ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']) {
+      if (MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return '';
+  }
+  // Play `paintAt(t)` on the canvas in real time for `ms` milliseconds, and
+  // when `record` is set return the recording as { blob, ext }. Real time,
+  // because MediaRecorder records what the canvas shows as it shows it: a
+  // background tab throttles the frames, so the tab has to stay in front.
+  async function run(cv, ms, paintAt, record) {
+    const type = record ? mime() : '';
+    if (record && !type) throw new Error('This browser cannot record video. Use Chrome.');
+    let rec = null; const chunks = [];
+    paintAt(0);
+    if (record) {
+      rec = new MediaRecorder(cv.captureStream(30), { mimeType: type, videoBitsPerSecond: 10e6 });
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.start(250);
+    }
+    await new Promise((resolve) => {
+      const t0 = performance.now();
+      const step = (now) => {
+        const t = now - t0;
+        paintAt(t);
+        if (t < ms + 400) requestAnimationFrame(step); else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+    if (!rec) return null;
+    await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+    const base = type.split(';')[0];
+    return { blob: new Blob(chunks, { type: base }), ext: base === 'video/mp4' ? 'mp4' : 'webm' };
+  }
+
+  global.Reel = { W, H, DURATION, SCENES, paint, countUp,
+    SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run };
 })(typeof window !== 'undefined' ? window : globalThis);

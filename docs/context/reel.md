@@ -39,3 +39,27 @@ In headless Chrome on the stored snapshot (1,281 rows) with closes from the anal
 - No audio. Music is added in Instagram, where licensed tracks live.
 - One storyboard only; further reels (a market week, what the filings say) would reuse the scenes.
 - The phone page cannot record. A saved Reel post opens there as the cover, for the owner only.
+
+## Video from images (`/reelmaker`, 2026-10-20, admin only)
+The owner: "a seperate tool only for the admin wherein admin can select upto 4 images and the app create a video, adds the 5th Tickr Lab mark and adds all the transitions etc", then "include all 3 sizes, There seems to be confusion on what sizes are accepted, Also include the color for the 5th slide".
+
+- **The page** is `private/reelmaker.html`, served at `/reelmaker` to the admin only (the route redirects anyone else, and the page itself says so if opened another way). It is linked from the Reel's box in the studio.
+- **Images** (PNG, JPG, WebP; up to four, a fifth is refused with a message) are decoded in the browser with `createImageBitmap` and **never uploaded or stored**, so there is nothing new on `/privacy`. Each can be reordered, removed, and given an optional caption (90 characters). The caption is typed onto the image on a dark band, inside the 9:16 safe area, or near the foot on the feed shapes.
+- **Three shapes** (`Reel.SHAPES`), each with what it is for written on its button:
+  - **9:16** (1080×1920): Reel or Story. Full screen; the profile grid shows the middle 3:4.
+  - **4:5** (1080×1350): feed post, the tallest shape the feed shows.
+  - **1:1** (1080×1080): square post.
+
+  The page notes that Instagram posts every new video as a Reel, so a 4:5 or square one plays at its shape in the feed and with space around it in the Reels screen. An image of another shape sits whole in the middle over a blurred, darkened copy of itself (`Reel.composeImage`, composed once per image because blurring every frame stalls the recording).
+- **Pace:** crossfade, slide, or slow zoom (100% to 108%, crossfaded), each image 2.5, 3, 4 or 5 seconds, 650 ms transitions, then the end card for 3.4 seconds.
+- **The end card** is the Reel's (`endCard`, now drawn at any of the three sizes), without the readings date, with "Mechanical readings — not investment advice". **Its colour:** the promo cards' four grounds (Dark, Navy, Light, Sky, from `Cards.reelInk`, the same colour set the Reel uses), or any colour picked by hand. A picked colour gets dark or light ink by its brightness (`Reel.customInk`), and its accent is the ink itself, because the site's blue can vanish on a ground somebody chose.
+- **Preview:** a scrubber shows any moment (the painter is a pure function of time), and a tick box shades where Instagram's own header, caption and buttons sit over a 9:16 Reel (preview only, never recorded). Picking an end colour jumps the preview to the end card.
+- **Recording** is `Reel.run`, now shared with the studio's Reel: real time, H.264 MP4 in Chrome, saved as `tickrlab-<n>-images-<shape>.mp4`.
+
+Tested on the page served from disk with real images of three shapes (two 4:5 cards, a 3:2 screenshot, a 9:16 cover):
+- frames from every shape at each image, mid-crossfade, mid-slide and on the end card;
+- all four grounds and two picked colours, yellow (dark ink) and violet (light ink);
+- a fifth image refused;
+- the non-admin view shows the refusal;
+- a 4:5 recording with slides at 3 seconds decodes at 1080×1350, 15.7 s;
+- the studio Reel re-recorded through the shared recorder.

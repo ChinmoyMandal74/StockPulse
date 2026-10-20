@@ -664,7 +664,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1677,6 +1677,14 @@ app.get('/holder/:kind/:id', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'holder:' + String(req.params.kind || '').slice(0, 1) + ':' + String(req.params.id || '').slice(0, 20));
   res.sendFile(path.join(__dirname, 'private', 'holder.html'));
+}));
+
+// Video from images (2026-10-20): the admin's own tool. It works in the
+// browser alone (the images are never uploaded), but the page is the owner's.
+app.get('/reelmaker', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'reelmaker');
+  res.sendFile(path.join(__dirname, 'private', 'reelmaker.html'));
 }));
 
 app.get('/backlog', route(async (req, res) => {
