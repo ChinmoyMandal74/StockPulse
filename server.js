@@ -12576,6 +12576,33 @@ async function secFillFromReports(sym, cik, recent, facts) {
   return added;
 }
 
+// THE TWO READERS OVER ONE COMPANY'S FILING LIST, shared by the weekly
+// rotation (secFetchOne, below) and the daily check (secDailyOne, after the
+// refresh route). Each in its own catch, so a failed write of one costs
+// neither the other nor the caller's own work.
+async function secListReaders(sym, cik, recent) {
+  // EVERY 8-K IN THE LIST, not only the newest results one (events8k.js).
+  // No further request: this is the response already in hand.
+  try {
+    const since = Events8k.sinceDate();
+    await store.writeSecEvents(sym, Events8k.parse(recent, since), since);
+  } catch (e) { /* events ride along */ }
+  // THE 13D AND 13G FILINGS ABOUT THIS COMPANY (holders13.js). The list
+  // names them; who filed and how much is in each filing's own small
+  // document, fetched once and never again. At most HOLDER_DOCS a company a
+  // visit, so a company with a backlog catches up over a few visits.
+  try {
+    const since = Holders13.sinceDate();
+    const got = await Holders13.collect({ cik, recent, since,
+      have: await store.readSecHolderAccns(sym), max: HOLDER_DOCS,
+      getDoc: async (u) => {
+        const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(15000) });
+        return { status: r.status, text: r.ok ? await r.text() : '' };
+      } });
+    if (got.rows.length) await store.writeSecHolders(sym, got.rows, since);
+  } catch (e) { /* holders ride along */ }
+}
+
 async function secFetchOne(symbol) {
   const sym = String(symbol).toUpperCase();
   // Declared OUTSIDE the try: the catch path writes it too, and a `let`
@@ -12622,30 +12649,9 @@ async function secFetchOne(symbol) {
         try { const nr = SecQuality.newestReport(recent); if (nr) await store.setSecLastReport(sym, nr); } catch (e) { /* rides along */ }
         const best = SecFacts.newestResults(sj.filings && sj.filings.recent);
         if (best) lastResults = best.d;
-        // EVERY 8-K IN THE SAME BLOCK, not only the newest results one
-        // (events8k.js). No further request: this is the response already
-        // in hand. Its own catch, so a failed write of events can cost
-        // neither the results date above nor the filings below.
-        try {
-          const since = Events8k.sinceDate();
-          await store.writeSecEvents(sym, Events8k.parse(sj.filings && sj.filings.recent, since), since);
-        } catch (e) { /* events ride along */ }
-        // THE 13D AND 13G FILINGS ABOUT THIS COMPANY (holders13.js). The
-        // list above names them; who filed and how much is in each
-        // filing's own small document, fetched once and never again. At
-        // most HOLDER_DOCS a company a run, so a company with a backlog
-        // catches up over a few rotations rather than holding this one.
-        // Its own catch, for the events' reason.
-        try {
-          const since = Holders13.sinceDate();
-          const got = await Holders13.collect({ cik, recent: sj.filings && sj.filings.recent, since,
-            have: await store.readSecHolderAccns(sym), max: HOLDER_DOCS,
-            getDoc: async (u) => {
-              const r = await fetch(u, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(15000) });
-              return { status: r.status, text: r.ok ? await r.text() : '' };
-            } });
-          if (got.rows.length) await store.writeSecHolders(sym, got.rows, since);
-        } catch (e) { /* holders ride along */ }
+        // The 8-Ks and the 13D/13G filings, from the list in hand (shared
+        // with the daily check, secDailyOne).
+        await secListReaders(sym, cik, sj.filings && sj.filings.recent);
         // WHERE THE REVENUE COMES FROM (segments.js): any annual or quarterly
         // report filed since the last one read, AT MOST TWO A VISIT, oldest
         // first so the next visit carries on from there. A company never
@@ -12817,6 +12823,55 @@ app.post('/api/sec/refresh', route(async (req, res) => {
     ok: results.filter((x) => x.status === 'ok').length,
     results,
   });
+}));
+
+// ---- NEXT-DAY 8-Ks AND 13D/13G FILINGS (2026-10-20; secdaily.js) ----------
+//
+// The owner: "focus on the next-day freshness for 13D/13G and 8-Ks". The
+// rotation above re-reads each company once a week, which is right for its
+// 1-5MB of statements and slow for a filing a reader wants the next day. So
+// each morning this reads the SEC's index of the previous business day's
+// filings (one file, about 0.3MB), keeps the 8-K, 13D and 13G lines naming a
+// company we track, and re-reads only those companies' filing lists through
+// secListReaders: the same two readers, no statements.
+//
+// ONE BOUNDED STEP A CALL (SecDaily.step), the refresh route's shape: up to
+// SEC_DAILY_DATES index days are read when nothing is queued, then up to
+// SEC_DAILY_N companies are re-read. The nightly loops it until `done`. State is one
+// app_meta row (`sec_daily`): the last day read and the queue, as
+// [symbol, cik] pairs so a call never reads sec_state twice. Sequential, the
+// declared SEC_UA, and a 429 stops the call with the queue kept.
+const SecDaily = require('./secdaily.js');
+const SEC_DAILY_DATES = 2, SEC_DAILY_N = 6;
+async function secDailyOne(sym, cik) {
+  const r = await fetch('https://data.sec.gov/submissions/CIK' + String(cik).padStart(10, '0') + '.json', {
+    headers: { 'User-Agent': SEC_UA, Accept: 'application/json' },
+    signal: AbortSignal.timeout(SEC_TIMEOUT_MS),
+  });
+  if (r.status === 429) return { throttled: true };
+  if (!r.ok) return { status: r.status };
+  const sj = await r.json();
+  await secListReaders(sym, cik, (sj.filings && sj.filings.recent) || null);
+  return { ok: true };
+}
+app.post('/api/sec/daily', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!SEC_READY) return res.status(400).json({ error: 'No contact address configured for the SEC.' });
+  const out = await SecDaily.step({
+    today: SecDaily.todayET(), dates: SEC_DAILY_DATES, n: SEC_DAILY_N,
+    readState: () => store.readSecDaily().catch(() => null),
+    writeState: (st) => store.writeSecDaily(st),
+    loadCiks: async () => {
+      const [universe, state] = await Promise.all([store.readUniverse(), store.readSecState()]);
+      return { ciks: SecDaily.cikMap(state, universe), cikOf: (s) => Number(state[s] && state[s].cik) };
+    },
+    fetchIndex: async (d) => {
+      const r = await fetch(SecDaily.indexUrl(d), { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000) });
+      return { status: r.status, text: r.ok ? await r.text() : '' };
+    },
+    readOne: secDailyOne,
+  });
+  res.json(out);
 }));
 
 // WHY IS ONE COMPANY'S NEWEST QUARTER MISSING (2026-10-13; secprobe.js).

@@ -31,3 +31,6 @@ The owner found a third-party API (FilingRail) offering 8-K events and 13F holdi
 An event appears when that company's filings are next re-read by the SEC rotation, not when it is filed. The column and the stock page both say "updated with the filings" rather than implying same-day.
 
 Tests were a scratchpad Node suite (39 checks) plus a dry run of the loader against the live feed. Neither surface was rendered in a browser by the build.
+
+## Next-day freshness (2026-10-20)
+New 8-Ks no longer wait for the weekly rotation: each morning's `sec daily` phase reads the SEC's index of the previous business day and re-reads the filing list of every tracked company that filed an 8-K (or a 13D/13G about it). See `large-holder-filings.md`, "Next-day freshness", and `secdaily.js`.

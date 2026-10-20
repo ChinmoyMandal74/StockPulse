@@ -3345,6 +3345,23 @@ async function readLongRun() {
 // Piotroski), built a slice of companies a night: { at, s: { SYM: { t, pe,
 // dv, cv, f } } }. One value, read and rewritten by each slice; derived, so a
 // rebuild restores it.
+// The daily filings check (secdaily.js): the last index day read, the
+// companies still to re-read, and a short log of the days read. One row.
+async function readSecDaily() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'sec_daily'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeSecDaily(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('sec_daily', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 async function readLongSlice() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'long_slice'");
@@ -7911,7 +7928,7 @@ module.exports = {
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
-  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice,
+  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice, readSecDaily, writeSecDaily,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

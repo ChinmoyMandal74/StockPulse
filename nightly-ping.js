@@ -87,6 +87,9 @@ const SEC_BATCH = 5;
 // It adds about 45 seconds to a run and stays inside what the SEC asks.
 const SEC_MAX_BATCHES = Number(process.env.SEC_MAX_BATCHES) || 30;
 const SEC_GAP_MS = Number(process.env.NIGHTLY_SEC_GAP_MS) || 1500;
+// The daily filings check: calls a run at most. A normal morning is two or
+// three (one index day, a dozen or two companies at six a call).
+const SEC_DAILY_MAX_CALLS = Number(process.env.SEC_DAILY_MAX_CALLS) || 25;
 // Options open interest, from the Options Clearing Corporation: 25 stocks a
 // call, so the universe is about 52 calls. The cap is a ceiling against a
 // loop that cannot finish, not a pace: the route itself skips a stock it
@@ -309,6 +312,38 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         await sleep(SEC_GAP_MS);
       }
       say(`sec        ${fetched} refetched in ${batches} batch(es) (cap) -- more next run`);
+    }
+
+    // NEXT-DAY 8-Ks AND 13D/13G FILINGS (2026-10-20). One call reads the
+    // SEC's index of the previous business day (and any missed since) and
+    // re-reads the filing lists of the companies it names, a few a call; the
+    // loop runs until the route says done. Non-fatal like the rest: a 404 is
+    // an older server, and a missed run is caught up by the next, since the
+    // route remembers the last day it read.
+    async function secDaily() {
+      let fetched = 0, calls = 0;
+      const days = [];
+      for (; calls < SEC_DAILY_MAX_CALLS; calls += 1) {
+        let r; let text;
+        try {
+          r = await fetch(`${base}/api/sec/daily`, { method: 'POST', signal: AbortSignal.timeout(300000), headers: { Authorization: 'Bearer ' + secret } });
+          text = await r.text();
+        } catch (e) {
+          say(`sec daily  stopped after ${calls} call(s) -- ${e.name === 'TimeoutError' ? 'timed out' : e.message}`);
+          return;
+        }
+        if (r.status === 404) { say('sec daily  skipped -- older server, no route yet'); return; }
+        let j = null; try { j = JSON.parse(text); } catch { /* not json */ }
+        if (!r.ok || !j) { say(`sec daily  stopped after ${calls} call(s) -- HTTP ${r.status} ${String(text).slice(0, 120)}`); return; }
+        fetched += j.fetched || 0;
+        for (const d of j.read || []) days.push(d.holiday ? d.date + ' (holiday)' : `${d.date} (${d.companies} co.)`);
+        if (j.done) {
+          say(`sec daily  through ${j.through} -- ${days.length ? days.join(', ') + '; ' : ''}${fetched} filing list(s) re-read${(j.notes || []).length ? ' -- ' + j.notes.join('; ') : ''}`);
+          return;
+        }
+        await sleep(SEC_GAP_MS);
+      }
+      say(`sec daily  ${fetched} filing list(s) re-read in ${calls} call(s) (cap) -- more next run`);
     }
 
     // FINRA short interest. ONE call, and on most nights it writes nothing:
@@ -565,7 +600,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
-      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
+      for (const [name, fn] of [['sec', secRotate], ['sec daily', secDaily], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
         try {
           await fn();
         } catch (e) {
