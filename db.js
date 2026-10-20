@@ -1133,6 +1133,29 @@ const SCHEMA = [
      error          text
    )`,
   `create index if not exists idx_news_runs_started on news_runs(started_at)`,
+  // The article-tone job's log (2026-10-20): one row a run of
+  // news-tone-load.js, written by the loader on the owner's laptop at the end
+  // of the run, for the /news-runs page. An operational log, kept 90 days.
+  `create table if not exists news_tone_runs (
+     id           integer primary key autoincrement,
+     started_at   integer not null,
+     ended_at     integer,
+     model        text,
+     stocks       integer,
+     feeds_failed integer,
+     found        integer,
+     attempted    integer,
+     scored       integer,
+     skipped      integer,
+     unreadable   integer,
+     failed       integer,
+     spent        real,
+     stop         text,
+     left_over    integer,
+     reasons      text,
+     error        text
+   )`,
+  `create index if not exists idx_news_tone_runs_started on news_tone_runs(started_at)`,
   `create table if not exists news_run_items (
      run_id  integer not null,
      symbol  text not null,
@@ -7459,6 +7482,35 @@ async function newsHoldings() {
 }
 
 // 30 days of batches, 14 of per-symbol detail.
+// The article-tone job's runs. One insert a run; anything over 90 days old
+// goes in the same batch (the owner keeps operational logs pruned).
+const TONE_RUN_KEEP_DAYS = 90;
+async function writeToneRun(r) {
+  await init();
+  await db.batch([
+    { sql: `insert into news_tone_runs (started_at, ended_at, model, stocks, feeds_failed, found, attempted, scored, skipped,
+            unreadable, failed, spent, stop, left_over, reasons, error) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [Number(r.startedAt), r.endedAt == null ? null : Number(r.endedAt), r.model || null, r.stocks ?? null, r.feedsFailed ?? null,
+        r.found ?? null, r.attempted ?? null, r.scored ?? null, r.skipped ?? null, r.unreadable ?? null, r.failed ?? null,
+        r.spent == null ? null : Number(r.spent), r.stop || null, r.left ?? null, r.reasons ? JSON.stringify(r.reasons) : null, r.error || null] },
+    { sql: 'delete from news_tone_runs where started_at < ?', args: [Date.now() - TONE_RUN_KEEP_DAYS * 86400000] },
+  ], 'write');
+}
+async function readToneRuns(sinceMs) {
+  await init();
+  const r = await db.execute({
+    sql: 'select * from news_tone_runs where started_at >= ? order by started_at desc limit 500',
+    args: [Number(sinceMs) || 0],
+  });
+  return r.rows.map((x) => {
+    let reasons = null; try { reasons = x.reasons ? JSON.parse(x.reasons) : null; } catch (e) { reasons = null; }
+    const n = (v) => (v == null ? null : Number(v));
+    return { id: n(x.id), startedAt: n(x.started_at), endedAt: n(x.ended_at), model: x.model || null, stocks: n(x.stocks), feedsFailed: n(x.feeds_failed),
+      found: n(x.found), attempted: n(x.attempted), scored: n(x.scored), skipped: n(x.skipped), unreadable: n(x.unreadable), failed: n(x.failed),
+      spent: n(x.spent), stop: x.stop || null, left: n(x.left_over), reasons, error: x.error || null };
+  });
+}
+
 async function pruneNewsRuns(runDays = 30, itemDays = 14) {
   await init();
   const now = Date.now();
@@ -7995,7 +8047,7 @@ module.exports = {
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,
   readCusipMap, writeFundHolders, readFundHolders,
   writeHolderBooks, clearHolderBooks, readHolderBook, listHolderBooks,
-  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice, readSecDaily, writeSecDaily, writeLineSeries, readLineSeries,
+  readMarginChange, writeMarginChange, readLongRun, writeLongRun, readLongSlice, writeLongSlice, readSecDaily, writeSecDaily, writeToneRun, readToneRuns, writeLineSeries, readLineSeries,
   readEarningsDates,
   barsSpan, coverageRollups,
   knownListings,

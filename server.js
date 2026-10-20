@@ -18245,8 +18245,11 @@ app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const days = Math.min(30, Math.max(1, Number(req.query.days) || 30));
   const now = Date.now();
-  const [runs, state, holdings, portfolios] = await Promise.all([
+  // The article-tone job's runs too (2026-10-20): written by the loader on the
+  // owner's laptop, 90 days of them, for the page's Article tone section.
+  const [runs, state, holdings, portfolios, toneRuns] = await Promise.all([
     store.readNewsRuns(now - days * 86400000), store.readNewsState(), store.newsHoldings(), readPortfolios(),
+    store.readToneRuns(now - 90 * 86400000).catch(() => []),
   ]);
   const universe = await readUniverse();
   const fetched = { day: 0, week: 0, older: 0, never: 0 };
@@ -18260,7 +18263,7 @@ app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
   }
   const emptyFeeds = universe.filter((s) => state[s] && !holdings.perSymbol[s]);
   res.json({
-    runs, now,
+    runs, now, toneRuns,
     health: {
       off: NEWS_OFF, provider: NEWS_PROVIDER_NAME, perRefresh: NEWS_TOPUP_PER_REFRESH,
       ttlHours: NEWS_TTL_MS / 3600000, keepDays: News.KEEP_DAYS, maxPerSymbol: News.MAX_PER_SYMBOL,

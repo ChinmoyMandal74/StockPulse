@@ -72,3 +72,9 @@ After one day of the shadow comparison (882 articles: shown-or-not agreed 94.6%,
 - **Tested:**
   - `newstone-test.js`, 88 checks: the model check moved to Haiku; seven scope checks (a semiconductor outside the index, an S&P member in any industry, case, neither, no holdings file).
   - A dry run of the loader on JPM and AMD: two stocks found, Haiku answered, nothing written.
+
+## The runs on `/news-runs` (2026-10-20, owner: "Is there a page that tracks yahoo news runs like the one we have for google")
+- At the end of every `--commit` run (and when one fails) the loader writes one row to `news_tone_runs` through `store.writeToneRun`: start and end, model, stocks checked, feeds unavailable, articles found, attempted, scored, skipped, unreadable, failed, spend, why it stopped (`done`, `time`, `budget`, `stopped`, `error`), articles left, and the not-read reasons as JSON. A dry run writes nothing. Bookkeeping: a failed write is logged and never fails the run.
+- An operational log, kept 90 days: the prune rides the insert's batch. `readToneRuns(sinceMs)` is a seek on `started_at`, at most 500 rows.
+- `/api/news-runs` carries them as `toneRuns`; the page's **Article tone** section draws the last run, 7- and 30-day spend with cost per article (four decimals: Haiku is about $0.0004), and a row per run. It warns when there has been no run for 8 hours, when the last three all stopped at the 45-minute limit (the backlog is not clearing), and when the last failed or hit the cost cap.
+- Runs before 2026-10-20 evening were backfilled from `news-tone.log` (the timestamped header and the summary line of each run).

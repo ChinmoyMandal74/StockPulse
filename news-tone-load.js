@@ -49,6 +49,16 @@ const MAX_USD = Number(arg('--max-usd')) || 8;
 const MAX_MINUTES = Number(arg('--max-minutes')) || 0;
 const STARTED = Date.now();
 const outOfTime = () => MAX_MINUTES > 0 && Date.now() - STARTED > MAX_MINUTES * 60000;
+// THE RUN'S RECORD for the /news-runs page (2026-10-20, news_tone_runs): what
+// was found, read and spent, and why the run stopped. Written at the end of a
+// --commit run, or when it fails; never on a dry run. Bookkeeping: a failed
+// write is said in the log and never fails the run.
+const RUN = { startedAt: STARTED, model: null, stocks: null, feedsFailed: null, found: null, stop: 'done', left: 0, attempted: 0 };
+async function recordRun(extra) {
+  if (!COMMIT) return;
+  try { await store.writeToneRun(Object.assign({}, RUN, { endedAt: Date.now() }, extra || {})); }
+  catch (e) { console.log('  (the run could not be recorded for /news-runs: ' + String(e.message).slice(0, 80) + ')'); }
+}
 const MODEL = process.env.NEWS_TONE_MODEL || NewsTone.MODEL;
 // Per token, in and out, by model (published rates, 2026-10-19). Haiku 5.5's
 // is its rate for a prompt of 100K tokens or fewer, which an article always is.
@@ -269,6 +279,7 @@ async function shadowBackfill(stocks) {
   // Newest first across all stocks, so a run cut short by the budget has
   // covered the most recent news everywhere rather than one stock in depth.
   todo.sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
+  Object.assign(RUN, { model: MODEL, stocks: stocks.length, feedsFailed: feedFail, found: todo.length });
   if (LIMIT) todo = todo.slice(0, LIMIT);
   // The run's start time, so the log says WHEN each run spent what it spent.
   console.log(`[${new Date().toISOString()}] ${stocks.length} stocks, the semiconductor industries and the S&P 500 (${feedFail} feeds unavailable), ${todo.length} articles to read from the last ${DAYS} days; `
@@ -291,8 +302,9 @@ async function shadowBackfill(stocks) {
 
   for (let i = 0; i < todo.length; i++) {
     const h = todo[i];
-    if (spent >= MAX_USD) { console.log(`Stopping: $${spent.toFixed(2)} spent, the --max-usd ceiling.`); break; }
-    if (outOfTime()) { console.log(`Stopping: ${MAX_MINUTES} minutes, the --max-minutes budget; ${todo.length - i} articles left for the next run.`); break; }
+    if (spent >= MAX_USD) { console.log(`Stopping: $${spent.toFixed(2)} spent, the --max-usd ceiling.`); Object.assign(RUN, { stop: 'budget', left: todo.length - i }); break; }
+    if (outOfTime()) { console.log(`Stopping: ${MAX_MINUTES} minutes, the --max-minutes budget; ${todo.length - i} articles left for the next run.`); Object.assign(RUN, { stop: 'time', left: todo.length - i }); break; }
+    RUN.attempted = i + 1;
     try {
       const page = await readPage(h.url);
       if (!page.text) { await write(h, { status: page.status, reason: page.reason, host: page.host, chars: page.chars }); continue; }
@@ -332,7 +344,7 @@ async function shadowBackfill(stocks) {
           + `\n    ${String(h.headline).slice(0, 110)}\n    ${a.summary || '(summary withheld)'}`);
       }
     } catch (err) {
-      if (err instanceof Stop) { console.log(err.message); break; }
+      if (err instanceof Stop) { console.log(err.message); Object.assign(RUN, { stop: 'stopped', left: todo.length - i, error: String(err.message).slice(0, 200) }); break; }
       await write(h, { status: 'failed', reason: String(err.cause && err.cause.code || err.message).slice(0, 80) }).catch(() => {});
     }
     if ((i + 1) % 25 === 0) console.log(`  ${i + 1}/${todo.length} -- ${tally.scored} scored, ${tally.unreadable} unreadable, ${tally.failed} failed, $${spent.toFixed(2)}, ${((Date.now() - t0) / 60000).toFixed(1)} min`);
@@ -340,5 +352,10 @@ async function shadowBackfill(stocks) {
   console.log(`\n${tally.scored} scored, ${tally.skipped} skipped (company not named), ${tally.unreadable} unreadable, ${tally.failed} failed; $${spent.toFixed(2)} spent; ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   for (const [k, n] of Object.entries(why).sort((a, b) => b[1] - a[1])) console.log(`  ${n} x ${k}`);
   if (SHADOW) console.log(`  shadow ${SHADOW}: ${shadowN} read, ${shadowFail} failed, $${shadowSpent.toFixed(3)} spent (main ${MODEL}: $${spent.toFixed(3)})`);
+  await recordRun({ scored: tally.scored, skipped: tally.skipped, unreadable: tally.unreadable, failed: tally.failed, spent, reasons: why });
   if (!COMMIT) console.log('DRY RUN: nothing written. Re-run with --commit.');
-})().catch((e) => { console.error('FAILED:', e.message); process.exitCode = 1; });
+})().catch(async (e) => {
+  console.error('FAILED:', e.message);
+  process.exitCode = 1;
+  await recordRun({ stop: 'error', error: String(e.message).slice(0, 200) });
+});
