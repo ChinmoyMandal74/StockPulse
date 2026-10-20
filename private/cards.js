@@ -1861,6 +1861,8 @@
     // inks) and leaves the chart's space empty, so the studio can paint the
     // card's frame once and animate the lines over it. Unset, nothing changes.
     let raceCap = null;
+    // The Reel's hook (2026-10-19): tplReel leaves every number it would paint here.
+    let reelCap = null;
     // THE CHART FILLS ITS CARD (2026-10-16, the owner, over a Race chart with a
     // gap above the kicker and another above the footer). The body centres its
     // content, so a fixed chart height left the spare room split in two. The
@@ -3681,6 +3683,66 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // THE SPOTLIGHT'S TWELVE FIGURES, as text and a colour class, shared by the
+  // Overview card and the Reel (2026-10-19) so the two cannot print one
+  // number two ways.
+  function spotFigures(row) {
+    const pe = thirdReader('fpe');
+    const peTxt = pe.txt(row);
+    const CELLS = [
+      ['1 week', row.oneWeekPct, 'ret'],
+      ['1 month', row.oneMonthPct, 'ret'],
+      ['3 months', row.threeMonthPct, 'ret'],
+      ['1 year', row.oneYearPct, 'ret'],
+      // WHERE IT STANDS. These two are LEVELS, not changes, which is why
+      // they take the sign and NOT the colour: "from the high" is always
+      // negative and "from the low" always positive, so green and red here
+      // would read as good and bad when -1.1% off the high is excellent and
+      // +61.5% off the low says nothing on its own. The margin rule, one
+      // step further — a margin drops the sign because zero is not a
+      // boundary it crosses; these keep it because the sign IS the label's
+      // direction.
+      ['From 52w high', row.pctFromHigh, 'lvl'],
+      ['From 52w low', row.pctFromLow, 'lvl'],
+      // RSI is an INDEX, not a percentage, so no % and no sign. Deliberately
+      // uncoloured: 70 and 30 mean overbought and oversold, but that is a
+      // reading this card does not otherwise make and the verdict below
+      // already carries it. The stock page paints RSI violet; violet is not
+      // in play here and spending it on one cell would make it mean
+      // something new on this surface alone.
+      ['RSI', row.rsi, 'idx'],
+      // ...and this one IS a direction, so it takes the colour: above the
+      // 200-day is the trend gate every rule set reads first.
+      ['vs 200-day', row.vs200ma, 'ret'],
+      ['Market cap', row.marketCap, 'cap'],
+      ['Fwd P/E', peTxt, 'raw'],
+      ['Revenue growth', row.revenueGrowthYoY, 'ret'],
+      ['Profit margin', row.profitMargin, 'margin'],
+    ];
+    const cell = (label, v, kind) => {
+      let txt = '\u2014', cls = '';
+      if (kind === 'raw') txt = v == null ? '\u2014' : String(v);
+      else if (kind === 'cap') txt = v != null && isFinite(v) ? '$' + fmtMoney(v) : '\u2014';
+      else if (kind === 'lvl') txt = pct(v);            // sign, no colour
+      else if (kind === 'idx') {
+        // A null is not a zero: a listing too young for a 200-day average,
+        // or with no stored range, gets a dash rather than a fabricated 0.
+        txt = v == null || !isFinite(v) ? '\u2014' : v.toFixed(1);
+      } else if (kind === 'margin') {
+        // A MARGIN TAKES NO SIGN and a RETURN DOES. "+25.0%" as a profit
+        // margin reads as a change rather than a level; a negative one still
+        // takes the colour, because loss-making is the reading.
+        txt = fmtMetric(v, 'pct');
+        cls = v != null && isFinite(v) && v < 0 ? 'neg' : '';
+      } else {
+        txt = pct(v);
+        cls = v == null || !isFinite(v) ? '' : v >= 0 ? 'pos' : 'neg';
+      }
+      return { label, txt, cls };
+    };
+    return { pe, cells: CELLS.map((c) => cell(c[0], c[1], c[2])) };
+  }
+
   // ---- Stock spotlight: one company, the whole picture --------------------
   //
   // "One card for a single stock" (the owner, 2026-09-30). Three templates
@@ -3820,63 +3882,12 @@
     //
     // Gross margin is meaningless for a lender, so the margin shown is the
     // PROFIT margin — true for a bank and for a manufacturer alike.
-    const pe = thirdReader('fpe');
-    const peTxt = pe.txt(row);
-    const CELLS = [
-      ['1 week', row.oneWeekPct, 'ret'],
-      ['1 month', row.oneMonthPct, 'ret'],
-      ['3 months', row.threeMonthPct, 'ret'],
-      ['1 year', row.oneYearPct, 'ret'],
-      // WHERE IT STANDS. These two are LEVELS, not changes, which is why
-      // they take the sign and NOT the colour: "from the high" is always
-      // negative and "from the low" always positive, so green and red here
-      // would read as good and bad when -1.1% off the high is excellent and
-      // +61.5% off the low says nothing on its own. The margin rule, one
-      // step further — a margin drops the sign because zero is not a
-      // boundary it crosses; these keep it because the sign IS the label's
-      // direction.
-      ['From 52w high', row.pctFromHigh, 'lvl'],
-      ['From 52w low', row.pctFromLow, 'lvl'],
-      // RSI is an INDEX, not a percentage, so no % and no sign. Deliberately
-      // uncoloured: 70 and 30 mean overbought and oversold, but that is a
-      // reading this card does not otherwise make and the verdict below
-      // already carries it. The stock page paints RSI violet; violet is not
-      // in play here and spending it on one cell would make it mean
-      // something new on this surface alone.
-      ['RSI', row.rsi, 'idx'],
-      // ...and this one IS a direction, so it takes the colour: above the
-      // 200-day is the trend gate every rule set reads first.
-      ['vs 200-day', row.vs200ma, 'ret'],
-      ['Market cap', row.marketCap, 'cap'],
-      ['Fwd P/E', peTxt, 'raw'],
-      ['Revenue growth', row.revenueGrowthYoY, 'ret'],
-      ['Profit margin', row.profitMargin, 'margin'],
-    ];
-    const cell = (label, v, kind) => {
-      let txt = '\u2014', cls = '';
-      if (kind === 'raw') txt = v == null ? '\u2014' : String(v);
-      else if (kind === 'cap') txt = v != null && isFinite(v) ? '$' + fmtMoney(v) : '\u2014';
-      else if (kind === 'lvl') txt = pct(v);            // sign, no colour
-      else if (kind === 'idx') {
-        // A null is not a zero: a listing too young for a 200-day average,
-        // or with no stored range, gets a dash rather than a fabricated 0.
-        txt = v == null || !isFinite(v) ? '\u2014' : v.toFixed(1);
-      } else if (kind === 'margin') {
-        // A MARGIN TAKES NO SIGN and a RETURN DOES. "+25.0%" as a profit
-        // margin reads as a change rather than a level; a negative one still
-        // takes the colour, because loss-making is the reading.
-        txt = fmtMetric(v, 'pct');
-        cls = v != null && isFinite(v) && v < 0 ? 'neg' : '';
-      } else {
-        txt = pct(v);
-        cls = v == null || !isFinite(v) ? '' : v >= 0 ? 'pos' : 'neg';
-      }
-      return '<div class="sp-cell"><span class="sp-cl">' + esc(label) + '</span>' +
-        '<span class="sp-cv ' + cls + '">' + esc(txt) + '</span></div>';
-    };
+    const { pe, cells } = spotFigures(row);
+    const cell = (c) => '<div class="sp-cell"><span class="sp-cl">' + esc(c.label) + '</span>' +
+      '<span class="sp-cv ' + c.cls + '">' + esc(c.txt) + '</span></div>';
     const figs = '<div class="sp-block"><div class="sp-head">Returns, position, and the business</div>' +
       '<div class="sp-grid">' +
-      CELLS.map((c) => cell(c[0], c[1], c[2])).join('') + '</div></div>';
+      cells.map(cell).join('') + '</div></div>';
 
     // ---- what the rules read ---------------------------------------------
     // THE VERDICT ALWAYS TRAVELS WITH THE RULE THAT FIRED and with the rule
@@ -10642,7 +10653,7 @@
   // repaints on its reply, /api/m/post reads it. A list kept in a host left the
   // Showcase phone and the What we measure trend stuck on "Reading prices" (2026-10-17).
   function historyNeed(tpl, opts) {
-    return drawdownNeed(tpl, opts) || bandsNeed(tpl, opts) || showcaseNeed(tpl, opts) || readingsNeed(tpl, opts) || stkChartNeed(tpl, opts);
+    return drawdownNeed(tpl, opts) || bandsNeed(tpl, opts) || showcaseNeed(tpl, opts) || readingsNeed(tpl, opts) || stkChartNeed(tpl, opts) || reelNeed(tpl, opts);
   }
   function drawdownNeed(tpl, opts) {
     if (tpl !== 'drawdown') return null;
@@ -11567,6 +11578,98 @@
       scLabel: label, kick: label + ' · ' + row.symbol, basket, single: true });
   }
 
+  // ---- Reel: one stock as a 22-second video (2026-10-19, admin only) -------
+  //
+  // The owner, over a stock-data API's Instagram ad: "Can you help me
+  // creating such marketing videos for instagram reel", then "One stock
+  // storyboard is fine .. I want to see this in action first". Five scenes,
+  // painted by Reel.paint (private/reel.js) on the studio's canvas and
+  // recorded the Race chart's way: an opening line, the stock and its twelve
+  // spotlight figures, the Signal with the rule that fired, a year of its
+  // price, and an end card.
+  //
+  // THIS TEMPLATE IS THE COVER AND THE MODEL. The still card is what a Reel
+  // cover shows (the stock, its Signal and the rule); `reelCap`, when the
+  // studio sets it, receives every number the video paints, already
+  // formatted here, so the video and the card cannot disagree and the
+  // painter does no arithmetic of its own beyond easing.
+  //
+  // The closes are the stock's own history (historyNeed), a year deep.
+  const REEL_DAYS = 253;
+  function reelNeed(tpl, opts) {
+    if (tpl !== 'reel') return null;
+    return { symbol: (opts && opts.rlSym) || null, days: REEL_DAYS };
+  }
+  function tplReel() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const sym = O.rlSym || null;
+    if (!sym) return shell('Reel', 'One stock', 'pick a stock', 'Pick a stock for the reel.');
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell(sym, 'Reel', 'not in the screener', sym + ' is not on the screen today.');
+    const nm = nameOf(row);
+    const kick = [row.sector, row.industry].filter(Boolean).join(' · ') || 'One stock, in full';
+    const priceStr = row.price != null && isFinite(row.price) ? '$' + Number(row.price).toFixed(2) : null;
+    const { cells } = spotFigures(row);
+    // THE VERDICT TRAVELS WITH ITS RULE, as on the spotlight: Balanced only.
+    const a = advScored('Balanced')[sym] || null;
+    const tint = (a && pal.tints[a.action]) || pal.flat;
+    // A year of closes. Null while the history is still on its way: the
+    // studio refuses to play until it lands rather than drawing no chart.
+    const h = getHistory(sym, REEL_DAYS);
+    let chart = null;
+    if (h && Array.isArray(h.dates)) {
+      const dates = [], closes = [];
+      for (let i = 0; i < h.dates.length; i++) {
+        const v = h.closes && h.closes[i] != null ? Number(h.closes[i]) : NaN;
+        if (!(v > 0) || !isFinite(v)) continue;
+        dates.push(String(h.dates[i]).slice(0, 10)); closes.push(v);
+      }
+      chart = { dates, closes };
+    }
+    const move = chart && chart.closes.length > 1 ? (chart.closes[chart.closes.length - 1] / chart.closes[0] - 1) * 100 : null;
+    if (reelCap) {
+      const ink = pal.ink;
+      reelCap.model = {
+        sym, name: nm, kick, price: priceStr,
+        today: row.todayPct != null && isFinite(row.todayPct) ? pct(row.todayPct, 2) : null,
+        todayUp: row.todayPct != null ? row.todayPct >= 0 : null,
+        cells,
+        action: a && a.action ? a.action : null, flag: a && a.action ? (a.flag || '') : '',
+        ladder: ActionRules.ACTIONS.slice().reverse().map((w) => ({ word: w, color: pal.tints[w] || pal.flat })),
+        chart, chartPending: !chart, move: move == null ? null : pct(move), moveUp: move == null ? null : move >= 0,
+        date: dateStr().split(' · ')[0],
+        ink: { ground: pal.ground, text: ink('#e9ecf2'), dim: ink('#cfd6e2'), axis: pal.axis, grid: pal.grid,
+          accent: ink('#7c9cff'), up: pal.up, down: pal.down, flat: pal.flat, tint },
+      };
+    }
+    const tCls = nm.length > 60 ? ' t4' : nm.length > 40 ? ' t3' : nm.length > 28 ? ' t2' : '';
+    const verdict = '<div class="sp-block"><div class="sp-head">What the rules read</div>'
+      + '<div class="sp-verd" style="border-color:' + tint + '33">'
+      + (a && a.action
+        ? (dialPlace(a.action) == null ? '' : '<span class="sp-dial">' + ladderDial(dialPlace(a.action)) + '</span>')
+          + '<span class="sp-vt"><span class="sp-vw" style="color:' + tint + '">' + esc(a.action) + '</span>'
+          + '<span class="sp-vr">' + esc(a.flag || '') + '</span></span>'
+        : '<span class="sp-vw" style="color:var(--muted)">Not scored</span>'
+          + '<span class="sp-vr">Not enough stored history for the rules to reach a reading.</span>')
+      + '<span class="sp-vp">Balanced rules</span></div></div>';
+    return chromeTop()
+      + '<div class="s-body"><div class="rl-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title' + tCls + '">' + esc(nm) + '</h2>'
+      + '<div class="sp-sub">' + esc(sym) + (priceStr ? ' · ' + esc(priceStr) : '')
+      + (move != null ? ' · <span class="' + (move >= 0 ? 'sp-up' : 'sp-dn') + '">' + esc(pct(move)) + ' in a year</span>' : '')
+      + '</div>'
+      + '<div class="rl-wrap"><div class="sp-block"><div class="sp-head">Returns, position, and the business</div><div class="sp-grid">'
+      + cells.map((c) => '<div class="sp-cell"><span class="sp-cl">' + esc(c.label) + '</span><span class="sp-cv ' + c.cls + '">' + esc(c.txt) + '</span></div>').join('')
+      + '</div></div>' + verdict + '</div>'
+      + '<p class="s-sub wide" style="--fs:19px;margin-top:24px">One stock. Every reading. After every close. '
+      + 'The signal is the Balanced rule set’s mechanical reading, with the one rule that fired.</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Month by month: one company's returns, year by month ---------------
   //
   // THE STOCK PAGE'S GRID AS A CARD. One row per year, one column per month,
@@ -12074,6 +12177,7 @@
     secspot: tplSecSpot,
     lines: tplLines,
     stkchart: tplStkChart,
+    reel: tplReel,
     scatter: tplScatter,
     months: tplMonths,
     peertrend: tplPeerTrend,
@@ -13836,6 +13940,16 @@
        alone, and node --check passes every time, because it is valid
        interpolation rather than a syntax error.) */
     .sp-in { height: 100%; display: flex; flex-direction: column; }
+    /* The Reel's cover (2026-10-19): the spotlight's parts, centred on the
+       tall card and set larger, because a Reel cover is read as a thumbnail. */
+    .rl-in { height: 100%; display: flex; flex-direction: column; justify-content: center; }
+    .rl-in .s-title { font-size: 92px; }
+    .rl-in .s-title.t2 { font-size: 70px; } .rl-in .s-title.t3 { font-size: 56px; } .rl-in .s-title.t4 { font-size: 44px; }
+    .rl-in .sp-sub { font-size: 38px; }
+    .rl-wrap { display: flex; flex-direction: column; gap: 44px; margin-top: 56px; }
+    .rl-wrap .sp-grid { grid-template-columns: repeat(3, 1fr); }
+    .rl-wrap .sp-cv { font-size: 44px; }
+    .rl-wrap .sp-cl { font-size: 18px; }
     .sp-wrap { flex: 1; display: flex; flex-direction: column;
                justify-content: space-evenly; gap: 18px; }
     .sp-up { color: var(--green); } .sp-dn { color: var(--red); }
@@ -14786,6 +14900,12 @@
       raceCap = {};
       try { const html = this.build('race', ctx); return { html, model: raceCap.model || null }; }
       finally { raceCap = null; }
+    },
+    // The Reel's model: every figure the video paints, formatted by tplReel.
+    reelFrame(ctx) {
+      reelCap = {};
+      try { const html = this.build('reel', ctx); return { html, model: reelCap.model || null }; }
+      finally { reelCap = null; }
     },
     build(id, ctx) {
       const c = ctx || {};

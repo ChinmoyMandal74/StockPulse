@@ -11685,10 +11685,11 @@ async function savedPosts() {
   postsCache = { at: Date.now(), list };
   return list;
 }
-// What a reader may see of them: a saved Race chart is the owner's alone.
+// What a reader may see of them: a saved Race chart or Reel is the owner's alone.
+const OWNER_ONLY_POSTS = new Set(['race', 'reel']);
 async function postsFor(req) {
   const list = await savedPosts();
-  return (await isAdmin(req)) ? list : list.filter((p) => p.tpl !== 'race');
+  return (await isAdmin(req)) ? list : list.filter((p) => !OWNER_ONLY_POSTS.has(p.tpl));
 }
 
 // NOT /api/posts — the blog owns that, registered higher up, and Express
@@ -11875,7 +11876,8 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   if (!post) return res.status(404).json({ error: 'No such post.' });
   // The Race chart is the owner's ("always for Admin only", 2026-10-16): a
   // saved one is not drawn for anyone else, here or in the studio.
-  if (post.tpl === 'race' && !(await isAdmin(req))) return res.status(404).json({ error: 'No such post.' });
+  // The Reel (2026-10-19) is the owner's on the same terms.
+  if (OWNER_ONLY_POSTS.has(post.tpl) && !(await isAdmin(req))) return res.status(404).json({ error: 'No such post.' });
 
   const snap = await readSnapshot();
   const stocks = ((snap && snap.stocks) || []);

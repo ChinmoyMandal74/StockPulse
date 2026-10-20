@@ -35,6 +35,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `private/glance.js` | The stock page's **At a glance** cards: each topic summed up with a descriptive arrow (never a rating), compared against its industry. Built by `/api/stock`, drawn by the page; `glance-test.js` |
 | `private/filters.js` | The column-filter grammar, defined once (`filterValue`, `screenRows`, `CAP_BANDS`) |
 | `private/cards.js`, `private/cardshot.js` | Promo card templates (global `Cards`) and the one rasteriser |
+| `private/reel.js` | The Reel's painter: one stock as a 22-second 9:16 video, every frame a pure function of the time and `Cards.reelFrame`'s model (admin only) |
 | `private/stock.html`, `compare.html`, `basket.html`, `mobile.html` | `/stock/<SYM>`, `/compare/<A>/<B>`, the group page, the phone page `/m` |
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
@@ -169,7 +170,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Stock, group and comparison pages** — `charts-and-the-stock-page` · `earnings-history-on-the-stock-page` · `similar-stocks` · `against-its-peers` · `growth-and-profitability` (also promo template grouping and split history) · `the-basket-page` · `the-compare-page` · `the-pivot-view` · `consolidated` · `the-phone-page`
 
-**Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts` · `race-chart` (admin-only video)
+**Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts` · `race-chart` (admin-only video) · `reel` (one stock as an Instagram Reel, admin-only video)
 
 **Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
 

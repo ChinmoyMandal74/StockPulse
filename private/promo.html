@@ -1178,6 +1178,18 @@
           filings. A price or volatility can be drawn day by day up to a year;
           a filed figure and a longer price line, one point per quarter end.</p>
       </div>
+      <!-- Reel (2026-10-19, admin only): one stock as a 22-second video. -->
+      <div id="rlBox">
+        <label>Stock</label>
+        <select id="rlSym"></select>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" id="rlPlay" type="button">Play</button>
+          <button class="btn" id="rlRec" type="button">Record the reel</button>
+        </div>
+        <p class="hint" id="rlMsg">The card is the reel's cover. Play runs the video in
+          the stage; Record saves it as an MP4 (Chrome) at 1080 by 1920. It records in
+          real time, about 23 seconds, so keep the tab in front. Add music in Instagram.</p>
+      </div>
       <!-- Bollinger bands (2026-10-16): one stock in its 20-day band. -->
       <div id="bndBox">
         <label>Stock or index fund</label>
@@ -2066,6 +2078,7 @@
   <script src="/rowcard.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
+  <script src="/reel.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -2104,6 +2117,7 @@
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
+      { id: 'reel', name: 'Reel (video)', note: 'One stock as a 22-second 9:16 video for an Instagram Reel: an opening line, its twelve figures, the Signal with its rule, a year of its price, and the end card' },
       { id: 'stkchart', name: 'Chart — any measure', note: 'One company on any measure the Lines card draws — its share price, its volatility, or a figure from its filings — over the time frame you pick' },
       { id: 'bands', name: 'Bollinger bands', note: 'One stock in its 20-day band: the close, the average and two standard deviations either side, with where it sits and how wide the band is' },
       { id: 'drawdown', name: 'Drawdowns', note: 'One stock or index below its own high, over the years — every drawdown, how deep it went and how long it took to come back' },
@@ -2194,6 +2208,7 @@
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
       ['stkchart', 'Chart — any measure', 'sclSym'],
+      ['reel', 'Reel (video)', 'rlSym'],
       ['bands', 'Bollinger bands', 'bndSym'],
       ['instflow', 'Who added, who cut', 'iflSym'],
       ['holders', 'Large holders', 'lhSym'],
@@ -2364,7 +2379,7 @@
     // Which scoped controls belong to which template, for an opened post.
     const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac', fallhigh: 'fall' };
     // The Race chart is the owner's too (2026-10-16: "always for Admin only").
-    const OWNER_ONLY_TPLS = new Set(['announce', 'race', 'showcase']);
+    const OWNER_ONLY_TPLS = new Set(['announce', 'race', 'showcase', 'reel']);
     let canAnnounce = false;
     // ---- member mode ---------------------------------------------------------
     //
@@ -2909,7 +2924,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3171,6 +3186,70 @@
       }
     }
     $('racPlay').addEventListener('click', () => raceRun(false));
+    // ---- the Reel (2026-10-19, admin only) ------------------------------------
+    // Reel.paint draws any frame from the time alone, so playing is a clock and
+    // recording is the Race chart's recorder on the same canvas.
+    let reelBusy = false;
+    const reelMsg = (t, cls) => { const m = $('rlMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+    async function reelRun(record) {
+      if (reelBusy) return;
+      const fr = Cards.reelFrame(cardCtx());
+      const M = fr.model;
+      if (!M) { reelMsg('Pick a stock on the screen first.', 'warn'); return; }
+      if (M.chartPending) { reelMsg('The year of prices is still loading \u2014 try again in a moment.', 'warn'); return; }
+      const mime = record ? raceMime() : '';
+      if (record && !mime) { reelMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      reelBusy = true;
+      $('rlPlay').disabled = $('rlRec').disabled = true;
+      const stage = $('stage');
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const cv = document.createElement('canvas');
+        cv.width = Reel.W; cv.height = Reel.H;
+        cv.style.display = 'block';
+        stage.style.height = Reel.H + 'px';
+        stage.innerHTML = '';
+        stage.appendChild(cv);
+        const g = cv.getContext('2d');
+        Reel.paint(g, M, 0);
+        let rec = null; const chunks = [];
+        if (record) {
+          rec = new MediaRecorder(cv.captureStream(RACE_FPS), { mimeType: mime, videoBitsPerSecond: 10e6 });
+          rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+          rec.start(250);
+        }
+        reelMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.round(Reel.DURATION / 1000) + ' seconds.' : 'Playing\u2026');
+        await new Promise((resolve) => {
+          const t0 = performance.now();
+          const step = (now) => {
+            const t = now - t0;
+            Reel.paint(g, M, t);
+            if (t < Reel.DURATION + 400) requestAnimationFrame(step); else resolve();
+          };
+          requestAnimationFrame(step);
+        });
+        if (rec) {
+          await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+          const type = mime.split(';')[0];
+          const blob = new Blob(chunks, { type });
+          const ext = type === 'video/mp4' ? 'mp4' : 'webm';
+          const name = 'reel-' + M.sym.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          reelMsg('Saved ' + name + ' (' + (blob.size / 1e6).toFixed(1) + ' MB' + (ext === 'webm' ? '; this browser records WebM, which Instagram does not take \u2014 use Chrome for MP4' : '') + ').', ext === 'webm' ? 'warn' : '');
+        } else reelMsg('Played. Record to save it as a video.');
+      } catch (e) {
+        reelMsg('Could not make the video: ' + (e && e.message ? e.message : e), 'warn');
+      } finally {
+        reelBusy = false;
+        $('rlPlay').disabled = $('rlRec').disabled = false;
+        render();
+      }
+    }
+    $('rlPlay').addEventListener('click', () => reelRun(false));
+    $('rlRec').addEventListener('click', () => reelRun(true));
     $('racRec').addEventListener('click', () => raceRun(true));
 
     // Each Industry picker offers only what its Sector picker's choice holds
@@ -3581,6 +3660,7 @@
       $('ddBox').style.display = tpl === 'drawdown' ? 'block' : 'none';
       $('bndBox').style.display = tpl === 'bands' ? 'block' : 'none';
       $('sclBox').style.display = tpl === 'stkchart' ? 'block' : 'none';
+      $('rlBox').style.display = tpl === 'reel' ? 'block' : 'none';
       $('iflBox').style.display = tpl === 'instflow' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
@@ -3761,6 +3841,7 @@
       if (!groupOf(e.target.value)) return;
       tpl = e.target.value;
       if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
+      if (tpl === 'reel') size = SIZES.find((z) => z.id === 'story') || size;
       paintControls();
       render();
     });
@@ -3775,6 +3856,7 @@
       // an avatar is square by definition; the other cards keep whatever
       // shape was already picked
       if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
+      if (tpl === 'reel') size = SIZES.find((z) => z.id === 'story') || size;
       paintControls();
       render();
     });
@@ -4002,6 +4084,7 @@
     $('sclMetric').addEventListener('change', () => { fillStkWindows(); if (tpl === 'stkchart') render(); });
     ['sclSym', 'sclWin'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'stkchart') render(); }));
+    $('rlSym').addEventListener('change', () => { if (tpl === 'reel') render(); });
     // Scatter: both measure lists from the Bars catalogue, grouped as there.
     (function fillScatterControls() {
       for (const id of ['sctX', 'sctY']) {
@@ -4844,6 +4927,8 @@
           if ([...$('bndSym').options].some((o) => o.value === keep)) $('bndSym').value = keep; }
         { const keep = $('sclSym').value; $('sclSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('sclSym').options].some((o) => o.value === keep)) $('sclSym').value = keep; }
+        { const keep = $('rlSym').value; $('rlSym').innerHTML = $('chtSym').innerHTML;
+          $('rlSym').value = [...$('rlSym').options].some((o) => o.value === keep) ? keep : ([...$('rlSym').options].some((o) => o.value === 'NVDA') ? 'NVDA' : $('rlSym').value); }
         // Two pickers from the one list, each keeping its choice across a
         // reload of the rows. The second opens on the SECOND company: a
         // pair that starts as one stock twice is not a comparison.
