@@ -143,6 +143,16 @@
     /* MEMBER MODE (body.mem): the studio as a place to LOOK, not to make a
        post. No shape to choose and nothing to download. */
     body.mem #sizeLab, body.mem #sizeList, body.mem #dlBtn, body.mem #dlMsg { display: none; }
+    body.mem #vidBox { display: none; }
+    #vidBox { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--hair); }
+    #vidList { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+    #vidList .vid-it { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+      font-size: 12.5px; color: var(--text); background: color-mix(in srgb, var(--wash) 4%, transparent);
+      border: 1px solid var(--hair); border-radius: 8px; padding: 6px 6px 6px 8px; }
+    #vidList .vid-n { font: 600 12px var(--mono, monospace); color: var(--faint); }
+    #vidList .vid-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #vidList .vid-acts { display: flex; gap: 3px; }
+    #vidList .vid-acts button { width: 26px; height: 26px; padding: 0; font-size: 12px; }
     /* ...and no colour of card to choose (the owner, 2026-10-12: "end users
        also don't need the option to select the color theme"). The grounds
        exist to match a post to a feed; a member is reading, and reads the
@@ -2012,6 +2022,49 @@
       <button class="btn" id="dlBtn" title="Render this card to a PNG at its exact pixel size">Download PNG</button>
       <p class="hint" id="dlMsg"></p>
 
+      <!-- Video from cards (2026-10-20, admin only): up to four studio cards,
+           each building itself on screen, then the Tickr Lab end card. -->
+      <div id="vidBox">
+        <label>Video from cards</label>
+        <button class="btn" id="vidAdd" type="button">Add this card to the video</button>
+        <div id="vidList"></div>
+        <label>Shape</label>
+        <select id="vidShape">
+          <option value="story">9:16 · Reel or Story (1080 × 1920)</option>
+          <option value="portrait">4:5 · Feed post (1080 × 1350)</option>
+          <option value="square">1:1 · Square post (1080 × 1080)</option>
+        </select>
+        <label>Colour</label>
+        <select id="vidGround">
+          <option value="dark">Dark</option>
+          <option value="navy">Navy</option>
+          <option value="light">Light</option>
+          <option value="sky">Sky</option>
+        </select>
+        <label>Transition</label>
+        <select id="vidTrans">
+          <option value="fade" selected>Crossfade</option>
+          <option value="slide">Slide</option>
+          <option value="zoom">Slow zoom, crossfade</option>
+        </select>
+        <label>Each card on screen</label>
+        <select id="vidPer">
+          <option value="4000">4 seconds</option>
+          <option value="5000" selected>5 seconds</option>
+          <option value="6000">6 seconds</option>
+          <option value="8000">8 seconds</option>
+        </select>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" id="vidPlay" type="button">Play</button>
+          <button class="btn" id="vidRec" type="button">Record video</button>
+        </div>
+        <p class="hint" id="vidMsg">Set up a card above, then add it. Up to four; each is redrawn at the
+          shape and colour chosen here and builds itself on screen (titles slide in, rows arrive one by one,
+          bars grow, charts draw), then the Tickr Lab end card. 9:16 is for Reels and Stories, 4:5 the
+          tallest feed post, 1:1 the square post. Records in real time as an MP4 in Chrome; add music in
+          Instagram. Your own images: <a href="/reelmaker" style="color:var(--accent)">Video from images</a>.</p>
+      </div>
+
       <!-- The same shot, kept rather than downloaded: it becomes a blog draft
            with the picture in the right-hand rail and prompts down the left.
            Admin only — the two routes behind it are requireAdmin, so a member
@@ -2180,6 +2233,8 @@
     // (/promo?tpl=spotlight&sym=MU) still wins: it is read after this.
     let tpl = 'day';
     let size = SIZES[0];
+    // True while a card video plays in the stage (see Video from cards).
+    let vidPlaying = false;
     let stocks = [];
     let loadedAt = null;
     let myLists = {};        // the viewer's own portfolios, for the scope picker
@@ -3232,6 +3287,145 @@
       }
     }
     $('rlPlay').addEventListener('click', () => reelRun(false));
+    // ---- Video from cards (2026-10-20, admin only) -----------------------------
+    // Each queued card is the template and the controls it was added with. At
+    // Play or Record it is built again OFF-SCREEN at the video's shape and
+    // colour, its parts are found from the layout (Reel.cardParts), and it is
+    // shot twice: whole, and with those parts hidden. Reel.cardSlide then
+    // builds it up frame by frame. Its data was read when it was on the stage,
+    // so the second build is from the studio's caches.
+    const VID_MAX = 4;
+    const vidQueue = [];
+    let vidBusy = false;
+    const vidMsg = (t, cls) => { const m = $('vidMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+    const vidSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function paintVidList() {
+      const L = $('vidList');
+      L.innerHTML = '';
+      vidQueue.forEach((q, i) => {
+        const row = document.createElement('div');
+        row.className = 'vid-it';
+        row.innerHTML = '<span class="vid-n"></span><span class="vid-nm"></span><span class="vid-acts"><button class="btn" type="button" title="Earlier">&uarr;</button><button class="btn" type="button" title="Later">&darr;</button><button class="btn" type="button" title="Remove">&times;</button></span>';
+        row.querySelector('.vid-n').textContent = i + 1;
+        row.querySelector('.vid-nm').textContent = q.name;
+        row.querySelector('.vid-nm').title = q.name;
+        const [up, down, del] = row.querySelectorAll('button');
+        up.disabled = i === 0; down.disabled = i === vidQueue.length - 1;
+        up.addEventListener('click', () => { [vidQueue[i - 1], vidQueue[i]] = [vidQueue[i], vidQueue[i - 1]]; paintVidList(); });
+        down.addEventListener('click', () => { [vidQueue[i + 1], vidQueue[i]] = [vidQueue[i], vidQueue[i + 1]]; paintVidList(); });
+        del.addEventListener('click', () => { vidQueue.splice(i, 1); paintVidList(); });
+        L.appendChild(row);
+      });
+      $('vidAdd').disabled = vidBusy || vidQueue.length >= VID_MAX;
+      $('vidPlay').disabled = $('vidRec').disabled = vidBusy || !vidQueue.length;
+    }
+    $('vidAdd').addEventListener('click', () => {
+      if (vidQueue.length >= VID_MAX) return;
+      const t = TPLS.find((x) => x.id === tpl);
+      // innerText, so a title broken over two lines reads as two words.
+      const title = ($('stage').querySelector('.s-title') || {}).innerText || '';
+      // The first card added sets the video's shape and colour to the studio's.
+      if (!vidQueue.length) {
+        $('vidShape').value = size.id;
+        if ([...$('vidGround').options].some((o) => o.value === $('cardTheme').value)) $('vidGround').value = $('cardTheme').value;
+      }
+      vidQueue.push({ tpl, opts: Object.assign(controlOpts(), linkOpts), name: (t ? t.name : tpl) + (title ? ' \u2014 ' + title.replace(/\s+/g, ' ').trim() : '') });
+      paintVidList();
+      vidMsg(vidQueue.length + ' of ' + VID_MAX + ' added.');
+    });
+    // A card still waiting for its data says so in words; those are the ones
+    // worth waiting for.
+    const VID_LOADING = /Reading the archive|Reading prices|still loading|loading\u2026|Drawing<br>/i;
+    let vidHost = null;
+    async function vidCapture(q, shp, ground) {
+      if (!vidHost) {
+        vidHost = document.createElement('div');
+        vidHost.style.cssText = 'position:fixed;left:-20000px;top:0;';
+        document.body.appendChild(vidHost);
+      }
+      const host = vidHost;
+      const opts = Object.assign({}, q.opts, { cardTheme: ground });
+      const z = SIZES.find((x) => x.id === shp.id);
+      const keepTpl = tpl, keepSize = size, keepFill = cardFill;
+      // fillGap and cardCtx read the studio's own tpl and size: set for the
+      // build, put back before anything is awaited after it.
+      const build = (fill) => { tpl = q.tpl; size = z; cardFill = fill || 0; try { return Cards.build(q.tpl, Object.assign(cardCtx(), { opts, size: z })); } finally { tpl = keepTpl; size = keepSize; cardFill = keepFill; } };
+      let html = build(), same = 0;
+      for (let k = 0; k < 30 && (same < 2 || VID_LOADING.test(html)); k++) {
+        await vidSleep(300);
+        const next = build();
+        same = next === html ? same + 1 : 0;
+        html = next;
+      }
+      host.className = 's-art sz-' + z.id;
+      const cls = Cards.themeClass(q.tpl, opts);
+      if (cls) host.classList.add(...cls.split(' '));
+      host.style.height = z.h + 'px';
+      host.innerHTML = '<div class="s-aura"></div><div class="s-in">' + html + '</div>';
+      tpl = q.tpl; size = z;
+      let spare = 0;
+      try { spare = fillGap(host); } finally { tpl = keepTpl; size = keepSize; }
+      if (spare) host.querySelector('.s-in').innerHTML = build(spare);
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const box = host.getBoundingClientRect();
+      const parts = Reel.cardParts(host.querySelector('.s-in'), box);
+      const fontCss = await CardShot.fontCss().catch(() => '');
+      const full = await createImageBitmap(await CardShot.shoot(host, { w: 1080, h: z.h, fontCss, mime: 'image/png' }));
+      const keepVis = parts.map((p) => p.el.style.visibility);
+      parts.forEach((p) => { p.el.style.visibility = 'hidden'; });
+      let bg;
+      try { bg = await createImageBitmap(await CardShot.shoot(host, { w: 1080, h: z.h, fontCss, mime: 'image/png' })); }
+      finally { parts.forEach((p, i) => { p.el.style.visibility = keepVis[i]; }); }
+      return { draw: Reel.cardSlide(bg, full, Reel.cardSchedule(parts)), parts: parts.length };
+    }
+    async function vidRun(record) {
+      if (vidBusy || !vidQueue.length) return;
+      if (record && !Reel.mime()) { vidMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      vidBusy = true; paintVidList();
+      const shp = Reel.SHAPES.find((x) => x.id === $('vidShape').value) || Reel.SHAPES[0];
+      const ground = $('vidGround').value;
+      const stage = $('stage');
+      try {
+        const slides = [];
+        for (let i = 0; i < vidQueue.length; i++) {
+          vidMsg('Preparing card ' + (i + 1) + ' of ' + vidQueue.length + '\u2026');
+          const c = await vidCapture(vidQueue[i], shp, ground);
+          slides.push({ draw: c.draw, caption: '' });
+        }
+        const plan = { w: 1080, h: shp.h, per: Number($('vidPer').value), trans: $('vidTrans').value, ink: Cards.reelInk(ground), slides };
+        const len = Reel.slidesDuration(plan);
+        // The stage takes the video's shape while it plays; render() puts the
+        // card back afterwards.
+        const keepSize = size;
+        size = SIZES.find((x) => x.id === shp.id) || size; fit(); size = keepSize;
+        const cv = document.createElement('canvas');
+        cv.width = plan.w; cv.height = plan.h; cv.style.display = 'block';
+        stage.style.height = plan.h + 'px';
+        stage.innerHTML = '';
+        stage.appendChild(cv);
+        const g = cv.getContext('2d');
+        vidMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.ceil(len / 1000) + ' seconds.' : 'Playing\u2026');
+        vidPlaying = true;
+        let out;
+        try { out = await Reel.run(cv, len, (t) => Reel.paintSlides(g, plan, t), record); } finally { vidPlaying = false; }
+        if (out) {
+          const name = 'tickrlab-cards-' + vidQueue.length + '-' + shp.label.replace(':', 'x') + '.' + out.ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(out.blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          vidMsg('Saved ' + name + ' (' + (out.blob.size / 1e6).toFixed(1) + ' MB' + (out.ext === 'webm' ? '; this browser records WebM, which Instagram does not take \u2014 use Chrome for MP4' : '') + ').', out.ext === 'webm' ? 'warn' : '');
+        } else vidMsg('Played. Record to save it as a video.');
+      } catch (e) {
+        vidMsg('Could not make the video: ' + (e && e.message ? e.message : e), 'warn');
+      } finally {
+        vidBusy = false; paintVidList();
+        render();
+      }
+    }
+    $('vidPlay').addEventListener('click', () => vidRun(false));
+    $('vidRec').addEventListener('click', () => vidRun(true));
+    paintVidList();
     $('rlRec').addEventListener('click', () => reelRun(true));
     $('racRec').addEventListener('click', () => raceRun(true));
 
@@ -3565,6 +3759,9 @@
     }
 
     function render() {
+      // A card video playing in the stage owns it until it ends; a data reply
+      // landing meanwhile would otherwise wipe the canvas mid-recording.
+      if (vidPlaying) return;
       syncStockPickers();
       syncIndustries(false);
       const stage = $('stage');

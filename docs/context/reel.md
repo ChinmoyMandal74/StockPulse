@@ -63,3 +63,19 @@ Tested on the page served from disk with real images of three shapes (two 4:5 ca
 - the non-admin view shows the refusal;
 - a 4:5 recording with slides at 3 seconds decodes at 1080×1350, 15.7 s;
 - the studio Reel re-recorded through the shared recorder.
+
+## Video from cards (the promo studio, 2026-10-20, admin only)
+The owner, after trying Video from images: "It is not adding any dynamic content like the race charts". Offered three ways forward, they chose "A" (any studio card builds itself), "I should have the option to select the size and color".
+
+- **The box** sits under Download PNG in the studio's side panel and is hidden in the member view (`body.mem #vidBox`). **Add this card to the video** queues the card on the stage: its template and every control value it was built with (`controlOpts()` plus `linkOpts`), named by template and title. There are up to four, which can be reordered and removed. The first card added sets the video's shape and colour to the studio's.
+- **Shape** (9:16, 4:5, 1:1, each labelled with its Instagram use) and **Colour** (Dark, Navy, Light, Sky, the card grounds) apply to the whole video. Every queued card is redrawn at that shape and in that colour, whatever it was added with, and the end card takes the same colour. Picked colours are not offered here because a card can only be drawn on its four grounds. **Transition** and **Each card on screen** (4, 5, 6 or 8 seconds) work as on `/reelmaker`.
+- **How a card builds itself** (`Reel.cardParts`, `cardSchedule`, `cardSlide` in `reel.js`). The card is built again off-screen (`vidCapture`: a parked `.s-art` at the video's size, `fillGap` applied). It is rebuilt every 300 ms until two builds agree and no loading words show, because its data was read while it was on the stage. Its parts are found from the layout, with no per-template code:
+  - a chart (an `svg`, `canvas` or `img` wider than 300px) draws left to right;
+  - repeated children (three or more of one tag and class) each arrive in turn: a wide, short one wipes in from the left (so a bar grows with its row), a squarer one pops in;
+  - anything small fades up;
+  - the brand and footer never move.
+
+  The card is shot twice by `CardShot`, whole and with the parts hidden; each frame is the empty card plus each part cut from the whole one. At most 48 parts, staggered so the card is built in about 2.5 seconds. **What cannot move** is a number inside a part: it is pixels, so it arrives with its row and does not count up. The Reel (one stock) is the template that counts.
+- `render()` stands aside while a card video plays (`vidPlaying`), so a data reply landing mid-recording cannot wipe the canvas.
+
+Tested in the real studio (served from disk, APIs mocked from the stored snapshot). Four kinds of card were queued (Movers, the Reel cover for MU, Chart — any measure for NVDA, the Signal board) and the fifth add was disabled. Played at 4:5 Light and 9:16 Dark, with frames sampled during the build: rows wiping in with their bars, cells popping, the chart drawing, the dials arriving. Recorded both, and both MP4s decode (1080×1350 and 1080×1920, 23.8 s). The stage came back afterwards. Video from images was re-run after the shared slide painter changed.

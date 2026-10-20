@@ -392,7 +392,8 @@
     return c;
   }
   // The plan: S = { w, h, per, trans ('fade'|'slide'|'zoom'), ink, slides:
-  // [{ canvas (from composeImage), caption }] }. Its length in milliseconds:
+  // [{ canvas (from composeImage), caption }] }; a slide may instead carry
+  // draw(g, local), a card building itself (cardSlide, below). Its length in milliseconds:
   const slidesDuration = (S) => S.slides.length * S.per + END_MS;
   // One caption: white on a dark band, typed in as the image settles. Inside
   // the 9:16 safe area (clear of Instagram's caption and buttons), and near
@@ -439,8 +440,10 @@
       // From 100% to 108% over the image's time on screen and its way out.
       const z = 1 + 0.08 * clamp(local / (S.per + TRANS_MS), 0, 1);
       g.save(); g.translate(S.w / 2, S.h / 2); g.scale(z, z); g.translate(-S.w / 2, -S.h / 2);
-      g.drawImage(sl.canvas, 0, 0, S.w, S.h); g.restore();
-    } else g.drawImage(sl.canvas, 0, 0, S.w, S.h);
+      if (sl.draw) sl.draw(g, local); else g.drawImage(sl.canvas, 0, 0, S.w, S.h);
+      g.restore();
+    } else if (sl.draw) sl.draw(g, local);
+    else g.drawImage(sl.canvas, 0, 0, S.w, S.h);
     caption(g, S, sl.caption, local);
   }
   // The frame at t: the current item, and over the last TRANS_MS of its time
@@ -488,6 +491,106 @@
       : { ground, text: '#ffffff', dim: '#e9ecf2', axis: '#cfd6e2', grid: 'rgba(255,255,255,0.08)', accent: '#ffffff' };
   }
 
+  // ---- VIDEO FROM CARDS (2026-10-20, admin only, the promo studio) ---------
+  //
+  // The owner, after trying Video from images: "It is not adding any dynamic
+  // content like the race charts". An image is pixels; a card on the stage is
+  // a layout whose parts are known. So any studio card can BUILD ITSELF: its
+  // kicker and title slide in, its rows arrive one after another and wipe in
+  // from the left (so a row's bar grows as it comes), grid cells pop in, and a
+  // chart draws left to right. One rule for every template, no per-card code.
+  //
+  // HOW. The card is drawn twice by the one rasteriser: once whole, and once
+  // with its parts hidden (the empty card: the ground, the brand, the
+  // footer). Each frame is the empty card plus each part cut from the whole
+  // one, placed by its own easing. What cannot move is a number INSIDE a
+  // part: it is already pixels, so it arrives with its row rather than
+  // counting up. The Reel (one stock) is the template that counts.
+  //
+  // cardParts(root, box) finds the parts, in reading order, never nested:
+  //   - an <svg>, <canvas> or <img> wider than 300px is a chart: 'draw';
+  //   - an element whose children repeat (three or more of one tag and
+  //     class: table rows, list rows, grid cells) gives each child as a part,
+  //     'row' when it is wide and short, 'pop' when it is closer to square;
+  //   - anything small (under 140px tall, or with nothing inside) is a block
+  //     that fades up: 'fade';
+  //   - otherwise it is looked inside.
+  // The brand and the footer stay on the empty card, so they never move.
+  // `box` is the artboard's own rectangle; rectangles come back relative to it,
+  // in the artboard's pixels.
+  const PART_CAP = 48;
+  function cardParts(root, box) {
+    const out = [];
+    const rectOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height }; };
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width >= 4 && r.height >= 4 && getComputedStyle(el).visibility !== 'hidden'; };
+    const sig = (el) => el.tagName + '.' + (typeof el.className === 'string' ? el.className : (el.className && el.className.baseVal) || '');
+    const visit = (el, depth) => {
+      for (const c of el.children) {
+        if (out.length >= PART_CAP) return;
+        if (c.matches('.s-top, .s-foot, .s-aura, style, script') || !shown(c)) continue;
+        const r = rectOf(c);
+        const tag = c.tagName.toLowerCase();
+        if (tag === 'svg' || tag === 'canvas' || tag === 'img') { out.push({ el: c, r, kind: r.w > 300 ? 'draw' : 'fade' }); continue; }
+        const kids = [...c.children].filter(shown);
+        const count = {};
+        for (const k of kids) count[sig(k)] = (count[sig(k)] || 0) + 1;
+        const most = kids.length ? Math.max(...Object.values(count)) : 0;
+        if (kids.length >= 3 && most >= 3) {
+          for (const k of kids) {
+            if (out.length >= PART_CAP) break;
+            const kr = rectOf(k);
+            out.push({ el: k, r: kr, kind: kr.w > kr.h * 3 ? 'row' : 'pop' });
+          }
+          continue;
+        }
+        if (!kids.length || depth > 7 || (r.h < 140 && !c.querySelector('svg, canvas, img'))) { out.push({ el: c, r, kind: 'fade' }); continue; }
+        visit(c, depth + 1);
+      }
+    };
+    visit(root, 0);
+    return out;
+  }
+  // How long each kind takes to arrive, and the gap between one part's start
+  // and the next: shorter when there are many, so a forty-row card is still
+  // built within about two and a half seconds.
+  const PART_MS = { fade: 450, row: 520, pop: 420, draw: 1500 };
+  function cardSchedule(parts) {
+    const gap = Math.min(140, 2000 / Math.max(1, parts.length));
+    return parts.map((p, i) => ({ x: p.r.x, y: p.r.y, w: p.r.w, h: p.r.h, kind: p.kind, at: 250 + i * gap }));
+  }
+  // The painter for one card: `bg` the empty card, `full` the whole one, both
+  // at the video's size; `parts` from cardSchedule.
+  function cardSlide(bg, full, parts) {
+    return function (g, local) {
+      g.drawImage(bg, 0, 0);
+      for (const p of parts) {
+        const q = prog(local, p.at, PART_MS[p.kind]);
+        if (q <= 0) continue;
+        const e = easeOut(q);
+        const x = Math.max(0, p.x), y = Math.max(0, p.y), w = Math.max(1, Math.min(p.w, full.width - x)), h = Math.max(1, Math.min(p.h, full.height - y));
+        if (q >= 1) { g.drawImage(full, x, y, w, h, x, y, w, h); continue; }
+        g.save();
+        if (p.kind === 'draw') {
+          const cw = w * easeInOut(q);
+          g.drawImage(full, x, y, cw, h, x, y, cw, h);
+        } else if (p.kind === 'row') {
+          g.globalAlpha = Math.min(1, e * 1.5);
+          const cw = w * e;
+          g.drawImage(full, x, y, cw, h, x, y + (1 - e) * 10, cw, h);
+        } else if (p.kind === 'pop') {
+          g.globalAlpha = e;
+          const k = 0.92 + 0.08 * e;
+          g.translate(x + w / 2, y + h / 2); g.scale(k, k);
+          g.drawImage(full, x, y, w, h, -w / 2, -h / 2, w, h);
+        } else {
+          g.globalAlpha = e;
+          g.drawImage(full, x, y, w, h, x, y + (1 - e) * 26, w, h);
+        }
+        g.restore();
+      }
+    };
+  }
+
   // ---- recording, shared by the Reel and Video from images -----------------
   // H.264 MP4 where the browser offers it (Chrome does), which is what
   // Instagram takes; WebM otherwise, and the caller says so.
@@ -528,5 +631,6 @@
   }
 
   global.Reel = { W, H, DURATION, SCENES, paint, countUp,
-    SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run };
+    SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run,
+    cardParts, cardSchedule, cardSlide };
 })(typeof window !== 'undefined' ? window : globalThis);
