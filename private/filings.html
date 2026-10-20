@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Filings — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- The account watermark every data page carries: members and guests, never the admin. -->
+  <script src="/wmark.js" defer></script>
+  <style>
+    /* The shell is the Holders page's. Everything this page adds is prefixed fl- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 76ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .fl-days { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 4px 12px; }
+    .fl-day { font: 500 12px var(--sans); padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hair);
+              background: none; color: var(--muted); cursor: pointer; }
+    .fl-day.on { color: var(--text); border-color: var(--accent); }
+    .fl-day:disabled { opacity: 0.4; cursor: default; }
+    .fl-when { font: 600 15px var(--sans); color: var(--text); margin-left: 6px; }
+    .fl-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; flex-wrap: wrap; }
+    .fl-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair);
+              background: none; color: var(--muted); cursor: pointer; }
+    .fl-tab.on { color: var(--text); border-color: var(--accent); }
+    .fl-bar select, .fl-bar input[type=search] { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2);
+      border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
+    .fl-bar input[type=search] { flex: 1; min-width: 200px; }
+    .fl-bar input[type=search]::placeholder { color: var(--faint); }
+    .fl-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .fl-count { font-size: 12px; color: var(--faint); font-family: var(--mono); margin: 0 6px 10px; }
+    .fl-sec { margin-top: 22px; }
+    .fl-sec h2 { margin: 0 6px 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .fl-wrap { overflow-x: auto; }
+    .fl-wrap table { width: 100%; border-collapse: collapse; }
+    .fl-wrap th, .fl-wrap td { padding: 10px 16px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; }
+    .fl-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .fl-wrap td.fl-co a { color: var(--text); text-decoration: none; font: 600 12.5px var(--mono); }
+    .fl-wrap td.fl-co a:hover { color: var(--accent); }
+    .fl-wrap td.fl-co span { display: block; color: var(--faint); font-size: 11.5px; margin-top: 2px; }
+    .fl-wrap td.fl-num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+    .fl-wrap th.fl-num { text-align: right; }
+    .fl-form { display: inline-block; font: 600 11px var(--mono); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .fl-form.fl-d { color: var(--text); border-color: var(--muted); }
+    .fl-item { display: inline-block; margin: 0 6px 4px 0; font-size: 12px; padding: 2px 8px; border-radius: 6px;
+               background: color-mix(in srgb, var(--wash) 5%, transparent); color: var(--text); }
+    .fl-item.fl-on { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+    .fl-link { color: var(--accent); text-decoration: none; font-size: 12px; white-space: nowrap; }
+    .fl-link:hover { text-decoration: underline; }
+    .fl-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .fl-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>SEC filings</span>
+      <h1>Filings</h1>
+      <p class="lede">Every filing by a holder crossing 5% of a company (Schedules 13D and 13G) and every company
+        announcement (Form 8-K) about the stocks tracked here, a day at a time. Read each morning from the SEC's
+        index of the previous business day, so the newest day is normally yesterday.</p>
+    </header>
+
+    <div class="fl-days" id="days"></div>
+    <div class="fl-bar">
+      <button class="fl-tab" data-f="all">All</button>
+      <button class="fl-tab" data-f="D">13D</button>
+      <button class="fl-tab" data-f="G">13G</button>
+      <button class="fl-tab" data-f="8K">8-K</button>
+      <label class="fl-check"><input type="checkbox" id="notable" /> Notable 8-Ks only</label>
+      <select id="cut" aria-label="Index">
+        <option value="">All stocks</option>
+        <option value="sp">S&amp;P 500</option>
+        <option value="ndx">Nasdaq 100</option>
+      </select>
+      <select id="sector" aria-label="Sector"><option value="">All sectors</option></select>
+      <input type="search" id="q" placeholder="Ticker, company or holder" aria-label="Find a ticker, company or holder" />
+    </div>
+    <div class="fl-count" id="count"></div>
+
+    <section class="fl-sec" id="secH">
+      <h2>5% holders · Schedules 13D and 13G</h2>
+      <div class="bezel"><div class="core" style="padding:0"><div class="fl-wrap" id="hold"><div class="fl-empty">Reading the filings&hellip;</div></div></div></div>
+    </section>
+    <section class="fl-sec" id="secE">
+      <h2>Company announcements · Form 8-K</h2>
+      <div class="bezel"><div class="core" style="padding:0"><div class="fl-wrap" id="ev"><div class="fl-empty">Reading the filings&hellip;</div></div></div></div>
+    </section>
+
+    <p class="fl-foot">A 13D is filed by a holder who may seek to influence or control the company; a 13G is the
+      short form for a passive one, such as an index fund. "Amended" updates an earlier filing, and "no holding" is
+      an amendment saying the stake has fallen below what must be reported. Joint filers (a fund, its manager and
+      its owner) report one holding several times; it is shown once, at the largest stake stated. An 8-K's items say
+      what kind of event it reports; the ones marked in amber are worth noticing (a bankruptcy, a restatement warning,
+      an auditor change, a listing notice and the like). The filing itself, linked on each row, is where what happened
+      is written. A filing is a record, not a reading of the stock.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const qs = new URLSearchParams(location.search);
+    const state = { date: /^\d{4}-\d{2}-\d{2}$/.test(qs.get('date') || '') ? qs.get('date') : '', form: ['D', 'G', '8K'].includes(qs.get('form')) ? qs.get('form') : 'all' };
+    let data = null, seq = 0;
+
+    // Business days, at noon so no zone moves a date.
+    const addDays = (s, n) => { const d = new Date(s + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const weekday = (s) => { const w = new Date(s + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6; };
+    const step = (s, dir) => { let d = addDays(s, dir); while (!weekday(d)) d = addDays(d, dir); return d; };
+    const todayNY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const short = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const long = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    async function load() {
+      const mine = ++seq;
+      try {
+        const r = await fetch('/api/filings' + (state.date ? '?date=' + encodeURIComponent(state.date) : ''), { cache: 'no-store' });
+        if (mine !== seq) return;
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
+        data = await r.json();
+        if (mine !== seq) return;
+        // The sectors on this day, for the picker.
+        const keep = $('sector').value;
+        const secs = [...new Set(Object.values(data.companies || {}).map((c) => c.sector).filter(Boolean))].sort();
+        $('sector').innerHTML = '<option value="">All sectors</option>' + secs.map((s) => '<option>' + we(s) + '</option>').join('');
+        if (secs.includes(keep)) $('sector').value = keep;
+        paint();
+      } catch (e) {
+        if (mine !== seq) return;
+        $('hold').innerHTML = $('ev').innerHTML = '<div class="fl-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    }
+    function paintDays() {
+      const today = todayNY();
+      const cur = data ? data.date : state.date;
+      const recent = data ? data.days.slice(0, 7) : [];
+      const prev = cur ? step(cur, -1) : null, next = cur ? step(cur, 1) : null;
+      $('days').innerHTML = '<button class="fl-day" data-d="' + we(prev || '') + '"' + (!prev || prev < addDays(today, -45) ? ' disabled' : '') + ' title="The business day before">&larr;</button>'
+        + recent.map((d) => '<button class="fl-day' + (d === cur ? ' on' : '') + '" data-d="' + we(d) + '">' + we(short(d)) + '</button>').join('')
+        + '<button class="fl-day" data-d="' + we(next || '') + '"' + (!next || next >= today ? ' disabled' : '') + ' title="The business day after">&rarr;</button>'
+        + (cur ? '<span class="fl-when">' + we(long(cur)) + '</span>' : '');
+      $('days').querySelectorAll('[data-d]').forEach((b) => b.addEventListener('click', () => {
+        if (!b.dataset.d || b.disabled) return;
+        state.date = b.dataset.d; syncUrl(); load();
+      }));
+    }
+    function paint() {
+      paintDays();
+      document.querySelectorAll('.fl-tab').forEach((b) => b.classList.toggle('on', b.dataset.f === state.form));
+      if (!data) return;
+      const C = data.companies || {};
+      const cut = $('cut').value, sector = $('sector').value, q = $('q').value.trim().toLowerCase(), notable = $('notable').checked;
+      const co = (s) => C[s] || { name: s };
+      const inCut = (s) => (!cut || (cut === 'sp' ? co(s).sp === true : co(s).ndx === true)) && (!sector || co(s).sector === sector);
+      const hit = (s, extra) => !q || s.toLowerCase().includes(q) || String(co(s).name || '').toLowerCase().includes(q) || String(extra || '').toLowerCase().includes(q);
+      const cap = (s) => co(s).cap || 0;
+      const H = data.holders.filter((h) => inCut(h.symbol) && hit(h.symbol, h.holder) && (state.form === 'all' || state.form === h.kind))
+        .sort((a, b) => (a.kind === 'D' ? 0 : 1) - (b.kind === 'D' ? 0 : 1) || cap(b.symbol) - cap(a.symbol));
+      const E = data.events.filter((e) => inCut(e.symbol) && hit(e.symbol, e.label) && (state.form === 'all' || state.form === '8K') && (!notable || e.notable))
+        .sort((a, b) => (b.notable ? 1 : 0) - (a.notable ? 1 : 0) || cap(b.symbol) - cap(a.symbol));
+      const showH = state.form !== '8K', showE = state.form === 'all' || state.form === '8K';
+      $('secH').hidden = !showH; $('secE').hidden = !showE;
+      const companies = new Set([...(showH ? H : []), ...(showE ? E : [])].map((x) => x.symbol)).size;
+      $('count').textContent = (showH ? H.length + ' holder filing' + (H.length === 1 ? '' : 's') + ' · ' : '') + (showE ? E.length + ' 8-K' + (E.length === 1 ? '' : 's') + ' · ' : '') + companies + ' compan' + (companies === 1 ? 'y' : 'ies');
+      const coCell = (s) => '<td class="fl-co"><a href="/stock/' + encodeURIComponent(s) + '">' + we(s) + '</a><span>' + we(co(s).name || '') + '</span></td>';
+      const link = (u) => (u ? '<a class="fl-link" href="' + we(u) + '" target="_blank" rel="noopener">sec.gov &#8599;</a>' : '');
+      const none = 'Nothing of this kind matches on ' + long(data.date) + '.';
+      $('hold').innerHTML = !H.length ? '<div class="fl-empty">' + we(none) + '</div>'
+        : '<table><thead><tr><th>Company</th><th>Holder</th><th>Form</th><th class="fl-num">Stake</th><th>Filing</th></tr></thead><tbody>'
+          + H.map((h) => '<tr>' + coCell(h.symbol) + '<td>' + we(h.holder || 'Not named') + '</td>'
+            + '<td><span class="fl-form' + (h.kind === 'D' ? ' fl-d' : '') + '">' + (h.kind === 'D' ? '13D' : '13G') + (h.amended ? ' amended' : '') + '</span></td>'
+            + '<td class="fl-num">' + we(h.pctWord || '—') + '</td><td>' + link(h.url) + '</td></tr>').join('') + '</tbody></table>';
+      $('ev').innerHTML = !E.length ? '<div class="fl-empty">' + we(none) + '</div>'
+        : '<table><thead><tr><th>Company</th><th>What it reports</th><th>Filing</th></tr></thead><tbody>'
+          + E.map((e) => '<tr>' + coCell(e.symbol) + '<td>'
+            + ((e.items && e.items.length) ? e.items.map((i) => '<span class="fl-item' + (i.notable ? ' fl-on' : '') + '" title="' + we(i.title || '') + '">' + we(i.name) + '</span>').join('') : we(e.label))
+            + '</td><td>' + link(e.url) + '</td></tr>').join('') + '</tbody></table>';
+    }
+    const syncUrl = () => history.replaceState(null, '', '/filings' + (() => { const p = new URLSearchParams(); if (state.date) p.set('date', state.date); if (state.form !== 'all') p.set('form', state.form); const s = p.toString(); return s ? '?' + s : ''; })());
+    document.querySelectorAll('.fl-tab').forEach((b) => b.addEventListener('click', () => { state.form = b.dataset.f; syncUrl(); paint(); }));
+    ['notable', 'cut', 'sector'].forEach((id) => $(id).addEventListener('change', paint));
+    let timer = null;
+    $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(paint, 150); });
+    paint();
+    load();
+  </script>
+</body>
+</html>

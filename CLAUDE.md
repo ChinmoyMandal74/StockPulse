@@ -47,6 +47,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `holders13.js`, `sec-holders-load.js` | Schedule 13D and 13G filings about each company: the reader, and the first fill |
 | `events8k.js`, `sec-events-load.js` | 8-K filings: the item catalogue and parser, and the first fill. The filings refresh keeps them current |
 | `secdaily.js` | Next-day 8-Ks and 13D/13G filings: each morning reads the SEC's daily index and re-reads only the companies named in it (`/api/sec/daily`, the nightly's `sec daily` phase); `secdaily-test.js` |
+| `private/filings.html` | `/filings` (members): every 13D/13G and 8-K about the tracked companies, a day at a time, with filters and sec.gov links (`/api/filings`, the same `filedDayPayload` as the Filed yesterday card) |
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `secprobe.js`, `secinstance.js` | The SEC probe (`/api/sec/probe`, read only): where one company's newest report stops. And the reader for a report the SEC facts feed lacks, taken from the report's own data file |

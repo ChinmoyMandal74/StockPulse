@@ -664,7 +664,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1665,6 +1665,14 @@ app.get('/research', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'research');
   res.sendFile(path.join(__dirname, 'private', 'research.html'));
+}));
+// Every 13D/13G and 8-K about the tracked companies, a day at a time
+// (2026-10-20). Members, as /holders is.
+app.get('/filings', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'filings');
+  res.sendFile(path.join(__dirname, 'private', 'filings.html'));
 }));
 app.get('/holders', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
@@ -14882,7 +14890,7 @@ app.get('/api/holders', requireAuth, route(async (req, res) => {
 // Labels are made here (Events8k, Holders13) because cards.js has no
 // requires. DISPLAY ONLY: a filing is a record, not a reading.
 const FILED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-async function filedDayPayload(asked, guest) {
+async function filedDayPayload(asked, guest, withCompanies) {
   const st = await store.readSecDaily().catch(() => null);
   const today = SecDaily.todayET();
   const days = [];
@@ -14894,7 +14902,7 @@ async function filedDayPayload(asked, guest) {
   }
   days.sort().reverse();
   const date = FILED_DATE_RE.test(String(asked || '')) && asked < today && asked >= SecDaily.addDays(today, -45) ? asked : days[0];
-  const [hold, ev] = await Promise.all([store.readSecHoldersSince(date), store.readSecEventsSince(date)]);
+  const [hold, ev, ids] = await Promise.all([store.readSecHoldersSince(date), store.readSecEventsSince(date), filerIds().catch(() => ({}))]);
   const keep = (s) => !guest || guestSet.has(s);
   // One line per holder and stake: a joint filing amended several times the
   // same day (CleanSpark's three from one bank) is one line.
@@ -14905,12 +14913,36 @@ async function filedDayPayload(asked, guest) {
     const k = h.symbol + '|' + h.kind + '|' + h.holder + '|' + h.pct;
     if (seen.has(k)) continue;
     seen.add(k);
-    holders.push({ symbol: h.symbol, kind: h.kind, amended: /\/A$/.test(h.form), holder: h.holder, pct: h.pct, pctWord: Holders13.pctWord(h.pct) });
+    holders.push({ symbol: h.symbol, kind: h.kind, amended: /\/A$/.test(h.form), holder: h.holder, pct: h.pct, pctWord: Holders13.pctWord(h.pct),
+      url: Holders13.pageUrl(ids[h.symbol], h.accn) });
   }
   const events = ev.filter((e) => e.filed === date && keep(e.symbol))
-    .map((e) => ({ symbol: e.symbol, label: Events8k.label(e.items, 2), notable: Events8k.notable(e.items) }));
-  return { date, days, through: (st && st.through) || null, holders, events };
+    .map((e) => ({ symbol: e.symbol, label: Events8k.label(e.items, 2), notable: Events8k.notable(e.items),
+      items: Events8k.detail(e.items).filter((i) => i.code !== '9.01').map((i) => ({ name: i.name, title: i.title, notable: i.notable })),
+      url: Events8k.url(ids[e.symbol], e.accn, e.doc) }));
+  const out = { date, days, through: (st && st.through) || null, holders, events };
+  // The /filings page names each company and lets a reader cut by sector and
+  // index: those come from the snapshot (held in memory per instance), stamped
+  // with the two index flags. The card has the rows already and skips this.
+  if (withCompanies) {
+    const want = new Set([...holders, ...events].map((x) => x.symbol));
+    const snap = await readSnapshot().catch(() => null);
+    const rows = ((snap && snap.stocks) || []).filter((r) => r && want.has(r.symbol))
+      .map((r) => ({ symbol: r.symbol, name: r.shortName || r.name || r.symbol, sector: r.sector || null, industry: r.industry || null,
+        cap: r.marketCap == null ? null : Number(r.marketCap) }));
+    try { await stampSpMember(rows); } catch (e) { /* the cut is then unknown */ }
+    out.companies = {};
+    for (const r of rows) out.companies[r.symbol] = { name: r.name, sector: r.sector, industry: r.industry, cap: r.cap, sp: r.spMember, ndx: r.ndxMember };
+  }
+  return out;
 }
+// The /filings page's read: the same day, with the companies named. Members
+// only, as the page is; a guest has the card's twenty-stock read below.
+app.get('/api/filings', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  res.json(await filedDayPayload(String(req.query.date || ''), false, true));
+}));
 app.get('/api/filings/day', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(await filedDayPayload(String(req.query.date || ''), await isGuest(req)));
@@ -15214,7 +15246,7 @@ app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const soft = (p, d) => Promise.resolve().then(p).catch((e) => Object.assign({ failed: String((e && e.message) || e).slice(0, 120) }, d || {}));
   const now = Date.now(), DAYMS = 86400000;
-  const [universe, state, filed, insider, shortN, shortSt, fund, splits] = await Promise.all([
+  const [universe, state, filed, insider, shortN, shortSt, fund, splits, daily] = await Promise.all([
     store.readUniverse(),
     store.readSecState().catch(() => ({})),
     store.readSecFiled().catch(() => ({})),
@@ -15223,6 +15255,8 @@ app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
     store.readShortState().catch(() => []),
     soft(() => store.fundNewest(SP_FUND)),
     soft(() => store.splitCoverage()),
+    // The daily 8-K and 13D/13G check (secdaily.js): one app_meta row.
+    store.readSecDaily().catch(() => null),
   ]);
   // ---- filings ----
   const buckets = { ok: 0, nocik: 0, nofacts: 0, empty: 0, error: 0, never: 0 };
@@ -15255,6 +15289,12 @@ app.get('/api/edgar-status', requireAdmin, route(async (req, res) => {
     short: Object.assign({}, shortN, { tracked: shortSt.length, onNewest, checkedAt: shortChecked }),
     holdings: fund,
     splits,
+    // The daily check: the last index day read, when it last ran, what waits,
+    // and the days it read (newest last). `expect` is the business day before
+    // today in New York, the newest day it could have read.
+    daily: daily ? { through: daily.through || null, at: daily.at || null, queued: Array.isArray(daily.pending) ? daily.pending.length : 0,
+      days: Array.isArray(daily.days) ? daily.days.slice(-7) : [] } : null,
+    dailyExpect: (() => { let d = SecDaily.addDays(SecDaily.todayET(), -1); while ([0, 6].includes(new Date(d + 'T12:00:00Z').getUTCDay())) d = SecDaily.addDays(d, -1); return d; })(),
   });
 }));
 

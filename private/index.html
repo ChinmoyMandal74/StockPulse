@@ -1313,6 +1313,11 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
                   <span class="nm">Paper positions</span>
                 </a>
+                <!-- Members: every 13D/13G and 8-K, a day at a time (2026-10-20). -->
+                <a class="pick" href="/filings" id="filingsLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
+                  <span class="nm">SEC filings</span>
+                </a>
                 <a class="pick" href="/research" id="researchLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
                   <span class="nm">Research</span>
@@ -5535,7 +5540,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'filingsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

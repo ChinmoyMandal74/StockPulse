@@ -224,6 +224,30 @@
       + '<button class="btn danger" type="button" data-stop="fil" hidden>Stop</button>',
       (f.errors && f.errors.length ? '<p class="errs">Errors: ' + f.errors.map((e) => esc(e.symbol) + ' (' + esc(e.error || 'unknown') + ')').join(', ') + '</p>' : ''));
 
+    // ---- 1b. the daily 8-K and 13D/13G check (2026-10-20) ----
+    const dl = S.daily, dBehind = dl && dl.through && S.dailyExpect ? dl.through < S.dailyExpect : true;
+    const dState = !S.ready ? ['behind', 'Not configured'] : !dl ? ['', 'Not run yet']
+      : dl.queued ? ['behind', plural(dl.queued, 'company', 'companies') + ' waiting']
+        : dBehind ? ['behind', 'Behind: last read ' + dl.through] : ['ok', 'Current'];
+    const dayLine = (d) => d.holiday ? esc(d.date) + ' · holiday, no index'
+      : esc(d.date) + ' · ' + plural(d.companies || 0, 'company', 'companies') + ' re-read'
+        + (d.filings ? ' (' + Object.entries(d.filings).map(([k, n]) => num(n) + ' ' + esc(k)).join(', ') + ')' : '');
+    const daily = card('dly', 'Next-day 8-Ks and 13D/13G', dState,
+      'Each morning the SEC’s index of the previous business day’s filings is read, and every tracked company it names with an 8-K, 13D or 13G '
+      + 'has its filing list re-read, so a new announcement or 5% filing appears the next morning rather than on the weekly lap above. '
+      + 'They feed the Large holders and Company events sections of a stock page, the screener’s Last 8-K and 5% filing columns, the Filings page and the Filed yesterday card.',
+      [fact('Last day read', dl && dl.through, dl && dl.through ? ago(dl.through) : '', dBehind && !!dl),
+        fact('Newest day it could read', S.dailyExpect),
+        fact('Last run', when(dl && dl.at)),
+        fact('Companies waiting', num(dl ? dl.queued : 0), '', !!(dl && dl.queued))],
+      '<b>Kept up to date by</b> the nightly job (its <i>sec daily</i> step, straight after the weekly check): the 7:30 AM run reads the day before. '
+      + 'A day the SEC has not published yet is left for the next run, a weekday with no index well in the past is a holiday, and if the SEC asks us to slow down the run stops and the companies waiting carry over. '
+      + '<b>Run now</b> does the same here.',
+      '<button class="btn warm" type="button" data-run="daily"' + (S.ready ? '' : ' disabled') + '>Run now</button>'
+      + '<button class="btn danger" type="button" data-stop="dly" hidden>Stop</button>'
+      + '<a class="btn" href="/filings">Open Filings</a>',
+      dl && dl.days && dl.days.length ? '<p class="errs" style="color:var(--muted)">Recent days: ' + dl.days.slice().reverse().map(dayLine).join(' &middot; ') + '</p>' : '');
+
     // ---- 2. announcement dates ----
     const rAge = daysSince(S.results.newest);
     const results = card('res', 'Earnings-announcement dates', S.results.companies ? ['ok', 'Current'] : ['', 'Nothing loaded'],
@@ -286,7 +310,7 @@
       + 'and it must not overlap the 7:30 AM or 7:30 PM nightly job.',
       '', cmd('Fill the rest, from your machine', 'node --use-system-ca backfill-splits.js --commit --missing'));
 
-    $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + quality() + results + insider
+    $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + daily + quality() + results + insider
       + '<p class="grp">Other scheduled pulls</p>' + short + hold + splits;
     $('foot').hidden = false;
     $('foot').textContent = 'Status read ' + when(S.at) + '. Price and company-profile refreshes are on the Refresh runs page; headlines on News runs.';
@@ -482,6 +506,31 @@
     await load(); say('ins', keep);
   }
 
+  // ---- the daily 8-K and 13D/13G check: the nightly's own loop ----
+  async function runDaily() {
+    if (busy.dly) return;
+    setRunning('dly', true);
+    let read = 0, calls = 0; const days = [];
+    try {
+      for (; calls < 40; calls++) {
+        if (halt.dly) { say('dly', 'Stopped after ' + plural(read, 'company', 'companies') + '.'); break; }
+        const r = await fetch('/api/sec/daily', { method: 'POST' });
+        const j = await r.json();
+        if (!r.ok) { say('dly', '<b class="warn">' + esc(j.error || ('HTTP ' + r.status)) + '</b>'); break; }
+        read += j.fetched || 0;
+        for (const d of j.read || []) days.push(d.holiday ? d.date + ' (holiday)' : d.date);
+        say('dly', (days.length ? 'Read ' + esc(days.join(', ')) + '. ' : '') + plural(read, 'company', 'companies') + ' re-read' + (j.remaining ? ', ' + num(j.remaining) + ' to go' : '') + '…');
+        if (j.done) {
+          say('dly', 'Up to date through ' + esc(j.through) + ' — ' + plural(read, 'company', 'companies') + ' re-read' + ((j.notes || []).length ? '. ' + esc(j.notes.join('; ')) : '') + '.');
+          break;
+        }
+        await new Promise((z) => setTimeout(z, 1500));
+      }
+    } catch (e) { say('dly', '<b class="warn">Stopped: ' + esc(e.message) + '</b>'); }
+    const keep = $('dlyProg').innerHTML;
+    await load(); say('dly', keep);
+  }
+
   // ---- the two one-call checks: what the nightly job itself calls ----
   async function runCheck(id, url) {
     if (busy[id]) return;
@@ -506,7 +555,7 @@
   function wire() {
     document.querySelectorAll('.pull button[disabled]').forEach((b) => { b.dataset.wasDisabled = '1'; });
     document.querySelectorAll('button[data-run]').forEach((b) => b.addEventListener('click', () =>
-      (b.dataset.run === 'insider' ? runInsider() : runFilings(b.dataset.run))));
+      (b.dataset.run === 'insider' ? runInsider() : b.dataset.run === 'daily' ? runDaily() : runFilings(b.dataset.run))));
     document.querySelectorAll('button[data-get]').forEach((b) => b.addEventListener('click', () => runCheck(b.dataset.card, b.dataset.get)));
     document.querySelectorAll('button[data-stop]').forEach((b) => b.addEventListener('click', () => { halt[b.dataset.stop] = true; }));
     wireQuality();
@@ -537,7 +586,7 @@
   $('reload').addEventListener('click', load);
   // A tab closed mid-run loses nothing -- every company and every day already
   // fetched is stored -- but it does stop, so say so before it happens.
-  window.addEventListener('beforeunload', (e) => { if (busy.fil || busy.ins) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', (e) => { if (busy.fil || busy.ins || busy.dly) { e.preventDefault(); e.returnValue = ''; } });
   load();
 })();
 </script>

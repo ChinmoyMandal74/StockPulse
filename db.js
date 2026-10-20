@@ -5152,10 +5152,10 @@ async function readSecEvents(symbol, limit) {
 async function readSecEventsSince(since) {
   await init();
   const r = await db.execute({
-    sql: 'select symbol, filed, items from sec_events indexed by idx_sec_events_filed where filed >= ?',
+    sql: 'select symbol, accn, filed, items, doc from sec_events indexed by idx_sec_events_filed where filed >= ?',
     args: [String(since)],
   });
-  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), items: x.items || '' }));
+  return r.rows.map((x) => ({ symbol: String(x.symbol), accn: x.accn ? String(x.accn) : null, filed: String(x.filed), items: x.items || '', doc: x.doc || null }));
 }
 
 // ---- large-holder filings ------------------------------------------------
@@ -5201,11 +5201,11 @@ async function readSecHolders(symbol, limit) {
 async function readSecHoldersSince(since) {
   await init();
   const r = await db.execute({
-    sql: `select symbol, filed, form, kind, holder, pct from sec_holders indexed by idx_sec_holders_filed
+    sql: `select symbol, accn, filed, form, kind, holder, pct from sec_holders indexed by idx_sec_holders_filed
           where filed >= ? and kind != 'X'`,
     args: [String(since)],
   });
-  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), form: x.form || '', kind: String(x.kind),
+  return r.rows.map((x) => ({ symbol: String(x.symbol), accn: x.accn ? String(x.accn) : null, filed: String(x.filed), form: x.form || '', kind: String(x.kind),
     holder: x.holder || '', pct: x.pct == null ? null : Number(x.pct) }));
 }
 

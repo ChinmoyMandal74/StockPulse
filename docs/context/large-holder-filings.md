@@ -70,3 +70,21 @@ Tested in `secdaily-test.js` (50 checks):
 - the step over an excerpt of the real 2026-10-19 index: a normal morning, a queue spanning calls, the first run, not yet published, a holiday, throttling on the index and on a company, a network failure, a failed company, and a symbol with no CIK.
 
 The not-yet rule and the stop-on-throttle rule were proven by reverting each (3 and 1 failures). One real index was read from the SEC to confirm the format (376 relevant lines that day, 198 of them 8-Ks).
+
+## The Filings page and the /edgar card (2026-10-20)
+The owner asked: "Is there a web page talking about all these filings". There was none across the market, only one company at a time on its stock page, the screener's newest-of-each columns and the Filed yesterday card. They said: "do both".
+
+- **`/filings`** (`private/filings.html`, members: a stranger goes to sign in, a guest back to the screener, and `/api/filings` answers a guest 403). Linked as **SEC filings** in the screener's account menu (`filingsLink`, hidden for guests with Research and Paper positions) and from `/help`.
+  - **What it shows:** one business day: the 5% holders table (company, holder, form with "amended", stake, sec.gov link) and the 8-K table (company, each item as a chip with its full title on hover, amber for `Events8k.NOTABLE`, sec.gov link). Every row links to `/stock/<SYM>`.
+  - **Controls:** the recent days as chips, with arrows stepping a business day (back to 45 days, never today); All / 13D / 13G / 8-K; Notable 8-Ks only; S&P 500 or Nasdaq 100; sector; and a search over ticker, company and holder. The day and form stay in the address.
+  - **Order:** the card's: 13D first, notable first, larger companies first.
+- **One payload for card and page.** `filedDayPayload(date, guest, withCompanies)` now also returns each filing's sec.gov address (`Holders13.pageUrl` and `Events8k.url`, under the company's CIK from `filerIds`; both kinds checked to open) and each 8-K's items (`Events8k.detail`, 9.01 left out). With `withCompanies` (the page only) it names each company from the in-memory snapshot, stamped with the index flags (`stampSpMember`). `readSecHoldersSince` and `readSecEventsSince` return the filing number (and the 8-K's document); their other caller, `buildFlows`, ignores the extra fields.
+- **`/edgar` card "Next-day 8-Ks and 13D/13G"**, straight after Company filings.
+  - **Pill:** Current; "Behind: last read <day>" when the last day read is before the business day before today (`dailyExpect` from `/api/edgar-status`); "N companies waiting"; or "Not run yet".
+  - **Facts:** last day read, the newest it could read, the last run, companies waiting, and the last seven days read (companies re-read, filings by kind).
+  - **Run now** loops `/api/sec/daily` to done, the nightly's own loop (`runDaily`), with Stop and a link to the Filings page.
+
+Tested:
+- `/filings` over payloads built by the server's own `filedDayPayload` from the live tables for 2026-10-19 and 2026-10-15: 20 checks covering rows, counts, links (52 stock and 52 sec.gov, new tab), order, the four form tabs, search by holder and ticker, the S&P and sector cuts against the flags, the day chips and arrows, notable only (Oct 15: Fortune Brands' impairment), no stepping past yesterday, no sideways scroll at 390px, the light theme, and the refusal message.
+- The `/edgar` card (10 checks): each pill, the facts, recent days newest first, Run now looping to done.
+- The access rules lifted from `server.js` (7 checks), proven by removing the guest guard.
