@@ -69,6 +69,7 @@
     .rm-scrub { width: 100%; margin-top: 12px; accent-color: var(--accent); }
     .rm-time { display: flex; justify-content: space-between; font: 500 12px "Geist Mono", monospace; color: var(--faint); }
     .rm-check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .rm-music select { background: var(--void); color: var(--text); border: 1px solid var(--hair-2); border-radius: 8px; padding: 8px 10px; font: 500 14px Geist, sans-serif; }
     .rm-denied { padding: 60px 20px; text-align: center; color: var(--muted); }
   </style>
 </head>
@@ -124,6 +125,12 @@
           <p class="rm-hint">The last slide is the Tickr Lab mark, tickrlab.com and the not-investment-advice line,
             on the colour picked here. The four named colours are the promo cards' own grounds.</p>
         </section>
+
+        <section class="rm-panel">
+          <h2 class="rm-h">4 · Music (optional)</h2>
+          <div id="rmMusic" class="rm-music"></div>
+          <p class="rm-hint">MP3, WAV or M4A, played under the whole video and faded out at the end. It stays in this browser. Use music you may use commercially (royalty-free, such as Pixabay Music or the YouTube Audio Library).</p>
+        </section>
       </div>
 
       <div class="rm-stagewrap">
@@ -138,7 +145,7 @@
           </div>
           <p class="rm-msg" id="rmMsg">Add at least one image.</p>
           <p class="rm-hint">Recording runs in real time and saves an MP4 (in Chrome) at 1080 pixels wide. Keep this tab
-            in front while it records. Add music in Instagram when you post.</p>
+            in front while it records. Music, if chosen, is heard while it plays and recorded into the file.</p>
         </section>
       </div>
     </div>
@@ -163,6 +170,7 @@
     const GROUNDS = [['dark', 'Dark'], ['navy', 'Navy'], ['light', 'Light'], ['sky', 'Sky']];
     const state = { slides: [], shape: 'story', trans: 'fade', per: 4000, ground: 'dark', custom: '#7c3aed', busy: false };
     let plan = null;
+    const music = Reel.musicPicker($('rmMusic'));
 
     const msg = (t, warn) => { $('rmMsg').textContent = t; $('rmMsg').className = 'rm-msg' + (warn ? ' rm-warn' : ''); };
     const shape = () => Reel.SHAPES.find((s) => s.id === state.shape);
@@ -311,7 +319,7 @@
       try {
         if (document.fonts && document.fonts.ready) await document.fonts.ready;
         msg(record ? 'Recording — keep this tab in front for ' + Math.ceil(len / 1000) + ' seconds.' : 'Playing…');
-        const out = await Reel.run($('rmCv'), len, (t) => { Reel.paintSlides(g, plan, t); $('rmScrub').value = String(Math.min(t, len)); $('rmAt').textContent = (Math.min(t, len) / 1000).toFixed(1) + ' s'; }, record);
+        const out = await Reel.run($('rmCv'), len, (t) => { Reel.paintSlides(g, plan, t); $('rmScrub').value = String(Math.min(t, len)); $('rmAt').textContent = (Math.min(t, len) / 1000).toFixed(1) + ' s'; }, record, music.get());
         if (out) {
           const name = 'tickrlab-' + state.slides.length + '-images-' + shape().label.replace(':', 'x') + '.' + out.ext;
           const a = document.createElement('a');

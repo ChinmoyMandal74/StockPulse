@@ -1192,13 +1192,15 @@
       <div id="rlBox">
         <label>Stock</label>
         <select id="rlSym"></select>
+        <label>Music (optional)</label>
+        <div id="rlMusic"></div>
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="btn" id="rlPlay" type="button">Play</button>
           <button class="btn" id="rlRec" type="button">Record the reel</button>
         </div>
         <p class="hint" id="rlMsg">The card is the reel's cover. Play runs the video in
           the stage; Record saves it as an MP4 (Chrome) at 1080 by 1920. It records in
-          real time, about 23 seconds, so keep the tab in front. Add music in Instagram.</p>
+          real time, about 23 seconds, so keep the tab in front. MP3, WAV or M4A, played under the whole video and faded out at the end. It stays in this browser. Use music you may use commercially (royalty-free, such as Pixabay Music or the YouTube Audio Library).</p>
         <p class="hint"><a href="/reelmaker" style="color:var(--accent)">Video from images</a>: up to four of your own images
           (promo card downloads, say) made into a video with transitions and the Tickr Lab end card.</p>
       </div>
@@ -2054,6 +2056,8 @@
           <option value="6000">6 seconds</option>
           <option value="8000">8 seconds</option>
         </select>
+        <label>Music (optional)</label>
+        <div id="vidMusic"></div>
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="btn" id="vidPlay" type="button">Play</button>
           <button class="btn" id="vidRec" type="button">Record video</button>
@@ -2061,8 +2065,7 @@
         <p class="hint" id="vidMsg">Set up a card above, then add it. Up to four; each is redrawn at the
           shape and colour chosen here and builds itself on screen (titles slide in, rows arrive one by one,
           bars grow, charts draw), then the Tickr Lab end card. 9:16 is for Reels and Stories, 4:5 the
-          tallest feed post, 1:1 the square post. Records in real time as an MP4 in Chrome; add music in
-          Instagram. Your own images: <a href="/reelmaker" style="color:var(--accent)">Video from images</a>.</p>
+          tallest feed post, 1:1 the square post. Records in real time as an MP4 in Chrome. Music: MP3, WAV or M4A, played under the whole video and faded out at the end. It stays in this browser. Use music you may use commercially (royalty-free, such as Pixabay Music or the YouTube Audio Library). Your own images: <a href="/reelmaker" style="color:var(--accent)">Video from images</a>.</p>
       </div>
 
       <!-- The same shot, kept rather than downloaded: it becomes a blog draft
@@ -3247,6 +3250,7 @@
     // Reel.paint draws any frame from the time alone, so playing is a clock and
     // recording is the Race chart's recorder on the same canvas.
     let reelBusy = false;
+    const rlMusic = Reel.musicPicker($('rlMusic'));
     const reelMsg = (t, cls) => { const m = $('rlMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
     async function reelRun(record) {
       if (reelBusy) return;
@@ -3268,7 +3272,7 @@
         stage.appendChild(cv);
         const g = cv.getContext('2d');
         reelMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.round(Reel.DURATION / 1000) + ' seconds.' : 'Playing\u2026');
-        const out = await Reel.run(cv, Reel.DURATION, (t) => Reel.paint(g, M, t), record);
+        const out = await Reel.run(cv, Reel.DURATION, (t) => Reel.paint(g, M, t), record, rlMusic.get());
         if (out) {
           const { blob, ext } = out;
           const name = 'reel-' + M.sym.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
@@ -3295,6 +3299,7 @@
     // builds it up frame by frame. Its data was read when it was on the stage,
     // so the second build is from the studio's caches.
     const VID_MAX = 4;
+    const vidMusic = Reel.musicPicker($('vidMusic'));
     const vidQueue = [];
     let vidBusy = false;
     const vidMsg = (t, cls) => { const m = $('vidMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
@@ -3407,7 +3412,7 @@
         vidMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.ceil(len / 1000) + ' seconds.' : 'Playing\u2026');
         vidPlaying = true;
         let out;
-        try { out = await Reel.run(cv, len, (t) => Reel.paintSlides(g, plan, t), record); } finally { vidPlaying = false; }
+        try { out = await Reel.run(cv, len, (t) => Reel.paintSlides(g, plan, t), record, vidMusic.get()); } finally { vidPlaying = false; }
         if (out) {
           const name = 'tickrlab-cards-' + vidQueue.length + '-' + shp.label.replace(':', 'x') + '.' + out.ext;
           const a = document.createElement('a');

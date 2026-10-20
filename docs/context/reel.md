@@ -79,3 +79,13 @@ The owner, after trying Video from images: "It is not adding any dynamic content
 - `render()` stands aside while a card video plays (`vidPlaying`), so a data reply landing mid-recording cannot wipe the canvas.
 
 Tested in the real studio (served from disk, APIs mocked from the stored snapshot). Four kinds of card were queued (Movers, the Reel cover for MU, Chart — any measure for NVDA, the Signal board) and the fifth add was disabled. Played at 4:5 Light and 9:16 Dark, with frames sampled during the build: rows wiping in with their bars, cells popping, the chart drawing, the dials arriving. Recorded both, and both MP4s decode (1080×1350 and 1080×1920, 23.8 s). The stage came back afterwards. Video from images was re-run after the shared slide painter changed.
+
+## Music (2026-10-20, all three tools)
+The owner asked how to add sound. Offered music, sound effects or both, they chose: "I don't need effect, Just add option for music". Instagram's desktop site has no music library (only the phone app does), so a track in the file is the only way a reel posted from the laptop gets sound.
+
+- **One picker, three hosts.** `Reel.musicPicker(el)` sits in the studio's Reel box (`#rlMusic`), its Video from cards box (`#vidMusic`) and `/reelmaker` (`#rmMusic`, section 4). It offers a file button (MP3, WAV, M4A, AAC, OGG), the track's name and length, remove, **Volume** (100, 80 (the default), 60, 40, 25%) and **Start the track at** (the beginning, or 5 to 90 seconds in). The file is decoded in the browser (`Reel.loadMusic`, Web Audio) and never uploaded or stored; nothing new for `/privacy`.
+- **Playback** (`Reel.run`'s `music` argument): the track starts with the picture (both clocks begin together), fades in over 0.4 s and out over the last 2 s, and loops from the chosen start if it is shorter than the video. It is heard during Play as well as recorded, so Play is a true preview.
+- **The file:** with music the recorder asks for `video/mp4;codecs=avc1.42E01E,mp4a.40.2`, H.264 with AAC audio, the pairing Instagram takes. Chrome 155 offers it. Without music the file has no audio track, as before.
+- The hint beside each picker says to use music that may be used commercially (royalty-free: Pixabay Music, the YouTube Audio Library).
+
+Tested with generated tunes (30 s and 8 s WAVs) set through the real file inputs. On `/reelmaker` (1:1, 2.5 s an image, track from 5 s at 60%), the recording carries AAC (`mp4a`, no Opus) and its decoded audio holds a steady level each second, then falls over the last. The 8-second track loops through a 13-second video. After Remove, the next recording has no audio track. In the studio, Video from cards (4:5) and the Reel each recorded with their own picker's track (AAC, 19.7 s and 22.9 s of audio).

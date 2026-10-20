@@ -591,46 +591,142 @@
     };
   }
 
-  // ---- recording, shared by the Reel and Video from images -----------------
+  // ---- recording, shared by the Reel, Video from cards and Video from images
   // H.264 MP4 where the browser offers it (Chrome does), which is what
-  // Instagram takes; WebM otherwise, and the caller says so.
-  function mime() {
+  // Instagram takes; WebM otherwise, and the caller says so. With music the
+  // audio is AAC inside the same MP4 (2026-10-20: Chrome 155 offers it).
+  function mime(withAudio) {
     if (typeof MediaRecorder === 'undefined') return '';
-    for (const m of ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']) {
-      if (MediaRecorder.isTypeSupported(m)) return m;
-    }
+    const list = withAudio
+      ? ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm']
+      : ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    for (const m of list) if (MediaRecorder.isTypeSupported(m)) return m;
     return '';
+  }
+  // MUSIC (2026-10-20, the owner: "Just add option for music"; no sound
+  // effects). A file the admin picks, decoded in the browser and never sent
+  // anywhere. It plays from `offset` seconds into the track, looping if the
+  // track is shorter than the video, faded in over 0.4s and out over the last
+  // two seconds, at `volume` (0 to 1). It is heard while playing as well as
+  // recorded, so Play is a true preview.
+  const MUSIC_FADE_IN = 0.4, MUSIC_FADE_OUT = 2;
+  async function loadMusic(file) {
+    const AC = global.AudioContext || global.webkitAudioContext;
+    if (!AC) throw new Error('This browser cannot play audio here.');
+    const ctx = new AC();
+    try { return await ctx.decodeAudioData(await file.arrayBuffer()); }
+    finally { ctx.close && ctx.close(); }
   }
   // Play `paintAt(t)` on the canvas in real time for `ms` milliseconds, and
   // when `record` is set return the recording as { blob, ext }. Real time,
   // because MediaRecorder records what the canvas shows as it shows it: a
   // background tab throttles the frames, so the tab has to stay in front.
-  async function run(cv, ms, paintAt, record) {
-    const type = record ? mime() : '';
+  // `music`: { buffer (an AudioBuffer from loadMusic), volume, offset } or null.
+  async function run(cv, ms, paintAt, record, music) {
+    const type = record ? mime(!!music) : '';
     if (record && !type) throw new Error('This browser cannot record video. Use Chrome.');
-    let rec = null; const chunks = [];
+    let rec = null, actx = null, src = null; const chunks = [];
+    const lead = 0.06;
     paintAt(0);
+    let stream = record ? cv.captureStream(30) : null;
+    if (music && music.buffer) {
+      actx = new (global.AudioContext || global.webkitAudioContext)();
+      if (actx.state === 'suspended') await actx.resume().catch(() => {});
+      src = actx.createBufferSource();
+      src.buffer = music.buffer;
+      const dur = music.buffer.duration;
+      const off = music.offset > 0 && music.offset < dur - 1 ? music.offset : 0;
+      src.loop = dur < ms / 1000 + off;
+      if (src.loop) { src.loopStart = off; src.loopEnd = dur; }
+      const gain = actx.createGain();
+      const vol = Math.max(0, Math.min(1, music.volume == null ? 0.8 : music.volume));
+      const t0a = actx.currentTime + lead, end = t0a + ms / 1000;
+      gain.gain.setValueAtTime(0, t0a);
+      gain.gain.linearRampToValueAtTime(vol, t0a + MUSIC_FADE_IN);
+      gain.gain.setValueAtTime(vol, Math.max(t0a + MUSIC_FADE_IN, end - MUSIC_FADE_OUT));
+      gain.gain.linearRampToValueAtTime(0, end);
+      src.connect(gain);
+      gain.connect(actx.destination);
+      if (stream) {
+        const dest = actx.createMediaStreamDestination();
+        gain.connect(dest);
+        stream = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+      }
+      src.start(t0a, off);
+      src.stop(end + 0.3);
+    }
     if (record) {
-      rec = new MediaRecorder(cv.captureStream(30), { mimeType: type, videoBitsPerSecond: 10e6 });
+      rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 10e6, audioBitsPerSecond: 192e3 });
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       rec.start(250);
     }
-    await new Promise((resolve) => {
-      const t0 = performance.now();
-      const step = (now) => {
-        const t = now - t0;
-        paintAt(t);
-        if (t < ms + 400) requestAnimationFrame(step); else resolve();
-      };
-      requestAnimationFrame(step);
-    });
-    if (!rec) return null;
-    await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+    try {
+      await new Promise((resolve) => {
+        // The picture's clock starts when the music does.
+        const t0 = performance.now() + (actx ? lead * 1000 : 0);
+        const step = (now) => {
+          const t = Math.max(0, now - t0);
+          paintAt(t);
+          if (t < ms + 400) requestAnimationFrame(step); else resolve();
+        };
+        requestAnimationFrame(step);
+      });
+      if (!rec) return null;
+      await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+    } finally {
+      if (src) try { src.stop(); } catch (e) { /* already stopped */ }
+      if (actx) actx.close().catch(() => {});
+    }
     const base = type.split(';')[0];
     return { blob: new Blob(chunks, { type: base }), ext: base === 'video/mp4' ? 'mp4' : 'webm' };
+  }
+  // The music control, one implementation for the three hosts: a file button,
+  // the track's name, remove, volume and where in the track to start. Returns
+  // { get() } giving run()'s `music` argument, or null when none is chosen.
+  function musicPicker(host, onChange) {
+    const VOLS = [[1, '100%'], [0.8, '80%'], [0.6, '60%'], [0.4, '40%'], [0.25, '25%']];
+    const STARTS = [0, 5, 10, 15, 20, 30, 45, 60, 90];
+    host.innerHTML = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      + '<button class="btn" type="button" data-m="pick">Choose music</button>'
+      + '<span data-m="name" style="font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">No music</span>'
+      + '<button class="btn" type="button" data-m="del" title="Remove the music" hidden>&times;</button>'
+      + '<input type="file" data-m="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/aac,audio/ogg" hidden></div>'
+      + '<div data-m="opts" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px" hidden>'
+      + '<span style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)">Volume<select data-m="vol" aria-label="Music volume">'
+      + VOLS.map(([v, l]) => '<option value="' + v + '"' + (v === 0.8 ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></span>'
+      + '<span style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)">Start the track at<select data-m="off" aria-label="Start the track at">'
+      + STARTS.map((s) => '<option value="' + s + '">' + (s ? s + ' seconds' : 'the beginning') + '</option>').join('') + '</select></span></div>';
+    const $m = (k) => host.querySelector('[data-m="' + k + '"]');
+    let buffer = null;
+    const paint = (name, warn) => {
+      $m('name').textContent = name;
+      $m('name').style.color = warn ? 'var(--amber)' : 'var(--muted)';
+      $m('del').hidden = !buffer;
+      $m('opts').hidden = !buffer;
+    };
+    $m('pick').addEventListener('click', () => $m('file').click());
+    $m('file').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      paint('Reading ' + f.name + '…');
+      try {
+        buffer = await loadMusic(f);
+        paint(f.name + ' · ' + Math.round(buffer.duration) + ' s');
+      } catch (err) {
+        buffer = null;
+        paint('Could not read that file as audio', true);
+      }
+      if (onChange) onChange();
+    });
+    $m('del').addEventListener('click', () => { buffer = null; paint('No music'); if (onChange) onChange(); });
+    return {
+      get: () => (buffer ? { buffer, volume: Number($m('vol').value), offset: Number($m('off').value) } : null),
+    };
   }
 
   global.Reel = { W, H, DURATION, SCENES, paint, countUp,
     SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run,
+    loadMusic, musicPicker,
     cardParts, cardSchedule, cardSlide };
 })(typeof window !== 'undefined' ? window : globalThis);
