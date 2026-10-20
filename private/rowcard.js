@@ -393,6 +393,12 @@
     ['size',  'Debt',           (s) => V.money(s.totalDebt, s.currency)],
     ['size',  'EBITDA',         (s) => V.money(s.ebitda, s.currency)],
     ['size',  'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
+    // (2026-10-19, after Stockanalysis.com's statistics page.) Working capital
+    // is current assets less current liabilities from the newest filed balance
+    // sheet, in dollars; net cash per share is a dollar reporter's only.
+    ['size',  'Working capital', (s) => V.signedMoney(s.workingCapital, 'USD')],
+    ['size',  'Net cash / share', (s) => (ok(s.netCashPerShare) ? { t: (s.netCashPerShare < 0 ? '−' : '') + '$' + Math.abs(s.netCashPerShare).toFixed(2), c: s.netCashPerShare < 0 ? 'neg' : '', n: s.netCashPerShare, u: 'num' } : null)],
+    ['size',  'Revenue / employee', (s) => V.money(s.revenuePerEmployee, s.currency || 'USD')],
     // Market cap plus debt, less cash — what the whole business costs rather
     // than what the equity costs. Stored since the profile call started being
     // kept in full and never surfaced.
@@ -415,6 +421,8 @@
     // Shares bought back over the latest twelve months on file, over today's
     // market value, from the company's own cash-flow statements.
     ['fund',  'Buyback yield',  (s) => (ok(s.buybackYield) ? { t: (s.buybackYield > 0 && s.buybackYield < 0.05 ? '<0.1' : s.buybackYield.toFixed(1)) + '%', c: '' } : null)],
+    // Dividend yield plus buyback yield: both must be known.
+    ['fund',  'Shareholder yield', (s) => V.mag(s.shareholderYield)],
     ['fund',  'ROE',            (s) => V.pct(s.roe)],
     // PEG leads the three P/E rows rather than sitting between them, the
     // screener's own column order since 2026-10-04: a PEG is a P/E with
@@ -435,6 +443,10 @@
     ['fund',  'P/E vs peers',   (s) => V.ratio(s.peerPe)],
     ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
     ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
+    ['fund',  'EV / sales',     (s) => V.num(s.evToSales)],
+    ['fund',  'P / op cash',    (s) => V.num(s.priceToOcf)],
+    // EPS over price: the live P/E turned over, so a loss reads negative.
+    ['fund',  'Earnings yield', (s) => V.smag(s.earningsYield, 2)],
     ['fund',  'EV/EBITDA',      (s) => V.num(s.evToEbitda)],
     ['fund',  'Operating margin',(s) => V.pct(s.operatingMargin)],
     ['fund',  'ROA',            (s) => V.pct(s.roa)],
@@ -463,6 +475,9 @@
     // discontinuity in them.
     ['fund',  'Last split',     (s) => (s.lastSplitDate ? { t: shortDate(s.lastSplitDate), c: '' } : null)],
     ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
+    // The diluted share count against the fiscal year before, from the filings:
+    // dilution when it rises, buybacks net of issuance when it falls.
+    ['own',   'Shares chg 1Y',  (s) => V.smag(s.sharesChg)],
     ['own',   'Float',          (s) => V.count(s.floatShares)],
     ['own',   'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
     ['own',   'Short ratio',    (s) => V.num(s.shortRatio)],

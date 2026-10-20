@@ -4062,6 +4062,35 @@ function stampCapDerived(rows) {
     const eps = Number(r.dilutedEpsTtm);
     r.peLive = (px > 0 && eps > 0) ? px / eps : null;
 
+    // DERIVED READINGS (2026-10-19, the owner, after Stockanalysis.com's
+    // statistics page). All from fields already on the row, stamped on the way
+    // out like the live P/E, never stored and read by no rule.
+    //   earningsYield  EPS over price, in percent: the live P/E turned over, so
+    //                  a loss reads negative where the P/E is a dash. Per traded
+    //                  share, the live P/E's own basis (measured above: no
+    //                  currency guard needed).
+    //   shareholderYield  dividend yield plus buyback yield. Both must be
+    //                  known: a non-payer's dividend yield is a real 0 on this
+    //                  row, while a company that files no buyback line has none
+    //                  (null), and a sum would read that as 0.
+    //   evToSales, priceToOcf  the enterprise value over revenue, the market
+    //                  value over operating cash flow. A dollar figure over a
+    //                  reporting-currency one, so DOLLAR REPORTERS ONLY, the rule
+    //                  for every cross-currency ratio on the site.
+    //   netCashPerShare  net cash over shares outstanding, dollar reporters only
+    //                  (a depositary receipt's share count is in another unit).
+    //   revenuePerEmployee  trailing revenue over the profile's employee count,
+    //                  in the reporting currency, which the screen labels.
+    const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    const usd = !r.currency || r.currency === 'USD';
+    r.earningsYield = px > 0 && n(r.dilutedEpsTtm) != null ? Math.round(eps / px * 10000) / 100 : null;
+    r.shareholderYield = n(r.divYield) != null && n(r.buybackYield) != null ? Math.round((n(r.divYield) + n(r.buybackYield)) * 100) / 100 : null;
+    const ev = n(r.enterpriseValue), rev = n(r.revenueTtm), ocf = n(r.operatingCashFlowTtm), sh = n(r.sharesOutstanding), emp = n(r.employees);
+    r.evToSales = usd && ev != null && ev > 0 && rev != null && rev > 0 ? Math.round(ev / rev * 100) / 100 : null;
+    r.priceToOcf = usd && cap > 0 && ocf != null && ocf > 0 ? Math.round(cap / ocf * 100) / 100 : null;
+    r.netCashPerShare = usd && n(r.netCash) != null && sh != null && sh > 0 ? Math.round(n(r.netCash) / sh * 100) / 100 : null;
+    r.revenuePerEmployee = rev != null && rev > 0 && emp != null && emp >= 1 ? Math.round(rev / emp) : null;
+
     // SHORT INTEREST LARGER THAN THE FLOAT IS MIXED UNITS, NOT A SQUEEZE.
     // shortPctFloat is OUR OWN division (shares_short / float_shares, where
     // fetchProfile computes it), and the vendor answers a dual-class company
@@ -5824,7 +5853,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 11;         // bumped when the stored value gains a part
+const FLOWS_V = 12;         // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -5980,6 +6009,7 @@ function flowsOf(row, f) {
     instManagers: null, instChange: null, instPeriod: null,
     optCalls: null, optPuts: null, optPcr: null, optDate: null,
     revGrowth3y: null, revGrowth5y: null, niGrowth3y: null, niGrowth5y: null, growthEnd: null, growthBasis: null,
+    workingCapital: null, workingCapitalEnd: null,
     peNowFiled: null, peMed10y: null, peMedN: null, peVsMed: null,
     divStreak: null, divSince: null, divYears: null, divGrowth5y: null, divEnd: null,
     intCover: null, intCoverEnd: null, intCoverBasis: null, fScore: null, fScoreBits: null, fScoreEnd: null };
@@ -6004,6 +6034,7 @@ function flowsOf(row, f) {
     out.revGrowth3y = n(lg[0]); out.revGrowth5y = n(lg[1]);
     out.niGrowth3y = n(lg[2]); out.niGrowth5y = n(lg[3]);
     out.growthEnd = lg[4] || null; out.growthBasis = lg[5] || null;
+    out.workingCapital = n(lg[6]); out.workingCapitalEnd = lg[7] || null;
   }
   // Zero is a real count here (no drawdown of 10% in five years); the median
   // is null when none has recovered, and neither is ever invented.
@@ -6125,6 +6156,8 @@ async function stampFlows(rows) {
     r.niGrowth5y = v.niGrowth5y;
     r.growthEnd = v.growthEnd;
     r.growthBasis = v.growthBasis;
+    r.workingCapital = v.workingCapital;
+    r.workingCapitalEnd = v.workingCapitalEnd;
     r.peNowFiled = v.peNowFiled;
     r.peMed10y = v.peMed10y;
     r.peMedN = v.peMedN;
@@ -8495,6 +8528,9 @@ async function computeStocks(asOf, opts = {}) {
         // first live check after the deploy is what caught it — a fixture that
         // writes the snapshot directly cannot, since it bypasses this function.
         instrumentType: prof.instrumentType || null,
+        // Full-time employees, from the profile (2026-10-19): read for revenue
+        // per employee (stampCapDerived). Display only.
+        employees: prof.employees ?? null,
         historyDays: ok ? values.length : 0,
         latestDate: ok ? values[0].datetime : null,
         profileFetchedAt: prof.fetchedAt ?? null, // when sector and fundamentals were cached
@@ -13354,14 +13390,25 @@ async function marginChangeBuild(opts = {}) {
     if (f.length) facts.set(sym, f);
   }
   const today = new Date().toISOString().slice(0, 10);
-  // { SYM: [rev3, rev5, ni3, ni5, end, basis] }: longrun.js, display only.
+  // { SYM: [rev3, rev5, ni3, ni5, end, basis, workingCapital, wcEnd] }:
+  // longrun.js growth, and working capital from the newest balance sheet that
+  // states both current assets and current liabilities (2026-10-19), in
+  // dollars as the reader converts them. Display only.
   const lg = {};
   for (const sym of universe) {
     const rows = wide.get(String(sym).toUpperCase());
     if (!rows) continue;
     try {
-      const g = LongRun.growth(SecFacts.latestFilled(rows), today);
-      if (g) lg[String(sym).toUpperCase()] = [g.rev3, g.rev5, g.ni3, g.ni5, g.end, g.basis];
+      const filled = SecFacts.latestFilled(rows);
+      const g = LongRun.growth(filled, today);
+      const wcRow = filled.filter((r) => r.currentAssets != null && r.currentLiabilities != null && isFinite(Number(r.currentAssets)) && isFinite(Number(r.currentLiabilities)))
+        .sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1))[0];
+      const wcFresh = wcRow && (Date.parse(today) - Date.parse(wcRow.periodEnd)) / 86400000 <= LongRun.Q_STALE_DAYS + 230;
+      const wc = wcFresh ? Number(wcRow.currentAssets) - Number(wcRow.currentLiabilities) : null;
+      if (g || wc != null) {
+        lg[String(sym).toUpperCase()] = [g ? g.rev3 : null, g ? g.rev5 : null, g ? g.ni3 : null, g ? g.ni5 : null,
+          g ? g.end : null, g ? g.basis : null, wc == null ? null : Math.round(wc), wc == null ? null : wcRow.periodEnd];
+      }
     } catch (e) { /* one company's figures never stop the pass */ }
   }
   if (!opts.dry && Object.keys(lg).length) await store.writeLongRun({ at: Date.now(), g: lg });

@@ -882,3 +882,14 @@ The owner: "add z-score". The `z200` column sits after "vs 200D MA": (latest clo
 - **Neutral ink**, not green and red (a position, not a move); bold at ±2 or beyond. Sorts and filters like any number. `FIELD_SPEC` row `trend|200D z-score` (`V.num`, two places).
 - The step list for a new column was followed: header and body cells, the Trend banner 5 → 6, `PAD_SPAN` 118 → 119. Checked in the real page with a fixture: all 112 visible columns aligned header to body down to the last (`optPcr`), the banner spans exactly its six cells, 119 filter cells, and a sort works both ways. With the banner put back to 5, the check failed.
 - The header's hover quotes research entry 16: since 2007, 42% of stock-days were between −1 and +1, and 84% between −2 and +2; no level was followed by a better or worse month than the average stock's.
+
+### Eight readings after Stockanalysis.com's statistics page (2026-10-19)
+The owner: "Do the other two" (the share-count change on the stock page, and five derived figures), with "the screener and the individual stock page should match", so each is a screener column AND a `FIELD_SPEC` row in the same group.
+
+- **Scale** (colspan 11 → 14, fund `naRun(14)`): `workingCapital` (current assets less current liabilities on the newest filed balance sheet, in dollars, from the daily filings pass: the `long_run` value's elements 6 and 7, `FLOWS_V` 11 → 12; blank over 460 days old or where neither line is filed), `netCashPerShare`, `revenuePerEmployee` (the profile's employee count, now named in computeStocks as `employees`).
+- **Fundamentals** (24 → 28; the fund run after Trail P/E 10 → 13, plus one for Holder yield): `evToSales`, `priceToOcf`, `earningsYield` after P/S; `shareholderYield` after Buyback yield.
+- **Ownership** (11 → 12, fund run 10 → 11): `sharesChg` after Shares Out, the diluted share count against the fiscal year before, stored by the capital-returns pass and until now only inside the buyback cell's tooltip.
+- `PAD_SPAN` 130 → 138. Rendered check: 138 columns, 138 cells a row, every cell's group equal to its header's.
+- **Stamped in `stampCapDerived`** (never stored, read by no rule): earnings yield is EPS over price (the live P/E's per-traded-share basis, which needs no currency guard), so a loss reads negative; shareholder yield needs both parts (a non-payer's dividend yield is a real 0 on the row; no buyback line filed is null); EV/sales, P/op cash and net cash per share are dollar reporters only (a dollar figure over a reporting-currency one, or a depositary receipt's share count).
+- Display only: each of the eight scored against 1,280 real rows absent, present and lying, identical verdicts.
+- Not taken from that page: Altman Z (the owner: no), analyst price targets and consensus, Lynch and Graham fair value (the site's rules), ROIC / ROCE / WACC (assumptions the site would be asserting).
