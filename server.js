@@ -14047,11 +14047,18 @@ async function groupLinesFor(dim, names, nqIn, mk) {
   const key = dim + '|' + names.join('\u0001') + '|' + nq + '|' + mk;
   const hit = glCache.get(key);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
-  const snap = await snapshotCached();
+  const [snap, themes] = await Promise.all([snapshotCached(), dim === 'theme' ? readPortfolios().catch(() => ({})) : null]);
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error && !RowCard.isFund(r));
   // A lender has no cost of sales: left out of gross profit and gross margin.
   const lenderOut = GroupLines.NO_FIN.has(mk);
-  const membersOf = (name) => rows.filter((r) => String(r[dim] || '') === name && !(lenderOut && r.sector === 'Financial Services'));
+  // A THEME is one of the site's own hand-made lists (2026-10-20, the owner:
+  // "Go ahead with themes as well"). A company may be in several, and counts
+  // in each; the list is the themes table, not a field on the stored row.
+  const inTheme = (name) => new Set(((themes || {})[name] || []).map((x) => String(x).toUpperCase()));
+  const membersOf = (name) => {
+    const set = dim === 'theme' ? inTheme(name) : null;
+    return rows.filter((r) => (set ? set.has(String(r.symbol).toUpperCase()) : String(r[dim] || '') === name) && !(lenderOut && r.sector === 'Financial Services'));
+  };
   const want = names.map((n) => ({ name: n, members: membersOf(n) }));
   const series = await store.readLineSeries([...new Set(want.flatMap((g) => g.members.map((r) => String(r.symbol).toUpperCase())))]);
   // THE QUARTERS DRAWN end at the newest quarter end most members hold: a
@@ -14079,7 +14086,7 @@ async function groupLinesFor(dim, names, nqIn, mk) {
   return body;
 }
 function glParams(q) {
-  const dim = q.dim === 'industry' ? 'industry' : q.dim === 'sector' ? 'sector' : null;
+  const dim = q.dim === 'industry' ? 'industry' : q.dim === 'sector' ? 'sector' : q.dim === 'theme' ? 'theme' : null;
   const mk = GL_MEASURES.has(String(q.m)) ? String(q.m) : null;
   const names = String(q.names || '').split('|').map((x) => x.trim()).filter((x) => x && x.length <= 80).slice(0, GL_MAX);
   return dim && mk && names.length ? { dim, mk, names, nq: q.nq } : null;
@@ -14087,7 +14094,7 @@ function glParams(q) {
 app.get('/api/group-lines', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const p = glParams(req.query || {});
-  if (!p) return res.status(400).json({ error: 'A dimension (sector or industry), a measure and one to ' + GL_MAX + ' names.' });
+  if (!p) return res.status(400).json({ error: 'A dimension (sector, industry or theme), a measure and one to ' + GL_MAX + ' names.' });
   res.json(await groupLinesFor(p.dim, p.names, p.nq, p.mk));
 }));
 

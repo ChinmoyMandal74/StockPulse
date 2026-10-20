@@ -1523,6 +1523,7 @@
       if (tpl === 'lines') return lineBasketDays(opts);
       if (tpl === 'seclines') return lineBasketDays(opts, 'gln');
       if (tpl === 'indlines') return lineBasketDays(opts, 'iln');
+      if (tpl === 'thmlines') return lineBasketDays(opts, 'tln');
       if (tpl === 'race' && RACE_MEASURES[(opts || {}).racMeasure]) return 0;
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
@@ -11616,7 +11617,11 @@
   //     quarterly series by grouplines.js, the same companies in every quarter.
   // Funds are never a member. Lenders are left out of gross profit and gross
   // margin, as on the Lines card.
-  const GLN = { seclines: { p: 'gln', G: GROUPING.sector }, indlines: { p: 'iln', G: GROUPING.industry } };
+  // Themes too (2026-10-20): a company may be in several and counts in each.
+  // The server asks for them as 'theme' (its own word; the row field is
+  // `portfolios`), the rest by the row field itself.
+  const GLN = { seclines: { p: 'gln', G: GROUPING.sector, dim: 'sector' }, indlines: { p: 'iln', G: GROUPING.industry, dim: 'industry' },
+    thmlines: { p: 'tln', G: GROUPING.theme, dim: 'theme' } };
   const GLN_MAX = 8, GLN_DEFAULT = 5, GLN_MIN = 3;
   // grouplines.js's median, restated: this module has no requires.
   const glnMedian = (xs) => { const a = xs.filter((x) => x != null && isFinite(x)).sort((p, q) => p - q); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
@@ -11708,7 +11713,7 @@
       }
     } else {
       winLabel = win[3];
-      data = getGroupLines({ dim: G.field, names: picks, nq: win[2], m: mk });
+      data = getGroupLines({ dim: T.dim, names: picks, nq: win[2], m: mk });
       if (!data || !Array.isArray(data.quarters)) return shell('Reading the filings', 'Drawing', 'the lines…');
       xs = data.quarters;
       for (const g of data.groups || []) { used[g.name] = [g.used, g.of]; if (g.values) vals[g.name] = g.values; }
@@ -12395,6 +12400,7 @@
     filed: tplFiled,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
+    thmlines: () => tplGroupLines('thmlines'),
     secmargin: () => marginsCard('secmargin'),
     thmmargin: () => marginsCard('thmmargin'),
     thmrank: tplThmRank,
@@ -15069,7 +15075,7 @@
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     groupLinesNeed, groupLinesMax: () => GLN_MAX,
     // The sectors or industries a group Lines card can draw, largest first.
-    groupNames: (dim, rows) => groupList(rows || [], 'All', GROUPING[dim === 'industry' ? 'industry' : 'sector']),
+    groupNames: (dim, rows) => groupList(rows || [], 'All', GROUPING[dim === 'industry' ? 'industry' : dim === 'theme' ? 'theme' : 'sector']),
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),

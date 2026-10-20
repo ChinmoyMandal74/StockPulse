@@ -145,6 +145,13 @@
     body.mem #sizeLab, body.mem #sizeList, body.mem #dlBtn, body.mem #dlMsg { display: none; }
     body.mem #vidBox { display: none; }
     /* Sector and Industry Lines (2026-10-20): the groups to draw, ticked. */
+    #tlnBox .gl-chips { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
+    #tlnBox .gl-chip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+    #tlnBox .gl-chip:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    #tlnBox .gl-chip span.n { margin-left: auto; color: var(--faint); font: 500 11px var(--mono, monospace); }
+    #tlnBox .gl-chip.off { opacity: 0.45; }
+    #tlnBox .gl-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    #tlnBox .gl-acts span { font-size: 12px; color: var(--faint); }
     #glnBox .gl-chips, #ilnBox .gl-chips { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto;
       margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
     #glnBox .gl-chip, #ilnBox .gl-chip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 4px 6px; border-radius: 6px; cursor: pointer; }
@@ -1225,6 +1232,18 @@
         <p class="hint">Each line is one industry, worked out as on the Sector lines card. An industry needs at least
           three companies with figures to draw a line.</p>
       </div>
+      <div id="tlnBox">
+        <label>Measure</label>
+        <select id="tlnMetric"></select>
+        <label>Time frame</label>
+        <select id="tlnWin"></select>
+        <label>Themes (up to 8)</label>
+        <input type="hidden" id="tlnPick" />
+        <div class="gl-acts"><button class="btn" type="button" data-gl="tln:top">Five largest</button><button class="btn" type="button" data-gl="tln:all">All</button><button class="btn" type="button" data-gl="tln:none">Clear</button><span id="tlnCount"></span></div>
+        <div class="gl-chips" id="tlnChips"></div>
+        <p class="hint">Each line is one of the site's themes, worked out as on the Sector lines card. A company in
+          two themes counts in both.</p>
+      </div>
       <!-- Filed yesterday (2026-10-20, Market): one day's 13D/13G and 8-K filings. -->
       <div id="fldBox">
         <label>Day</label>
@@ -2226,6 +2245,7 @@
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
       { id: 'seclines', name: 'Sector lines', note: 'The Lines card a line a sector: share price, volatility or any filed measure, for the sectors you tick' },
       { id: 'indlines', name: 'Industry lines', note: 'The Lines card a line an industry: share price, volatility or any filed measure, for the industries you tick' },
+      { id: 'thmlines', name: 'Theme lines', note: 'The Lines card a line a theme: share price, volatility or any filed measure, for the themes you tick' },
       { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
       { id: 'reel', name: 'Reel (video)', note: 'One stock as a 22-second 9:16 video for an Instagram Reel: an opening line, its twelve figures, the Signal with its rule, a year of its price, and the end card' },
       { id: 'stkchart', name: 'Chart — any measure', note: 'One company on any measure the Lines card draws — its share price, its volatility, or a figure from its filings — over the time frame you pick' },
@@ -2434,6 +2454,7 @@
       ['thmmargin', 'Margins'],
       ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
+      ['thmlines', 'Lines — any measure'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
@@ -2990,6 +3011,9 @@
     // measure and the quarters. The daily windows come from the basket.
     const glCache = {};
     const glPending = {};
+    // The three group Lines cards and their control prefixes.
+    const GL_TPL = { seclines: 'gln', indlines: 'iln', thmlines: 'tln' };
+    const GL_DIM = { gln: 'sector', iln: 'industry', tln: 'theme' };
     function getGroupLines(need) {
       const k = need.dim + '|' + need.names.join('|') + '|' + need.nq + '|' + need.m;
       if (glCache[k]) return glCache[k];
@@ -2998,7 +3022,7 @@
       fetch('/api/group-lines?dim=' + encodeURIComponent(need.dim) + '&m=' + encodeURIComponent(need.m) + '&nq=' + encodeURIComponent(need.nq)
         + '&names=' + encodeURIComponent(need.names.join('|')), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { glPending[k] = false; if (!d || !d.quarters) return; glCache[k] = d; if (tpl === 'seclines' || tpl === 'indlines') render(); })
+        .then((d) => { glPending[k] = false; if (!d || !d.quarters) return; glCache[k] = d; if (GL_TPL[tpl]) render(); })
         .catch(() => { glPending[k] = false; });
       return null;
     }
@@ -3006,7 +3030,7 @@
     // live in the hidden `glnPick` / `ilnPick`, '|'-joined, which is what a
     // saved post keeps. None ticked yet: the five largest are ticked for you.
     function paintGroupChips(p) {
-      const dim = p === 'gln' ? 'sector' : 'industry';
+      const dim = GL_DIM[p];
       const all = Cards.groupNames(dim, stocks);
       const max = Cards.groupLinesMax();
       const pickEl = $(p + 'Pick');
@@ -3037,7 +3061,7 @@
     }
     document.querySelectorAll('[data-gl]').forEach((b) => b.addEventListener('click', () => {
       const [p, what] = b.dataset.gl.split(':');
-      const all = Cards.groupNames(p === 'gln' ? 'sector' : 'industry', stocks);
+      const all = Cards.groupNames(GL_DIM[p], stocks);
       const max = Cards.groupLinesMax();
       $(p + 'Pick').value = (what === 'all' ? all.slice(0, max) : what === 'none' ? all.slice(0, 1) : all.slice(0, 5)).map((g) => g.name).join('|');
       render();
@@ -3123,7 +3147,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3873,14 +3897,14 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines', 'stkchart', 'seclines', 'indlines']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines', 'stkchart', 'seclines', 'indlines', 'thmlines']), FILL_KEEP = 32;
     function fillGap(stage) {
       // THE LINES CARD FILLS ITS BODY ALREADY (.pv-in is height 100%, the note
       // pushed down by an auto margin), so the measure below would always find
       // nothing. Its spare room is the band between the chart and the note,
       // and that is measured on every shape, story included. offsetTop, not
       // getBoundingClientRect: the stage may be scaled to fit the window.
-      if (tpl === 'lines' || tpl === 'stkchart' || tpl === 'seclines' || tpl === 'indlines') {
+      if (tpl === 'lines' || tpl === 'stkchart' || tpl === 'seclines' || tpl === 'indlines' || tpl === 'thmlines') {
         const chart = stage.querySelector('.ln-in .pv-chart'), note = stage.querySelector('.ln-in > .s-sub');
         if (!chart || !note) return 0;
         const gap = note.offsetTop - (chart.offsetTop + chart.offsetHeight) - FILL_KEEP / 2;
@@ -3988,7 +4012,8 @@
       $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
       $('glnBox').style.display = tpl === 'seclines' ? 'block' : 'none';
       $('ilnBox').style.display = tpl === 'indlines' ? 'block' : 'none';
-      if (tpl === 'seclines' || tpl === 'indlines') paintGroupChips(tpl === 'seclines' ? 'gln' : 'iln');
+      $('tlnBox').style.display = tpl === 'thmlines' ? 'block' : 'none';
+      if (GL_TPL[tpl]) paintGroupChips(GL_TPL[tpl]);
       $('iflBox').style.display = tpl === 'instflow' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
@@ -4393,7 +4418,7 @@
     }());
     $('linMetric').addEventListener('change', () => { fillLineWindows(); if (tpl === 'lines') render(); });
     // The group Lines cards: the same catalogue, and the windows follow the measure.
-    for (const p of ['gln', 'iln']) {
+    for (const p of ['gln', 'iln', 'tln']) {
       const sel = $(p + 'Metric');
       const groups = new Map();
       for (const [v, label, grp] of Cards.lineMetrics()) {
@@ -4407,7 +4432,7 @@
         el.value = wins.some((w) => w[0] === keep) ? keep : (wins.find((w) => w[2]) || wins[0])[0];
       };
       fillWins();
-      const mine = p === 'gln' ? 'seclines' : 'indlines';
+      const mine = Object.keys(GL_TPL).find((t) => GL_TPL[t] === p);
       sel.addEventListener('change', () => { fillWins(); if (tpl === mine) render(); });
       $(p + 'Win').addEventListener('change', () => { if (tpl === mine) render(); });
     }
