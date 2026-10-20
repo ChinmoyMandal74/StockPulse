@@ -1514,6 +1514,15 @@ const ADDED_COLUMNS = [
   // dividend record), interest expense (interest coverage), and current
   // assets and liabilities (the Piotroski F-score). Null on every row written
   // before the company was next re-read (sec-reread.js).
+  // The shadow model's reading of the same article (2026-10-19, the owner's
+  // comparison of a cheaper model), beside the main one and never in place
+  // of it: the stock page shows it to the admin only. Null on every row the
+  // shadow has not read.
+  "alter table news_tone add column shadow_model text",
+  "alter table news_tone add column shadow_about text",
+  "alter table news_tone add column shadow_kind text",
+  "alter table news_tone add column shadow_tone real",
+  "alter table news_tone add column shadow_summary text",
   "alter table sec_facts add column dividends_per_share real",
   "alter table sec_facts add column interest_expense real",
   "alter table sec_facts add column current_assets real",
@@ -7395,13 +7404,42 @@ async function readNews(symbol, limit = 12, offset = 0) {
 async function readNewsToneList(symbol, limit = 20, offset = 0) {
   await init();
   const r = await db.execute({
-    sql: `select published_at, headline, source, url, about, kind, tone, summary, complete, model from news_tone
+    sql: `select published_at, headline, source, url, about, kind, tone, summary, complete, model,
+                 shadow_model, shadow_about, shadow_kind, shadow_tone, shadow_summary from news_tone
            where symbol = ? and status = 'scored' and about = 'primary'
            order by published_at desc limit ? offset ?`,
     args: [symbol, Math.min(100, Math.max(1, Number(limit) || 20)), Math.max(0, Number(offset) || 0)],
   });
+  // `shadow` rides along for the caller to keep or drop: the route sends it
+  // to the admin only.
   return r.rows.map((x) => ({ published_at: x.published_at, headline: x.headline, source: x.source, url: x.url, about: x.about, kind: x.kind,
-    tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null, complete: x.complete == null ? null : Number(x.complete) === 1, model: x.model }));
+    tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null, complete: x.complete == null ? null : Number(x.complete) === 1, model: x.model,
+    shadow: x.shadow_model ? { model: x.shadow_model, about: x.shadow_about || null, kind: x.shadow_kind || null,
+      tone: x.shadow_tone == null ? null : Number(x.shadow_tone), summary: x.shadow_summary || null } : null }));
+}
+
+// The shadow model's reading of a row already written (news-tone-load.js
+// --shadow). Its own five columns and nothing else, so the main reading,
+// which is final once scored, cannot be touched by it.
+async function writeNewsToneShadow(id, s) {
+  await init();
+  await db.execute({
+    sql: `update news_tone set shadow_model = ?, shadow_about = ?, shadow_kind = ?, shadow_tone = ?, shadow_summary = ? where id = ?`,
+    args: [s.model, s.about || null, s.kind || null, s.tone == null ? null : Number(s.tone), s.summary || null, id],
+  });
+}
+
+// One stock's scored readings since a date that the shadow has not read yet,
+// for the shadow's catch-up over the week already on file. The same seek.
+async function readNewsToneUnshadowed(symbol, sinceIso) {
+  await init();
+  const r = await db.execute({
+    sql: `select id, url, headline, source, published_at, about, kind, tone, summary, model from news_tone
+           where symbol = ? and published_at >= ? and status = 'scored' and shadow_model is null`,
+    args: [symbol, sinceIso],
+  });
+  return r.rows.map((x) => ({ id: x.id, url: x.url, headline: x.headline, source: x.source, published_at: x.published_at,
+    about: x.about, kind: x.kind, tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null, model: x.model }));
 }
 
 // One stock's readings published since a date, for the seven-day line. The
@@ -7664,7 +7702,7 @@ module.exports = {
   // pressing Run again and a reader reporting a bug.
   isNetDrop,
   init,
-  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone,
+  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone, writeNewsToneShadow, readNewsToneUnshadowed,
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,

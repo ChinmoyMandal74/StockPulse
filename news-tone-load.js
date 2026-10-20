@@ -178,8 +178,16 @@ async function shadowRead(h, input, main) {
     if (err instanceof Stop) { shadowOff = true; console.log('  shadow stopped: ' + err.message); }
   }
   const line = { at: new Date().toISOString(), id: h.id, symbol: h.symbol, url: h.url, headline: h.headline,
-    chars: input.text.length, main: pick(main, MODEL), shadow: pick(sh, SHADOW) };
+    chars: input.text.length, main: main && main.answer ? pick(main, MODEL) : main, shadow: pick(sh, SHADOW) };
   try { require('fs').appendFileSync(SHADOW_FILE, JSON.stringify(line) + '\n'); } catch (e) { /* the file is a convenience */ }
+  // Kept on the article for write(), which stores it in the row's shadow
+  // columns once the main reading is written (the stock page shows it to the
+  // admin). Only a reading that answered and kept the rules.
+  const s = line.shadow;
+  if (s && !s.error && !s.refused && typeof s.tone === 'number' && s.readable !== false) {
+    h.__shadow = { model: SHADOW, about: s.about, kind: s.kind, tone: Math.round(s.tone * 100) / 100,
+      summary: (s.problems || []).some((p) => /^summary/.test(p)) ? null : s.summary };
+  }
 }
 
 // What a run should look at: no row yet, or a transient failure that has
@@ -187,11 +195,45 @@ async function shadowRead(h, input, main) {
 const due = (k) => !k
   || (k.status === 'failed' && k.attempts < MAX_ATTEMPTS && Date.now() - (k.scoredAt || 0) > RETRY_AFTER_MS);
 
+// THE SHADOW'S CATCH-UP (--shadow-backfill): the readings already on file for
+// the last DAYS that the shadow has not read. Each article is fetched again
+// (politely, as always) and read by the shadow ONLY; the main reading stays as
+// it is, and the shadow's goes in its own columns and the local file.
+async function shadowBackfill(stocks) {
+  const since = new Date(Date.now() - DAYS * 86400000).toISOString();
+  let todo = [];
+  for (const s of stocks) {
+    for (const r of await store.readNewsToneUnshadowed(s.symbol, since)) todo.push(Object.assign({ symbol: s.symbol, name: s.name }, r));
+  }
+  if (LIMIT) todo = todo.slice(0, LIMIT);
+  console.log(`[${new Date().toISOString()}] shadow catch-up: ${todo.length} readings on file from the last ${DAYS} days without a ${SHADOW} reading; stop at $${SHADOW_MAX_USD.toFixed(2)}. `
+    + (COMMIT ? 'COMMIT: writing the shadow columns' : 'DRY RUN: nothing will be written'));
+  let done = 0, gone = 0;
+  for (const h of todo) {
+    if (shadowOff || shadowSpent >= SHADOW_MAX_USD) break;
+    const page = await readPage(h.url);
+    if (!page.text) { gone++; continue; }
+    const input = { symbol: h.symbol, name: h.name, headline: h.headline, source: h.source, text: page.text };
+    // The main reading as stored, in the shape the file keeps.
+    const main = { model: h.model || MODEL, readable: true, about: h.about, kind: h.kind, tone: h.tone, summary: h.summary, problems: [], cost: null, stored: true };
+    await shadowRead(h, input, main);
+    if (COMMIT && h.__shadow) await store.writeNewsToneShadow(h.id, h.__shadow).catch(() => {});
+    if (h.__shadow) done++;
+    if ((done + gone) % 25 === 0) console.log(`  ${done + gone}/${todo.length} -- ${done} read, ${gone} no longer readable, $${shadowSpent.toFixed(3)}`);
+  }
+  console.log(`\nshadow catch-up: ${done} read, ${gone} no longer readable, ${shadowFail} failed; $${shadowSpent.toFixed(3)} spent`);
+}
+
 (async () => {
   if (!KEY) throw new Error('ANTHROPIC_API_KEY is not set in .env');
   const snap = await store.readSnapshot();
   const stocks = ((snap && snap.stocks) || []).filter((s) => NewsTone.INDUSTRIES.includes(s.industry))
     .filter((s) => !ONLY || ONLY.has(String(s.symbol).toUpperCase()));
+  if (process.argv.includes('--shadow-backfill')) {
+    if (!SHADOW) throw new Error('--shadow-backfill needs --shadow <model>');
+    await shadowBackfill(stocks);
+    return;
+  }
   const sinceMs = Date.now() - DAYS * 86400000;
   const since = new Date(sinceMs).toISOString();
   let todo = [];
@@ -229,6 +271,7 @@ const due = (k) => !k
     if (COMMIT) {
       await store.writeNewsTone(Object.assign({ id: h.id, symbol: h.symbol, published_at: h.published_at,
         headline: h.headline, source: h.source, url: h.url, model: MODEL }, row));
+      if (h.__shadow) await store.writeNewsToneShadow(h.id, h.__shadow).catch(() => {});
     }
   };
 

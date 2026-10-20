@@ -15237,13 +15237,20 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
 // count, and the page only needs to know whether to offer the next page.
 // One stock's readings: the stock page's card and the Article tone promo
 // card both draw from this.
-async function toneStockPayload(symbol, limit = 8, offset = 0) {
+// `withShadow`: the admin's view, which carries the shadow model's reading of
+// each article beside the main one (the 2026-10-19 comparison). Everyone else,
+// and every promo card, gets the main reading only.
+async function toneStockPayload(symbol, limit = 8, offset = 0, withShadow = false) {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const [rows, week] = await Promise.all([
     store.readNewsToneList(symbol, limit + 1, offset),
     store.readNewsToneSince(symbol, weekAgo),
   ]);
-  const items = rows.slice(0, limit).map((x) => Object.assign(x, { label: NewsTone.label(x.tone), kindLabel: NewsTone.KIND_LABEL[x.kind] || null }));
+  const items = rows.slice(0, limit).map((x) => {
+    const sh = withShadow && x.shadow ? Object.assign({}, x.shadow, { label: NewsTone.label(x.shadow.tone), kindLabel: NewsTone.KIND_LABEL[x.shadow.kind] || null }) : null;
+    delete x.shadow;
+    return Object.assign(x, { label: NewsTone.label(x.tone), kindLabel: NewsTone.KIND_LABEL[x.kind] || null }, sh ? { shadow: sh } : {});
+  });
   return { symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND };
 }
 app.get('/api/news/tone', requireMember, route(async (req, res) => {
@@ -15252,7 +15259,7 @@ app.get('/api/news/tone', requireMember, route(async (req, res) => {
   if (!symbol) return res.status(400).json({ error: 'symbol required' });
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 8));
   const offset = Math.max(0, Number(req.query.offset) || 0);
-  res.json(await toneStockPayload(symbol, limit, offset));
+  res.json(await toneStockPayload(symbol, limit, offset, await isAdmin(req)));
 }));
 
 // An industry's readings, one row a stock, for the Article tone promo card.

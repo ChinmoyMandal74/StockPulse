@@ -73,11 +73,18 @@ console.log('  kind (results, opinion, price move, ...)  ' + pct(kindSame, n));
 console.log('  mean tone                                 main ' + (mx >= 0 ? '+' : '') + mx.toFixed(3) + '   shadow ' + (my >= 0 ? '+' : '') + my.toFixed(3));
 
 // ---- cost ------------------------------------------------------------------------
-const costOf = (k) => sum(all.filter((r) => r[k] && r[k].cost).map((r) => r[k].cost.usd));
-const cm = costOf('main'), cs = costOf('shadow');
-const days = Math.max(1 / 24, (Date.parse(last) - Date.parse(first)) / 86400000);
-console.log(`\nCost on these ${all.length} articles:  main $${cm.toFixed(3)} ($${(cm / all.length).toFixed(4)} each)   shadow $${cs.toFixed(3)} ($${(cs / all.length).toFixed(4)} each)   ratio ${(cm / cs).toFixed(1)}x`);
-if (days >= 1) console.log(`Over ${days.toFixed(1)} days, about ${(all.length / days).toFixed(0)} articles a day: a month is about main $${(cm / days * 30).toFixed(2)}, shadow $${(cs / days * 30).toFixed(2)}`);
+// Cost only where BOTH models were paid for in the same run: a catch-up row
+// (--shadow-backfill) carries the stored main reading, whose cost was paid
+// earlier and is not in this file.
+const paired = all.filter((r) => r.main && r.main.cost && r.shadow && r.shadow.cost);
+const cm = sum(paired.map((r) => r.main.cost.usd)), cs = sum(paired.map((r) => r.shadow.cost.usd));
+const csAll = sum(all.filter((r) => r.shadow && r.shadow.cost).map((r) => r.shadow.cost.usd));
+if (paired.length) {
+  console.log(`\nCost on the ${paired.length} articles both read in the same run:  main $${cm.toFixed(3)} ($${(cm / paired.length).toFixed(4)} each)   shadow $${cs.toFixed(3)} ($${(cs / paired.length).toFixed(4)} each)   ratio ${(cm / cs).toFixed(1)}x`);
+  const pf = paired.map((r) => r.at).sort(), days = (Date.parse(pf[pf.length - 1]) - Date.parse(pf[0])) / 86400000;
+  if (days >= 1) console.log(`Over ${days.toFixed(1)} days, about ${(paired.length / days).toFixed(0)} articles a day: a month is about main $${(cm / days * 30).toFixed(2)}, shadow $${(cs / days * 30).toFixed(2)}`);
+}
+console.log(`Shadow spend in the file, catch-up included: $${csAll.toFixed(3)}`);
 console.log('(Articles the main model alone read, skipped and unreadable ones, and the main model\'s re-asks are not in this file; see news-tone.log for the whole spend.)');
 
 // ---- where they differ most -------------------------------------------------------

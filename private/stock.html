@@ -669,6 +669,15 @@
     #tone .ti-sum { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
     #tone .ti-meta { margin-top: 4px; font-size: 11.5px; color: var(--faint); }
     #tone .tone-note { margin: 14px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
+    /* The shadow model's reading, admin only: a muted box under the main one,
+       amber-edged where the two disagree. */
+    #tone .ti-shadow { margin-top: 8px; padding: 7px 10px; border-radius: 9px; border: 1px dashed var(--hair-2);
+                       background: color-mix(in srgb, var(--wash) 3%, transparent); }
+    #tone .ti-shadow.differs { border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); }
+    #tone .ts-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+    #tone .ts-who { font: 500 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    #tone .ts-note { font-size: 11.5px; color: var(--amber); }
+    #tone .ts-sum { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--faint); }
     .news-types { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
     .news-types button { border: 1px solid var(--hair-2); background: none; color: var(--muted); cursor: pointer;
       font: 500 11.5px var(--sans); padding: 4px 10px; border-radius: 999px; }
@@ -2707,8 +2716,27 @@
           + `<span class="ti-chip ${cls}" title="Tone from −1 to +1">${esc(x.label || '')} ${esc(toneNum(x.tone))}</span>`
           + `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.headline || '')}</a></div>`
           + (x.summary ? `<p class="ti-sum">${esc(x.summary)}</p>` : '')
-          + `<div class="ti-meta">${meta}</div></div>`;
+          + `<div class="ti-meta">${meta}</div>` + renderToneShadow(x) + '</div>';
       }).join('');
+    }
+    // THE SHADOW MODEL'S READING (2026-10-19, the owner: "show both the
+    // outputs ... to me on the screen itself"). The server sends it to the
+    // admin only, so a member never meets a second reading. Amber where the
+    // two disagree on the tone's word or on whether the article is mainly
+    // about the company (which decides whether it is shown at all).
+    const MODEL_NAME = (m) => String(m || '').replace(/^claude-/, 'Claude ').replace(/-(\d+)-(\d+)$/, ' $1.$2').replace(/(^|\s)([a-z])/g, (s, a, b) => a + b.toUpperCase());
+    function renderToneShadow(x) {
+      const s = x.shadow;
+      if (!s) return '';
+      const cls = s.label === 'Positive' ? 'pos' : s.label === 'Negative' ? 'neg' : '';
+      const notShown = s.about && s.about !== 'primary';
+      const differs = s.label !== x.label || notShown;
+      const notes = [s.kindLabel && s.kindLabel !== x.kindLabel ? 'reads it as ' + s.kindLabel.toLowerCase() : null,
+        notShown ? (s.about === 'mentioned' ? 'would not show it: says it only mentions the company' : 'would not show it: says it is not about the company') : null].filter(Boolean);
+      return `<div class="ti-shadow${differs ? ' differs' : ''}"><div class="ts-h"><span class="ts-who">${esc(MODEL_NAME(s.model))} · admin only</span>`
+        + `<span class="ti-chip ${cls}">${esc(s.label || '')} ${esc(toneNum(s.tone))}</span>`
+        + (notes.length ? `<span class="ts-note">${esc(notes.join('; '))}</span>` : '') + '</div>'
+        + (s.summary ? `<p class="ts-sum">${esc(s.summary)}</p>` : '') + '</div>';
     }
     // ---- end news renderers ---------------------------------------------
 
