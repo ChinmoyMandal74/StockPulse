@@ -11625,6 +11625,9 @@
   const GLN_MAX = 8, GLN_DEFAULT = 5, GLN_MIN = 3;
   // grouplines.js's median, restated: this module has no requires.
   const glnMedian = (xs) => { const a = xs.filter((x) => x != null && isFinite(x)).sort((p, q) => p - q); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+  // The index cut, S&P 500 unless another is chosen (the owner: "I am more
+  // interested in s&p only"). Every member, every list and every line is cut.
+  const glnCut = (tpl, o) => { const c = (o || {})[GLN[tpl].p + 'Sp500']; return SP_CUTS.some(([k]) => k === c) ? c : 'in'; };
   const glnPicks = (tpl, o, all) => {
     const T = GLN[tpl];
     const known = new Set(all.map((g) => g.name));
@@ -11666,11 +11669,14 @@
     const f = LINE_FLAGS[mk] || {};
     const win = lineWin(mk, O[p + 'Win']);
     const mLabel = (PT.LINE_METRICS.find((m) => m[0] === mk) || [])[1] || mk;
-    const all = groupList(stocks, 'All', G);
-    if (!all.length) return shell(G.Many, mLabel, 'nothing to draw', 'No ' + G.many + ' on the screen yet.');
+    const cut = glnCut(tpl, O);
+    const cutWord = cut !== 'All' && SP_CUT_LABEL[cut] ? SP_CUT_LABEL[cut] : null;
+    const all = groupList(stocks, cut, G);
+    if (!all.length) return shell(cutWord || G.Many, mLabel, 'nothing to draw', 'No ' + G.many + ' with enough companies' + (cutWord ? ' in ' + (SP_CUT_PROSE[cut] || cutWord) : ' on the screen') + '.');
     const picks = glnPicks(tpl, O, all);
     const label = G.Many;
-    const kick = G.Many + ' · ' + picks.length + ' shown';
+    const kick = (cutWord ? cutWord + ' · ' : '') + G.Many + ' · ' + picks.length + ' shown';
+    const pool = spFilter(stocks, cut);
     const daily = mk === 'vol' || win[1] === 'd';
     const vals = {}, used = {};
     let xs, winLabel, data = null;
@@ -11687,7 +11693,7 @@
       if (mk === 'vol' && (!RC || !RC.volSeries)) return shell('Nothing to chart', 'Volatility', 'not available here');
       const from = mk === 'vol' ? 0 : i0;
       for (const name of picks) {
-        const members = stocks.filter((r) => r && !r.error && !isFundRow(r) && !IS_BENCH.has(r.symbol) && inGroup(r, G.field, name));
+        const members = pool.filter((r) => r && !r.error && !isFundRow(r) && !IS_BENCH.has(r.symbol) && inGroup(r, G.field, name));
         // THE MEDIAN COMPANY, as on the quarterly lines (grouplines.js says why
         // not an average): each member against its own first close in the
         // window, a missing day carrying its last; and for volatility, the
@@ -11713,7 +11719,7 @@
       }
     } else {
       winLabel = win[3];
-      data = getGroupLines({ dim: T.dim, names: picks, nq: win[2], m: mk });
+      data = getGroupLines({ dim: T.dim, names: picks, nq: win[2], m: mk, cut });
       if (!data || !Array.isArray(data.quarters)) return shell('Reading the filings', 'Drawing', 'the lines…');
       xs = data.quarters;
       for (const g of data.groups || []) { used[g.name] = [g.used, g.of]; if (g.values) vals[g.name] = g.values; }
@@ -11726,7 +11732,7 @@
       ? (mk === 'vol' ? 'Each line is the median of the ' + G.one + '’s companies’ 30-day volatility: the typical company’s daily moves over the last thirty sessions, annualised. '
         : 'Each line is the median company’s return in the ' + G.one + ' since the first close of the window, price only: what the typical company did, which one or two large winners cannot lead. ')
       : 'Each line is ' + (GLN_HOW[mk] || 'the ' + G.one + '’s figure') + (mk === 'px' ? '. One point per quarter end. ' : ', from the filings. ');
-    const note = 'Built from ' + u[0].toLocaleString('en-US') + ' of the ' + u[1].toLocaleString('en-US') + ' companies in the ' + G.many + ' shown'
+    const note = 'Built from ' + u[0].toLocaleString('en-US') + ' of the ' + u[1].toLocaleString('en-US') + ' companies in the ' + G.many + ' shown' + (cutWord ? ' that are in ' + (SP_CUT_PROSE[cut] || cutWord) : '')
       + (daily || mk === 'px' ? ' (those priced at the start of the window). ' : ', those with a figure in every quarter drawn. ')
       + (thin.length ? thin.slice(0, 2).join(', ') + (thin.length > 2 ? ' and ' + (thin.length - 2) + ' more' : '') + (thin.length === 1 ? ' has' : ' have') + ' too few companies with figures to draw. ' : '')
       + (data && data.lenderOut ? 'Lenders are left out: this measure means nothing for one. ' : '')
@@ -15075,7 +15081,8 @@
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     groupLinesNeed, groupLinesMax: () => GLN_MAX,
     // The sectors or industries a group Lines card can draw, largest first.
-    groupNames: (dim, rows) => groupList(rows || [], 'All', GROUPING[dim === 'industry' ? 'industry' : dim === 'theme' ? 'theme' : 'sector']),
+    groupNames: (dim, rows, cut) => groupList(rows || [], cut || 'All', GROUPING[dim === 'industry' ? 'industry' : dim === 'theme' ? 'theme' : 'sector']),
+    groupLinesCut: (tpl, opts) => (GLN[tpl] ? glnCut(tpl, opts) : 'All'),
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),

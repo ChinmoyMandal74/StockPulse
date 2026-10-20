@@ -12167,7 +12167,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // The Sector and Industry Lines cards: their groups' lines, only when asked for.
   let glines = null;
   const glNeed = Cards.groupLinesNeed(post.tpl, { stocks, myLists, screens, size: POST_SIZES[post.size], opts: post.opts || {} });
-  if (glNeed) { try { glines = await groupLinesFor(glNeed.dim, glNeed.names, glNeed.nq, glNeed.m); } catch { glines = null; } }
+  if (glNeed) { try { glines = await groupLinesFor(glNeed.dim, glNeed.names, glNeed.nq, glNeed.m, glNeed.cut); } catch { glines = null; } }
 
   // The Filed yesterday card: one day's filings, only when asked for.
   let fld = null;
@@ -14042,13 +14042,34 @@ const GroupLines = require('./grouplines.js');
 const GL_MEASURES = new Set(['px', 'rev', 'gp', 'oi', 'ni', 'fcf', 'gm', 'om', 'pm', 'fm', 'rg', 'cap', 'pe', 'ps']);
 const GL_MAX = 8;
 const glCache = new Map();
-async function groupLinesFor(dim, names, nqIn, mk) {
+// THE INDEX CUT (2026-10-20, the owner: "I should still be able to filter
+// index membership, I am more interested in s&p only"): the Cards module's own
+// cuts, struck on the two funds' holdings files. A cut that asserts an absence
+// needs both files; with none held, an asserting cut has no members.
+const GL_CUTS = new Set(['All', 'in', 'ndx', 'either', 'ndxonly', 'neither']);
+async function glCutTest(cut) {
+  if (cut === 'All') return () => true;
+  const [sp, nd] = await Promise.all([spMembers().catch(() => ({ set: null })), fundMembers(NDX_FUND).catch(() => ({ set: null }))]);
+  const S = sp.set, N = nd.set;
+  const has = (set, s) => (set ? set.has(s) : null);
+  return (sym) => {
+    const a = has(S, sym), b = has(N, sym);
+    if (cut === 'in') return a === true;
+    if (cut === 'ndx') return b === true;
+    if (cut === 'either') return a === true || b === true;
+    if (cut === 'ndxonly') return b === true && a === false;
+    if (cut === 'neither') return a === false && b === false;
+    return true;
+  };
+}
+async function groupLinesFor(dim, names, nqIn, mk, cutIn) {
   const nq = LINE_QUARTERS.includes(Number(nqIn)) ? Number(nqIn) : 21;
-  const key = dim + '|' + names.join('\u0001') + '|' + nq + '|' + mk;
+  const cut = GL_CUTS.has(String(cutIn)) ? String(cutIn) : 'All';
+  const key = dim + '|' + names.join('\u0001') + '|' + nq + '|' + mk + '|' + cut;
   const hit = glCache.get(key);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
-  const [snap, themes] = await Promise.all([snapshotCached(), dim === 'theme' ? readPortfolios().catch(() => ({})) : null]);
-  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error && !RowCard.isFund(r));
+  const [snap, themes, inCut] = await Promise.all([snapshotCached(), dim === 'theme' ? readPortfolios().catch(() => ({})) : null, glCutTest(cut)]);
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error && !RowCard.isFund(r) && inCut(r.symbol));
   // A lender has no cost of sales: left out of gross profit and gross margin.
   const lenderOut = GroupLines.NO_FIN.has(mk);
   // A THEME is one of the site's own hand-made lists (2026-10-20, the owner:
@@ -14080,7 +14101,7 @@ async function groupLinesFor(dim, names, nqIn, mk) {
     const a = quarters.length ? GroupLines.aggregate(ms, quarters, mk) : { values: null, used: 0, of: ms.length };
     return { name: g.name, values: a.values, used: a.used, of: g.members.length, withSeries: ms.length };
   });
-  const body = { dim, measure: mk, quarters, groups, lenderOut };
+  const body = { dim, measure: mk, cut, quarters, groups, lenderOut };
   if (glCache.size > 200) glCache.clear();
   glCache.set(key, { at: Date.now(), body });
   return body;
@@ -14089,13 +14110,13 @@ function glParams(q) {
   const dim = q.dim === 'industry' ? 'industry' : q.dim === 'sector' ? 'sector' : q.dim === 'theme' ? 'theme' : null;
   const mk = GL_MEASURES.has(String(q.m)) ? String(q.m) : null;
   const names = String(q.names || '').split('|').map((x) => x.trim()).filter((x) => x && x.length <= 80).slice(0, GL_MAX);
-  return dim && mk && names.length ? { dim, mk, names, nq: q.nq } : null;
+  return dim && mk && names.length ? { dim, mk, names, nq: q.nq, cut: GL_CUTS.has(String(q.cut)) ? String(q.cut) : 'All' } : null;
 }
 app.get('/api/group-lines', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const p = glParams(req.query || {});
   if (!p) return res.status(400).json({ error: 'A dimension (sector, industry or theme), a measure and one to ' + GL_MAX + ' names.' });
-  res.json(await groupLinesFor(p.dim, p.names, p.nq, p.mk));
+  res.json(await groupLinesFor(p.dim, p.names, p.nq, p.mk, p.cut));
 }));
 
 // ---- Growth and profitability: revenue, net income and net margin -----------

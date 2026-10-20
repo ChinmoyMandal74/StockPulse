@@ -40,3 +40,14 @@ The owner: "Go ahead with themes as well". Under Theme, **Lines — any measure*
 - **Membership:** the card reads it from the rows' `portfolios` field, which the screener stamps when it serves (`finishServe`). The server reads the themes table itself (`readPortfolios`), because the stored snapshot has no membership on it; it is asked as `dim=theme`.
 - **The list:** 22 of the 27 themes are offered on 2026-10-20. The others have fewer than three companies, or only funds (Benchmarks, ETFs). The defaults are the five largest by market value: Mag 7, Hyperscalers, Space, Memory, and Cloud Infra, Hardware and Networking.
 - **Tested:** the route on an in-memory database (two more checks: a theme's sum with its fund left out, a company in two themes counting in both), and the studio over the live tables (three more: the list, the share price drawn, revenue from the server).
+
+## The index cut (2026-10-20, all three)
+The owner: "All the 3 news cards, I shoukd still be able to filter index membership, I am more interested in s&p only".
+
+- An **Index** picker on Sector, Industry and Theme lines (`glnSp500`, `ilnSp500`, `tlnSp500`), with the Cards module's cuts (All stocks, S&P 500, Nasdaq 100, either, Nasdaq 100 not S&P, neither). **It opens on the S&P 500**, and a saved post without the key reads as the S&P 500 too (`glnCut`).
+- **Every part is cut:** the list of groups to tick (counts and the five largest are within the cut, `Cards.groupNames(dim, rows, cut)`), the daily lines (members through `spFilter`), and the server's filed lines (`cut=` on `/api/group-lines`; `glCutTest` strikes it on the two funds' holdings files, the same as the screener's flags). A cut that asserts membership or absence finds no members when the file it needs is missing: unknown is never "in".
+- The kicker reads "S&P 500 · Sectors · 5 shown", and the note "…companies in the sectors shown that are in the S&P 500".
+- **Fixed with it:** the tick list's labels had taken the side panel's uppercase heading style, and its three buttons stretched to full width (seen in the owner's screenshot). They are scoped back to names and side-by-side buttons.
+- **Tested:**
+  - The route on an in-memory database (16 checks): the S&P cut with a seeded holdings file, no Nasdaq 100 file meaning no members, an unknown cut read as All. Proven by removing the cut (2 failures).
+  - The studio over the live tables with the real index files, 503 and 101 holdings (18 checks): the default kicker and note, All stocks dropping the prefix and raising the counts, the label and button styling measured, every filed request asking for the S&P 500, and Theme lines within it (18 themes have enough S&P 500 members).

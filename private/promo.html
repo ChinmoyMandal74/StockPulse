@@ -152,6 +152,8 @@
     #tlnBox .gl-chip.off { opacity: 0.45; }
     #tlnBox .gl-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     #tlnBox .gl-acts span { font-size: 12px; color: var(--faint); }
+    #glnBox label.gl-chip, #ilnBox label.gl-chip, #tlnBox label.gl-chip { text-transform: none; letter-spacing: normal; font: 500 13px var(--sans, sans-serif); margin: 0; }
+    #glnBox .gl-acts .btn, #ilnBox .gl-acts .btn, #tlnBox .gl-acts .btn { width: auto; flex: 0 0 auto; margin: 0; padding: 6px 12px; font-size: 12px; }
     #glnBox .gl-chips, #ilnBox .gl-chips { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto;
       margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
     #glnBox .gl-chip, #ilnBox .gl-chip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 4px 6px; border-radius: 6px; cursor: pointer; }
@@ -1210,6 +1212,8 @@
         <select id="glnMetric"></select>
         <label>Time frame</label>
         <select id="glnWin"></select>
+        <label>Index</label>
+        <select id="glnSp500"></select>
         <label>Sectors (up to 8)</label>
         <input type="hidden" id="glnPick" />
         <div class="gl-acts"><button class="btn" type="button" data-gl="gln:top">Five largest</button><button class="btn" type="button" data-gl="gln:all">All</button><button class="btn" type="button" data-gl="gln:none">Clear</button><span id="glnCount"></span></div>
@@ -1223,6 +1227,8 @@
         <select id="ilnMetric"></select>
         <label>Time frame</label>
         <select id="ilnWin"></select>
+        <label>Index</label>
+        <select id="ilnSp500"></select>
         <label>Industries (up to 8)</label>
         <input type="hidden" id="ilnPick" />
         <select id="ilnSector" aria-label="Show the industries in one sector"><option value="">Every sector's industries</option></select>
@@ -1237,6 +1243,8 @@
         <select id="tlnMetric"></select>
         <label>Time frame</label>
         <select id="tlnWin"></select>
+        <label>Index</label>
+        <select id="tlnSp500"></select>
         <label>Themes (up to 8)</label>
         <input type="hidden" id="tlnPick" />
         <div class="gl-acts"><button class="btn" type="button" data-gl="tln:top">Five largest</button><button class="btn" type="button" data-gl="tln:all">All</button><button class="btn" type="button" data-gl="tln:none">Clear</button><span id="tlnCount"></span></div>
@@ -3015,12 +3023,12 @@
     const GL_TPL = { seclines: 'gln', indlines: 'iln', thmlines: 'tln' };
     const GL_DIM = { gln: 'sector', iln: 'industry', tln: 'theme' };
     function getGroupLines(need) {
-      const k = need.dim + '|' + need.names.join('|') + '|' + need.nq + '|' + need.m;
+      const k = need.dim + '|' + need.names.join('|') + '|' + need.nq + '|' + need.m + '|' + (need.cut || 'All');
       if (glCache[k]) return glCache[k];
       if (glPending[k]) return null;
       glPending[k] = true;
       fetch('/api/group-lines?dim=' + encodeURIComponent(need.dim) + '&m=' + encodeURIComponent(need.m) + '&nq=' + encodeURIComponent(need.nq)
-        + '&names=' + encodeURIComponent(need.names.join('|')), { cache: 'no-store' })
+        + '&cut=' + encodeURIComponent(need.cut || 'All') + '&names=' + encodeURIComponent(need.names.join('|')), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { glPending[k] = false; if (!d || !d.quarters) return; glCache[k] = d; if (GL_TPL[tpl]) render(); })
         .catch(() => { glPending[k] = false; });
@@ -3031,7 +3039,8 @@
     // saved post keeps. None ticked yet: the five largest are ticked for you.
     function paintGroupChips(p) {
       const dim = GL_DIM[p];
-      const all = Cards.groupNames(dim, stocks);
+      const tplOf = Object.keys(GL_TPL).find((t) => GL_TPL[t] === p);
+      const all = Cards.groupNames(dim, stocks, Cards.groupLinesCut(tplOf, controlOpts()));
       const max = Cards.groupLinesMax();
       const pickEl = $(p + 'Pick');
       const known = new Set(all.map((g) => g.name));
@@ -3061,7 +3070,8 @@
     }
     document.querySelectorAll('[data-gl]').forEach((b) => b.addEventListener('click', () => {
       const [p, what] = b.dataset.gl.split(':');
-      const all = Cards.groupNames(GL_DIM[p], stocks);
+      const tplOf = Object.keys(GL_TPL).find((t) => GL_TPL[t] === p);
+      const all = Cards.groupNames(GL_DIM[p], stocks, Cards.groupLinesCut(tplOf, controlOpts()));
       const max = Cards.groupLinesMax();
       $(p + 'Pick').value = (what === 'all' ? all.slice(0, max) : what === 'none' ? all.slice(0, 1) : all.slice(0, 5)).map((g) => g.name).join('|');
       render();
@@ -3147,7 +3157,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -4435,6 +4445,9 @@
       const mine = Object.keys(GL_TPL).find((t) => GL_TPL[t] === p);
       sel.addEventListener('change', () => { fillWins(); if (tpl === mine) render(); });
       $(p + 'Win').addEventListener('change', () => { if (tpl === mine) render(); });
+      // The index cut: S&P 500 to start. Changing it re-cuts the list to tick from.
+      for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'in', v === 'in'));
+      $(p + 'Sp500').addEventListener('change', () => { if (tpl === mine) render(); });
     }
     // Chart, any measure: the same catalogue and the same rule that the time
     // frames follow the measure, on its own controls.
