@@ -1188,6 +1188,18 @@
           filings. A price or volatility can be drawn day by day up to a year;
           a filed figure and a longer price line, one point per quarter end.</p>
       </div>
+      <!-- Filed yesterday (2026-10-20, Market): one day's 13D/13G and 8-K filings. -->
+      <div id="fldBox">
+        <label>Day</label>
+        <select id="fldDay"><option value="">Newest day read</option></select>
+        <label>Show</label>
+        <select id="fldShow"></select>
+        <label>Index</label>
+        <select id="fldSp500"></select>
+        <p class="hint">What the SEC received on one business day about the companies on the screen:
+          5% holder filings (13D, 13G) and 8-Ks. Read each morning from the SEC's daily index, so the
+          newest day is normally yesterday.</p>
+      </div>
       <!-- Reel (2026-10-19, admin only): one stock as a 22-second video. -->
       <div id="rlBox">
         <label>Stock</label>
@@ -2175,6 +2187,7 @@
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
+      { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
       { id: 'reel', name: 'Reel (video)', note: 'One stock as a 22-second 9:16 video for an Instagram Reel: an opening line, its twelve figures, the Signal with its rule, a year of its price, and the end card' },
       { id: 'stkchart', name: 'Chart — any measure', note: 'One company on any measure the Lines card draws — its share price, its volatility, or a figure from its filings — over the time frame you pick' },
       { id: 'bands', name: 'Bollinger bands', note: 'One stock in its 20-day band: the close, the average and two standard deviations either side, with where it sits and how wide the band is' },
@@ -2296,6 +2309,7 @@
       ['mktmonths', 'Month by month'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
+      ['filed', 'Filed yesterday'],
       // Called Corrections until 2026-10-19 (the owner): renamed to match the
       // screener's Drawdown column, whose four states it counts. The id stays.
       ['corrections', 'Drawdowns'],
@@ -2931,6 +2945,31 @@
         .catch(() => { mgPending[cut] = false; });
       return null;
     }
+    // One day's filings (the Filed yesterday card), by the day asked for ('' is
+    // the newest the daily check has read). The reply names the recent days,
+    // which fill the Day picker.
+    const fldCache = {};
+    const fldPending = {};
+    function getFiled(need) {
+      const k = need.date || 'latest';
+      if (fldCache[k]) return fldCache[k];
+      if (fldPending[k]) return null;
+      fldPending[k] = true;
+      fetch('/api/filings/day' + (need.date ? '?date=' + encodeURIComponent(need.date) : ''), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          fldPending[k] = false;
+          if (!d || !d.date) return;
+          fldCache[k] = d;
+          const el = $('fldDay'), keep = el.value;
+          const fmt = (x) => new Date(x + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          el.innerHTML = '<option value="">Newest day read</option>' + (d.days || []).map((x) => '<option value="' + esc(x) + '">' + esc(fmt(x)) + '</option>').join('');
+          if ([...el.options].some((o) => o.value === keep)) el.value = keep;
+          if (tpl === 'filed') render();
+        })
+        .catch(() => { fldPending[k] = false; });
+      return null;
+    }
     function getEarnGrowth(cut) {
       if (egrCache[cut]) return egrCache[cut];
       if (egrPending[cut]) return null;
@@ -2984,7 +3023,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3031,7 +3070,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -3340,7 +3379,7 @@
     });
     // A card still waiting for its data says so in words; those are the ones
     // worth waiting for.
-    const VID_LOADING = /Reading the archive|Reading prices|still loading|loading\u2026|Drawing<br>/i;
+    const VID_LOADING = /Reading the archive|Reading prices|still loading|loading\u2026|Drawing<br>|Reading<br>/i;
     let vidHost = null;
     async function vidCapture(q, shp, ground) {
       if (!vidHost) {
@@ -3846,6 +3885,7 @@
       $('bndBox').style.display = tpl === 'bands' ? 'block' : 'none';
       $('sclBox').style.display = tpl === 'stkchart' ? 'block' : 'none';
       $('rlBox').style.display = tpl === 'reel' ? 'block' : 'none';
+      $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
       $('iflBox').style.display = tpl === 'instflow' ? 'block' : 'none';
       $('lhBox').style.display = tpl === 'holders' ? 'block' : 'none';
       $('rmBox').style.display = tpl === 'revmix' ? 'block' : 'none';
@@ -4166,6 +4206,9 @@
     // Beating the index: its own listener list, like every template here.
     for (const [v, label] of Cards.indexPeCuts()) $('ipeCut').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('pbSp500').add(new Option(label, v));
+    for (const [v, label] of Cards.spCuts()) $('fldSp500').add(new Option(label, v));
+    for (const [v, label] of Cards.filedShows()) $('fldShow').add(new Option(label, v));
+    ['fldDay', 'fldShow', 'fldSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'filed') render(); }));
     $('pbSp500').value = 'All';
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });

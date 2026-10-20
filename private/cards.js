@@ -51,6 +51,8 @@
   let getShortMoves = () => null;
   let getEarnGrowth = () => null;
   let getMargins = () => null;
+  // One day's 13D/13G and 8-K filings (the Filed yesterday card), or null while it loads.
+  let getFiled = () => null;
   let getHolders = () => null;
   let getSegments = () => null;
   let getFundHolders = () => null;
@@ -11675,6 +11677,96 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Filed yesterday: one day's 13D/13G and 8-K filings (2026-10-20) ----
+  //
+  // The owner: "I need a card in promo showing what was filed yesterday, I
+  // should be under Market template". Every 5% holder filing (Schedule 13D or
+  // 13G) and every 8-K filed on one day about a company on the screen, from
+  // /api/filings/day: the newest day the daily filings check has read, or one
+  // picked. The server names the 8-K items and words the stakes; this lays
+  // them out.
+  //
+  // ORDER, NOT RANK. Holders: the 13Ds first (the rarer form), then the 13Gs;
+  // 8-Ks: the ones with an item worth noticing first (amber, "notice this":
+  // a restatement warning, an auditor change, a listing notice, a bankruptcy
+  // and the like). Within each, the larger companies first, so the names a
+  // reader knows lead. Nothing is coloured good or bad: a filing is a record,
+  // not a reading, and the note says so.
+  // Measured with both lists full and their "and N more" lines showing.
+  const FLD_ROWS = { portrait: 13, square: 9, story: 22 };
+  const FLD_SHOW = [['both', 'Holders and 8-Ks'], ['holders', '5% holders only'], ['events', '8-Ks only']];
+  function filedNeed(tpl, opts) {
+    if (tpl !== 'filed') return null;
+    const d = String((opts && opts.fldDay) || '');
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '' };
+  }
+  function tplFiled() {
+    const need = filedNeed('filed', O);
+    const d = getFiled(need);
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!d) return shell('SEC filings', 'Reading', 'the filings…');
+    const cut = O.fldSp500 || 'All';
+    const show = FLD_SHOW.some(([k]) => k === O.fldShow) ? O.fldShow : 'both';
+    const bySym = new Map(spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol)), cut).map((x) => [x.symbol, x]));
+    const capOf = (s) => Number((bySym.get(s) || {}).marketCap) || 0;
+    const H = (d.holders || []).filter((h) => bySym.has(h.symbol))
+      .sort((a, b) => (a.kind === 'D' ? 0 : 1) - (b.kind === 'D' ? 0 : 1) || capOf(b.symbol) - capOf(a.symbol));
+    const E = (d.events || []).filter((e) => bySym.has(e.symbol))
+      .sort((a, b) => (b.notable ? 1 : 0) - (a.notable ? 1 : 0) || capOf(b.symbol) - capOf(a.symbol));
+    const day = new Date(d.date + 'T12:00:00');
+    const weekday = day.toLocaleDateString('en-US', { weekday: 'long' });
+    const full = day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const kick = 'SEC filings' + (cut !== 'All' && SP_CUT_LABEL[cut] ? ' · ' + SP_CUT_LABEL[cut] : '');
+    const wantH = show !== 'events', wantE = show !== 'holders';
+    const nH = wantH ? H.length : 0, nE = wantE ? E.length : 0;
+    if (!nH && !nE) {
+      return shell(kick, 'Filed on ' + weekday, full, 'Nothing of these kinds was filed that day about the companies on this screen.');
+    }
+    // The rows a card has room for, shared between the two lists: each gets
+    // half, and gives the other whatever it does not use.
+    const cap = FLD_ROWS[size.id] || FLD_ROWS.portrait;
+    let rh = Math.min(nH, nE ? Math.max(Math.ceil(cap / 2), cap - nE) : cap);
+    const re = Math.min(nE, cap - rh);
+    rh = Math.min(nH, cap - re);
+    const nm = (s) => { const r = bySym.get(s); return r ? nameOf(r) : s; };
+    const more = (n) => (n > 0 ? '<div class="fd-more">and ' + n + ' more</div>' : '');
+    const companies = new Set([...(wantH ? H : []), ...(wantE ? E : [])].map((x) => x.symbol)).size;
+    const chips = '<div class="fd-chips">'
+      + (wantH ? '<span class="fd-chip"><b>' + nH + '</b> 5% holder filing' + (nH === 1 ? '' : 's') + '</span>' : '')
+      + (wantE ? '<span class="fd-chip"><b>' + nE + '</b> 8-K' + (nE === 1 ? '' : 's') + '</span>' : '')
+      + '<span class="fd-chip"><b>' + companies + '</b> compan' + (companies === 1 ? 'y' : 'ies') + '</span></div>';
+    const hBlock = !nH ? '' : '<div class="fd-blk"><div class="fd-h">5% holders · Schedules 13D and 13G</div>'
+      + H.slice(0, rh).map((h) => '<div class="fd-row">'
+        + '<span class="fd-sym">' + esc(h.symbol) + '</span>'
+        + '<span class="fd-nm">' + esc(nm(h.symbol)) + '</span>'
+        + '<span class="fd-who">' + esc(h.holder || 'Holder not named') + '</span>'
+        + '<span class="fd-form' + (h.kind === 'D' ? ' fd-d' : '') + '">' + (h.kind === 'D' ? '13D' : '13G') + (h.amended ? ' amended' : '') + '</span>'
+        + '<span class="fd-pct">' + esc(h.pctWord || '—') + '</span></div>').join('')
+      + more(nH - rh) + '</div>';
+    const eBlock = !nE ? '' : '<div class="fd-blk"><div class="fd-h">Company announcements · 8-K</div>'
+      + E.slice(0, re).map((e) => '<div class="fd-row fd-ev">'
+        + '<span class="fd-sym">' + esc(e.symbol) + '</span>'
+        + '<span class="fd-nm">' + esc(nm(e.symbol)) + '</span>'
+        + '<span class="fd-what">' + esc(e.label) + '</span>'
+        + '<span class="fd-dot' + (e.notable ? ' fd-on' : '') + '"></span></div>').join('')
+      + more(nE - re) + '</div>';
+    const note = 'Filed with the SEC on ' + weekday + ', ' + full + ', about companies on this screen'
+      + (cut !== 'All' && SP_CUT_PROSE[cut] ? ' in ' + SP_CUT_PROSE[cut] : '') + '. '
+      + (wantH ? 'A 13D comes from a holder who may seek influence, a 13G from a passive one; amended updates an earlier filing. ' : '')
+      + (wantE ? 'An amber dot marks an 8-K item worth noticing, such as a restatement warning, an auditor change or a listing notice. ' : '')
+      + 'A filing is a record, not a reading.';
+    return chromeTop()
+      + '<div class="s-body"><div class="fd-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">Filed on ' + esc(weekday) + '<br><span class="dim">' + esc(full) + '</span></h2>'
+      + chips + hBlock + eBlock
+      + '<p class="s-sub wide fd-note" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Month by month: one company's returns, year by month ---------------
   //
   // THE STOCK PAGE'S GRID AS A CARD. One row per year, one column per month,
@@ -12148,6 +12240,7 @@
     tonestock: tplToneStock,
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
+    filed: tplFiled,
     secmargin: () => marginsCard('secmargin'),
     thmmargin: () => marginsCard('thmmargin'),
     thmrank: tplThmRank,
@@ -13945,6 +14038,32 @@
        alone, and node --check passes every time, because it is valid
        interpolation rather than a syntax error.) */
     .sp-in { height: 100%; display: flex; flex-direction: column; }
+    /* Filed yesterday (2026-10-20): one day's 13D/13G and 8-K filings. */
+    .fd-in { height: 100%; display: flex; flex-direction: column; }
+    .fd-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .fd-chip { font: 600 18px var(--mono); color: var(--muted); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 14px; }
+    .fd-chip b { color: var(--text); font-weight: 700; }
+    .fd-blk { margin-top: 26px; }
+    .fd-h { font: 600 15px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint);
+            border-bottom: 1px solid var(--hair-2); padding-bottom: 8px; }
+    /* The form column is a fixed width so every holder name starts in line. */
+    .fd-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1.25fr) 148px 88px; gap: 14px;
+              align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--hair); font: 500 21px var(--sans); color: var(--text); }
+    .fd-row.fd-ev { grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1.5fr) 12px; }
+    .fd-sym { font: 650 21px var(--mono); color: var(--text); }
+    .fd-nm { font-size: 18px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fd-who, .fd-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fd-form { justify-self: start; font: 650 15px var(--mono); color: var(--muted); border: 1px solid var(--hair-2); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+    .fd-form.fd-d { color: var(--text); border-color: var(--muted); }
+    .fd-pct { font: 600 20px var(--mono); text-align: right; white-space: nowrap; }
+    .fd-dot { width: 10px; height: 10px; border-radius: 50%; align-self: center; }
+    .fd-dot.fd-on { background: var(--amber); }
+    .fd-more { font: 500 16px var(--mono); color: var(--faint); padding-top: 8px; }
+    .fd-note { margin-top: auto; padding-top: 18px; }
+    .sz-square .fd-row { padding: 7px 0; font-size: 19px; }
+    .sz-square .fd-sym { font-size: 19px; }
+    .sz-square .fd-blk { margin-top: 16px; }
+    .sz-story .fd-row { padding: 12px 0; }
     /* The Reel's cover (2026-10-19): the spotlight's parts, centred on the
        tall card and set larger, because a Reel cover is read as a thumbnail. */
     .rl-in { height: 100%; display: flex; flex-direction: column; justify-content: center; }
@@ -14793,6 +14912,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
+    filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     marginsNeed, marginMetrics: () => MG_METRICS.map((p) => p.slice()),
     holdersNeed, holdersFold,
     revMixNeed, revMixKinds: () => RM_KINDS.map((p) => p.slice()), revMixPeriods: () => RM_PERIODS.map((p) => p.slice()), revMixViews: () => RM_VIEWS.map((p) => p.slice()),
@@ -14935,6 +15055,7 @@
       getShortMoves = c.getShortMoves || (() => null);
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
+      getFiled = c.getFiled || (() => null);
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
       getFundHolders = c.getFundHolders || (() => null);

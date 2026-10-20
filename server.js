@@ -12079,6 +12079,11 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const egNeed = Cards.earnGrowthNeed(post.tpl, post.opts || {});
   if (egNeed) { try { egrow = await earnGrowthFor(egNeed.cut); } catch { egrow = null; } }
 
+  // The Filed yesterday card: one day's filings, only when asked for.
+  let fld = null;
+  const fldNeed = Cards.filedNeed(post.tpl, post.opts || {});
+  if (fldNeed) { try { fld = await filedDayPayload(fldNeed.date, await isGuest(req)); } catch { fld = null; } }
+
   let smov = null;
   if (Cards.shortMovesNeed(post.tpl)) {
     try { smov = await shortMovesPayload(); } catch { smov = null; }
@@ -12101,6 +12106,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getShortMoves: () => smov,
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
+      getFiled: () => fld,
       getGroupMonths: () => gmonths,
       getIndexPe: () => ipe,
       getHolders: () => lholders,
@@ -14863,6 +14869,51 @@ app.get('/api/holders', requireAuth, route(async (req, res) => {
     return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   }
   res.json(await holdersPayload(symbol));
+}));
+
+// ---- What was filed on one day (2026-10-20, the Filed yesterday card) ------
+// The owner: "I need a card in promo showing what was filed yesterday, I
+// should be under Market template". Every 13D/13G and 8-K filed on one day
+// about a tracked company, from the two tables the daily check keeps fresh
+// (secdaily.js). The day defaults to the newest the daily check has read;
+// `days` lists the recent ones a picker may offer. Two reads by the `filed`
+// index, from that day on, kept to that day.
+//
+// Labels are made here (Events8k, Holders13) because cards.js has no
+// requires. DISPLAY ONLY: a filing is a record, not a reading.
+const FILED_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+async function filedDayPayload(asked, guest) {
+  const st = await store.readSecDaily().catch(() => null);
+  const today = SecDaily.todayET();
+  const days = [];
+  if (st && Array.isArray(st.days)) for (const d of st.days) if (d && !d.holiday && d.date) days.push(d.date);
+  if (st && st.through && !days.includes(st.through)) days.push(st.through);
+  // No daily check yet: the last five business days.
+  if (!days.length) for (let d = SecDaily.addDays(today, -1); days.length < 5; d = SecDaily.addDays(d, -1)) {
+    const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w && w < 6) days.push(d);
+  }
+  days.sort().reverse();
+  const date = FILED_DATE_RE.test(String(asked || '')) && asked < today && asked >= SecDaily.addDays(today, -45) ? asked : days[0];
+  const [hold, ev] = await Promise.all([store.readSecHoldersSince(date), store.readSecEventsSince(date)]);
+  const keep = (s) => !guest || guestSet.has(s);
+  // One line per holder and stake: a joint filing amended several times the
+  // same day (CleanSpark's three from one bank) is one line.
+  const seen = new Set();
+  const holders = [];
+  for (const h of hold) {
+    if (h.filed !== date || !keep(h.symbol)) continue;
+    const k = h.symbol + '|' + h.kind + '|' + h.holder + '|' + h.pct;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    holders.push({ symbol: h.symbol, kind: h.kind, amended: /\/A$/.test(h.form), holder: h.holder, pct: h.pct, pctWord: Holders13.pctWord(h.pct) });
+  }
+  const events = ev.filter((e) => e.filed === date && keep(e.symbol))
+    .map((e) => ({ symbol: e.symbol, label: Events8k.label(e.items, 2), notable: Events8k.notable(e.items) }));
+  return { date, days, through: (st && st.through) || null, holders, events };
+}
+app.get('/api/filings/day', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await filedDayPayload(String(req.query.date || ''), await isGuest(req)));
 }));
 
 // ---- 8-K events for one company ---------------------------------------------

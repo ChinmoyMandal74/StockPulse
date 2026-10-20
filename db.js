@@ -5201,11 +5201,11 @@ async function readSecHolders(symbol, limit) {
 async function readSecHoldersSince(since) {
   await init();
   const r = await db.execute({
-    sql: `select symbol, filed, kind, holder, pct from sec_holders indexed by idx_sec_holders_filed
+    sql: `select symbol, filed, form, kind, holder, pct from sec_holders indexed by idx_sec_holders_filed
           where filed >= ? and kind != 'X'`,
     args: [String(since)],
   });
-  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), kind: String(x.kind),
+  return r.rows.map((x) => ({ symbol: String(x.symbol), filed: String(x.filed), form: x.form || '', kind: String(x.kind),
     holder: x.holder || '', pct: x.pct == null ? null : Number(x.pct) }));
 }
 
