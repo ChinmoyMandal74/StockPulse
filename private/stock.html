@@ -985,6 +985,14 @@
        card's own marking, carried over. Passing arithmetic off as a filing
        is the one thing neither surface may do. */
     #stmt table.stmt td.dv { border-bottom-style: dotted; border-bottom-color: var(--hair-2); }
+    /* The controls row, the growth lines, the TTM column (2026-10-19). */
+    #stmt .stmt-ctl { display: flex; flex-wrap: wrap; gap: 14px; margin: -4px 0 12px; }
+    #stmt .stmt-ctl .sc-grp { display: inline-flex; gap: 6px; }
+    #stmt .stab { overflow-x: auto; }
+    #stmt table.stmt tr.gr td { font-size: 11px; color: var(--muted); border-bottom-style: dashed; }
+    #stmt table.stmt tr.gr td.li { font-size: 11px; color: var(--faint); padding-left: 22px; font-weight: 400; }
+    #stmt table.stmt tr.gr td.na { color: var(--faint); }
+    #stmt table.stmt th.ttm, #stmt table.stmt td.ttm { background: color-mix(in srgb, var(--accent) 6%, transparent); }
     #stmt .sspark .up { fill: var(--accent); }
     #stmt .sspark .dn { fill: var(--red); }
     #stmt .sspark .zl { stroke: var(--hair-2); stroke-width: 1; }
@@ -3818,7 +3826,16 @@
               <button class="rng on" id="stmtInc" type="button">Income</button>
               <button class="rng" id="stmtBal" type="button">Balance sheet</button>
               <button class="rng" id="stmtCf" type="button">Cash flow</button>
+              <button class="rng" id="stmtMg" type="button">Margins</button>
             </span>
+          </div>
+          <!-- (2026-10-19, the owner, after Stockanalysis.com's financials page.)
+               Which periods (the same switch as the SEC card's), how many,
+               and a growth line under each figure. -->
+          <div class="stmt-ctl">
+            <span class="sc-grp"><button class="rng" id="stmtQ" type="button">Quarterly</button><button class="rng" id="stmtA" type="button">Annual</button></span>
+            <span class="sc-grp"><button class="rng on" data-cols="5" type="button">5</button><button class="rng" data-cols="10" type="button">10</button><button class="rng" data-cols="all" type="button">All</button></span>
+            <span class="sc-grp"><button class="rng" id="stmtGr" type="button" title="A line under each figure: its change against the same period a year earlier (in points on the Margins tab)">Growth</button></span>
           </div>
           <div id="stmtBody"><p class="msg">Loading filings…</p></div>
         </div></section>
@@ -4452,7 +4469,10 @@
       // The raw card is untouched, deliberately: it carries the filing link
       // and the per-filing provenance this layout has no room for.
       let stmtTab = 'income';
-      const STMT_COLS = 5;
+      // How many periods (5, 10 or every one filed) and whether each figure
+      // carries a growth line under it (2026-10-19).
+      let stmtCols = '5';
+      let stmtGrowth = false;
 
       // IN MILLIONS, NO UNIT PER CELL, and that is the one real difference
       // from secMoney. That formatter picks a unit per value, which is right
@@ -4472,21 +4492,33 @@
       // is NOT here: we do not store it, and revenue minus operating income
       // is not the same thing -- inventing a line to match a layout is how a
       // card starts asserting something no filing says.
+      // A margin, in percent, to one place; the Margins tab's own format.
+      const stmtPct = (v) => (v == null || !Number.isFinite(v)) ? null : v.toFixed(1) + '%';
+      // NEW LINES (2026-10-19): interest expense, dividends declared per share,
+      // current assets and liabilities, read by the filings reader since that
+      // day's re-read; and net cash, which no filing states and is computed
+      // here (cash less long-term debt), marked as computed like a derived
+      // quarter. A fourth field per row marks those: 'calc'.
       const STMT_DEFS = {
         income: { label: 'Income statement', rows: [
           ['revenue', 'Revenue', stmtM],
           ['costOfRevenue', 'Cost of revenue', stmtM],
           ['grossProfit', 'Gross profit', stmtM],
           ['operatingIncome', 'Operating income', stmtM],
+          ['interestExpense', 'Interest expense', stmtM],
           ['netIncome', 'Net income', stmtM],
           ['epsDiluted', 'Diluted EPS', stmtEps],
+          ['dividendsPerShare', 'Dividends per share', stmtEps],
         ] },
         balance: { label: 'Balance sheet', rows: [
           ['assets', 'Total assets', stmtM],
+          ['currentAssets', 'Current assets', stmtM],
           ['liabilities', 'Total liabilities', stmtM],
+          ['currentLiabilities', 'Current liabilities', stmtM],
           ['equity', 'Shareholders’ equity', stmtM],
           ['cash', 'Cash', stmtM],
           ['debt', 'Long-term debt', stmtM],
+          ['netCash', 'Net cash (cash less long-term debt)', stmtM, 'calc'],
           ['sharesDiluted', 'Diluted shares', stmtSh],
         ] },
         cash: { label: 'Cash flow', rows: [
@@ -4494,7 +4526,70 @@
           ['capex', 'Capital expenditure', stmtM],
           ['freeCashFlow', 'Free cash flow', stmtM],
         ] },
+        // Each a share of the same period's revenue, worked out here from the
+        // figures above; growth on this tab is the change in POINTS.
+        margins: { label: 'Margins', pts: true, rows: [
+          ['grossMargin', 'Gross margin', stmtPct, 'calc'],
+          ['operatingMargin', 'Operating margin', stmtPct, 'calc'],
+          ['profitMargin', 'Profit margin', stmtPct, 'calc'],
+          ['fcfMargin', 'Free cash flow margin', stmtPct, 'calc'],
+        ] },
       };
+      // The figures computed here rather than filed, for one period (a filed
+      // row or the TTM column alike). Null, never zero, where a part is missing.
+      function stmtCalc(r) {
+        const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+        const rev = n(r.revenue);
+        const pct = (part) => (n(part) != null && rev != null && rev >= 1 ? n(part) / rev * 100 : null);
+        const gp = n(r.grossProfit) != null ? n(r.grossProfit) : (rev != null && n(r.costOfRevenue) != null ? rev - n(r.costOfRevenue) : null);
+        return Object.assign({}, r, {
+          netCash: n(r.cash) != null && n(r.debt) != null ? n(r.cash) - n(r.debt) : null,
+          grossMargin: pct(gp), operatingMargin: pct(r.operatingIncome), profitMargin: pct(r.netIncome), fcfMargin: pct(r.freeCashFlow),
+        });
+      }
+      // THE TRAILING YEAR, a column of its own (2026-10-19): the four newest
+      // quarters summed, by the rule SecFacts.ttm keeps on the server -- four
+      // CONSECUTIVE quarters (300 to 430 days end to start), and a line summed
+      // only where all four state it. `k` = 4 gives the trailing year before,
+      // for its growth line. Marked computed where a part was derived.
+      const STMT_FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'interestExpense', 'netIncome',
+        'epsDiluted', 'dividendsPerShare', 'operatingCashFlow', 'capex', 'freeCashFlow'];
+      function stmtTtm(q, k) {
+        const part = (q || []).slice(k, k + 4);
+        if (part.length < 4) return null;
+        const end = part[0].periodEnd, start = part[3].periodStart || part[3].periodEnd;
+        const days = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
+        if (!(days >= 300 && days <= 430)) return null;
+        const out = { periodEnd: end, fp: 'TTM', __ttm: true, derivedFields: [] };
+        for (const f of STMT_FLOWS) {
+          let t = 0, ok = true, dv = false;
+          for (const r of part) {
+            const v = r[f];
+            if (v == null || !Number.isFinite(Number(v))) { ok = false; break; }
+            t += Number(v);
+            if (r.derived || (r.derivedFields || []).indexOf(f) >= 0) dv = true;
+          }
+          out[f] = ok ? t : null;
+          if (ok && dv) out.derivedFields.push(f);
+        }
+        return out;
+      }
+      // The same period a year earlier, matched on the DATE within six weeks
+      // (secfacts.js yearAgo's rule), so a gap or a changed year end is never
+      // compared with whatever sits four rows away.
+      function stmtYearAgo(list, r) {
+        const want = new Date(r.periodEnd + 'T12:00:00'); want.setFullYear(want.getFullYear() - 1);
+        let best = null, gap = Infinity;
+        for (const o of list) {
+          if (o === r) continue;
+          const g = Math.abs(Date.parse(o.periodEnd + 'T12:00:00') - want.getTime()) / 86400000;
+          if (g < gap) { gap = g; best = o; }
+        }
+        return gap <= 45 ? best : null;
+      }
+      // Growth against a year earlier. From a base of zero or below there is
+      // no rate (the sign inverts), so it is blank, never invented.
+      const stmtGrowthOf = (now, then) => (now == null || then == null || !Number.isFinite(now) || !Number.isFinite(then) || !(then > 0) ? null : (now - then) / then * 100);
 
       // A SIGNED bar chart, because half these lines go negative and a chart
       // that plotted |v| would draw a loss as a gain. Scaled to the largest
@@ -4535,8 +4630,21 @@
           host.innerHTML = '<p class="msg">No ' + secMode + ' periods filed.</p>';
           return;
         }
-        const cols = all.slice(0, STMT_COLS);               // newest first, as filed
         const def = STMT_DEFS[stmtTab] || STMT_DEFS.income;
+        // Every period filed, each with the figures computed here; the shown
+        // columns are the newest few of them, the growth lines read the rest.
+        const allC = all.map(stmtCalc);
+        const n = stmtCols === 'all' ? allC.length : Number(stmtCols) || 5;
+        const shown = allC.slice(0, n);                      // newest first, as filed
+        // The TTM column leads on every tab but the balance sheet, whose
+        // figures are positions at a date, not a year's flow; the newest
+        // quarter is already its latest column.
+        const tq = secData.quarterly || [];
+        const ttm = stmtTab !== 'balance' ? stmtTtm(tq, 0) : null;
+        const ttmC = ttm ? stmtCalc(ttm) : null;
+        const ttmPrev = ttm ? stmtTtm(tq, 4) : null;
+        const ttmPrevC = ttmPrev ? stmtCalc(ttmPrev) : null;
+        const cols = (ttmC ? [ttmC] : []).concat(shown);
         // A LINE WITH NOTHING IN IT IS DROPPED, never drawn as a row of
         // dashes: the balance sheet is sparse for some filers and five empty
         // cells under a label says only that we hold nothing.
@@ -4546,35 +4654,61 @@
             esc(def.label.toLowerCase()) + ' over these periods.</p>';
           return;
         }
-        let anyDerived = false;
+        let anyDerived = false, anyCalc = false;
         let h = '<div class="stab"><table class="stmt"><thead><tr><th class="li">' +
           esc(def.label) + '</th><th class="tr">Trend</th>' +
-          cols.map((r) => '<th>' + esc(r.periodEnd) +
-            (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</th>').join('') +
+          cols.map((r) => (r.__ttm
+            ? '<th class="ttm" title="The trailing twelve months: the four newest quarters added up">TTM<span class="fp">to ' + esc(r.periodEnd) + '</span></th>'
+            : '<th>' + esc(r.periodEnd) + (r.fp ? '<span class="fp">' + esc(r.fp) + '</span>' : '') + '</th>')).join('') +
           '</tr></thead><tbody>';
-        for (const [k, label, fmt] of live) {
-          // The spark reads oldest -> newest; the columns read newest first.
-          const series = cols.map((r) => r[k]).slice().reverse();
+        const yearAgoOf = (r) => (r.__ttm ? ttmPrevC : stmtYearAgo(allC, r));
+        for (const [k, label, fmt, calc] of live) {
+          // The spark reads oldest -> newest over the filed columns (the TTM
+          // column overlaps them, so it is not a point of its own).
+          const series = shown.map((r) => r[k]).slice().reverse();
           h += '<tr><td class="li">' + esc(label) + '</td>' +
             '<td class="tr">' + stmtSpark(series) + '</td>';
           for (const r of cols) {
             const t = fmt(r[k]);
             const isD = r.derived || (r.derivedFields || []).indexOf(k) >= 0;
             if (t != null && isD) anyDerived = true;
+            if (t != null && calc) anyCalc = true;
             const cls = [t == null ? 'na' : '', t != null && r[k] < 0 ? 'neg' : '',
-              t != null && isD ? 'dv' : ''].filter(Boolean).join(' ');
+              t != null && (isD || calc) ? 'dv' : '', r.__ttm ? 'ttm' : ''].filter(Boolean).join(' ');
             h += '<td' + (cls ? ' class="' + cls + '"' : '') +
-              (t != null && isD ? ' title="Computed here by differencing the cumulative periods — no filing states this quarter on its own"' : '') +
+              (t != null && calc ? ' title="Computed here from the figures filed for this period"'
+                : t != null && isD ? ' title="Computed here by differencing the cumulative periods — no filing states this quarter on its own"' : '') +
               '>' + (t == null ? '—' : esc(t)) + '</td>';
           }
           h += '</tr>';
+          // THE GROWTH LINE: against the same period a year earlier, matched
+          // on the date; in points on the Margins tab. Neutral ink: a change
+          // in a company's figures is not a price move.
+          if (stmtGrowth) {
+            h += '<tr class="gr"><td class="li">' + (def.pts ? 'change, points' : 'growth') + '</td><td class="tr"></td>';
+            for (const r of cols) {
+              const p = yearAgoOf(r);
+              const now = r[k], then = p ? p[k] : null;
+              const g = def.pts
+                ? (now != null && then != null && Number.isFinite(now) && Number.isFinite(then) ? now - then : null)
+                : stmtGrowthOf(now, then);
+              const txt = g == null ? '—' : (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(1) + (def.pts ? '' : '%');
+              h += '<td class="' + [g == null ? 'na' : '', r.__ttm ? 'ttm' : ''].filter(Boolean).join(' ') + '"' +
+                (p ? ' title="Against ' + esc(p.__ttm ? 'the trailing year to ' + p.periodEnd : p.periodEnd) + '"' : '') + '>' + txt + '</td>';
+            }
+            h += '</tr>';
+          }
         }
         h += '</tbody></table></div>';
-        h += '<p class="note">Figures in millions, except per-share data and the share count. ' +
-          '( ) = negative. Periods run newest first; the trend runs oldest to newest and is ' +
-          'scaled to the largest figure in its own row. ' +
+        h += '<p class="note">' + (def.pts ? 'Margins in percent of the same period’s revenue. ' : 'Figures in millions, except per-share data and the share count. ' +
+          '( ) = negative. ') +
+          'Periods run newest first' + (ttmC ? ', after the trailing twelve months (the four newest quarters added up, where all four state the line)' : '') +
+          '; the trend runs oldest to newest and is scaled to the largest figure in its own row. ' +
+          (stmtGrowth ? (def.pts ? 'Each change line is the margin less the same period’s a year earlier, in points. '
+            : 'Each growth line is against the same period a year earlier, and is blank where that figure was zero or a loss. ') : '') +
           (anyDerived ? 'A dotted value was computed here rather than filed — no company files a fourth quarter, and a cash-flow statement is year-to-date. ' : '') +
-          esc(fxNote(cols)) +
+          (anyCalc && !def.pts ? 'Net cash is cash less long-term debt, worked out here. ' : '') +
+          esc(fxNote(cols.filter((r) => !r.__ttm))) +
           'The same filings as the SEC EDGAR card below, which names the document each row came from.</p>';
         host.innerHTML = h;
       }
@@ -4937,10 +5071,17 @@
           const pq = document.getElementById('perfQ');
           const pa = document.getElementById('perfA');
           const sb = document.getElementById('stmt');
-          const tabs = [['stmtInc', 'income'], ['stmtBal', 'balance'], ['stmtCf', 'cash']];
+          const tabs = [['stmtInc', 'income'], ['stmtBal', 'balance'], ['stmtCf', 'cash'], ['stmtMg', 'margins']];
           const sync = () => {
             qb.classList.toggle('on', secMode === 'quarterly');
             ab.classList.toggle('on', secMode === 'annual');
+            // The statements card's own copies of the period switch, and its
+            // count and growth controls.
+            const sq = document.getElementById('stmtQ'), sa = document.getElementById('stmtA'), sg = document.getElementById('stmtGr');
+            if (sq) sq.classList.toggle('on', secMode === 'quarterly');
+            if (sa) sa.classList.toggle('on', secMode === 'annual');
+            if (sg) sg.classList.toggle('on', stmtGrowth);
+            document.querySelectorAll('#stmt [data-cols]').forEach((b) => b.classList.toggle('on', b.dataset.cols === stmtCols));
             if (fb) fb.classList.toggle('on', secView === 'figures');
             if (rb) rb.classList.toggle('on', secView === 'ratios');
             for (const [id, key] of tabs) {
@@ -4959,6 +5100,12 @@
               const el = document.getElementById(id);
               if (el) el.addEventListener('click', () => { stmtTab = key; sync(); });
             }
+            const sq = document.getElementById('stmtQ'), sa = document.getElementById('stmtA'), sg = document.getElementById('stmtGr');
+            if (sq) sq.addEventListener('click', () => { secMode = 'quarterly'; sync(); });
+            if (sa) sa.addEventListener('click', () => { secMode = 'annual'; sync(); });
+            if (sg) sg.addEventListener('click', () => { stmtGrowth = !stmtGrowth; sync(); });
+            document.querySelectorAll('#stmt [data-cols]').forEach((b) =>
+              b.addEventListener('click', () => { stmtCols = b.dataset.cols; sync(); }));
           }
           // A card neither period can fill is removed, not left as a heading
           // over a sentence -- a bank with no revenue tag on file, say.
