@@ -1475,6 +1475,15 @@ function parseAddColumn(stmt) {
 }
 
 const ADDED_COLUMNS = [
+  // Paper positions dated in the past (2026-10-20, the owner: "include entry
+  // date so that I can input historical purchases"): `d` the trading day a
+  // trade is dated to (null: the day it was made), and the shares and price as
+  // the member entered them from a statement, with the split factor that put
+  // them on today's basis. `shares` and `price` stay on today's basis.
+  "alter table paper_trades add column d text",
+  "alter table paper_trades add column stmt_shares real",
+  "alter table paper_trades add column stmt_price real",
+  "alter table paper_trades add column split_k real",
   // A filing reported in another currency, converted when read (2026-10-10).
   // HOW a company files, kept on its state row so the screener can say
   // which companies are foreign filers without opening a filing:
@@ -6686,12 +6695,14 @@ async function readPaper(userKey, startCash) {
       args: [userKey, account.start_cash, account.started_at] });
   }
   r = await db.execute({
-    sql: 'select id, ts, kind, symbol, shares, price, priced_at, signal, note from paper_trades where user_key = ? order by id',
+    sql: 'select id, ts, kind, symbol, shares, price, priced_at, signal, note, d, stmt_shares, stmt_price, split_k from paper_trades where user_key = ? order by id',
     args: [userKey],
   });
   const trades = r.rows.map((x) => ({ id: Number(x.id), ts: Number(x.ts), kind: x.kind, symbol: x.symbol,
     shares: Number(x.shares), price: Number(x.price), priced_at: x.priced_at == null ? null : Number(x.priced_at),
-    signal: x.signal || null, note: x.note || null }));
+    signal: x.signal || null, note: x.note || null, d: x.d || null,
+    stmt_shares: x.stmt_shares == null ? null : Number(x.stmt_shares), stmt_price: x.stmt_price == null ? null : Number(x.stmt_price),
+    split_k: x.split_k == null ? null : Number(x.split_k) }));
   return { account, trades };
 }
 
@@ -6706,20 +6717,38 @@ async function readPaper(userKey, startCash) {
 // Returns false when another trade landed first; the caller asks again.
 async function addPaperTrade(userKey, t, lastId) {
   await init();
-  const vals = [userKey, t.ts, t.kind, t.symbol, t.shares, t.price, t.priced_at ?? null, t.signal ?? null, t.note ?? null];
+  const vals = [userKey, t.ts, t.kind, t.symbol, t.shares, t.price, t.priced_at ?? null, t.signal ?? null, t.note ?? null,
+    t.d ?? null, t.stmt_shares ?? null, t.stmt_price ?? null, t.split_k ?? null];
   if (lastId == null) {
     await db.execute({
-      sql: 'insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      sql: 'insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note, d, stmt_shares, stmt_price, split_k) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       args: vals,
     });
     return true;
   }
   const r = await db.execute({
-    sql: `insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note)
-          select ?, ?, ?, ?, ?, ?, ?, ?, ? where coalesce((select max(id) from paper_trades where user_key = ?), 0) = ?`,
+    sql: `insert into paper_trades (user_key, ts, kind, symbol, shares, price, priced_at, signal, note, d, stmt_shares, stmt_price, split_k)
+          select ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? where coalesce((select max(id) from paper_trades where user_key = ?), 0) = ?`,
     args: [...vals, userKey, Number(lastId)],
   });
   return Number(r.rowsAffected) > 0;
+}
+
+// A dated entry earlier than the account's start moves the start back to it,
+// never forward: the chart and the S&P comparison then run from there.
+async function setPaperStartNoLater(userKey, ms) {
+  await init();
+  await db.execute({ sql: 'update paper_accounts set started_at = min(started_at, ?) where user_key = ?', args: [Number(ms), userKey] });
+}
+
+// One stock's stored bar on one day, or null: a seek on the primary key.
+async function readBarOn(symbol, d) {
+  await init();
+  const r = await db.execute({ sql: 'select open, high, low, close from bars where symbol = ? and d = ?', args: [String(symbol), String(d)] });
+  if (!r.rows.length) return null;
+  const x = r.rows[0];
+  return { open: x.open == null ? null : Number(x.open), high: x.high == null ? null : Number(x.high),
+    low: x.low == null ? null : Number(x.low), close: Number(x.close) };
 }
 
 // Start again: the ledger goes and the account restarts today. One batch, so
@@ -7763,7 +7792,7 @@ module.exports = {
   readUserPortfolios,
   writeUserPortfolios,
   listAllUserPortfolios,
-  readPaper,
+  readPaper, setPaperStartNoLater, readBarOn,
   addPaperTrade,
   resetPaper,
   listAllPaper,

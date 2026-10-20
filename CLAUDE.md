@@ -31,7 +31,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `private/index.html` | The screener — single page, vanilla JS, no build step |
 | `private/rowcard.js` | `FIELD_SPEC`, the one field catalogue, plus hover card and chart SVG. Feeds `/stock`, tiles, phone, `/compare` |
 | `drillhist.js`, `private/drillpop.js` | The history behind a screener number: click a cell, get a chart and a table. The one list of drillable columns and the builders (server), and the panel (page) |
-| `paper.js`, `private/paper.html` | **Paper positions** at `/paper`: a pretend $100,000 account per member, opened and closed (never bought or sold) at the latest stored price. The ledger arithmetic and the page; `paper-test.js` |
+| `paper.js`, `private/paper.html` | **Paper positions** at `/paper`: a pretend account per member ($100,000 or an amount they choose), opened and closed (never bought or sold) at the latest stored price, or dated in the past at the price paid within that day's range, split-adjusted. The ledger arithmetic and the page; `paper-test.js` |
 | `private/glance.js` | The stock page's **At a glance** cards: each topic summed up with a descriptive arrow (never a rating), compared against its industry. Built by `/api/stock`, drawn by the page; `glance-test.js` |
 | `private/filters.js` | The column-filter grammar, defined once (`filterValue`, `screenRows`, `CAP_BANDS`) |
 | `private/cards.js`, `private/cardshot.js` | Promo card templates (global `Cards`) and the one rasteriser |

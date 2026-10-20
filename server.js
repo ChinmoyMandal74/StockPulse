@@ -6792,8 +6792,68 @@ app.get('/api/paper', requireMember, route(async (req, res) => {
   try { hist = await paperHistory(account, trades); } catch (e) { hist = []; }   // never fail the page over the chart
   // The pickers' list: what can be opened, by symbol and name.
   const universe = Object.entries(prices).map(([s, p]) => ({ s, n: p.name || '' })).sort((a, b) => a.s.localeCompare(b.s));
-  res.json({ ...sum, history: hist, universe });
+  const today = Paper.nyDay(Date.now());
+  res.json({ ...sum, history: hist, universe,
+    limits: { today, earliest: SecDaily.addDays(today, -Paper.MAX_BACK_DAYS), minCash: Paper.MIN_CASH, maxCash: Paper.MAX_CASH } });
 }));
+
+// A POSITION DATED IN THE PAST (2026-10-20, the owner: "include entry date so
+// that I can input historical purchases", with the price paid typed in and a
+// starting amount of their choosing). The day must be a stored trading day for
+// the stock within MAX_BACK_DAYS; the price entered must lie in that day's
+// low to high (blank takes the close); a statement's shares and price from
+// before a split are put on today's basis with the stored split history, and
+// kept as entered beside it. The whole ledger must still add up in day order
+// (Paper.checkLedger). The Signal is left blank: the daily verdict on a past
+// day is not stored, and the weekly technical reading is a different measure.
+async function paperDated(kind, key, body, account, trades, symbol) {
+  const today = Paper.nyDay(Date.now());
+  const day = String(body.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > today) return { status: 400, error: 'Choose a date up to today.' };
+  const earliest = SecDaily.addDays(today, -Paper.MAX_BACK_DAYS);
+  if (day < earliest) return { status: 400, error: 'Dates go back about four years, to ' + earliest + '.' };
+  const bar = await store.readBarOn(symbol, day);
+  if (!bar) return { status: 400, error: 'There was no trading in ' + symbol + ' on ' + day + ': a weekend, a market holiday, or a day before the site\u2019s prices for it begin.' };
+  const sp = await store.readSplits(symbol).catch(() => null);
+  const k = Paper.splitFactor(sp && sp.splits, day);
+  const pr = Paper.pricedOn(body.price, bar, k);
+  if (pr.error) return { status: 400, error: pr.error };
+  let shares;
+  if (kind === 'open') {
+    if (body.dollars != null && body.dollars !== '') {
+      const dl = Number(body.dollars);
+      if (!(dl >= 1)) return { status: 400, error: 'Enter an amount of at least $1.' };
+      shares = dl / pr.price;
+    } else if (body.shares != null && body.shares !== '') {
+      const n = Number(body.shares);
+      if (!(n > 0)) return { status: 400, error: 'Enter a number of shares above zero.' };
+      shares = n * k;
+    } else return { status: 400, error: 'Enter an amount or a number of shares.' };
+  } else {
+    const held = Paper.heldOn(trades, symbol, day);
+    if (!(held > 1e-9)) return { status: 400, error: 'There was no open position in ' + symbol + ' on ' + day + '.' };
+    if (body.all || body.shares == null || body.shares === '') shares = held;
+    else {
+      const n = Number(body.shares);
+      if (!(n > 0)) return { status: 400, error: 'Enter a number of shares above zero.' };
+      shares = n * k;
+      if (shares > held + 1e-6) return { status: 400, error: 'Only ' + Math.round(held / k * 1e6) / 1e6 + ' shares were open on ' + day + '.' };
+      shares = Math.min(shares, held);
+    }
+  }
+  shares = Math.round(shares * 1e6) / 1e6;
+  if (!(shares > 0)) return { status: 400, error: 'That is less than a millionth of a share.' };
+  const trade = { ts: Date.now(), d: day, kind, symbol, shares, price: pr.price, priced_at: null, signal: null,
+    stmt_shares: Math.round(shares / k * 1e6) / 1e6, stmt_price: pr.entered != null ? pr.entered : Math.round(pr.price * k * 1e4) / 1e4, split_k: k };
+  const lastId = trades.length ? trades[trades.length - 1].id : 0;
+  const bad = Paper.checkLedger(account, trades.concat([Object.assign({ id: lastId + 1 }, trade)]));
+  if (bad) return { status: 400, error: bad.error };
+  if (!(await store.addPaperTrade(key, trade, lastId))) return { status: 409, error: 'Another trade went through at the same moment. Please try again.' };
+  // An entry before the account's start moves the start back to it.
+  const dayMs = Date.parse(day + 'T12:00:00Z');
+  if (dayMs < Number(account.started_at)) await store.setPaperStartNoLater(key, dayMs).catch(() => {});
+  return { ok: true, symbol, date: day, shares, price: pr.price, splitFactor: k, enteredShares: trade.stmt_shares, enteredPrice: trade.stmt_price };
+}
 
 app.post('/api/paper/open', requireMember, route(async (req, res) => {
   const key = await prefsKey(req);
@@ -6803,8 +6863,15 @@ app.post('/api/paper/open', requireMember, route(async (req, res) => {
   const now = prices[symbol];
   if (!now) return res.status(400).json({ error: symbol + ' is not one of the stocks the site tracks.' });
   if (trades.length >= PAPER_MAX_TRADES) return res.status(400).json({ error: 'This account has reached its limit of trades. Start again to keep going.' });
+  const body = req.body || {};
+  if (body.date && String(body.date) !== Paper.nyDay(Date.now())) {
+    const out = await paperDated('open', key, body, account, trades, symbol);
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    logAct(req, 'paper', 'open:' + symbol + ':dated');
+    return res.json(out);
+  }
   const sum = Paper.summarise(account, trades, prices);
-  const size = Paper.sizeOpen(req.body || {}, now.price, sum.cash);
+  const size = Paper.sizeOpen(body, now.price, sum.cash);
   if (size.error) return res.status(400).json({ error: size.error });
   // Only if no other trade landed since the ledger was read (backlog 45f).
   const lastId = trades.length ? trades[trades.length - 1].id : 0;
@@ -6821,6 +6888,14 @@ app.post('/api/paper/close', requireMember, route(async (req, res) => {
   const symbol = String((req.body && req.body.symbol) || '').trim().toUpperCase();
   if (!PAPER_SYM.test(symbol)) return res.status(400).json({ error: 'Choose a position.' });
   const [{ account, trades }, prices] = await Promise.all([store.readPaper(key, Paper.START_CASH), paperPrices()]);
+  const body = req.body || {};
+  if (body.date && String(body.date) !== Paper.nyDay(Date.now())) {
+    if (trades.length >= PAPER_MAX_TRADES) return res.status(400).json({ error: 'This account has reached its limit of trades. Start again to keep going.' });
+    const out = await paperDated('close', key, body, account, trades, symbol);
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    logAct(req, 'paper', 'close:' + symbol + ':dated');
+    return res.json(out);
+  }
   const sum = Paper.summarise(account, trades, prices);
   const pos = sum.positions.find((p) => p.symbol === symbol);
   const size = Paper.sizeClose(req.body || {}, pos ? pos.shares : 0);
@@ -6837,7 +6912,9 @@ app.post('/api/paper/close', requireMember, route(async (req, res) => {
 
 app.post('/api/paper/reset', requireMember, route(async (req, res) => {
   if (!(req.body && req.body.confirm === true)) return res.status(400).json({ error: 'Confirm to start again.' });
-  await store.resetPaper(await prefsKey(req), Paper.START_CASH);
+  const sc = Paper.startCashOf(req.body.startCash);
+  if (sc.error) return res.status(400).json({ error: sc.error });
+  await store.resetPaper(await prefsKey(req), sc.cash);
   logAct(req, 'paper', 'reset');
   res.json({ ok: true });
 }));

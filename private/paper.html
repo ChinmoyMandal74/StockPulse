@@ -68,6 +68,14 @@
       background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 13px var(--sans); min-width: 0; }
     .pp-form #sym { flex: 1 1 260px; }
     .pp-form #amt { flex: 0 1 150px; }
+    /* A position dated in the past (2026-10-20): the day and the price paid. */
+    .pp-form #day { flex: 0 1 160px; }
+    .pp-form #paid { flex: 0 1 150px; }
+    .pp-form input:disabled { opacity: 0.45; }
+    .pp-hint { margin-top: 8px; font-size: 12px; color: var(--faint); line-height: 1.55; max-width: 92ch; }
+    .pp-tag { display: inline-block; margin-left: 6px; font-size: 10.5px; color: var(--faint); border: 1px solid var(--hair); border-radius: 6px; padding: 1px 6px; }
+    .pp-reset { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .pp-reset input { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 13px var(--sans); width: 150px; }
     .pp-form input:focus-visible, .pp-form select:focus-visible, .pp-close-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .pp-msg { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
     .pp-msg.err { color: var(--red); }
@@ -94,11 +102,14 @@
     .pp-close-row td { background: color-mix(in srgb, var(--wash) 3%, transparent); }
     .pp-close-row .pp-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; white-space: normal; }
     .pp-close-row input { width: 140px; }
+    .pp-close-row input[type=date] { width: 160px; }
     .pp-empty { padding: 14px 2px; font-size: 13px; color: var(--muted); }
     .pp-foot { margin: 18px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 92ch; }
     .pp-foot button { margin-left: 6px; }
 
     @media (max-width: 860px) { .pp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    /* A larger starting amount makes the totals wider; on a phone they shrink to fit their box. */
+    @media (max-width: 520px) { .pp-val { font-size: 19px; } .pp-stat .core { padding: 14px 14px; } }
     @media (max-width: 760px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
   </style>
 </head>
@@ -125,10 +136,11 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Simulation</span>
       <h1>Paper positions</h1>
-      <p class="lede">Practise with pretend money: $100,000 to start. Open a position in any stock the site tracks
-        and close it when you choose; each fill is the latest price the site holds, which refreshes every half hour
-        while the market is open, so fills are delayed rather than live. Only you can see this account.
-        It is a simulation, not advice, and no real money or order is involved.</p>
+      <p class="lede">Practise with pretend money: $100,000 to start, or an amount you choose. Open a position in any
+        stock the site tracks and close it when you choose; a fill today is the latest price the site holds, which
+        refreshes every half hour while the market is open. You can also date a position in the past, up to about four
+        years back, at the price you paid on that day, to record positions you already hold. Only you can see this
+        account. It is a simulation, not advice, and no real money or order is involved.</p>
     </header>
 
     <div class="pp-stats" id="stats"></div>
@@ -143,14 +155,20 @@
           <option value="shares">Number of shares</option>
         </select>
         <input id="amt" type="number" min="0" step="any" placeholder="10000" aria-label="Amount" />
+        <input id="day" type="date" aria-label="Date: leave as today, or a past trading day" title="Today, or a past trading day" />
+        <input id="paid" type="number" min="0" step="any" placeholder="Price paid" aria-label="Price paid per share, for a past date" disabled />
         <button class="btn" id="openBtn" type="submit">Open position</button>
         <span class="pp-quote" id="quote"></span>
       </form>
       <div class="pp-msg" id="openMsg" role="status"></div>
+      <p class="pp-hint" id="dayHint">For a past date, enter the price you paid per share and the shares as they appear on your
+        statement; leave the price blank to use that day's close. The price must be within the day's low and high.
+        If the stock has split since, your figures are converted to today's basis and both are kept. The Signal is not
+        recorded for past dates.</p>
     </div></section>
 
     <section class="bezel pp-card" id="chartCard" hidden><div class="core">
-      <div class="pp-h"><h2>Account value</h2><span class="pp-note">At each close since the account started, beside the S&amp;P 500 (SPY) bought with the same $100,000 on the same day. Price only: no dividends.</span></div>
+      <div class="pp-h"><h2>Account value</h2><span class="pp-note" id="chartNote">At each close since the account started, beside the S&amp;P 500 (SPY) bought with the same starting amount on the same day. Price only: no dividends.</span></div>
       <div id="chart"></div>
       <div class="pp-legend"><span><i style="background:var(--accent)"></i>This account</span><span><i style="background:var(--muted)"></i>S&amp;P 500 (SPY)</span></div>
     </div></section>
@@ -168,7 +186,17 @@
     <p class="pp-foot">A simulation with pretend money, not investment advice; past results say nothing about future ones.
       Fills use the latest stored price, so they can be up to half an hour old in market hours and are the last close
       outside them. Returns are price only: no dividends, fees or tax.
-      <button class="btn" id="resetBtn" type="button">Start again with $100,000</button></p>
+      <button class="btn" id="resetBtn" type="button">Start again…</button></p>
+    <div class="pp-foot" id="resetBox" hidden>
+      <div>Start again? Every open position and closed trade in this account is deleted, and it restarts today with the amount below.</div>
+      <div class="pp-reset">
+        <label for="startAmt">Starting amount</label>
+        <input id="startAmt" type="text" inputmode="numeric" value="100,000" aria-label="Starting amount in dollars" />
+        <button class="btn" id="resetGo" type="button">Start again</button>
+        <button class="btn" id="resetCancel" type="button">Cancel</button>
+        <span class="pp-msg" id="resetMsg" role="status"></span>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -249,11 +277,14 @@
             + `<td class="num mono">${we(usd(p.price))}<span class="pp-asof${!p.tracked || stale(p.pricedAt) ? ' pp-stale' : ''}">${p.tracked ? 'as of ' + we(when(p.pricedAt)) : 'no longer tracked: last traded price'}</span></td>`
             + `<td class="num mono">${we(usd(p.value))}</td><td class="num mono ${clsUsd(p.gain)}">${we(sgnUsd(p.gain))}</td>`
             + `<td class="num mono ${cls(p.gainPct)}">${we(pct(p.gainPct))}</td>`
-            + `<td class="hide-sm">${we(p.signal || '—')}</td><td class="hide-sm">${we(dayOf(p.openedAt))}</td>`
+            + `<td class="hide-sm">${p.dated && !p.signal ? '<span class="na" title="Not recorded for past dates">—</span>' : we(p.signal || '—')}</td>`
+            + `<td class="hide-sm">${we(dayOf(p.openedAt))}${p.splitAdjusted ? '<span class="pp-tag" title="Entered from before a split; shares and price are on today\u2019s basis">split-adjusted</span>' : ''}</td>`
             + `<td><button class="btn" data-close="${we(p.symbol)}" type="button">Close</button></td></tr>`
             + (closing === p.symbol ? `<tr class="pp-close-row"><td colspan="11"><div class="pp-inline">`
               + `<span>Close how many of ${we(shares(p.shares))} shares?</span>`
               + `<input id="closeAmt" type="number" min="0" step="any" value="${we(shares(p.shares))}" aria-label="Shares to close" />`
+              + `<input id="closeDay" type="date" aria-label="Date: leave as today, or a past trading day" min="${we(d.limits ? d.limits.earliest : '')}" max="${we(d.limits ? d.limits.today : '')}" />`
+              + `<input id="closePaid" type="number" min="0" step="any" placeholder="Price received" aria-label="Price per share, for a past date" disabled />`
               + `<button class="btn" id="closeGo" type="button">Close at ${we(usd(p.price))}</button>`
               + `<button class="btn" id="closeCancel" type="button">Cancel</button>`
               + `<span class="pp-msg" id="closeMsg" role="status"></span></div></td></tr>` : '')).join('')
@@ -278,6 +309,15 @@
       }));
       if ($('closeCancel')) $('closeCancel').addEventListener('click', () => { closing = null; paint(); });
       if ($('closeGo')) $('closeGo').addEventListener('click', doClose);
+      if ($('closeDay')) $('closeDay').addEventListener('input', () => {
+        const past = isPast($('closeDay').value);
+        $('closePaid').disabled = !past;
+        const p = data.positions.find((x) => x.symbol === closing);
+        $('closeGo').textContent = past ? 'Close dated ' + fmtDay($('closeDay').value) : 'Close at ' + usd(p ? p.price : 0);
+      });
+      // The form's own limits: today, back to the earliest a date may go.
+      if (d.limits) { $('day').max = d.limits.today; $('day').min = d.limits.earliest; }
+      $('chartNote').textContent = 'At each close since the account started, beside the S&P 500 (SPY) bought with the same ' + usd(d.startCash, 0) + ' on the same day. Price only: no dividends.';
     }
 
     async function post(url, body) {
@@ -295,7 +335,9 @@
       const all = !(n > 0) || Math.abs(n - p.shares) < 1e-6;
       const btn = $('closeGo'); btn.disabled = true;
       try {
-        await post('/api/paper/close', all ? { symbol: p.symbol, all: true } : { symbol: p.symbol, shares: n });
+        const day = $('closeDay') ? $('closeDay').value : '';
+        const dated = isPast(day) ? { date: day, price: $('closePaid').value } : {};
+        await post('/api/paper/close', Object.assign(all ? { symbol: p.symbol, all: true } : { symbol: p.symbol, shares: n }, dated));
         closing = null;
         await load();
       } catch (e) {
@@ -312,6 +354,15 @@
     }
     $('sym').addEventListener('input', quote);
     $('mode').addEventListener('change', () => { $('amt').placeholder = $('mode').value === 'dollars' ? '10000' : '10'; });
+    // A past date opens the price-paid field; today keeps the live price.
+    const today = () => (data && data.limits ? data.limits.today : new Date().toISOString().slice(0, 10));
+    const isPast = (v) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && v < today();
+    const fmtDay = (v) => new Date(v + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    $('day').addEventListener('input', () => {
+      const past = isPast($('day').value);
+      $('paid').disabled = !past;
+      $('openBtn').textContent = past ? 'Open dated ' + fmtDay($('day').value) : 'Open position';
+    });
 
     $('openForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -321,20 +372,35 @@
       $('openBtn').disabled = true;
       msg.textContent = 'Opening…'; msg.className = 'pp-msg';
       try {
-        const d = await post('/api/paper/open', $('mode').value === 'dollars' ? { symbol: sym, dollars: amt } : { symbol: sym, shares: amt });
-        msg.textContent = `Opened ${shares(d.shares)} shares of ${d.symbol} at ${usd(d.price)} (price as of ${when(d.pricedAt)}).`;
+        const day = $('day').value;
+        const dated = isPast(day) ? { date: day, price: $('paid').value } : {};
+        const d = await post('/api/paper/open', Object.assign($('mode').value === 'dollars' ? { symbol: sym, dollars: amt } : { symbol: sym, shares: amt }, dated));
+        msg.textContent = d.date
+          ? `Opened ${shares(d.shares)} shares of ${d.symbol} dated ${fmtDay(d.date)} at ${usd(d.price)}`
+            + (d.splitFactor && d.splitFactor !== 1 ? ` (entered as ${shares(d.enteredShares)} at ${usd(d.enteredPrice)}, before the stock split since; shown on today\u2019s basis).` : '.')
+          : `Opened ${shares(d.shares)} shares of ${d.symbol} at ${usd(d.price)} (price as of ${when(d.pricedAt)}).`;
         msg.className = 'pp-msg ok';
-        $('amt').value = '';
+        $('amt').value = ''; $('paid').value = '';
         await load();
       } catch (err) {
         msg.textContent = err.message; msg.className = 'pp-msg err';
       } finally { $('openBtn').disabled = false; }
     });
 
-    $('resetBtn').addEventListener('click', async () => {
-      if (!confirm('Start again? Every open position and closed trade in this account is deleted, and it restarts today with $100,000.')) return;
-      try { await post('/api/paper/reset', { confirm: true }); closing = null; await load(); }
-      catch (e) { alert(e.message); }
+    // Start again, with a starting amount: asked on the page, then confirmed.
+    $('resetBtn').addEventListener('click', () => {
+      $('resetBox').hidden = !$('resetBox').hidden;
+      if (!$('resetBox').hidden) { $('startAmt').value = data ? Math.round(data.startCash).toLocaleString('en-US') : '100,000'; $('startAmt').focus(); }
+    });
+    $('resetCancel').addEventListener('click', () => { $('resetBox').hidden = true; $('resetMsg').textContent = ''; });
+    $('resetGo').addEventListener('click', async () => {
+      const btn = $('resetGo'); btn.disabled = true;
+      try {
+        await post('/api/paper/reset', { confirm: true, startCash: $('startAmt').value });
+        closing = null; $('resetBox').hidden = true; $('resetMsg').textContent = '';
+        await load();
+      } catch (e) { $('resetMsg').textContent = e.message; $('resetMsg').className = 'pp-msg err'; }
+      finally { btn.disabled = false; }
     });
 
     // /paper?open=MU arrives from a stock page with the stock chosen.

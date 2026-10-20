@@ -54,5 +54,70 @@ check('account valued at each close', near(h[0].value, 100000) && near(h[1].valu
 // A fill at 8pm Eastern belongs to that New York day, not the next UTC one.
 check('trading day is New York’s', P.nyDay(Date.parse('2026-10-02T00:30:00Z')) === '2026-10-01');
 
+// ---- dated entries (2026-10-20) --------------------------------------------
+// A trade dated to a past day takes its place by DAY, wherever it was typed in.
+const dt = (id, kind, symbol, shares, price, d, extra) => Object.assign({ id, kind, symbol, shares, price, d, ts: Date.parse('2026-10-20T15:00:00Z') + id }, extra || {});
+check('dayOf: a dated trade is its day, a live one its New York day', P.dayOf(dt(1, 'open', 'A', 1, 1, '2025-03-04')) === '2025-03-04' && P.dayOf(t(1, 'open', 'A', 1, 1)) === '2026-10-01');
+check('whenOf: noon on a dated trade’s day', P.whenOf(dt(1, 'open', 'A', 1, 1, '2025-03-04')) === Date.parse('2025-03-04T12:00:00Z'));
+// Typed in after a live open, dated before it: it is the first open of A, so
+// the position's open date is the dated one, and the closed slice measures from it.
+{
+  const L = [t(1, 'open', 'A', 10, 100, Date.parse('2026-10-05T15:00:00Z')), dt(2, 'open', 'A', 10, 50, '2025-01-06'), dt(3, 'close', 'A', 5, 80, '2025-06-02')];
+  const S2 = P.summarise(acct, L, { A: { price: 120 } });
+  check('replayed by day: the dated close comes before the later live open', S2.closed.length === 1 && near(S2.closed[0].entry, 50) && near(S2.closed[0].exit, 80), S2.closed);
+  check('the open date of the position that remains is the dated first open', S2.positions[0].openedAt === Date.parse('2025-01-06T12:00:00Z') && S2.positions[0].dated === true, S2.positions[0]);
+  check('days held measured between the two dates', S2.closed[0].days === Math.round((Date.parse('2025-06-02') - Date.parse('2025-01-06')) / 86400000));
+  check('average after: 5 left at 50, then 10 at 100', near(S2.positions[0].avgCost, (5 * 50 + 10 * 100) / 15) && near(S2.positions[0].shares, 15));
+}
+// The whole ledger must add up in day order.
+{
+  const small = { start_cash: 10000, started_at: acct.started_at };
+  check('a ledger that fits passes', P.checkLedger(small, [dt(1, 'open', 'A', 50, 100, '2025-01-06'), dt(2, 'close', 'A', 50, 120, '2025-02-03'), dt(3, 'open', 'B', 100, 110, '2025-03-03')]) === null);
+  // An earlier dated open spends the cash a later open had used: the later day fails.
+  const r1 = P.checkLedger(small, [t(1, 'open', 'B', 80, 100, Date.parse('2026-10-05T15:00:00Z')), dt(2, 'open', 'A', 50, 100, '2025-01-06')]);
+  check('an earlier entry that leaves a later one short of cash is refused, naming the later day', !!r1 && /2026-10-05/.test(r1.error), r1);
+  const r2 = P.checkLedger(small, [dt(1, 'open', 'A', 10, 100, '2025-05-01'), dt(2, 'close', 'A', 10, 120, '2025-04-01')]);
+  check('a close dated before its open is refused', !!r2 && /2025-04-01/.test(r2.error), r2);
+  check('spending exactly the cash is allowed', P.checkLedger(small, [dt(1, 'open', 'A', 100, 100, '2025-01-06')]) === null);
+  check('a cent over is refused', !!P.checkLedger(small, [dt(1, 'open', 'A', 100.0001, 100, '2025-01-06')]));
+  check('heldOn: what was open at the end of a day', near(P.heldOn([dt(1, 'open', 'A', 10, 1, '2025-01-06'), dt(2, 'close', 'A', 4, 1, '2025-02-03'), dt(3, 'open', 'A', 1, 1, '2025-03-03')], 'A', '2025-02-10'), 6));
+  check('heldOn: nothing before the first open', P.heldOn([dt(1, 'open', 'A', 10, 1, '2025-01-06')], 'A', '2025-01-03') === 0);
+}
+// Splits: a statement from before one is on another footing.
+{
+  const NV = [{ d: '2021-07-20', f: 4 }, { d: '2024-06-10', f: 10 }];
+  check('splitFactor: both splits since 2021', P.splitFactor(NV, '2021-01-04') === 40);
+  check('splitFactor: one since 2023', P.splitFactor(NV, '2023-05-01') === 10);
+  check('splitFactor: a purchase on the split day is already on the new basis', P.splitFactor(NV, '2024-06-10') === 1);
+  check('splitFactor: none since', P.splitFactor(NV, '2025-01-02') === 1 && P.splitFactor(null, '2025-01-02') === 1);
+}
+// The price paid must lie in the day's range, on the statement's basis.
+{
+  const bar = { low: 118.5, high: 122, close: 120 };
+  check('blank takes the close', P.pricedOn('', bar, 1).price === 120 && P.pricedOn('', bar, 1).entered === null);
+  check('a price in the range is kept', near(P.pricedOn(119.25, bar, 1).price, 119.25));
+  check('outside the range is refused, naming the range', /118\.50 to \$122\.00/.test(P.pricedOn(130, bar, 1).error || ''), P.pricedOn(130, bar, 1));
+  check('half a percent of room for rounding', !P.pricedOn(122.5, bar, 1).error && !!P.pricedOn(123, bar, 1).error);
+  check('before a 10-for-1: $1,200 paid is $120 today', near(P.pricedOn(1200, bar, 10).price, 120) && P.pricedOn(1200, bar, 10).entered === 1200);
+  check('and the range is said on the statement’s basis', /1185\.00 to \$1220\.00, before the split/.test(P.pricedOn(150, bar, 10).error || ''), P.pricedOn(150, bar, 10));
+  check('zero or a word is refused', !!P.pricedOn('0', bar, 1).error && !!P.pricedOn('abc', bar, 1).error);
+  check('no stored price for the day', !!P.pricedOn('', { close: null }, 1).error);
+}
+// The starting amount.
+check('starting amount: blank is $100,000', P.startCashOf('').cash === 100000);
+check('starting amount: commas and a dollar sign are read', P.startCashOf('$250,000').cash === 250000);
+check('starting amount: under $1,000 or over $10M is refused', !!P.startCashOf(500).error && !!P.startCashOf(20000000).error && !!P.startCashOf('lots').error);
+// History with dated entries: the account's own start (moved back to the
+// first dated day by the server) and the trades in day order.
+{
+  const a2 = { start_cash: 10000, started_at: Date.parse('2025-01-06T12:00:00Z') };
+  const b2 = [{ d: '2025-01-03', c: 90 }, { d: '2025-01-06', c: 100 }, { d: '2025-01-07', c: 105 }, { d: '2025-01-08', c: 100 }];
+  const h2 = P.history(a2, [t(9, 'open', 'Z', 1, 1, Date.parse('2026-10-05T15:00:00Z')), dt(2, 'open', 'A', 50, 100, '2025-01-06'), dt(3, 'close', 'A', 50, 110, '2025-01-08')],
+    { A: [{ d: '2025-01-06', c: 100 }, { d: '2025-01-07', c: 104 }, { d: '2025-01-08', c: 110 }] }, b2);
+  check('dated history starts on the first dated day', h2[0].d === '2025-01-06' && h2.length === 3, h2);
+  check('valued through the dated open and close', near(h2[0].value, 10000) && near(h2[1].value, 5000 + 50 * 104) && near(h2[2].value, 10000 + 50 * 10), h2);
+  check('SPY rebased on that day', near(h2[1].bench, 10500), h2);
+}
+
 console.log(ran + ' checks, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
