@@ -591,6 +591,168 @@
     };
   }
 
+  // ---- MUSIC MADE HERE (2026-10-20, the owner: "I have to provide the
+  // music?", then "yes option 1"). Four short loops composed in code and
+  // rendered in the browser by Web Audio's offline renderer: nothing to
+  // licence, no file to find. Each is eight bars over a four-chord
+  // progression, rendered with its reverb tail folded back onto its start so
+  // it loops without a seam, then levelled to the same loudness. Seeded noise,
+  // so a track sounds the same on every render.
+  //
+  // Clean and simple by design (synthesised pads, plucks and drums), not a
+  // produced song. Your own file stays the other choice.
+  const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  function seeded(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  function noiseBuf(ctx, secs, seed) {
+    const b = ctx.createBuffer(1, Math.round(ctx.sampleRate * secs), ctx.sampleRate), d = b.getChannelData(0), r = seeded(seed);
+    for (let i = 0; i < d.length; i++) d[i] = r() * 2 - 1;
+    return b;
+  }
+  function roomImpulse(ctx, secs, seed) {
+    const n = Math.round(ctx.sampleRate * secs), b = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c), r = seeded(seed + c); for (let i = 0; i < n; i++) d[i] = (r() * 2 - 1) * Math.pow(1 - i / n, 3); }
+    return b;
+  }
+  // The instruments. `out` is where a voice goes (the reverb bus or dry).
+  function makeVoices(ctx) {
+    const master = ctx.createDynamicsCompressor();
+    master.threshold.value = -16; master.ratio.value = 3; master.attack.value = 0.01; master.release.value = 0.25;
+    master.connect(ctx.destination);
+    const bus = ctx.createGain(); bus.connect(master);
+    const verb = ctx.createConvolver(); verb.buffer = roomImpulse(ctx, 2.4, 7);
+    const wet = ctx.createGain(); wet.gain.value = 0.32;
+    bus.connect(verb); verb.connect(wet); wet.connect(master);
+    const dry = ctx.createGain(); dry.connect(master);
+    const noise = noiseBuf(ctx, 1, 11);
+    const V = {
+      pad(notes, t, dur, vol) {
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1300; f.Q.value = 0.4;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.9, dur * 0.3));
+        g.gain.setValueAtTime(vol, t + Math.max(0.9, dur - 0.3)); g.gain.linearRampToValueAtTime(0, t + dur + 0.6);
+        f.connect(g); g.connect(bus);
+        for (const n of notes) for (const det of [-8, 8]) {
+          const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = midi(n); o.detune.value = det;
+          o.connect(f); o.start(t); o.stop(t + dur + 0.7);
+        }
+      },
+      bass(n, t, dur, vol, type) {
+        const o = ctx.createOscillator(); o.type = type || 'triangle'; o.frequency.value = midi(n);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.012);
+        g.gain.setTargetAtTime(vol * 0.6, t + 0.012, 0.15); g.gain.setTargetAtTime(0, t + dur, 0.06);
+        o.connect(g); g.connect(dry); o.start(t); o.stop(t + dur + 0.4);
+      },
+      pluck(n, t, vol, decay) {
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 3200;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0008, t + decay);
+        f.connect(g); g.connect(bus);
+        const a = ctx.createOscillator(); a.type = 'triangle'; a.frequency.value = midi(n);
+        const b = ctx.createOscillator(); b.type = 'sine'; b.frequency.value = midi(n) * 2;
+        const bg = ctx.createGain(); bg.gain.value = 0.3;
+        a.connect(f); b.connect(bg); bg.connect(f);
+        a.start(t); b.start(t); a.stop(t + decay + 0.05); b.stop(t + decay + 0.05);
+      },
+      kick(t, vol) {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+        const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+        o.connect(g); g.connect(dry); o.start(t); o.stop(t + 0.4);
+      },
+      hat(t, vol) {
+        const s = ctx.createBufferSource(); s.buffer = noise;
+        const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7500;
+        const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        s.connect(f); f.connect(g); g.connect(dry); s.start(t, (t * 7.31) % 0.9); s.stop(t + 0.06);
+      },
+      clap(t, vol) {
+        const s = ctx.createBufferSource(); s.buffer = noise;
+        const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 0.8;
+        const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        s.connect(f); f.connect(g); g.connect(bus); s.start(t, (t * 3.17) % 0.7); s.stop(t + 0.22);
+      },
+    };
+    return V;
+  }
+  // Chords as MIDI notes in close voicing, and their bass roots.
+  const CH = {
+    Am: [57, 60, 64], F: [57, 60, 65], C: [55, 60, 64], G: [55, 59, 62],
+  };
+  const ROOT = { Am: 45, F: 41, C: 48, G: 43 };
+  const BARS = 8;
+  const TRACKS = [
+    { id: 'calm', name: 'Calm', note: 'slow ambient pads', bpm: 80, prog: ['Am', 'F', 'C', 'G'],
+      play(V, beat, bar, b, ch, root) {
+        V.pad(CH[ch], b * bar, bar, 0.045);
+        V.bass(root, b * bar, bar * 0.95, 0.2, 'sine');
+        V.pluck(CH[ch][b % 3] + 12, b * bar, 0.07, 2.6);
+        V.pluck(CH[ch][2] + 12, b * bar + 2 * beat, 0.05, 2.6);
+      } },
+    { id: 'pulse', name: 'Pulse', note: 'soft electronic beat', bpm: 110, prog: ['Am', 'F', 'C', 'G'],
+      play(V, beat, bar, b, ch, root) {
+        const t0 = b * bar;
+        V.pad(CH[ch], t0, bar, 0.03);
+        for (let k = 0; k < 4; k++) { V.kick(t0 + k * beat, 0.5); V.hat(t0 + k * beat + beat / 2, 0.1); }
+        for (let k = 0; k < 8; k++) V.bass(root + (k % 2 ? 12 : 0), t0 + k * beat / 2, beat * 0.4, 0.17);
+        const arp = [0, 1, 2, 1];
+        for (let k = 0; k < 16; k++) V.pluck(CH[ch][arp[k % 4]] + 12, t0 + k * beat / 4, 0.03, 0.28);
+      } },
+    { id: 'bright', name: 'Bright', note: 'upbeat pop beat', bpm: 124, prog: ['C', 'G', 'Am', 'F'],
+      play(V, beat, bar, b, ch, root) {
+        const t0 = b * bar;
+        for (let k = 0; k < 4; k++) {
+          V.kick(t0 + k * beat, 0.55);
+          if (k % 2) V.clap(t0 + k * beat, 0.22);
+          V.hat(t0 + k * beat, 0.05); V.hat(t0 + k * beat + beat / 2, 0.1);
+          for (const n of CH[ch]) V.pluck(n + 12, t0 + k * beat + beat / 2, 0.035, 0.3);
+        }
+        for (let k = 0; k < 8; k++) V.bass(root, t0 + k * beat / 2, beat * 0.38, 0.2);
+      } },
+    { id: 'keys', name: 'Keys', note: 'gentle piano-like arpeggio', bpm: 90, prog: ['Am', 'F', 'C', 'G'],
+      play(V, beat, bar, b, ch, root) {
+        const t0 = b * bar, c = CH[ch];
+        const run = [c[0], c[1], c[2], c[0] + 12, c[2], c[1], c[2], c[0] + 12];
+        run.forEach((n, k) => V.pluck(n, t0 + k * beat / 2, k % 4 ? 0.07 : 0.1, 1.8));
+        V.bass(root + 12, t0, bar * 0.95, 0.09, 'sine');
+        V.pad(c, t0, bar, 0.015);
+      } },
+  ];
+  const trackCache = {};
+  // One loop of a track as an AudioBuffer, rendered once per page.
+  function renderTrack(id) {
+    if (trackCache[id]) return trackCache[id];
+    const T = TRACKS.find((x) => x.id === id);
+    if (!T) return Promise.reject(new Error('No such track.'));
+    const OAC = global.OfflineAudioContext || global.webkitOfflineAudioContext;
+    if (!OAC) return Promise.reject(new Error('This browser cannot make music here.'));
+    const rate = 44100, beat = 60 / T.bpm, bar = beat * 4, loop = bar * BARS, tail = 3;
+    const ctx = new OAC(2, Math.round(rate * (loop + tail)), rate);
+    const V = makeVoices(ctx);
+    for (let b = 0; b < BARS; b++) { const ch = T.prog[b % T.prog.length]; T.play(V, beat, bar, b, ch, ROOT[ch]); }
+    trackCache[id] = ctx.startRendering().then((full) => {
+      // Fold the tail past the loop's end back onto its start, so the reverb
+      // and the last notes ring into the next time round instead of cutting.
+      const n = Math.round(rate * loop), out = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: rate });
+      let peak = 0, energy = 0;
+      const chans = [0, 1].map((c) => {
+        const src = full.getChannelData(c), d = new Float32Array(n);
+        for (let i = 0; i < n; i++) d[i] = src[i] + (i + n < src.length ? src[i + n] : 0);
+        for (let i = 0; i < n; i++) { peak = Math.max(peak, Math.abs(d[i])); energy += d[i] * d[i]; }
+        return d;
+      });
+      // Levelled by loudness (the average), so moving between tracks does not
+      // jump in volume; drums set a track's peak without making it louder.
+      // The peak stays under 0.95 whatever that asks for.
+      const rms = Math.sqrt(energy / (2 * n));
+      const k = peak > 0 && rms > 0 ? Math.min(0.95 / peak, 0.19 / rms) : 1;
+      chans.forEach((d, c) => { for (let i = 0; i < n; i++) d[i] *= k; out.copyToChannel(d, c); });
+      return out;
+    });
+    trackCache[id].catch(() => { delete trackCache[id]; });
+    return trackCache[id];
+  }
+
   // ---- recording, shared by the Reel, Video from cards and Video from images
   // H.264 MP4 where the browser offers it (Chrome does), which is what
   // Instagram takes; WebM otherwise, and the caller says so. With music the
@@ -623,6 +785,8 @@
   // background tab throttles the frames, so the tab has to stay in front.
   // `music`: { buffer (an AudioBuffer from loadMusic), volume, offset } or null.
   async function run(cv, ms, paintAt, record, music) {
+    // A made track may still be rendering: wait for it here.
+    if (music && music.ready && !music.buffer) music = Object.assign({}, music, { buffer: await music.ready });
     const type = record ? mime(!!music) : '';
     if (record && !type) throw new Error('This browser cannot record video. Use Chrome.');
     let rec = null, actx = null, src = null; const chunks = [];
@@ -680,53 +844,103 @@
     const base = type.split(';')[0];
     return { blob: new Blob(chunks, { type: base }), ext: base === 'video/mp4' ? 'mp4' : 'webm' };
   }
-  // The music control, one implementation for the three hosts: a file button,
-  // the track's name, remove, volume and where in the track to start. Returns
-  // { get() } giving run()'s `music` argument, or null when none is chosen.
+  // The music control, one implementation for the three hosts: a list (no
+  // music, the four tracks made here, or your own file), Listen, volume, and
+  // for your own file where in the track to start. Returns { get() } giving
+  // run()'s `music` argument, or null for none. A made track may still be
+  // rendering when Play is pressed: `ready` is its promise and run() waits.
   function musicPicker(host, onChange) {
     const VOLS = [[1, '100%'], [0.8, '80%'], [0.6, '60%'], [0.4, '40%'], [0.25, '25%']];
     const STARTS = [0, 5, 10, 15, 20, 30, 45, 60, 90];
-    host.innerHTML = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-      + '<button class="btn" type="button" data-m="pick">Choose music</button>'
-      + '<span data-m="name" style="font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">No music</span>'
-      + '<button class="btn" type="button" data-m="del" title="Remove the music" hidden>&times;</button>'
+    const col = 'display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)';
+    host.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">'
+      + '<span style="' + col + '">Track<select data-m="src" aria-label="Music">'
+      + '<option value="">No music</option>'
+      + TRACKS.map((t) => '<option value="' + t.id + '">' + t.name + ' — ' + t.note + '</option>').join('')
+      + '<option value="file">Your own file…</option></select></span>'
+      + '<button class="btn" type="button" data-m="listen" hidden>Listen</button></div>'
+      + '<div data-m="own" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" hidden>'
+      + '<button class="btn" type="button" data-m="pick">Choose a file</button>'
+      + '<span data-m="name" style="font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">No file chosen</span>'
       + '<input type="file" data-m="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/aac,audio/ogg" hidden></div>'
       + '<div data-m="opts" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px" hidden>'
-      + '<span style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)">Volume<select data-m="vol" aria-label="Music volume">'
+      + '<span style="' + col + '">Volume<select data-m="vol" aria-label="Music volume">'
       + VOLS.map(([v, l]) => '<option value="' + v + '"' + (v === 0.8 ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></span>'
-      + '<span style="display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)">Start the track at<select data-m="off" aria-label="Start the track at">'
+      + '<span data-m="offw" style="' + col + '" hidden>Start the track at<select data-m="off" aria-label="Start the track at">'
       + STARTS.map((s) => '<option value="' + s + '">' + (s ? s + ' seconds' : 'the beginning') + '</option>').join('') + '</select></span></div>';
     const $m = (k) => host.querySelector('[data-m="' + k + '"]');
-    let buffer = null;
-    const paint = (name, warn) => {
-      $m('name').textContent = name;
-      $m('name').style.color = warn ? 'var(--amber)' : 'var(--muted)';
-      $m('del').hidden = !buffer;
-      $m('opts').hidden = !buffer;
+    let fileBuf = null, listening = null;
+    const src = () => $m('src').value;
+    const stopListen = () => {
+      if (!listening) return;
+      try { listening.src.stop(); } catch (e) { /* already stopped */ }
+      listening.ctx.close().catch(() => {});
+      listening = null;
+      $m('listen').textContent = 'Listen';
     };
+    const paint = () => {
+      const s = src();
+      $m('own').hidden = s !== 'file';
+      $m('opts').hidden = !s || (s === 'file' && !fileBuf);
+      $m('offw').hidden = s !== 'file';
+      $m('listen').hidden = !s || (s === 'file' && !fileBuf);
+    };
+    // A made track starts rendering the moment it is picked, so Play rarely waits.
+    $m('src').addEventListener('change', () => {
+      stopListen();
+      if (TRACKS.some((t) => t.id === src())) renderTrack(src()).catch(() => {});
+      paint();
+      if (onChange) onChange();
+    });
     $m('pick').addEventListener('click', () => $m('file').click());
     $m('file').addEventListener('change', async (e) => {
       const f = e.target.files && e.target.files[0];
       e.target.value = '';
       if (!f) return;
-      paint('Reading ' + f.name + '…');
+      stopListen();
+      $m('name').textContent = 'Reading ' + f.name + '…'; $m('name').style.color = 'var(--muted)';
       try {
-        buffer = await loadMusic(f);
-        paint(f.name + ' · ' + Math.round(buffer.duration) + ' s');
+        fileBuf = await loadMusic(f);
+        $m('name').textContent = f.name + ' · ' + Math.round(fileBuf.duration) + ' s';
       } catch (err) {
-        buffer = null;
-        paint('Could not read that file as audio', true);
+        fileBuf = null;
+        $m('name').textContent = 'Could not read that file as audio'; $m('name').style.color = 'var(--amber)';
       }
+      paint();
       if (onChange) onChange();
     });
-    $m('del').addEventListener('click', () => { buffer = null; paint('No music'); if (onChange) onChange(); });
+    // Listen: the chosen music alone, ten seconds at the chosen volume.
+    $m('listen').addEventListener('click', async () => {
+      if (listening) { stopListen(); return; }
+      const s = src();
+      const buf = s === 'file' ? fileBuf : await renderTrack(s).catch(() => null);
+      if (!buf) return;
+      const ctx = new (global.AudioContext || global.webkitAudioContext)();
+      const node = ctx.createBufferSource(); node.buffer = buf; node.loop = true;
+      const g = ctx.createGain(), vol = Number($m('vol').value), t = ctx.currentTime;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.3);
+      g.gain.setValueAtTime(vol, t + 9); g.gain.linearRampToValueAtTime(0, t + 10);
+      node.connect(g); g.connect(ctx.destination);
+      const off = s === 'file' ? Number($m('off').value) : 0;
+      node.start(t, off < buf.duration - 1 ? off : 0); node.stop(t + 10.1);
+      listening = { ctx, src: node };
+      node.onended = () => { if (listening && listening.src === node) stopListen(); };
+      $m('listen').textContent = 'Stop';
+    });
+    paint();
     return {
-      get: () => (buffer ? { buffer, volume: Number($m('vol').value), offset: Number($m('off').value) } : null),
+      get() {
+        const s = src(), volume = Number($m('vol').value);
+        stopListen();
+        if (!s) return null;
+        if (s === 'file') return fileBuf ? { buffer: fileBuf, volume, offset: Number($m('off').value) } : null;
+        return { ready: renderTrack(s), volume, offset: 0 };
+      },
     };
   }
 
   global.Reel = { W, H, DURATION, SCENES, paint, countUp,
     SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run,
-    loadMusic, musicPicker,
+    loadMusic, musicPicker, TRACKS, renderTrack,
     cardParts, cardSchedule, cardSlide };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -89,3 +89,17 @@ The owner asked how to add sound. Offered music, sound effects or both, they cho
 - The hint beside each picker says to use music that may be used commercially (royalty-free: Pixabay Music, the YouTube Audio Library).
 
 Tested with generated tunes (30 s and 8 s WAVs) set through the real file inputs. On `/reelmaker` (1:1, 2.5 s an image, track from 5 s at 60%), the recording carries AAC (`mp4a`, no Opus) and its decoded audio holds a steady level each second, then falls over the last. The 8-second track loops through a 13-second video. After Remove, the next recording has no audio track. In the studio, Video from cards (4:5) and the Reel each recorded with their own picker's track (AAC, 19.7 s and 22.9 s of audio).
+
+## Music made here (2026-10-20)
+The owner: "I have to provide the music?" Offered generated loops or a bundled library of public-domain tracks, they chose: "yes option 1".
+
+- **Four tracks composed in code** (`TRACKS` in `reel.js`). Each is eight bars, rendered by Web Audio's offline renderer (`renderTrack`) with synthesised instruments (`makeVoices`: detuned-saw pads, triangle plucks, sine and triangle bass, a swept-sine kick, noise hats and claps, a generated room reverb, a compressor):
+  - **Calm**: 80 bpm, pads and slow plucks over Am–F–C–G, 24 s loop.
+  - **Pulse**: 110 bpm, kick, off-beat hats, eighth-note bass, sixteenth arpeggio, 17.5 s loop.
+  - **Bright**: 124 bpm, four-on-the-floor kick, claps on 2 and 4, off-beat chord stabs over C–G–Am–F, 15.5 s loop.
+  - **Keys**: 90 bpm, a piano-like arpeggio with soft bass and pad, 21.3 s loop.
+- **Seamless and level.** The reverb tail past the eighth bar is folded back onto the start, so the loop wraps without a cut (the measured jump at the wrap is under 0.007). Each track is levelled to the same loudness (an RMS of 0.19, peak kept under 0.95), so switching tracks does not change the volume (measured within 0.6 dB). Noise is seeded, so every render is identical. A render takes about 1.5–2.5 s, starts the moment a track is picked, is cached for the page, and `Reel.run` waits for it if Play comes first (`music.ready`).
+- **The picker** (`musicPicker`) is now a list: No music (the default), the four tracks, or Your own file… (the earlier file button, with Start the track at). **Listen** plays the chosen music alone for ten seconds at the chosen volume; Volume applies to all. The hints say the made tracks need no licence.
+- Synthesised and simple by design: background for an explainer, not a produced song.
+
+Tested in headless Chrome. Each track renders with no NaN and no clipping, at the lengths above. A `/reelmaker` video with Pulse picked from the list carries AAC audio at a steady level, fading at the end. The studio's two pickers list six choices each, and the Reel still records. A WAV of each track was rendered for the owner to listen to.
