@@ -20,8 +20,8 @@
 //     positive;
 //   - revenue growth: the summed trailing-year revenue against the same
 //     companies' summed revenue a year earlier;
-//   - the share price: the equal-weight average of the members' returns since
-//     the window's first quarter end, the group pages' own rule (groupmonths.js).
+//   - the share price: the median company's return since the window's first
+//     quarter end (see aggregate for why not an average).
 //
 // THE SAME COMPANIES IN EVERY QUARTER DRAWN. A company that starts filing, or
 // stops, part-way through would move a sum by its whole size and read as
@@ -52,6 +52,7 @@ const RULES = {
 const r2 = (v) => (v == null || !isFinite(v) ? null : Math.round(v * 100) / 100);
 const pct = (v) => r2(v * 100);
 const ok = (v) => v != null && isFinite(Number(v));
+const median = (xs) => { const a = xs.filter((x) => x != null && isFinite(x)).sort((p, q) => p - q); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 
 // A member's figure for a key at a quarter end, by date (members built on
 // different nights may hold different quarter lists).
@@ -79,16 +80,21 @@ function aggregate(members, quarters, mk) {
   const of = ms.length;
   const Q = quarters || [];
   if (mk === 'px') {
-    // Equal weight: each member's price against its own close at the first
-    // quarter end, averaged; a quarter with no close carries its last.
+    // THE MEDIAN COMPANY'S RETURN since the window's first quarter end, at each
+    // quarter end: what the typical member did. Measured on 2026-10-20 over ten
+    // years: an equal-dollar average read Technology +2,065% and Energy +323%,
+    // led by a few winners; compounding each quarter's average return read
+    // Energy +1,221% (volatile small members pump it). The median read +347%
+    // and +90%, beside a geometric average's +363% and +123%. A member counts
+    // when it has a close at the first quarter end; a quarter with no close
+    // carries its last.
     const kept = ms.filter((m) => { const p0 = at(m, 'px', Q[0]); return p0 != null && p0 > 0; });
     if (kept.length < MIN_COMPANIES) return { values: null, used: kept.length, of };
     const last = kept.map((m) => at(m, 'px', Q[0]));
     const base = last.slice();
     const values = Q.map((q) => {
-      let sum = 0;
-      kept.forEach((m, k) => { const p = at(m, 'px', q); if (p != null && p > 0) last[k] = p; sum += last[k] / base[k]; });
-      return r2((sum / kept.length - 1) * 100);
+      const rel = kept.map((m, k) => { const p = at(m, 'px', q); if (p != null && p > 0) last[k] = p; return last[k] / base[k]; });
+      return r2((median(rel) - 1) * 100);
     });
     return { values, used: kept.length, of };
   }
@@ -120,4 +126,4 @@ function aggregate(members, quarters, mk) {
 // lender (gross profit and gross margin): the caller leaves lenders out first.
 const NO_FIN = new Set(['gp', 'gm']);
 
-module.exports = { KEYS, RULES, MIN_COMPANIES, NO_FIN, aggregate };
+module.exports = { KEYS, RULES, MIN_COMPANIES, NO_FIN, aggregate, median };

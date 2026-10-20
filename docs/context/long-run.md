@@ -66,3 +66,6 @@ Phase 1 is growth (daily, from the margins pass). Phase 2 is the rest, built a s
   - **Exxon has nothing**: its `sec_state` carries CIK 2115436 with 4 rows of filings, not the long-standing 34088. Reported to the owner, not changed: the mapping is the filings refresh's.
   - **Procter & Gamble's streak starts in 2018** because its filings state 3.00 for fiscal 2017, between 2.66 and 2.79. One odd filed figure breaks a streak; it is shown as filed rather than second-guessed.
   - Apple, Johnson & Johnson and others have no interest coverage: their filings carry no interest expense tag in recent years (Apple reports it inside other income).
+
+## The slice also keeps each company's quarterly series (2026-10-20)
+For the Sector and Industry lines cards (`group-lines.md`), `longRunSlice` now runs `trendSeries` in full mode and writes each company's series to `line_series` (`writeLineSeries`, one batch a chunk; a failed write never stops the long-run figures). Measured on the first fill: 11–21 seconds a call of 200 companies, about the same as before.

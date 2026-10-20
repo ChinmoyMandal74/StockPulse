@@ -11513,6 +11513,7 @@
           + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '')
         : PT.measureNote(model, data);
     const note = what
+      + (grp && model.pinned && mk !== 'rg' ? model.pinned + (model.pinned === 1 ? ' point above ' : ' points above ') + PT.fmt(model.unit, model.ceil) + (model.pinned === 1 ? ' is' : ' are') + ' drawn at the top of the scale. ' : '')
       + (model.log ? 'Log scale, so equal distances are equal ratios. ' : '')
       + (model.gaps && mk !== 'px' && mk !== 'pe' && mk !== 'vol' ? 'A break in a line is a quarter with no figure on record. ' : '')
       + (late.length ? names(late) + (late.length === 1 ? ' is' : ' are') + ' left out: the price history held here starts after the window does. ' : '')
@@ -11617,6 +11618,8 @@
   // margin, as on the Lines card.
   const GLN = { seclines: { p: 'gln', G: GROUPING.sector }, indlines: { p: 'iln', G: GROUPING.industry } };
   const GLN_MAX = 8, GLN_DEFAULT = 5, GLN_MIN = 3;
+  // grouplines.js's median, restated: this module has no requires.
+  const glnMedian = (xs) => { const a = xs.filter((x) => x != null && isFinite(x)).sort((p, q) => p - q); if (!a.length) return null; const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
   const glnPicks = (tpl, o, all) => {
     const T = GLN[tpl];
     const known = new Set(all.map((g) => g.name));
@@ -11644,7 +11647,7 @@
     pe: 'its companies’ summed market value over their summed net income (none where that is not positive)',
     ps: 'its companies’ summed market value over their summed revenue',
     rg: 'its companies’ summed revenue against the same companies’ revenue a year earlier',
-    px: 'the equal-weight average of its companies’ returns since the first quarter end, price only',
+    px: 'the median company’s return since the first quarter end, price only: what the typical company did, which one or two large winners cannot lead',
   };
   function tplGroupLines(tpl) {
     const T = GLN[tpl], G = T.G, p = T.p;
@@ -11680,24 +11683,28 @@
       const from = mk === 'vol' ? 0 : i0;
       for (const name of picks) {
         const members = stocks.filter((r) => r && !r.error && !isFundRow(r) && !IS_BENCH.has(r.symbol) && inGroup(r, G.field, name));
-        // Each member against its own first close in the span read; members
-        // with no close there are left out, and a missing day carries the last.
+        // THE MEDIAN COMPANY, as on the quarterly lines (grouplines.js says why
+        // not an average): each member against its own first close in the
+        // window, a missing day carrying its last; and for volatility, the
+        // median of the members' own 30-day figures, the typical company's
+        // swings rather than a diversified average's.
         const S = members.map((r) => (d.series || {})[r.symbol]).filter((x) => x && x[from] != null && Number(x[from]) > 0);
         used[name] = [S.length, members.length];
         if (S.length < GLN_MIN) continue;
-        const last = S.map((x) => Number(x[from]));
-        const base = last.slice();
-        const avg = [];
-        for (let t = from; t < d.dates.length; t++) {
-          let sum = 0;
-          S.forEach((x, k) => { const v = x[t]; if (v != null && Number(v) > 0) last[k] = Number(v); sum += last[k] / base[k]; });
-          avg.push(sum / S.length);
-        }
         if (mk === 'vol') {
-          const v = RC.volSeries(avg, VOL_PRE).slice(i0);
+          const each = S.map((x) => RC.volSeries(x.map((v) => (v == null ? null : Number(v))), VOL_PRE).slice(i0));
+          const v = xs.map((_, t) => glnMedian(each.map((e) => e[t])));
           if (v[0] == null) continue;
           vals[name] = v.map((x) => (x == null ? null : Math.round(x * 100) / 100));
-        } else vals[name] = avg.map((x) => Math.round((x - 1) * 10000) / 100);
+        } else {
+          const last = S.map((x) => Number(x[from]));
+          const base = last.slice();
+          const med = [];
+          for (let t = from; t < d.dates.length; t++) {
+            med.push(glnMedian(S.map((x, k) => { const v = x[t]; if (v != null && Number(v) > 0) last[k] = Number(v); return last[k] / base[k]; })));
+          }
+          vals[name] = med.map((x) => (x == null ? null : Math.round((x - 1) * 10000) / 100));
+        }
       }
     } else {
       winLabel = win[3];
@@ -11711,11 +11718,11 @@
     const u = picks.reduce((a, n) => (used[n] ? [a[0] + used[n][0], a[1] + used[n][1]] : a), [0, 0]);
     const thin = picks.filter((n) => !vals[n]);
     const how = daily
-      ? (mk === 'vol' ? 'Each line is the 30-day volatility of the ' + G.one + '’s equal-weight average price: each point the last thirty sessions’ daily moves of that average, annualised. '
-        : 'Each line is the equal-weight average of the ' + G.one + '’s companies’ prices, each rebased to the first close of the window, so the gap between two lines is the difference in their returns. ')
+      ? (mk === 'vol' ? 'Each line is the median of the ' + G.one + '’s companies’ 30-day volatility: the typical company’s daily moves over the last thirty sessions, annualised. '
+        : 'Each line is the median company’s return in the ' + G.one + ' since the first close of the window, price only: what the typical company did, which one or two large winners cannot lead. ')
       : 'Each line is ' + (GLN_HOW[mk] || 'the ' + G.one + '’s figure') + (mk === 'px' ? '. One point per quarter end. ' : ', from the filings. ');
     const note = 'Built from ' + u[0].toLocaleString('en-US') + ' of the ' + u[1].toLocaleString('en-US') + ' companies in the ' + G.many + ' shown'
-      + (daily ? ' (those priced at the start of the window). ' : ', those with a figure in every quarter drawn. ')
+      + (daily || mk === 'px' ? ' (those priced at the start of the window). ' : ', those with a figure in every quarter drawn. ')
       + (thin.length ? thin.slice(0, 2).join(', ') + (thin.length > 2 ? ' and ' + (thin.length - 2) + ' more' : '') + (thin.length === 1 ? ' has' : ' have') + ' too few companies with figures to draw. ' : '')
       + (data && data.lenderOut ? 'Lenders are left out: this measure means nothing for one. ' : '')
       + 'Funds are not counted. ';

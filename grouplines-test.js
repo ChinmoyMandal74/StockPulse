@@ -37,13 +37,18 @@ r = G.aggregate(W, Q.slice(4), 'rg');
 ok(r.used === 3 && near(r.values[0], Math.round((410 / 350 - 1) * 10000) / 100), 'revenue growth: the same companies’ revenue against a year before', r);
 r = G.aggregate(W, Q, 'rg');
 ok(r.values === null, 'growth over quarters with no year before cannot be drawn', r);
-// Share price: equal weight.
+// Share price: the median company's return since the first quarter end.
 r = G.aggregate(W, Q, 'px');
-ok(r.used === 3 && near(r.values[0], 0), 'price starts at 0% on the first quarter end', r);
-ok(near(r.values[5], Math.round(((15 / 10 + 30 / 20 + 10 / 5) / 3 - 1) * 10000) / 100), 'price: the equal-weight average of the members’ returns', r.values);
-const E = co('E', { px: [10, null, null, 20, 20, 20] });
-r = G.aggregate([A, B, C, E], Q, 'px');
-ok(near(r.values[1], Math.round(((11 / 10 + 20 / 20 + 5 / 5 + 10 / 10) / 4 - 1) * 10000) / 100), 'a quarter with no close carries the member’s last', r.values);
+ok(r.values[0] === 0 && r.used === 3, 'price starts at 0%, from the companies priced at the first quarter end (D listed later)', r);
+// At the last quarter: A 15/10 = 1.5, B 30/20 = 1.5, C 10/5 = 2.0: the median is 1.5.
+ok(near(r.values[5], 50), 'price: the median company’s return, not the average', r.values);
+// One huge winner moves an average and not the median.
+r = G.aggregate([A, B, C, co('W', { px: [1, 1, 1, 1, 1, 100] })], Q, 'px');
+ok(near(r.values[5], (1.5 + 2.0) / 2 * 100 - 100), 'a single hundred-bagger does not lead the line (median of four is the middle pair’s mean)', r.values);
+r = G.aggregate([A, B, C, co('E', { px: [10, null, null, 20, 20, 20] })], Q, 'px');
+// Second quarter: A 1.1, B 1.0, C 1.0, E carried at 10/10 = 1.0: the median is 1.0.
+ok(near(r.values[1], 0) && r.used === 4, 'a quarter with no close carries the member’s last', r.values);
+ok(G.median([3, 1, 2]) === 2 && G.median([4, 1, 3, 2]) === 2.5 && G.median([]) === null, 'median of odd, even and none');
 // Too few companies.
 r = G.aggregate([A, B], Q, 'rev');
 ok(r.values === null && r.used === 2, 'fewer than three companies: no line', r);
