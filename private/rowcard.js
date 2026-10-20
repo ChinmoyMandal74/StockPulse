@@ -273,9 +273,6 @@
                                         month: 'short', hour: 'numeric', minute: '2-digit' }),
                                       c: Date.now() - s.pricedAt > 86400000 ? 'warn' : '' })],
     ['short', 'Today', (s) => V.pct(s.todayPct)],
-    // Beside Today for the reason the column is: it is what says whether
-    // today's move is unusual for this stock.
-    ['short', 'Bad day',        (s) => V.mag(s.badDay)],
     // Beside the percentage it is derived from, which is where the table has
     // kept it all along — it sat in the Volume group here only because that
     // was where the other money readings were, and that group has gone.
@@ -306,12 +303,6 @@
     ['rel',   'RS vs S&P',      (s) => V.pct(s.relStrength)],
     ['rel',   '% from 52W lo',  (s) => V.lvl(s.pctFromLow)],
     ['rel',   '% from 52W hi',  (s) => V.pct(s.pctFromHigh)],
-    // The word for that distance: Near high, Pullback, Correction, Bear market.
-    ['rel',   'Drawdown',       (s) => V.text(s.ddState)],
-    // Five years of history: how many drawdowns of 10% or more, and the
-    // median days from the bottom back to the old high.
-    ['rel',   'Corrections 5Y', (s) => (ok(s.ddCount) ? { t: String(s.ddCount), c: '' } : null)],
-    ['rel',   'Median recovery', (s) => (ok(s.ddMedBack) ? { t: s.ddMedBack + ' days', c: '' } : null)],
     // Distance below the highest CLOSE on record. Deliberately not called an
     // all-time high: measured 2026-10-02, 718 of 1,282 archives start in 2006
     // at the provider's 5,000-bar ceiling, so the window differs by symbol and
@@ -323,16 +314,6 @@
     ['rel',   '52W high set',   (s) => (ok(s.daysSince52wHigh) ? { t: s.daysSince52wHigh === 0 ? 'today' : s.daysSince52wHigh + ' sessions ago', c: '' } : null)],
     ['rel',   '52W low set',    (s) => (ok(s.daysSince52wLow) ? { t: s.daysSince52wLow === 0 ? 'today' : s.daysSince52wLow + ' sessions ago', c: '' } : null)],
     ['rel',   '52W range',      (s) => V.num(s.range52Pos, 0)],
-    // How straight the year's path was, and how much of it was spent below the
-    // running high. Descriptive, like Cushion: neither has been shown to
-    // predict anything, and consistency as a PREDICTOR was measured and came
-    // back noise (see docs/momentum-delta.md).
-    ['rel',   'Steadiness',     (s) => V.num(s.steadiness, 0)],
-    ['rel',   'Ulcer',          (s) => V.num(s.ulcer, 1)],
-    // How much it moves, and how much with the market (2026-10-19). Both a
-    // description of the past year, uncoloured.
-    ['rel',   'Volatility 1Y',  (s) => V.mag(s.vol1y)],
-    ['rel',   'Beta',           (s) => V.num(s.beta, 2)],
     ['rel',   'Crossings',      (s) => V.count(s.crossings)],
     ['rel',   'Band',           (s) => V.num(s.bandPct, 0)],
     ['rel',   'RSI',            (s) => V.rsi(s.rsi)],
@@ -344,6 +325,25 @@
     ['rel',   'Vol trend',      (s) => V.pct(s.volTrend)],
     ['rel',   'Rel. volume',    (s) => (ok(s.volX) ? { t: s.volX.toFixed(2) + '×', c: s.volX >= 1.5 ? 'warn' : '', n: s.volX, u: 'num' } : null)],
     ['rel',   '$ volume',       (s) => V.money(s.dollarVolume, s.currency || 'USD')],
+    // How much it moves, and how much with the market (2026-10-19). Both a
+    // description of the past year, uncoloured.
+    ['risk',  'Volatility 1Y',  (s) => V.mag(s.vol1y)],
+    ['risk',  'Beta',           (s) => V.num(s.beta, 2)],
+    // Beside Today for the reason the column is: it is what says whether
+    // today's move is unusual for this stock.
+    ['risk',  'Bad day',        (s) => V.mag(s.badDay)],
+    // The word for that distance: Near high, Pullback, Correction, Bear market.
+    ['risk',  'Drawdown',       (s) => V.text(s.ddState)],
+    // Five years of history: how many drawdowns of 10% or more, and the
+    // median days from the bottom back to the old high.
+    ['risk',  'Corrections 5Y', (s) => (ok(s.ddCount) ? { t: String(s.ddCount), c: '' } : null)],
+    ['risk',  'Median recovery', (s) => (ok(s.ddMedBack) ? { t: s.ddMedBack + ' days', c: '' } : null)],
+    ['risk',  'Ulcer',          (s) => V.num(s.ulcer, 1)],
+    // How straight the year's path was, and how much of it was spent below the
+    // running high. Descriptive, like Cushion: neither has been shown to
+    // predict anything, and consistency as a PREDICTOR was measured and came
+    // back noise (see docs/momentum-delta.md).
+    ['risk',  'Steadiness',     (s) => V.num(s.steadiness, 0)],
     // REACTIONS (2026-10-10): what the stock did on someone else's worst and
     // best days, and what short sellers and its own insiders have been
     // doing. Chip selloff moved here from Relative; a stored `rel|Chip
@@ -384,96 +384,109 @@
     ['trend', 'Awesome osc.',   (s) => V.pct(s.aoPct)],
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
-    ['size',  'Gross margin',   (s) => V.lvl(s.grossMargin)],
     ['size',  'Net income',     (s) => V.money(s.netIncomeTtm, s.currency)],
     ['size',  'FCF TTM',        (s) => V.money(s.fcfTtm, s.currency)],
-    ['size',  'FCF margin',     (s) => V.lvl(s.fcfMargin)],
-    ['size',  'Net cash',       (s) => V.signedMoney(s.netCash, s.currency)],
-    ['size',  'Cash',           (s) => V.money(s.totalCash, s.currency)],
-    ['size',  'Debt',           (s) => V.money(s.totalDebt, s.currency)],
     ['size',  'EBITDA',         (s) => V.money(s.ebitda, s.currency)],
     ['size',  'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
-    // (2026-10-19, after Stockanalysis.com's statistics page.) Working capital
-    // is current assets less current liabilities from the newest filed balance
-    // sheet, in dollars; net cash per share is a dollar reporter's only.
-    ['size',  'Working capital', (s) => V.signedMoney(s.workingCapital, 'USD')],
-    ['size',  'Net cash / share', (s) => (ok(s.netCashPerShare) ? { t: (s.netCashPerShare < 0 ? '−' : '') + '$' + Math.abs(s.netCashPerShare).toFixed(2), c: s.netCashPerShare < 0 ? 'neg' : '', n: s.netCashPerShare, u: 'num' } : null)],
     ['size',  'Revenue / employee', (s) => V.money(s.revenuePerEmployee, s.currency || 'USD')],
     // Market cap plus debt, less cash — what the whole business costs rather
     // than what the equity costs. Stored since the profile call started being
     // kept in full and never surfaced.
     ['size',  'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
-    // FIRST in the group because it dates everything under it: these figures
-    // were struck at that announcement, and a reader scanning margins and
-    // multiples should see how old they are before reading them. The DATE
-    // only -- the time of day lives in earnings_history, which a snapshot row
-    // does not carry; /stock's caption has it because that page reads it.
-    ['fund',  'Period',         (s) => (s.mostRecentQuarter
-      ? { t: shortDate(s.mostRecentQuarter), c: '' } : null)],
-    ['fund',  'Reported',       (s) => (s.lastEarningsDate
-      ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
-    ['fund',  'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
-    ['fund',  'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
-    ['fund',  'Profit margin',  (s) => V.pct(s.profitMargin)],
-    // The trailing year's net margin less the year before it, in points,
-    // from the company's own filings.
-    ['fund',  'Margin change',  (s) => (ok(s.netMarginChg) ? { t: (s.netMarginChg > 0 ? '+' : s.netMarginChg < 0 ? '\u2212' : '') + Math.abs(s.netMarginChg).toFixed(1) + ' pts', c: '' } : null)],
-    // Shares bought back over the latest twelve months on file, over today's
-    // market value, from the company's own cash-flow statements.
-    ['fund',  'Buyback yield',  (s) => (ok(s.buybackYield) ? { t: (s.buybackYield > 0 && s.buybackYield < 0.05 ? '<0.1' : s.buybackYield.toFixed(1)) + '%', c: '' } : null)],
-    // Dividend yield plus buyback yield: both must be known.
-    ['fund',  'Shareholder yield', (s) => V.mag(s.shareholderYield)],
-    ['fund',  'ROE',            (s) => V.pct(s.roe)],
-    // PEG leads the three P/E rows rather than sitting between them, the
-    // screener's own column order since 2026-10-04: a PEG is a P/E with
-    // growth divided into it, so it reads beside the multiples and not
-    // through the middle of them.
-    ['fund',  'PEG',            (s) => V.peg(s.peg)],
-    ['fund',  'Fwd P/E',        (s) => V.num(s.forwardPe)],
-    ['fund',  'Trailing P/E',   (s) => V.num(s.trailingPe)],
+    ['value', 'Fwd P/E',        (s) => V.num(s.forwardPe)],
+    ['value', 'Trailing P/E',   (s) => V.num(s.trailingPe)],
     // Deliberately NOT in FUND_HAS: a fund's EPS is not something we hold, so
     // this is NA there even though the provider's Trail P/E above it is real.
-    ['fund',  'Live P/E',       (s) => V.num(s.peLive)],
+    ['value', 'Live P/E',       (s) => V.num(s.peLive)],
     // UNCOLOURED, and that is a measurement rather than restraint. Over this
     // universe the cheapest third of each industry grow more slowly (revenue
     // 7.2% against 15.4%), earn thinner margins and score lower on Quality
     // (5 against 6) than the dearest third -- monotonically. A green cell
     // would be the screener asserting the opposite of what its own data says.
     // Not in FUND_HAS either: a fund has no industry and no peer group.
-    ['fund',  'P/E vs peers',   (s) => V.ratio(s.peerPe)],
-    ['fund',  'P/B',            (s) => V.num(s.priceToBook)],
-    ['fund',  'P/S',            (s) => V.num(s.priceToSales)],
-    ['fund',  'EV / sales',     (s) => V.num(s.evToSales)],
-    ['fund',  'P / op cash',    (s) => V.num(s.priceToOcf)],
+    ['value', 'P/E vs peers',   (s) => V.ratio(s.peerPe)],
+    // PEG follows the four P/E rows rather than sitting between them: a PEG is
+    // a P/E with growth divided into it, so it reads beside the multiples and
+    // not through the middle of them. (It led them until the Valuation group
+    // was made, 2026-10-19; the screener's columns run in this order too.)
+    ['value', 'PEG',            (s) => V.peg(s.peg)],
+    ['value', 'P/B',            (s) => V.num(s.priceToBook)],
+    ['value', 'P/S',            (s) => V.num(s.priceToSales)],
+    ['value', 'EV / sales',     (s) => V.num(s.evToSales)],
+    ['value', 'EV/EBITDA',      (s) => V.num(s.evToEbitda)],
+    ['value', 'P / op cash',    (s) => V.num(s.priceToOcf)],
     // EPS over price: the live P/E turned over, so a loss reads negative.
-    ['fund',  'Earnings yield', (s) => V.smag(s.earningsYield, 2)],
-    ['fund',  'EV/EBITDA',      (s) => V.num(s.evToEbitda)],
-    ['fund',  'Operating margin',(s) => V.pct(s.operatingMargin)],
-    ['fund',  'ROA',            (s) => V.pct(s.roa)],
-    ['fund',  'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
-    ['fund',  'Debt / equity',  (s) => V.num(s.debtToEquity)],
-    ['fund',  'Current ratio',  (s) => V.num(s.currentRatio)],
+    ['value', 'Earnings yield', (s) => V.smag(s.earningsYield, 2)],
     // Both are price-divided, so they move with the price every day — the
     // reason the refresh email excludes them from its moved-fields list. Fine
     // to read, misleading to watch for changes.
-    ['fund',  'FCF yield',      (s) => V.lvl(s.fcfYield)],
-    ['fund',  'Net cash %',     (s) => V.lvl(s.netCashPct)],
-    ['fund',  'Dividend yield', (s) => V.lvl(s.divYield)],
+    ['value', 'FCF yield',      (s) => V.lvl(s.fcfYield)],
+    ['profit', 'Gross margin',   (s) => V.lvl(s.grossMargin)],
+    ['profit', 'Operating margin',(s) => V.pct(s.operatingMargin)],
+    ['profit', 'Profit margin',  (s) => V.pct(s.profitMargin)],
+    ['profit', 'FCF margin',     (s) => V.lvl(s.fcfMargin)],
+    // The trailing year's net margin less the year before it, in points,
+    // from the company's own filings.
+    ['profit', 'Margin change',  (s) => (ok(s.netMarginChg) ? { t: (s.netMarginChg > 0 ? '+' : s.netMarginChg < 0 ? '\u2212' : '') + Math.abs(s.netMarginChg).toFixed(1) + ' pts', c: '' } : null)],
+    ['profit', 'ROE',            (s) => V.pct(s.roe)],
+    ['profit', 'ROA',            (s) => V.pct(s.roa)],
+    ['growth', 'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
+    ['growth', 'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
+    ['growth', 'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
+    ['finpos', 'Cash',           (s) => V.money(s.totalCash, s.currency)],
+    ['finpos', 'Debt',           (s) => V.money(s.totalDebt, s.currency)],
+    ['finpos', 'Net cash',       (s) => V.signedMoney(s.netCash, s.currency)],
+    ['finpos', 'Net cash / share', (s) => (ok(s.netCashPerShare) ? { t: (s.netCashPerShare < 0 ? '−' : '') + '$' + Math.abs(s.netCashPerShare).toFixed(2), c: s.netCashPerShare < 0 ? 'neg' : '', n: s.netCashPerShare, u: 'num' } : null)],
+    // (2026-10-19, after Stockanalysis.com's statistics page.) Working capital
+    // is current assets less current liabilities from the newest filed balance
+    // sheet, in dollars; net cash per share is a dollar reporter's only.
+    ['finpos', 'Working capital', (s) => V.signedMoney(s.workingCapital, 'USD')],
+    ['finpos', 'Debt / equity',  (s) => V.num(s.debtToEquity)],
+    ['finpos', 'Current ratio',  (s) => V.num(s.currentRatio)],
+    ['finpos', 'Net cash %',     (s) => V.lvl(s.netCashPct)],
+    ['divs',  'Dividend yield', (s) => V.lvl(s.divYield)],
+    ['divs',  'Payout ratio',   (s) => V.lvl(s.payoutRatio)],
+    // Shares bought back over the latest twelve months on file, over today's
+    // market value, from the company's own cash-flow statements.
+    ['divs',  'Buyback yield',  (s) => (ok(s.buybackYield) ? { t: (s.buybackYield > 0 && s.buybackYield < 0.05 ? '<0.1' : s.buybackYield.toFixed(1)) + '%', c: '' } : null)],
+    // Dividend yield plus buyback yield: both must be known.
+    ['divs',  'Shareholder yield', (s) => V.mag(s.shareholderYield)],
     // The cash amount behind the yield, per share and in the trading currency.
     // Not V.money: that abbreviates for market caps and renders a $1.00
     // dividend as "$1".
-    ['fund',  'Dividend rate',  (s) => (ok(s.divRate)
+    ['divs',  'Dividend rate',  (s) => (ok(s.divRate)
       ? { t: curSym(s.currency) + s.divRate.toFixed(2), c: '' } : null)],
-    ['fund',  'Payout ratio',   (s) => V.lvl(s.payoutRatio)],
-    ['fund',  'Ex-dividend',    (s) => (s.exDivDate ? { t: shortDate(s.exDivDate), c: '' } : null)],
+    ['divs',  'Ex-dividend',    (s) => (s.exDivDate ? { t: shortDate(s.exDivDate), c: '' } : null)],
     // Beside the dividend figures they qualify. A row with no value is
     // omitted rather than drawn empty, so a non-payer and a company whose
     // profile predates these fields both simply show fewer rows.
-    ['fund',  'Dividend paid',  (s) => (s.divPayDate ? { t: shortDate(s.divPayDate), c: '' } : null)],
+    ['divs',  'Dividend paid',  (s) => (s.divPayDate ? { t: shortDate(s.divPayDate), c: '' } : null)],
+    // FIRST in the group because it dates everything under it: these figures
+    // were struck at that announcement, and a reader scanning margins and
+    // multiples should see how old they are before reading them. The DATE
+    // only -- the time of day lives in earnings_history, which a snapshot row
+    // does not carry; /stock's caption has it because that page reads it.
+    ['report', 'Period',         (s) => (s.mostRecentQuarter
+      ? { t: shortDate(s.mostRecentQuarter), c: '' } : null)],
+    ['report', 'Reported',       (s) => (s.lastEarningsDate
+      ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
     // Every per-share figure on the row — EPS, book value, the share count —
     // is stated after this split, which is the one thing that explains a
     // discontinuity in them.
-    ['fund',  'Last split',     (s) => (s.lastSplitDate ? { t: shortDate(s.lastSplitDate), c: '' } : null)],
+    ['report', 'Last split',     (s) => (s.lastSplitDate ? { t: shortDate(s.lastSplitDate), c: '' } : null)],
+    // The Long run group (2026-10-19): growth a year, compounded, from the
+    // company's own filings. Signed and uncoloured, like the screener cells.
+    ['lrun',  'Revenue /yr 3Y', (s) => V.smag(s.revGrowth3y)],
+    ['lrun',  'Revenue /yr 5Y', (s) => V.smag(s.revGrowth5y)],
+    ['lrun',  'Net income /yr 3Y', (s) => V.smag(s.niGrowth3y)],
+    ['lrun',  'Net income /yr 5Y', (s) => V.smag(s.niGrowth5y)],
+    // Against its own ten-year median P/E, both from the filings.
+    ['lrun',  'P/E vs 10Y median', (s) => V.smag(s.peVsMed)],
+    ['lrun',  'P/E 10Y median', (s) => (ok(s.peMed10y) ? { t: Number(s.peMed10y).toFixed(1) + '×', c: '', n: Number(s.peMed10y), u: 'num' } : null)],
+    ['lrun',  'Dividend raises', (s) => (ok(s.divStreak) ? { t: String(s.divStreak) + (s.divStreak > 0 && s.divSince ? ' since ' + s.divSince : ''), c: '', n: Number(s.divStreak), u: 'num' } : null)],
+    ['lrun',  'Dividend /yr 5Y', (s) => V.smag(s.divGrowth5y)],
+    ['lrun',  'Interest cover', (s) => (ok(s.intCover) ? { t: Number(s.intCover).toFixed(1) + '×', c: '', n: Number(s.intCover), u: 'num' } : null)],
+    ['lrun',  'F-score',        (s) => (ok(s.fScore) ? { t: s.fScore + ' of 9', c: '', n: Number(s.fScore), u: 'num' } : null)],
     ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
     // The diluted share count against the fiscal year before, from the filings:
     // dilution when it rises, buybacks net of issuance when it falls.
@@ -493,25 +506,14 @@
     // quarter end, and the change in their combined shares on the quarter before.
     ['own',   '13F holders',    (s) => (ok(s.instManagers) ? { t: Number(s.instManagers).toLocaleString('en-US'), c: '' } : null)],
     ['own',   '13F shares chg', (s) => V.smag(s.instChange)],
-    // The Long run group (2026-10-19): growth a year, compounded, from the
-    // company's own filings. Signed and uncoloured, like the screener cells.
-    ['lrun',  'Revenue /yr 3Y', (s) => V.smag(s.revGrowth3y)],
-    ['lrun',  'Revenue /yr 5Y', (s) => V.smag(s.revGrowth5y)],
-    ['lrun',  'Net income /yr 3Y', (s) => V.smag(s.niGrowth3y)],
-    ['lrun',  'Net income /yr 5Y', (s) => V.smag(s.niGrowth5y)],
-    // Against its own ten-year median P/E, both from the filings.
-    ['lrun',  'P/E vs 10Y median', (s) => V.smag(s.peVsMed)],
-    ['lrun',  'P/E 10Y median', (s) => (ok(s.peMed10y) ? { t: Number(s.peMed10y).toFixed(1) + '×', c: '', n: Number(s.peMed10y), u: 'num' } : null)],
-    ['lrun',  'Dividend raises', (s) => (ok(s.divStreak) ? { t: String(s.divStreak) + (s.divStreak > 0 && s.divSince ? ' since ' + s.divSince : ''), c: '', n: Number(s.divStreak), u: 'num' } : null)],
-    ['lrun',  'Dividend /yr 5Y', (s) => V.smag(s.divGrowth5y)],
-    ['lrun',  'Interest cover', (s) => (ok(s.intCover) ? { t: Number(s.intCover).toFixed(1) + '×', c: '', n: Number(s.intCover), u: 'num' } : null)],
-    ['lrun',  'F-score',        (s) => (ok(s.fScore) ? { t: s.fScore + ' of 9', c: '', n: Number(s.fScore), u: 'num' } : null)],
     // Put options open for every call open, from the clearing house's count.
     ['own',   'Put/call OI',    (s) => (ok(s.optPcr) ? { t: Number(s.optPcr).toFixed(2), c: '' } : null)],
     ['own',   '5% filing',      (s) => (s.lastHolder ? { t: s.lastHolder + (s.lastHolderDate ? ' \u00b7 ' + shortDate(s.lastHolderDate) : ''), c: '' } : null)],
   ];
 
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'react', 'trend', 'size', 'fund', 'lrun', 'own'];
+  // Option A (owner, 2026-10-19): Relative split into Range and level (id
+  // kept) and Risk; Fundamentals into six. The screener's group list matches.
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
@@ -523,14 +525,17 @@
     info: 'var(--accent, #7c9cff)', rank: 'var(--lime, #a3e635)', act: 'var(--teal, #5eead4)',
     short: 'var(--green, #34d399)', long: 'var(--accent-2, #a78bfa)', fwd: 'var(--orange, #fb923c)',
     rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)',
-    size: 'var(--steel, #94a3b8)', fund: 'var(--red, #fb7185)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)',
+    size: 'var(--steel, #94a3b8)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)',
+    risk: 'var(--peach, #fdba74)', value: 'var(--red, #fb7185)', profit: 'var(--indigo, #818cf8)', growth: 'var(--sky, #38bdf8)',
+    finpos: 'var(--lilac, #c4b5fd)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)',
   };
   // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
   // band). The group ID is unchanged, so every saved key that names it still
   // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Relative', react: 'Reactions', trend: 'Trend', size: 'Scale', fund: 'Fundamentals', lrun: 'Long run', own: 'Ownership',
+    rel: 'Range and level', risk: 'Risk', react: 'Reactions', trend: 'Trend', size: 'Scale', value: 'Valuation', profit: 'Profitability',
+    growth: 'Growth', finpos: 'Financial position', divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
   };
 
   // ---- price history -------------------------------------------------------
@@ -1226,10 +1231,10 @@
   // XLK 41.5). A distribution yield is one of the most-read numbers about an
   // ETF; NA there would destroy a true figure to satisfy a rule about the
   // group it happens to sit in.
-  const FUND_NA_GROUPS = ['size', 'own', 'fund', 'lrun'];
+  const FUND_NA_GROUPS = ['size', 'own', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun'];
   const FUND_HAS = new Set([
-    'fund|Trailing P/E', 'fund|Dividend yield', 'fund|Dividend rate',
-    'fund|Ex-dividend', 'fund|Last split',
+    'value|Trailing P/E', 'divs|Dividend yield', 'divs|Dividend rate',
+    'divs|Ex-dividend', 'report|Last split',
   ]);
 
   function isFund(s) { return !!s && s.instrumentType === 'ETF'; }

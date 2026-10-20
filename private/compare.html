@@ -259,7 +259,7 @@
     // rather than inviting a comparison that cannot be made. The cards already
     // drop these for banks; here the row has a second stock in it and dropping
     // it silently would be the worse answer.
-    const BANK_BLIND = new Set(['size|Gross margin', 'size|Net cash', 'fund|Net cash %']);
+    const BANK_BLIND = new Set(['profit|Gross margin', 'finpos|Net cash', 'finpos|Net cash %']);
     const isBank = (s) => /Financial/i.test((s && s.sector) || '');
 
     // ---- the difference -------------------------------------------------------

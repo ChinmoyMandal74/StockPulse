@@ -33,10 +33,10 @@
     ['The company', ['info|Sector', 'info|Industry', 'info|Market Cap', 'info|Size', 'info|Index', 'info|Next Earn']],
     ['Signal', ['act|Signal', 'act|Why', 'act|Trend', 'act|Days held']],
     ['Price and trend', ['info|Price', 'short|Today', 'short|1W', 'short|1M', 'long|3M', 'long|6M', 'long|YTD', 'long|1Y', 'long|5Y',
-      'rel|RS vs S&P', 'rel|% from 52W hi', 'rel|Drawdown', 'rel|Corrections 5Y', 'rel|Median recovery', 'rel|RSI', 'trend|vs 50D MA', 'trend|vs 200D MA']],
-    ['The business in numbers', ['size|Revenue TTM', 'size|Gross margin', 'size|Net income', 'size|FCF TTM', 'size|Net cash',
-      'fund|Rev grth Q YoY', 'fund|Earn grth Q YoY', 'fund|Profit margin', 'fund|Margin change', 'fund|ROE', 'fund|Debt / equity']],
-    ['Valuation', ['fund|Live P/E', 'fund|Fwd P/E', 'fund|P/S', 'fund|EV/EBITDA', 'fund|Dividend yield', 'fund|Buyback yield']],
+      'rel|RS vs S&P', 'rel|% from 52W hi', 'risk|Drawdown', 'risk|Corrections 5Y', 'risk|Median recovery', 'rel|RSI', 'trend|vs 50D MA', 'trend|vs 200D MA']],
+    ['The business in numbers', ['size|Revenue TTM', 'profit|Gross margin', 'size|Net income', 'size|FCF TTM', 'finpos|Net cash',
+      'growth|Rev grth Q YoY', 'growth|Earn grth Q YoY', 'profit|Profit margin', 'profit|Margin change', 'profit|ROE', 'finpos|Debt / equity']],
+    ['Valuation', ['value|Live P/E', 'value|Fwd P/E', 'value|P/S', 'value|EV/EBITDA', 'divs|Dividend yield', 'divs|Buyback yield']],
     ['Ownership and positioning', ['own|Institutions', 'own|13F holders', 'own|13F shares chg', 'own|Short % float', 'own|Put/call OI', 'react|Insider net']],
   ];
 

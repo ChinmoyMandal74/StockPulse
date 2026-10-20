@@ -3726,12 +3726,12 @@
             tips: true,
             // Company facts the screener never carries — they come from the
             // profile rather than the snapshot, so only this page has them.
-            extra: { info: companyRows(payload.company), fund: [annRow(true)] },
+            extra: { info: companyRows(payload.company), report: [annRow(true)] },
             // WHEN THE FUNDAMENTAL FIGURES ACTUALLY RELATE TO. Every TTM
             // number in this section is a trailing twelve months, and until
             // now the page printed about twenty of them with no period
             // attached at all.
-            captions: { fund: fundDates(stock, payload.earnings,
+            captions: { report: fundDates(stock, payload.earnings,
               payload.company && payload.company.fetchedAt) },
             // PERIOD AND REPORTED CAME BACK ON 2026-10-04, at the owner's
             // instruction — "make sure Period, Reported and Announced (SEC)

@@ -30,12 +30,12 @@
   // beside the list it answers to. Every key on KEYS has its row here.
   const FIELD_OF = {
     'size|Revenue TTM': 'revenueTtm', 'size|Gross profit': 'grossProfitTtm', 'size|Net income': 'netIncomeTtm',
-    'size|Operating cash': 'operatingCashFlowTtm', 'size|FCF TTM': 'fcfTtm', 'fund|Buyback yield': 'buybackYield',
-    'size|Gross margin': 'grossMargin', 'fund|Operating margin': 'operatingMargin', 'fund|Profit margin': 'profitMargin',
-    'fund|Margin change': 'netMarginChg', 'size|FCF margin': 'fcfMargin', 'fund|EPS TTM': 'dilutedEpsTtm',
-    'fund|Trailing P/E': 'trailingPe', 'fund|Live P/E': 'peLive', 'fund|P/S': 'priceToSales', 'fund|P/B': 'priceToBook',
+    'size|Operating cash': 'operatingCashFlowTtm', 'size|FCF TTM': 'fcfTtm', 'divs|Buyback yield': 'buybackYield',
+    'profit|Gross margin': 'grossMargin', 'profit|Operating margin': 'operatingMargin', 'profit|Profit margin': 'profitMargin',
+    'profit|Margin change': 'netMarginChg', 'profit|FCF margin': 'fcfMargin', 'growth|EPS TTM': 'dilutedEpsTtm',
+    'value|Trailing P/E': 'trailingPe', 'value|Live P/E': 'peLive', 'value|P/S': 'priceToSales', 'value|P/B': 'priceToBook',
     'own|Short % float': 'shortPctFloat', 'own|Short % out': 'shortPctOutstanding', 'own|Short ratio': 'shortRatio',
-    'fund|Reported': 'lastEarningsDate',
+    'report|Reported': 'lastEarningsDate',
     'lrun|Revenue /yr 3Y': 'revGrowth3y', 'lrun|Revenue /yr 5Y': 'revGrowth5y',
     'lrun|Net income /yr 3Y': 'niGrowth3y', 'lrun|Net income /yr 5Y': 'niGrowth5y',
   };

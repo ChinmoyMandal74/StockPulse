@@ -10234,7 +10234,7 @@ function peersFor(stock, stocks, links) {
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
   const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
-    'fund|Live P/E', 'fund|Fwd P/E', 'act|Signal'];
+    'value|Live P/E', 'value|Fwd P/E', 'act|Signal'];
   const peerRow = (x) => {
     const v = RowCard.fieldValues(x);
     const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
@@ -11303,10 +11303,64 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // names it that way, and a key the catalogue no longer has is dropped by the
 // cleaners below -- so the verdict would vanish from every saved view.
 // ...and Chip selloff moved from Relative to the Reactions group on 2026-10-10.
-const FIELD_KEY_MOVED = { 'act|Advice': 'act|Signal', 'rel|Chip selloff': 'react|Chip selloff' };
+// ...and Option A's regrouping (owner, 2026-10-19): Relative split into Range
+// and level and Risk, Fundamentals into six groups, so 48 fields have new keys.
+const FIELD_KEY_MOVED = {
+  'act|Advice': 'act|Signal', 'rel|Chip selloff': 'react|Chip selloff',
+  'short|Bad day': 'risk|Bad day',
+  'rel|Drawdown': 'risk|Drawdown',
+  'rel|Corrections 5Y': 'risk|Corrections 5Y',
+  'rel|Median recovery': 'risk|Median recovery',
+  'rel|Steadiness': 'risk|Steadiness',
+  'rel|Ulcer': 'risk|Ulcer',
+  'rel|Volatility 1Y': 'risk|Volatility 1Y',
+  'rel|Beta': 'risk|Beta',
+  'size|Gross margin': 'profit|Gross margin',
+  'size|FCF margin': 'profit|FCF margin',
+  'size|Net cash': 'finpos|Net cash',
+  'size|Cash': 'finpos|Cash',
+  'size|Debt': 'finpos|Debt',
+  'size|Working capital': 'finpos|Working capital',
+  'size|Net cash / share': 'finpos|Net cash / share',
+  'fund|Period': 'report|Period',
+  'fund|Reported': 'report|Reported',
+  'fund|Earn grth Q YoY': 'growth|Earn grth Q YoY',
+  'fund|Rev grth Q YoY': 'growth|Rev grth Q YoY',
+  'fund|Profit margin': 'profit|Profit margin',
+  'fund|Margin change': 'profit|Margin change',
+  'fund|Buyback yield': 'divs|Buyback yield',
+  'fund|Shareholder yield': 'divs|Shareholder yield',
+  'fund|ROE': 'profit|ROE',
+  'fund|PEG': 'value|PEG',
+  'fund|Fwd P/E': 'value|Fwd P/E',
+  'fund|Trailing P/E': 'value|Trailing P/E',
+  'fund|Live P/E': 'value|Live P/E',
+  'fund|P/E vs peers': 'value|P/E vs peers',
+  'fund|P/B': 'value|P/B',
+  'fund|P/S': 'value|P/S',
+  'fund|EV / sales': 'value|EV / sales',
+  'fund|P / op cash': 'value|P / op cash',
+  'fund|Earnings yield': 'value|Earnings yield',
+  'fund|EV/EBITDA': 'value|EV/EBITDA',
+  'fund|Operating margin': 'profit|Operating margin',
+  'fund|ROA': 'profit|ROA',
+  'fund|EPS TTM': 'growth|EPS TTM',
+  'fund|Debt / equity': 'finpos|Debt / equity',
+  'fund|Current ratio': 'finpos|Current ratio',
+  'fund|FCF yield': 'value|FCF yield',
+  'fund|Net cash %': 'finpos|Net cash %',
+  'fund|Dividend yield': 'divs|Dividend yield',
+  'fund|Dividend rate': 'divs|Dividend rate',
+  'fund|Payout ratio': 'divs|Payout ratio',
+  'fund|Ex-dividend': 'divs|Ex-dividend',
+  'fund|Dividend paid': 'divs|Dividend paid',
+  'fund|Last split': 'report|Last split',
+};
 const fieldKeyNow = (f) => (Object.prototype.hasOwnProperty.call(FIELD_KEY_MOVED, f) ? FIELD_KEY_MOVED[f] : f);
 // `lrun` is the Long run group, 2026-10-19.
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|react|trend|size|fund|lrun|own)\|[^|]{1,32}$/;
+// Option A's groups (2026-10-19) replace `fund`; a stored `fund|…` key is
+// translated by fieldKeyNow before it is tested here.
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|risk|react|trend|size|value|profit|growth|finpos|divs|report|lrun|own)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];
@@ -11353,7 +11407,7 @@ const MOBILE_DEFAULT = {
   views: [
     { id: 'move', name: 'Move', fields: ['short|Today', 'short|1W', 'short|1M', 'long|1Y'] },
     { id: 'verdict', name: 'Verdict', fields: ['act|Signal', 'act|Trend', 'act|Entry'] },
-    { id: 'value', name: 'Value', fields: ['fund|Fwd P/E', 'fund|ROE', 'fund|Profit margin', 'info|Market Cap'] },
+    { id: 'value', name: 'Value', fields: ['value|Fwd P/E', 'profit|ROE', 'profit|Profit margin', 'info|Market Cap'] },
   ],
 };
 
