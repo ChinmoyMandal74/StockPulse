@@ -15727,6 +15727,20 @@ app.get('/api/news/tone', requireMember, route(async (req, res) => {
   res.json(await toneStockPayload(symbol, limit, offset, await isAdmin(req)));
 }));
 
+// The screener's Tone column (2026-10-21): every stock's last seven days, the
+// one figure the tone loader writes at the end of each run. Members, as every
+// tone surface is; a guest's screener draws the column blank. Held two minutes
+// per instance: the figure changes four times a day.
+let toneColHeld = null;
+app.get('/api/news/tone-column', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!toneColHeld || Date.now() - toneColHeld.at > 2 * 60 * 1000) {
+    toneColHeld = { at: Date.now(), fig: await store.readFigure('toneColumn').catch(() => null) };
+  }
+  const f = toneColHeld.fig;
+  res.json(f ? { at: f.at || null, days: f.days || 7, band: f.band || NewsTone.BAND, rows: f.rows || {} } : { at: null, days: 7, band: NewsTone.BAND, rows: {} });
+}));
+
 // An industry's readings, one row a stock, for the Article tone promo card.
 // One seek per stock on idx_news_tone_symbol, ten at a time: about fifty
 // stocks, each bounded by its feed over the window. Names are not sent; the

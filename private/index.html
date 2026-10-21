@@ -393,6 +393,12 @@
     .tl-px { margin-left: auto; text-align: right; }
     .tl-price { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
     .tl-today { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    /* ---- the Tone column (2026-10-21) ----------------------------------- */
+    td.tone a.tn-v { font-family: var(--mono); font-size: 12px; color: var(--muted); text-decoration: none; }
+    td.tone.tn-pos a.tn-v { color: var(--blue); }
+    td.tone.tn-neg a.tn-v { color: var(--orange); }
+    td.tone a.tn-v:hover { text-decoration: underline; }
+    td.tone .tn-n { margin-left: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
     /* ---- the News column and its panel ---------------------------------- */
     td.news { cursor: pointer; white-space: nowrap; }
     td.news .nw-age { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
@@ -1517,7 +1523,7 @@
       <tr>
         <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
-        <th class="group grp-info" data-group="info" colspan="12">Info</th>
+        <th class="group grp-info" data-group="info" colspan="13">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
         <th class="group grp-act" data-group="act" colspan="8">Signal</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
@@ -1551,6 +1557,7 @@
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
+        <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.15 or more, orange −0.15 or less. Read for the S&amp;P 500 and the semiconductor stocks from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~) from the date of the same quarter last year. Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
@@ -3842,7 +3849,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="113">${s.error}</td>
+            <td class="na" colspan="114">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -3873,6 +3880,7 @@
           <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
           ${newsCell(s)}
+          ${toneCell(s)}
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
           ${typeCell(s)}
@@ -4021,7 +4029,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 138;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 139;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4206,7 +4214,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="115">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="116">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4283,6 +4291,7 @@
       paintSparklines();
       loadSparklines();
       loadLatestNews();
+      loadToneColumn();
       // After the table paints, like the news and the sparklines: a
       // decoration — or in this case a caveat — must not make the data wait.
       loadSecFiled();
@@ -4311,6 +4320,40 @@
         title: (s.newsLatest.headline || '').slice(0, 110),
         html: `<span class="nw-age">${age}</span>` + (n > 1 ? `<span class="nw-n">${n}</span>` : ''),
       };
+    }
+
+    // ARTICLE TONE (2026-10-21): the week's average reading and how many
+    // articles it is over, from /api/news/tone-column after the table paints.
+    // Blue and orange, never green and red: a reading of words, not a price.
+    // Blank for a stock outside the scope or with nothing read this week.
+    function toneBits(s) {
+      if (s.toneAvg == null || !isFinite(s.toneAvg)) return { cls: '', title: s.toneAt ? 'No article read in the last seven days' : 'Article tone is read for the S&P 500 and the semiconductor stocks', html: '<span class="na">—</span>' };
+      const a = s.toneAvg, band = toneBand;
+      const word = a >= band ? 'positive' : a <= -band ? 'negative' : 'neutral';
+      const num = (a > 0 ? '+' : a < 0 ? '\u2212' : '') + Math.abs(a).toFixed(2);
+      return {
+        cls: a >= band ? ' tn-pos' : a <= -band ? ' tn-neg' : '',
+        title: 'Last seven days: ' + s.toneN + ' article' + (s.toneN === 1 ? '' : 's') + ' read, ' + s.tonePos + ' positive, ' + s.toneNeg + ' negative; average ' + num + ' (' + word + '). Click for the articles.',
+        html: '<a class="tn-v" href="/stock/' + encodeURIComponent(s.symbol) + '#tone">' + num + '</a><span class="tn-n">' + s.toneN + '</span>',
+      };
+    }
+    function toneCell(s) {
+      const b = toneBits(s);
+      return `<td class="tone grp-info${b.cls}" data-tone="${we(s.symbol)}" title="${we(b.title)}">${b.html}</td>`;
+    }
+    // Refilled in place, as the News column is (the same reason: a fresh <td>
+    // would come back visible inside a collapsed Info group).
+    function paintToneCells() {
+      const by = {};
+      for (const s of stocks) by[s.symbol] = s;
+      document.querySelectorAll('td.tone[data-tone]').forEach((td) => {
+        const s = by[td.dataset.tone];
+        if (!s) return;
+        const b = toneBits(s);
+        td.className = 'tone grp-info' + b.cls;
+        td.title = b.title;
+        td.innerHTML = b.html;
+      });
     }
 
     function newsCell(s) {
@@ -5856,6 +5899,28 @@
       savePrefs();
       paintTicker();
       paintWindow(true);
+    }
+
+    let toneLoaded = false, toneBand = 0.15;
+    async function loadToneColumn() {
+      if (toneLoaded) return;
+      toneLoaded = true;
+      try {
+        const data = await api('GET', '/api/news/tone-column');
+        const rows = data.rows || {};
+        if (data.band) toneBand = Number(data.band) || toneBand;
+        for (const list of [baseStocks, stocks]) {
+          for (const s of list) {
+            const r = rows[s.symbol];
+            s.toneAt = data.at || null;
+            if (r) { s.toneAvg = r[0]; s.toneN = r[1]; s.tonePos = r[2]; s.toneNeg = r[3]; }
+            else { s.toneAvg = null; s.toneN = null; s.tonePos = null; s.toneNeg = null; }
+          }
+        }
+        if (sortKey === 'toneAvg') render(); else paintToneCells();
+      } catch (e) {
+        // A guest is refused (members only), and the column stays blank.
+      }
     }
 
     async function loadLatestNews() {

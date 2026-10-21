@@ -241,6 +241,37 @@ async function shadowBackfill(stocks) {
   console.log(`\nshadow catch-up: ${done} read, ${gone} no longer readable, ${shadowFail} failed; $${shadowSpent.toFixed(3)} spent`);
 }
 
+// THE SCREENER'S TONE COLUMN (2026-10-21, the owner: "need to the article
+// tone on screener next to existing news column"). Every stock's last seven
+// days in one stored figure (app_meta fig:toneColumn), written here at the end
+// of each committed run, so a screener load is one read rather than a seek per
+// stock. A stock whose read fails keeps its previous row (a failed read never
+// blanks stored data); a run cut to --only or --limit writes nothing, since it
+// would be a partial column. Bookkeeping: never fails the run.
+const TONE_COL_DAYS = 7;
+async function writeToneColumn(stocks) {
+  if (!COMMIT || ONLY || LIMIT) return;
+  try {
+    const prev = await store.readFigure('toneColumn').catch(() => null);
+    const old = (prev && prev.rows) || {};
+    const since = new Date(Date.now() - TONE_COL_DAYS * 86400000).toISOString();
+    const rows = {};
+    let failed = 0;
+    for (let i = 0; i < stocks.length; i += 10) {
+      const part = stocks.slice(i, i + 10);
+      const got = await Promise.all(part.map((s) => store.readNewsToneSince(s.symbol, since).catch(() => null)));
+      got.forEach((r, k) => {
+        const sym = part[k].symbol;
+        if (r == null) { failed++; if (old[sym]) rows[sym] = old[sym]; return; }
+        const w = NewsTone.summarise(r);
+        if (w) rows[sym] = [Math.round(w.avg * 1000) / 1000, w.count, w.positive, w.negative];
+      });
+    }
+    await store.writeFigures({ toneColumn: { at: Date.now(), days: TONE_COL_DAYS, model: MODEL, band: NewsTone.BAND, rows } });
+    console.log('  screener tone column: ' + Object.keys(rows).length + ' stocks with readings in the last ' + TONE_COL_DAYS + ' days' + (failed ? ', ' + failed + ' kept from before (read failed)' : ''));
+  } catch (e) { console.log('  (the screener tone column could not be written: ' + String(e.message).slice(0, 80) + ')'); }
+}
+
 (async () => {
   if (!KEY) throw new Error('ANTHROPIC_API_KEY is not set in .env');
   const snap = await store.readSnapshot();
@@ -253,6 +284,8 @@ async function shadowBackfill(stocks) {
   if (!spSet) console.log('  no S&P 500 holdings file could be read: the semiconductor stocks only this run');
   const stocks = ((snap && snap.stocks) || []).filter((s) => NewsTone.inScope(s, spSet))
     .filter((s) => !ONLY || ONLY.has(String(s.symbol).toUpperCase()));
+  // --column-only: write the screener's tone column and stop (no feeds, no model).
+  if (process.argv.includes('--column-only')) { await writeToneColumn(stocks); return; }
   if (process.argv.includes('--shadow-backfill')) {
     if (!SHADOW) throw new Error('--shadow-backfill needs --shadow <model>');
     await shadowBackfill(stocks);
@@ -352,6 +385,7 @@ async function shadowBackfill(stocks) {
   console.log(`\n${tally.scored} scored, ${tally.skipped} skipped (company not named), ${tally.unreadable} unreadable, ${tally.failed} failed; $${spent.toFixed(2)} spent; ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   for (const [k, n] of Object.entries(why).sort((a, b) => b[1] - a[1])) console.log(`  ${n} x ${k}`);
   if (SHADOW) console.log(`  shadow ${SHADOW}: ${shadowN} read, ${shadowFail} failed, $${shadowSpent.toFixed(3)} spent (main ${MODEL}: $${spent.toFixed(3)})`);
+  await writeToneColumn(stocks);
   await recordRun({ scored: tally.scored, skipped: tally.skipped, unreadable: tally.unreadable, failed: tally.failed, spent, reasons: why });
   if (!COMMIT) console.log('DRY RUN: nothing written. Re-run with --commit.');
 })().catch(async (e) => {

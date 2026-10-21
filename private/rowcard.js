@@ -225,6 +225,8 @@
                                   const h = n.headline.length > 64 ? n.headline.slice(0, 63) + '…' : n.headline;
                                   return { t: (age ? age + ' · ' : '') + h, c: '' };
                                 }],
+    ['info',  'Tone 7D',        (s) => (s.toneAvg == null || !isFinite(s.toneAvg) ? null
+                                  : { t: (s.toneAvg > 0 ? '+' : s.toneAvg < 0 ? '\u2212' : '') + Math.abs(s.toneAvg).toFixed(2) + (s.toneN ? ' · ' + s.toneN + ' read' : ''), c: '' })],
     ['info',  'Next Earn',      (s) => s.nextEarningsDate
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
