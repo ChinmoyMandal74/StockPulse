@@ -255,7 +255,6 @@
       <select id="cardTheme" aria-label="Ground">
         <option value="dark" selected>Dark</option>
         <option value="light">Light</option>
-        <option value="sky">Light blue</option>
         <option value="navy">Navy</option>
       </select>
 
@@ -2175,7 +2174,6 @@
           <option value="dark">Dark</option>
           <option value="navy">Navy</option>
           <option value="light">Light</option>
-          <option value="sky">Sky</option>
         </select>
         <label>Transition</label>
         <select id="vidTrans">
@@ -4923,7 +4921,12 @@
       for (const [k, fill] of [['tspSp500', fillTspNames], ['tsnSp500', fillTsnNames], ['tmgSp500', fillTmgNames], ['othSp500', fillOthNames]]) { set(k); fill(); }
       set('imgSp500');
       fillImgNames();
+      // The three group tone cards: their group lists exist only under their own cut.
+      ['stoSp500', 'itoSp500', 'ttoSp500'].forEach(set);
+      fillToneNames();
       Object.keys(opts).forEach(set);
+      // Light blue is retired: a post saved on it opens on Light, as cards.js draws it.
+      if (opts.cardTheme === 'sky') $('cardTheme').value = 'light';
       // A post stores only its own template's stock; the sibling views follow it.
       if (spotView(tpl)) spotSyncFrom(spotView(tpl)[2]);
       // ...and the same for the cut: the opened card's own wins, the rest follow.

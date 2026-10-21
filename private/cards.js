@@ -1776,10 +1776,17 @@
     // chose for it. Caught by the day suite's own independence checks, which
     // were asserting the previous behaviour and were right to fail.
     const LEGACY_KEY = { spotlight: 'spotTheme', day: 'dayTheme' };
+    // LIGHT BLUE (sky) IS RETIRED (2026-10-21, the owner: "remove the light
+    // blue theme from promo"): no picker offers it, and a post saved on it is
+    // drawn on Light, the ground it was a tint of, the same in the studio, on
+    // the phone and in a saved image. Its palette stays defined, unused, so
+    // un-retiring it is one line.
+    const RETIRED_GROUND = { sky: 'light' };
     const themeOf = (tpl, opts) => {
       const o = opts || {};
       const legacy = LEGACY_KEY[tpl];
-      return THEMES[o.cardTheme || (legacy && o[legacy])] || THEMES.dark;
+      const k = o.cardTheme || (legacy && o[legacy]);
+      return THEMES[RETIRED_GROUND[k] || k] || THEMES.dark;
     };
 
     const CHART_PALETTE = ['#34d399', '#22d3ee', '#a78bfa', '#fbbf24', '#fb923c',
