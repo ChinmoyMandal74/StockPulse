@@ -78,3 +78,10 @@ After one day of the shadow comparison (882 articles: shown-or-not agreed 94.6%,
 - An operational log, kept 90 days: the prune rides the insert's batch. `readToneRuns(sinceMs)` is a seek on `started_at`, at most 500 rows.
 - `/api/news-runs` carries them as `toneRuns`; the page's **Article tone** section draws the last run, 7- and 30-day spend with cost per article (four decimals: Haiku is about $0.0004), and a row per run. It warns when there has been no run for 8 hours, when the last three all stopped at the 45-minute limit (the backlog is not clearing), and when the last failed or hit the cost cap.
 - Runs before 2026-10-20 evening were backfilled from `news-tone.log` (the timestamped header and the summary line of each run).
+
+## The one-stock card: headlines only, negatives first (2026-10-21, owner: "Give an option to show only the subject not the body, this way more news can be covered, Always show the negative first")
+- **Show** picker on the Article tone card (`tnsView`, kept by a saved post): Headline and summary, or Headlines only. Headlines only draws 8 on a portrait, 5 on a square, 10 on a story (`TONE_HEADS`); with summaries it is 3, 2 and 4 (`TONE_ITEMS`; the story was 5 and overflowed with long headlines).
+- **Negative readings first**, in both views: the negative ones among the latest readings, newest first, then the rest, newest first. The note says so when one is shown. It is an ordering; nothing is dropped for its tone.
+- Both hosts ask the module how many readings to fetch (`toneStockNeed(...).limit`, 20, up from 6), so the negatives among the latest twenty are in hand to go first.
+- On a story the four figures stay in one row (`.tn-figs`); stacked two by two they cost the list two headlines.
+- Tested in the studio over live readings (INTC) at every shape in both views: nothing past the note, no headline clamped, every negative before the rest; the Node host draws the same order. Reverting the ordering fails seven checks.

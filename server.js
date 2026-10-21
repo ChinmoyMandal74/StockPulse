@@ -12114,7 +12114,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   if (tbNeed) { try { tboard = await toneBoardPayload(tbNeed.group, tbNeed.days); } catch { tboard = null; } }
   let tstock = null;
   const tsNeed = Cards.toneStockNeed(post.tpl, post.opts || {});
-  if (tsNeed && tsNeed.symbol && /^[A-Z0-9.-]{1,15}$/.test(String(tsNeed.symbol).toUpperCase())) { try { tstock = await toneStockPayload(String(tsNeed.symbol).toUpperCase(), 6); } catch { tstock = null; } }
+  if (tsNeed && tsNeed.symbol && /^[A-Z0-9.-]{1,15}$/.test(String(tsNeed.symbol).toUpperCase())) { try { tstock = await toneStockPayload(String(tsNeed.symbol).toUpperCase(), tsNeed.limit || 6); } catch { tstock = null; } }
 
   // The Capital returns card, likewise.
   let capret = null;

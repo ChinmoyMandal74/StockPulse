@@ -1094,11 +1094,14 @@
       <div id="tnsBox">
         <label>Stock</label>
         <select id="tnsSym"></select>
+        <label>Show</label>
+        <select id="tnsView"></select>
         <p class="hint">The latest articles about one stock, each with an
           AI model's reading of how its content leans (&minus;1 to +1)
           and its own two-sentence summary, under the week's figures.
-          Read for the semiconductor stocks only; any other stock says
-          so. A description of what was written, not a forecast.</p>
+          Headlines only fits more of them. The negative readings come first.
+          Read for the S&amp;P 500 and the semiconductor stocks; any other
+          stock says so. A description of what was written, not a forecast.</p>
       </div>
       <div id="itnBox">
         <label>Companies</label>
@@ -2263,8 +2266,8 @@
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
-      { id: 'tonestock', name: 'Article tone', note: 'How the articles about one semiconductor stock read — its latest, each with an AI model’s reading and summary' },
-      { id: 'indtone', name: 'Article tone, an industry', note: 'How the week’s articles about each semiconductor stock read, one row a company, from an AI model’s reading of each' },
+      { id: 'tonestock', name: 'Article tone', note: 'How the articles about one stock read — its latest, each with an AI model’s reading and summary' },
+      { id: 'indtone', name: 'Article tone, an industry', note: 'How the week’s articles about each company in a group read, one row a company, from an AI model’s reading of each' },
       { id: 'holderchg', name: 'What changed', note: 'One 13F manager or one fund, its latest filing against the one before: bought, sold, positions opened and closed, and the largest changes' },
       { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
@@ -2718,7 +2721,7 @@
       if (tsCache[symbol]) return tsCache[symbol];
       if (tsPending[symbol]) return null;
       tsPending[symbol] = true;
-      fetch(`/api/news/tone?symbol=${encodeURIComponent(symbol)}&limit=6`, { cache: 'no-store' })
+      fetch(`/api/news/tone?symbol=${encodeURIComponent(symbol)}&limit=${(Cards.toneStockNeed('tonestock', {}) || {}).limit || 6}`, { cache: 'no-store' })
         .then((r) => r.json())
         .then((d) => {
           tsCache[symbol] = d && typeof d === 'object' && Array.isArray(d.items) ? d : { items: [], week: null };
@@ -3211,7 +3214,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'itnGroup', 'itnWin', 'itnCount', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -4699,6 +4702,8 @@
     // Article tone: the stock card's one control, and the industry card's
     // three, every choice from the module that draws them.
     $('tnsSym').addEventListener('change', () => { if (tpl === 'tonestock') render(); });
+    for (const [v, label] of Cards.toneStockViews()) $('tnsView').appendChild(new Option(label, v));
+    $('tnsView').addEventListener('change', () => { if (tpl === 'tonestock') render(); });
     for (const [v, label] of Cards.toneGroups()) $('itnGroup').add(new Option(label, v));
     for (const [v, label] of Cards.toneWindows()) $('itnWin').add(new Option(label, v));
     for (const c of Cards.toneCounts()) $('itnCount').add(new Option(String(c), String(c)));

@@ -9382,7 +9382,15 @@
   const TONE_WINS = [['7', 'Past 7 days'], ['30', 'Past 30 days']];
   const TONE_COUNTS = [8, 12, 16];
   const TONE_ROWS = { portrait: 16, square: 10, story: 16 };
-  const TONE_ITEMS = { portrait: 3, square: 2, story: 5 };
+  const TONE_ITEMS = { portrait: 3, square: 2, story: 4 };
+  // HEADLINES ONLY (2026-10-21, the owner: "Give an option to show only the
+  // subject not the body, this way more news can be covered, Always show the
+  // negative first"). Measured with two-line headlines throughout.
+  const TONE_HEADS = { portrait: 8, square: 5, story: 10 };
+  const TONE_VIEWS = [['full', 'Headline and summary'], ['heads', 'Headlines only']];
+  // How many of the latest readings both hosts ask for: enough that the
+  // negative ones among the latest are in hand to go first.
+  const TONE_STOCK_LIMIT = 20;
   const TONE_WORDS = /\b(buy|sell|hold|bullish|bearish|outperform|underperform|overweight|underweight|price target|target price)\b/i;
   const toneLabel = (t) => (t == null || !isFinite(t) ? '' : t >= TONE_BAND ? 'Positive' : t <= -TONE_BAND ? 'Negative' : 'Neutral');
   const toneNum = (t) => (t == null || !isFinite(t) ? '—' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
@@ -9397,7 +9405,7 @@
   }
   function toneStockNeed(tpl, opts) {
     if (tpl !== 'tonestock') return null;
-    return { symbol: (opts && opts.tnsSym) || null };
+    return { symbol: (opts && opts.tnsSym) || null, limit: TONE_STOCK_LIMIT };
   }
   const toneShell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
     + '<span class="s-kick">' + esc(kick) + '</span>'
@@ -9471,11 +9479,16 @@
     // marketing: one that says buy, sell or hold ("Should You Buy an Index
     // Fund Now?", on NVDA's first card) is passed over for the next article,
     // as the summaries' own rule already is upstream.
-    const items = (data.items || []).filter((x) => x && x.headline && !TONE_WORDS.test(x.headline) && !TONE_WORDS.test(x.summary || ''))
-      .slice(0, TONE_ITEMS[size.id] || 3);
+    const heads = O.tnsView === 'heads';
+    const pool = (data.items || []).filter((x) => x && x.headline && !TONE_WORDS.test(x.headline) && !TONE_WORDS.test(x.summary || ''));
+    // THE NEGATIVE READINGS FIRST (the owner), newest first among them, then
+    // the rest newest first: an ordering, never a selection by tone beyond it.
+    const isNeg = (x) => x.tone != null && isFinite(x.tone) && x.tone <= -TONE_BAND;
+    const items = pool.filter(isNeg).concat(pool.filter((x) => !isNeg(x))).slice(0, (heads ? TONE_HEADS : TONE_ITEMS)[size.id] || 3);
+    const negShown = items.filter(isNeg).length;
     const W = data.week;
     if (!items.length) {
-      return toneShell(n, 'Article tone', 'nothing read yet', 'Article tone is read for the semiconductor stocks only, and no article about ' + sym + ' has been read yet.');
+      return toneShell(n, 'Article tone', 'nothing read yet', 'Article tone is read for the S&P 500 and the semiconductor stocks, and no article about ' + sym + ' has been read yet.');
     }
     const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
     const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
@@ -9492,7 +9505,7 @@
       return '<div class="tn-it">'
         + '<div class="tn-h"><span class="tn-chip" style="' + (c ? 'color:' + c + ';border-color:' + c : '') + '">' + esc(toneLabel(x.tone) + ' ' + toneNum(x.tone)) + '</span>'
         + '<span class="tn-hl">' + esc(x.headline) + '</span></div>'
-        + (x.summary ? '<p class="tn-sum">' + esc(x.summary) + '</p>' : '')
+        + (x.summary && !heads ? '<p class="tn-sum">' + esc(x.summary) + '</p>' : '')
         + '<div class="tn-meta">' + esc(meta) + '</div></div>';
     }).join('');
     return chromeTop()
@@ -9500,9 +9513,10 @@
       + '<span class="s-kick">' + esc((row.industry || row.sector || '') + ' · ' + sym + ' · article tone') + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
       + '<span class="dim">how the articles read</span></h2>'
-      + '<div class="cr-figs">' + figs + '</div>'
-      + '<div class="tn-list">' + list + '</div>'
-      + '<p class="s-sub wide" style="--fs:16px">' + esc('The latest articles about ' + sym + ', each with its reading and the model’s own two-sentence summary. ' + TONE_NOTE) + '</p>'
+      + '<div class="cr-figs tn-figs">' + figs + '</div>'
+      + '<div class="tn-list' + (heads ? ' tn-heads' : '') + '">' + list + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc('The latest articles about ' + sym + (negShown ? ', the negative readings first' : '')
+        + (heads ? ', each headline with its reading. ' : ', each with its reading and the model’s own two-sentence summary. ') + TONE_NOTE) + '</p>'
       + '</div></div>' + chromeFoot();
   }
 
@@ -13057,6 +13071,16 @@
     .tn-meta { margin-top: 6px; font: 500 14px var(--mono); color: var(--faint); }
     .sz-square .tn-hl { font-size: 20px; } .sz-square .tn-sum { font-size: 16px; } .sz-square .tn-chip { font-size: 14px; }
     .sz-story .tn-hl { font-size: 32px; } .sz-story .tn-sum { font-size: 24px; } .sz-story .tn-chip { font-size: 22px; } .sz-story .tn-meta { font-size: 18px; }
+    /* One stock's tone: the four figures stay in one row on a story, where
+       stacking them two by two costs the list two headlines. */
+    .sz-story .cr-figs.tn-figs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+    /* Headlines only: tighter, so twice as many fit. */
+    .tn-list.tn-heads { gap: 10px; }
+    .tn-heads .tn-it { padding-top: 10px; }
+    .tn-heads .tn-hl { font-size: 23px; }
+    .tn-heads .tn-meta { margin-top: 4px; }
+    .sz-square .tn-heads .tn-hl { font-size: 19px; }
+    .sz-story .tn-heads .tn-hl { font-size: 27px; }
     /* Insider activity: bought on the upper half of the track, sold on the lower. */
     .in-t { background: none; }
     .in-b { position: absolute; left: 0; border-radius: 3px; }
@@ -15209,7 +15233,7 @@
     instFlowNeed,
     capReturnNeed,
     optionsNeed,
-    toneBoardNeed, toneStockNeed, toneBand: TONE_BAND,
+    toneBoardNeed, toneStockNeed, toneBand: TONE_BAND, toneStockViews: () => TONE_VIEWS.map((v) => v.slice()),
     toneGroups: () => TONE_GROUPS.map((p) => p.slice()), toneWindows: () => TONE_WINS.map((p) => p.slice()), toneCounts: () => TONE_COUNTS.slice(),
     insiderNeed, insiderWindows: () => IN_WINS.map((p) => p.slice()),
     buybackBys: () => BB_BY.map((p) => p.slice()), buybackFloors: () => BB_FLOORS.map((p) => p.slice()),
