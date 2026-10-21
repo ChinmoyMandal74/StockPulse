@@ -84,6 +84,19 @@
     .fl-link:hover { text-decoration: underline; }
     .fl-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .fl-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
+    .fl-who { font: inherit; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+              text-decoration: underline; text-decoration-color: var(--hair-2); text-underline-offset: 3px; }
+    .fl-who:hover, .fl-who:focus-visible { color: var(--accent); text-decoration-color: var(--accent); }
+    dialog.fl-dlg { width: min(860px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 0;
+                    background: transparent; color: var(--text); overflow: hidden; outline: none; }
+    dialog.fl-dlg::backdrop { background: color-mix(in srgb, var(--shade) 70%, transparent); backdrop-filter: blur(4px); }
+    dialog.fl-dlg .core { padding: 22px 0 8px; max-height: calc(100dvh - 60px); overflow: auto; }
+    .fl-dlg .fl-dhead { display: flex; align-items: flex-start; gap: 12px; padding: 0 22px; }
+    .fl-dlg .fl-dhead h2 { margin: 0; font-size: 19px; letter-spacing: -0.02em; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .fl-dlg .fl-dsub { margin: 8px 22px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+    .fl-dlg .fl-dsub a { color: var(--accent); text-decoration: none; }
+    .fl-dlg .fl-dsub a:hover { text-decoration: underline; }
+    .fl-dlg td.fl-day1 { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
   </style>
 </head>
@@ -140,6 +153,8 @@
       <h2>Company announcements · Form 8-K</h2>
       <div class="bezel"><div class="core" style="padding:0"><div class="fl-wrap" id="ev"><div class="fl-empty">Reading the filings&hellip;</div></div></div></div>
     </section>
+
+    <dialog class="fl-dlg" id="whoDlg" aria-labelledby="whoName"><div class="bezel"><div class="core" id="whoBody"></div></div></dialog>
 
     <p class="fl-foot">A 13D is filed by a holder who may seek to influence or control the company; a 13G is the
       short form for a passive one, such as an index fund. "Amended" updates an earlier filing, and "no holding" is
@@ -222,7 +237,7 @@
       const none = 'Nothing of this kind matches on ' + long(data.date) + '.';
       $('hold').innerHTML = !H.length ? '<div class="fl-empty">' + we(none) + '</div>'
         : '<table><thead><tr><th>Company</th><th>Holder</th><th>Form</th><th class="fl-num">Stake</th><th>Filing</th></tr></thead><tbody>'
-          + H.map((h) => '<tr>' + coCell(h.symbol) + '<td>' + we(h.holder || 'Not named') + '</td>'
+          + H.map((h) => '<tr>' + coCell(h.symbol) + '<td>' + (h.holder ? '<button class="fl-who" data-who="' + we(h.holder) + '" title="Every 13D and 13G this holder filed about the stocks tracked here">' + we(h.holder) + '</button>' : 'Not named') + '</td>'
             + '<td><span class="fl-form' + (h.kind === 'D' ? ' fl-d' : '') + '">' + (h.kind === 'D' ? '13D' : '13G') + (h.amended ? ' amended' : '') + '</span></td>'
             + '<td class="fl-num">' + we(h.pctWord || '—') + '</td><td>' + link(h.url) + '</td></tr>').join('') + '</tbody></table>';
       $('ev').innerHTML = !E.length ? '<div class="fl-empty">' + we(none) + '</div>'
@@ -231,6 +246,47 @@
             + ((e.items && e.items.length) ? e.items.map((i) => '<span class="fl-item' + (i.notable ? ' fl-on' : '') + '" title="' + we(i.title || '') + '">' + we(i.name) + '</span>').join('') : we(e.label))
             + '</td><td>' + link(e.url) + '</td></tr>').join('') + '</tbody></table>';
     }
+    // ONE HOLDER (2026-10-21): every 13D/13G it filed about the tracked
+    // stocks, all days on file, and its 13F book when the name matches one.
+    $('hold').addEventListener('click', (e) => { const b = e.target.closest('[data-who]'); if (b) openWho(b.dataset.who); });
+    let whoSeq = 0;
+    async function openWho(name) {
+      const mine = ++whoSeq;
+      const dlg = $('whoDlg');
+      const head = (title) => '<div class="fl-dhead"><h2 id="whoName">' + we(title) + '</h2><button class="btn" id="whoClose">Close</button></div>';
+      const wire = () => { $('whoClose').addEventListener('click', () => dlg.close()); };
+      $('whoBody').innerHTML = head(name) + '<div class="fl-empty">Reading the filings&hellip;</div>';
+      wire();
+      if (!dlg.open) dlg.showModal();
+      try {
+        const r = await fetch('/api/filings/holder?name=' + encodeURIComponent(name), { cache: 'no-store' });
+        if (mine !== whoSeq) return;
+        if (!r.ok) throw new Error('The server answered ' + r.status + '.');
+        const d = await r.json();
+        if (mine !== whoSeq) return;
+        const F = d.filings || [];
+        const cos = new Set(F.map((x) => x.symbol)).size;
+        const sub = F.length + ' filing' + (F.length === 1 ? '' : 's') + ' about ' + cos + ' tracked compan' + (cos === 1 ? 'y' : 'ies')
+          + ' in the last ' + Math.round((d.keepDays || 400) / 30) + ' months, newest first.'
+          + (d.holderId ? ' <a href="/holder/M/' + encodeURIComponent(d.holderId) + '">Everything it reports holding (Form 13F) &rarr;</a>' : '');
+        $('whoBody').innerHTML = head(d.holder || name) + '<p class="fl-dsub">' + sub + '</p>'
+          + (!F.length ? '<div class="fl-empty">No filings on file under this name.</div>'
+            : '<div class="fl-wrap"><table><thead><tr><th>Filed</th><th>Company</th><th>Form</th><th class="fl-num">Stake</th><th>Filing</th></tr></thead><tbody>'
+              + F.map((x) => '<tr><td class="fl-day1">' + we(new Date(x.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })) + '</td>'
+                + '<td class="fl-co"><a href="/stock/' + encodeURIComponent(x.symbol) + '">' + we(x.symbol) + '</a><span>' + we(x.name || '') + '</span></td>'
+                + '<td><span class="fl-form' + (x.kind === 'D' ? ' fl-d' : '') + '">' + (x.kind === 'D' ? '13D' : '13G') + (x.amended ? ' amended' : '') + '</span></td>'
+                + '<td class="fl-num">' + we(x.pctWord || '—') + '</td>'
+                + '<td>' + (x.url ? '<a class="fl-link" href="' + we(x.url) + '" target="_blank" rel="noopener">sec.gov &#8599;</a>' : '') + '</td></tr>').join('')
+              + '</tbody></table></div>');
+        wire();
+      } catch (e) {
+        if (mine !== whoSeq) return;
+        $('whoBody').innerHTML = head(name) + '<div class="fl-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+        wire();
+      }
+    }
+    $('whoDlg').addEventListener('click', (e) => { if (e.target === $('whoDlg')) $('whoDlg').close(); });
+
     const syncUrl = () => history.replaceState(null, '', '/filings' + (() => { const p = new URLSearchParams(); if (state.date) p.set('date', state.date); if (state.form !== 'all') p.set('form', state.form); const s = p.toString(); return s ? '?' + s : ''; })());
     document.querySelectorAll('.fl-tab').forEach((b) => b.addEventListener('click', () => { state.form = b.dataset.f; syncUrl(); paint(); }));
     ['notable', 'cut', 'sector'].forEach((id) => $(id).addEventListener('change', paint));

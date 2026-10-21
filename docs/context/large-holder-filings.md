@@ -88,3 +88,8 @@ Tested:
 - `/filings` over payloads built by the server's own `filedDayPayload` from the live tables for 2026-10-19 and 2026-10-15: 20 checks covering rows, counts, links (52 stock and 52 sec.gov, new tab), order, the four form tabs, search by holder and ticker, the S&P and sector cuts against the flags, the day chips and arrows, notable only (Oct 15: Fortune Brands' impairment), no stepping past yesterday, no sideways scroll at 390px, the light theme, and the refusal message.
 - The `/edgar` card (10 checks): each pill, the facts, recent days newest first, Run now looping to done.
 - The access rules lifted from `server.js` (7 checks), proven by removing the guest guard.
+
+## One holder, from `/filings` (2026-10-21, owner: "make the holder column clickable on the filling page")
+- On `/filings` each holder name is a button. It opens a panel listing every 13D/13G that holder filed about a tracked company, all days on file (`Holders13.KEEP_DAYS`, about 13 months), newest first, each row linking to the stock page and to sec.gov.
+- `GET /api/filings/holder?name=` (members; guests refused, as the page is): `store.readSecHoldersBy(name)`, a seek on the new `idx_sec_holders_holder` index (`holder collate nocase`), so "PZENA INVESTMENT MANAGEMENT LLC" and "Pzena Investment Management LLC" are one holder. Spelling variants beyond case ("..., LLC" with a comma) are separate names. Joint filers' duplicates are one line per company, kind, day and stake, as on the day view.
+- When the name matches exactly one 13F manager (`holderIdFor`, the stock page's matcher), the panel links that manager's book at `/holder/M/<id>`. Display only.

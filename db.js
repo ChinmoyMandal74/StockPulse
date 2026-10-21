@@ -892,6 +892,8 @@ const SCHEMA = [
      primary key (symbol, accn)
    )`,
   'create index if not exists idx_sec_holders_filed on sec_holders (filed)',
+  // One holder's filings across the tracked companies, for the /filings page (2026-10-21).
+  'create index if not exists idx_sec_holders_holder on sec_holders (holder collate nocase)',
   // Institutional holdings from Form 13F, one row per stock for the newest
   // quarter on file (2026-10-11): how many managers hold it, the shares
   // between them, the same for the quarter before, and the largest holders
@@ -5268,6 +5270,19 @@ async function readSecHolders(symbol, limit) {
     persons: x.persons == null ? null : Number(x.persons), eventDate: x.event_d || null }));
 }
 
+// Every 13D/13G one holder filed about a tracked company, newest first: a
+// seek on the holder index, the name matched without regard to case.
+async function readSecHoldersBy(holder, limit) {
+  await init();
+  const r = await db.execute({
+    sql: `select symbol, accn, filed, form, kind, holder, pct from sec_holders indexed by idx_sec_holders_holder
+          where holder = ? collate nocase and kind != 'X' order by filed desc limit ?`,
+    args: [String(holder), Math.max(1, Math.min(300, Number(limit) || 200))],
+  });
+  return r.rows.map((x) => ({ symbol: String(x.symbol), accn: x.accn ? String(x.accn) : null, filed: String(x.filed), form: x.form || '', kind: String(x.kind),
+    holder: x.holder || '', pct: x.pct == null ? null : Number(x.pct) }));
+}
+
 async function readSecHoldersSince(since) {
   await init();
   const r = await db.execute({
@@ -8041,7 +8056,7 @@ module.exports = {
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
   writeSecEvents, readSecEvents, readSecEventsSince,
-  writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince,
+  writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince, readSecHoldersBy,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
   writeSecSegments, readSecSegments, readSecSegmentAccn, writeSegReport, readSegAccns, readSegPeriods, readSecInstance, writeSecInstance,

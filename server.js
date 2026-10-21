@@ -15127,6 +15127,32 @@ app.get('/api/filings/day', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(await filedDayPayload(String(req.query.date || ''), await isGuest(req)));
 }));
+// One holder's 13D/13G filings about the tracked companies, every day on file
+// (2026-10-21, the owner: "make the holder column clickable on the filings
+// page"). Members, as the page is. One seek on the holder index; the 13F
+// book is linked when the name matches one manager (holderIdFor, as the
+// stock page does). One line per company, kind, day and stake, as the day's.
+app.get('/api/filings/holder', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  const name = String(req.query.name || '').trim();
+  if (name.length < 2 || name.length > 200) return res.status(400).json({ error: 'Bad holder.' });
+  const [rows, ids, holderId, snap] = await Promise.all([store.readSecHoldersBy(name, 300), filerIds().catch(() => ({})),
+    holderIdFor(name).catch(() => null), readSnapshot().catch(() => null)]);
+  const by = new Map();
+  for (const r of ((snap && snap.stocks) || [])) if (r && r.symbol) by.set(r.symbol, r);
+  const seen = new Set();
+  const filings = [];
+  for (const h of rows) {
+    const k = h.symbol + '|' + h.kind + '|' + h.filed + '|' + h.pct;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const r = by.get(h.symbol);
+    filings.push({ symbol: h.symbol, name: r ? (r.shortName || r.name || h.symbol) : h.symbol, filed: h.filed, kind: h.kind,
+      amended: /\/A$/.test(h.form), pct: h.pct, pctWord: Holders13.pctWord(h.pct), url: Holders13.pageUrl(ids[h.symbol], h.accn) });
+  }
+  res.json({ holder: rows.length ? rows[0].holder : name, holderId, keepDays: Holders13.KEEP_DAYS, filings });
+}));
 
 // ---- 8-K events for one company ---------------------------------------------
 // What it filed and what each filing was about, newest first, with a link
