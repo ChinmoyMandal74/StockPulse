@@ -12131,7 +12131,7 @@
   // line names, and nothing adds the arrows up. Green and red only on the two
   // price topics; amber only for a stale figure. The Signal travels with the
   // rule that fired, in its own colour.
-  const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['growth', 'Growth'],
+  const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['trend', 'Momentum and trend'], ['growth', 'Growth'],
     ['profit', 'Profitability'], ['value', 'Valuation'], ['vol', 'Volatility'], ['balance', 'Balance sheet'],
     ['shortpos', 'Short position'], ['owners', 'Insiders and owners'], ['earn', 'Earnings'], ['signal', 'Signal']];
   const GLC_DEFAULT = ['long', 'growth', 'profit', 'value', 'balance', 'earn'];
@@ -12172,7 +12172,7 @@
     // for the direction; the Signal keeps its own tint.
     const kf = ({ square: k <= 4 ? 40 : 32, portrait: k <= 4 ? 52 : k <= 6 ? 44 : 30, story: k <= 4 ? 60 : k <= 6 ? 54 : k <= 8 ? 46 : 34 })[size.id] || 44;
     // No green, red or amber among them: those mean price up, down and "notice this".
-    const TOPIC = { growth: '#7c9cff', profit: '#22d3ee', value: '#c4b5fd', vol: '#f0abfc', balance: '#fdba74', shortpos: '#cbd5e1', owners: '#7dd3fc', earn: '#d6c58b' };
+    const TOPIC = { trend: '#818cf8', growth: '#60a5fa', profit: '#22d3ee', value: '#c4b5fd', vol: '#f0abfc', balance: '#fdba74', shortpos: '#cbd5e1', owners: '#7dd3fc', earn: '#d6c58b' };
     const colorOfCard = (c) => (c.tone === 'signal' && c.signal ? (pal.tints[canon(c.signal)] || pal.flat)
       : c.tone === 'price' ? (c.key && c.key.dir === 'up' ? pal.up : c.key && c.key.dir === 'down' ? pal.down : pal.flat)
         : pal.ink(TOPIC[c.id] || '#7c9cff'));

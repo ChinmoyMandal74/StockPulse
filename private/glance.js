@@ -115,6 +115,26 @@
         arrow: signArrow(y, 5), text: join(bits) });
     }
 
+    // Momentum and trend (2026-10-21, the owner: "add one more card on the At
+    // a glance section", this topic chosen). The trend reading the Trend
+    // column shows, where the 50-day average sits against the 200-day and
+    // since when, and the three months against the S&P 500. Plain words, not
+    // the MA cross column's Bullish/Bearish. The arrow is ahead of or behind
+    // the market: a comparison, so a topic colour, never green or red.
+    {
+      const tw = s.actionTrend ? String(s.actionTrend) : null;
+      const rs = num(s.relStrength), days = num(s.maCrossDays);
+      const bits = [];
+      if (tw) bits.push('On the trend ladder, from Breakdown to Strong uptrend, it reads ' + tw + '.');
+      if (s.maBullish === true || s.maBullish === false) {
+        bits.push('The 50-day average is ' + (s.maBullish ? 'above' : 'below') + ' the 200-day'
+          + (days != null ? '; it crossed ' + (s.maBullish ? 'above' : 'below') + ' ' + days + ' session' + (days === 1 ? '' : 's') + ' ago.' : '.'));
+      }
+      if (rs != null) bits.push('Over three months ' + (Math.abs(rs) < 0.5 ? 'about level with' : pct(rs) + (rs > 0 ? ' ahead of' : ' behind')) + ' the S&P 500.');
+      add({ id: 'trend', title: 'Momentum and trend', jump: 'price', tone: 'neutral',
+        arrow: signArrow(rs, 2), text: join(bits) });
+    }
+
     // Growth
     {
       const rg = num(s.revenueGrowthYoY), eg = num(s.earningsGrowthYoY);
@@ -268,6 +288,8 @@
         return m != null ? k(signed(m), 'over the month', m > 0 ? 'up' : m < 0 ? 'down' : null) : w != null ? k(signed(w), 'over the week', w > 0 ? 'up' : w < 0 ? 'down' : null) : null; }
       case 'long': { const y = n('oneYearPct');
         return y != null ? k(signed(y), 'over the year', y > 0 ? 'up' : y < 0 ? 'down' : null) : null; }
+      case 'trend': { const rs = n('relStrength');
+        return rs != null ? k(signed(rs), 'vs the S&P 500, 3 months') : s.actionTrend ? k(String(s.actionTrend), 'trend reading') : null; }
       case 'growth': { const r = n('revenueGrowthYoY'), e = n('earningsGrowthYoY');
         return r != null ? k(signed(r), 'revenue, year on year') : e != null ? k(signed(e), 'earnings, year on year') : null; }
       case 'profit': { const p = n('profitMargin');
