@@ -1102,6 +1102,45 @@
           Read for the S&amp;P 500 and the semiconductor stocks; any other
           stock says so. A description of what was written, not a forecast.</p>
       </div>
+      <!-- Bars, any measure, a bar a sector, industry or theme (2026-10-21). -->
+      <div id="sgbBox">
+        <label>Measure</label>
+        <select id="sgbMetric"></select>
+        <label>Order</label>
+        <select id="sgbDir"><option value="desc">Highest first</option><option value="asc">Lowest first</option></select>
+        <label>How many</label>
+        <select id="sgbCount"><option>5</option><option selected>10</option><option>15</option></select>
+        <label>Index</label>
+        <select id="sgbSp500"></select>
+        <p class="hint">Any measure the Bars card ranks, a bar a group: each bar is the group's middle company among those
+          with a reading (at least three). The small figure is how many readings stand behind it.</p>
+      </div>
+      <div id="igbBox">
+        <label>Measure</label>
+        <select id="igbMetric"></select>
+        <label>Order</label>
+        <select id="igbDir"><option value="desc">Highest first</option><option value="asc">Lowest first</option></select>
+        <label>How many</label>
+        <select id="igbCount"><option>5</option><option selected>10</option><option>15</option></select>
+        <label>Index</label>
+        <select id="igbSp500"></select>
+        <label>Sector</label>
+        <select id="igbSector"><option value="">Every sector</option></select>
+        <p class="hint">Any measure the Bars card ranks, a bar a group: each bar is the group's middle company among those
+          with a reading (at least three). The small figure is how many readings stand behind it.</p>
+      </div>
+      <div id="tgbBox">
+        <label>Measure</label>
+        <select id="tgbMetric"></select>
+        <label>Order</label>
+        <select id="tgbDir"><option value="desc">Highest first</option><option value="asc">Lowest first</option></select>
+        <label>How many</label>
+        <select id="tgbCount"><option>5</option><option selected>10</option><option>15</option></select>
+        <label>Index</label>
+        <select id="tgbSp500"></select>
+        <p class="hint">Any measure the Bars card ranks, a bar a group: each bar is the group's middle company among those
+          with a reading (at least three). The small figure is how many readings stand behind it.</p>
+      </div>
       <!-- Article tone for a sector, an industry, a theme (2026-10-21): the Market tone card for one group. -->
       <div id="stoBox">
         <label>Sector</label>
@@ -2312,6 +2351,9 @@
       { id: 'revmix', name: 'Revenue mix', note: 'Where one company’s revenue comes from — by product, segment or region, for the latest year or quarter, or how the mix has changed over time (set Show)' },
       { id: 'holders', name: 'Large holders', note: 'Who reports holding more than 5% of one company, and on which form — each holder at its newest filing' },
       { id: 'instflow', name: 'Who added, who cut', note: 'One stock\u2019s institutional holders over the quarters: each quarter\u2019s change in shares held, and the latest quarter\u2019s largest buyers and sellers' },
+      { id: 'secbars', name: 'Sector bars', note: 'The Bars card a bar a sector: any measure, each sector\u2019s middle company' },
+      { id: 'indbars', name: 'Industry bars', note: 'The Bars card a bar an industry: any measure, each industry\u2019s middle company' },
+      { id: 'thmbars', name: 'Theme bars', note: 'The Bars card a bar a theme: any measure, each theme\u2019s middle company' },
       { id: 'seclines', name: 'Sector lines', note: 'The Lines card a line a sector: share price, volatility or any filed measure, for the sectors you tick' },
       { id: 'indlines', name: 'Industry lines', note: 'The Lines card a line an industry: share price, volatility or any filed measure, for the industries you tick' },
       { id: 'thmlines', name: 'Theme lines', note: 'The Lines card a line a theme: share price, volatility or any filed measure, for the themes you tick' },
@@ -2510,6 +2552,7 @@
       ['optsec', 'Options'],
       ['secmonths', 'Month by month'],
       ['seclines', 'Lines — any measure'],
+      ['secbars', 'Bars — any measure'],
       ['sectone', 'Article tone'],
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
@@ -2528,12 +2571,14 @@
       ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
       ['thmlines', 'Lines — any measure'],
+      ['thmbars', 'Bars — any measure'],
       ['thmtone', 'Article tone'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
       ['indspot', 'Spotlight'],
       ['indlines', 'Lines — any measure'],
+      ['indbars', 'Bars — any measure'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
       ['indcotone', 'Article tone'],
@@ -3256,7 +3301,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'mtnWin', 'stoName', 'stoWin', 'stoSp500', 'itoName', 'itoWin', 'itoSp500', 'ttoName', 'ttoWin', 'ttoSp500', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'mtnWin', 'sgbMetric', 'sgbDir', 'sgbCount', 'sgbSp500', 'igbMetric', 'igbDir', 'igbCount', 'igbSp500', 'igbSector', 'tgbMetric', 'tgbDir', 'tgbCount', 'tgbSp500', 'stoName', 'stoWin', 'stoSp500', 'itoName', 'itoWin', 'itoSp500', 'ttoName', 'ttoWin', 'ttoSp500', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -4131,6 +4176,9 @@
       $('itnBox').style.display = tpl === 'indtone' ? 'block' : 'none';
       $('mtnBox').style.display = tpl === 'mkttone' ? 'block' : 'none';
       $('stoBox').style.display = tpl === 'sectone' ? 'block' : 'none';
+      $('sgbBox').style.display = tpl === 'secbars' ? 'block' : 'none';
+      $('igbBox').style.display = tpl === 'indbars' ? 'block' : 'none';
+      $('tgbBox').style.display = tpl === 'thmbars' ? 'block' : 'none';
       $('itoBox').style.display = tpl === 'indcotone' ? 'block' : 'none';
       $('ttoBox').style.display = tpl === 'thmtone' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
@@ -4682,6 +4730,19 @@
     // The measures come from the module, grouped as it groups them, so one
     // added there appears here with no edit and the picker can never offer
     // a key the card does not know.
+    // The group Bars (2026-10-21): the same catalogue, grouped the same way,
+    // an index picker starting on the S&P 500, and the industry card's sector.
+    for (const [p, t2] of [['sgb', 'secbars'], ['igb', 'indbars'], ['tgb', 'thmbars']]) {
+      const sel = $(p + 'Metric'), og = new Map();
+      for (const [v, label, grp] of Cards.barMetrics()) {
+        if (!og.has(grp)) { const g = document.createElement('optgroup'); g.label = grp; og.set(grp, g); sel.appendChild(g); }
+        og.get(grp).appendChild(new Option(label, v));
+      }
+      sel.value = 'm1';
+      for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'in', v === 'in'));
+      [p + 'Metric', p + 'Dir', p + 'Count', p + 'Sp500'].concat(p === 'igb' ? ['igbSector'] : [])
+        .forEach((id) => $(id).addEventListener('change', () => { if (tpl === t2) render(); }));
+    }
     (function fillBarMetrics() {
       const sel = $('barMetric');
       const groups = new Map();
@@ -5549,6 +5610,10 @@
         // The theme cards' pickers, filled with the sector ones.
         fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames();
         fillToneNames();
+        // Industry bars: its sector filter, from the rows.
+        if ($('igbSector').options.length <= 1) {
+          for (const sname of [...new Set(stocks.map((r) => r && r.sector).filter(Boolean))].sort()) $('igbSector').add(new Option(sname, sname));
+        }
         { const keep = $('tgrName').value; $('tgrName').innerHTML = Cards.themeList(stocks, 'All').map((g) => `<option value="${esc(g.name)}">${esc(g.name)} \u00b7 ${g.n}</option>`).join(''); if ([...$('tgrName').options].some((o) => o.value === keep)) $('tgrName').value = keep; }
         fillOinNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not

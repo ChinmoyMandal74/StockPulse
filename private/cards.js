@@ -8125,6 +8125,94 @@
     })).sort((a, b) => b.cap - a.cap || (a.name < b.name ? -1 : 1));
   }
 
+  // ---- Bars, any measure, a bar a group (2026-10-21) ----------------------
+  //
+  // The owner: "Can you add the bars any measure to Industry, Sector and
+  // Theme level like how you added the Lines any measure". The Bars card's
+  // whole catalogue (the group Ranking offers twelve measures), a bar a
+  // sector, industry or theme. A group's figure is its MIDDLE COMPANY, the
+  // median of the companies with a reading, so one or two extremes cannot
+  // lead it: the same rule as the group Lines' price and the Ranking's
+  // levels. Every guard the Bars card applies to a row is applied before the
+  // median (funds, lenders where the measure means nothing for them, rows
+  // whose figures are not all in dollars, a multiple off a loss), and a group
+  // needs IND_MIN readings. Index cut first, the S&P 500 by default.
+  const GBARS = {
+    secbars: { G: 'sector', p: 'sgb' },
+    indbars: { G: 'industry', p: 'igb' },
+    thmbars: { G: 'theme', p: 'tgb' },
+  };
+  function tplGroupBars(tpl) {
+    const C = GBARS[tpl], G = GROUPING[C.G], p = C.p;
+    const m = BAR_BY_KEY[O[p + 'Metric']] || BAR_BY_KEY.m1;
+    const desc = O[p + 'Dir'] !== 'asc';
+    const K = [5, 10, 15].includes(Number(O[p + 'Count'])) ? Number(O[p + 'Count']) : 10;
+    const N = Math.min(K, BAR_CAP[size.id] || 10);
+    const cut = SP_CUTS.some(([k]) => k === O[p + 'Sp500']) ? O[p + 'Sp500'] : 'in';
+    const secCut = C.G === 'industry' && O[p + 'Sector'] ? String(O[p + 'Sector']) : null;
+    const isFund = (r) => r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol);
+    const out = { fin: 0, mixed: 0, sign: 0 };
+    const groups = new Map();
+    let firms = 0;
+    for (const r of spFilter(stocks, cut)) {
+      if (!r || r.error || isFund(r)) continue;
+      if (secCut && r.sector !== secCut) continue;
+      const keys = groupKeys(r, G.field);
+      if (!keys.length) continue;
+      firms++;
+      const raw = r[m.field];
+      // A NULL IS NOT A ZERO: rejected before it is coerced.
+      if (raw == null || raw === '') continue;
+      const v = Number(raw);
+      if (!isFinite(v)) continue;
+      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
+      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
+      if (m.coh && barMixed(r)) { out.mixed++; continue; }
+      if (m.pos && !(v > 0)) { out.sign++; continue; }
+      for (const k of keys) {
+        if (!groups.has(k)) groups.set(k, { vals: [], cap: 0 });
+        const g = groups.get(k);
+        g.vals.push(v);
+        const c = Number(r.marketCap); if (c > 0) g.cap += c;
+      }
+    }
+    const median = (a) => { const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) / 2; return s.length % 2 ? s[i] : (s[i - 0.5] + s[i + 0.5]) / 2; };
+    const rows = [];
+    let thin = 0;
+    for (const [name, g] of groups) {
+      if (g.vals.length < IND_MIN) { thin++; continue; }
+      rows.push({ name, sub: String(g.vals.length), v: median(g.vals), cap: g.cap });
+    }
+    rows.sort((a, b) => (desc ? b.v - a.v : a.v - b.v) || b.cap - a.cap);
+    const cutLabel = cut !== 'All' && SP_CUT_LABEL[cut] ? SP_CUT_LABEL[cut] + ' \u00b7 ' : '';
+    const word = (m.words || ['Highest', 'Lowest'])[desc ? 0 : 1];
+    const head = '<span class="s-kick">' + esc(cutLabel + (secCut ? secCut + ' \u00b7 ' : '') + rows.length + ' ' + (rows.length === 1 ? G.one : G.many)) + '</span>'
+      + '<h2 class="s-title">' + esc(word) + '<span class="dim">' + esc(m.label + ', the middle company') + '</span></h2>';
+    if (rows.length < 3) {
+      return chromeTop() + '<div class="s-body"><div class="bx-in">' + head
+        + '<p class="s-sub wide" style="--fs:20px">' + esc('Too few ' + G.many + ' to rank: ' + rows.length + ' with at least ' + IND_MIN
+          + ' companies carrying this measure' + (cutLabel ? ' under this index' : '') + '. Widen the cut.') + '</p></div></div>' + chromeFoot();
+    }
+    const top = rows.slice(0, N);
+    const drawn = barDraw(top, m, N);
+    const left = [];
+    if (thin) left.push(thin + ' ' + (thin === 1 ? G.one : G.many) + ' with fewer than ' + IND_MIN + ' readings');
+    if (out.sign) left.push(out.sign + (out.sign === 1 ? ' company' : ' companies') + ' with no positive reading');
+    if (out.fin) left.push(out.fin + (out.fin === 1 ? ' lender' : ' lenders') + ', for whom this measure means nothing');
+    if (out.mixed) left.push(out.mixed + (out.mixed === 1 ? ' company' : ' companies') + ' whose reported figures are not all in dollars');
+    const note = m.note + ' Each bar is the middle company of the ' + G.one + (cutLabel ? ' within ' + SP_CUT_PROSE[cut] : '')
+      + ', of those with a reading; the small figure is how many readings stand behind it. '
+      + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
+      + (drawn.broke ? 'A broken bar runs past the scale, which is set by the next largest so the rest stay readable. ' : '')
+      + (G.multi ? 'Themes are the site\u2019s own lists, chosen by hand, and a company in two of them counts in both. ' : G.Many + ' are the data provider\u2019s, not GICS. ')
+      + 'A ranking of what the screen holds, not a recommendation.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">' + head
+      + '<div class="bx-rows" style="--bxv:' + drawn.vw + 'px">' + drawn.html + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const tplIndSpot = () => groupSpot(GROUPING.industry);
   const tplSecSpot = () => groupSpot(GROUPING.sector);
   const tplThmSpot = () => groupSpot(GROUPING.theme);
@@ -12687,6 +12775,9 @@
     indtone: tplToneBoard,
     tonestock: tplToneStock,
     mkttone: tplMarketTone,
+    secbars: () => tplGroupBars('secbars'),
+    indbars: () => tplGroupBars('indbars'),
+    thmbars: () => tplGroupBars('thmbars'),
     sectone: () => tplGroupTone('sectone'),
     indcotone: () => tplGroupTone('indcotone'),
     thmtone: () => tplGroupTone('thmtone'),
