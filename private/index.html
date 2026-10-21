@@ -1557,7 +1557,7 @@
         <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
-        <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.15 or more, orange −0.15 or less. Read for the S&amp;P 500 and the semiconductor stocks from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
+        <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. Read for the S&amp;P 500 and the semiconductor stocks from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed if the feed has it, else estimated (~) from the date of the same quarter last year. Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
@@ -5901,7 +5901,7 @@
       paintWindow(true);
     }
 
-    let toneLoaded = false, toneBand = 0.15;
+    let toneLoaded = false, toneBand = 0.25;
     async function loadToneColumn() {
       if (toneLoaded) return;
       toneLoaded = true;

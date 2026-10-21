@@ -1103,6 +1103,14 @@
           Read for the S&amp;P 500 and the semiconductor stocks; any other
           stock says so. A description of what was written, not a forecast.</p>
       </div>
+      <!-- Market tone (2026-10-21): the S&P 500's articles by sector. -->
+      <div id="mtnBox">
+        <label>Window</label>
+        <select id="mtnWin"></select>
+        <p class="hint">Every article about an S&amp;P 500 company read in the window, gathered by sector: how they
+          split negative, neutral and positive, the average, and how many of each sector's companies that covers.
+          The S&amp;P 500 has been read since 21 October 2026, so the coverage grows run by run.</p>
+      </div>
       <div id="itnBox">
         <label>Companies</label>
         <select id="itnGroup"></select>
@@ -1110,7 +1118,7 @@
         <select id="itnWin"></select>
         <label>How many</label>
         <select id="itnCount"></select>
-        <p class="hint">Each semiconductor stock's average article tone
+        <p class="hint">Each company's average article tone
           over the window, one row a company: the ones with the most
           articles, ordered by their average. Articles that are not
           about the company, or could not be read, are left out.</p>
@@ -2267,6 +2275,7 @@
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'tonestock', name: 'Article tone', note: 'How the articles about one stock read — its latest, each with an AI model’s reading and summary' },
+      { id: 'mkttone', name: 'Article tone, the market', note: 'How the articles about the S&P 500’s companies read, sector by sector: the split, the average and the coverage' },
       { id: 'indtone', name: 'Article tone, an industry', note: 'How the week’s articles about each company in a group read, one row a company, from an AI model’s reading of each' },
       { id: 'holderchg', name: 'What changed', note: 'One 13F manager or one fund, its latest filing against the one before: bought, sold, positions opened and closed, and the largest changes' },
       { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
@@ -2402,6 +2411,7 @@
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
       ['filed', 'Filed yesterday'],
+      ['mkttone', 'Article tone'],
       // Called Corrections until 2026-10-19 (the owner): renamed to match the
       // screener's Drawdown column, whose four states it counts. The id stays.
       ['corrections', 'Drawdowns'],
@@ -3214,7 +3224,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'mtnWin', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -4087,6 +4097,7 @@
       $('oiBox').style.display = tpl === 'optoi' ? 'block' : 'none';
       $('tnsBox').style.display = tpl === 'tonestock' ? 'block' : 'none';
       $('itnBox').style.display = tpl === 'indtone' ? 'block' : 'none';
+      $('mtnBox').style.display = tpl === 'mkttone' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
       $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
@@ -4707,6 +4718,8 @@
     for (const [v, label] of Cards.toneGroups()) $('itnGroup').add(new Option(label, v));
     for (const [v, label] of Cards.toneWindows()) $('itnWin').add(new Option(label, v));
     for (const c of Cards.toneCounts()) $('itnCount').add(new Option(String(c), String(c)));
+    for (const [v, label] of Cards.toneWindows()) $('mtnWin').add(new Option(label, v));
+    $('mtnWin').addEventListener('change', () => { if (tpl === 'mkttone') render(); });
     $('itnCount').value = '12';
     ['itnGroup', 'itnWin', 'itnCount'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'indtone') render(); }));
     for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));

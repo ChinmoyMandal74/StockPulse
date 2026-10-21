@@ -9397,8 +9397,10 @@
   const TONE_NOTE = 'An AI model (Claude Haiku 5.5; Claude Sonnet 5.5 before 20 October 2026) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
     + 'Only articles mainly about the company are counted; one that names it in passing, or that could not be read, is left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
   function toneBoardNeed(tpl, opts) {
-    if (tpl !== 'indtone') return null;
     const o = opts || {};
+    // The Market tone card asks for the S&P 500 board, the same channel.
+    if (tpl === 'mkttone') { const d = o.mtnWin === '30' ? 30 : 7; return { group: 'sp', days: d, key: 'sp|' + d }; }
+    if (tpl !== 'indtone') return null;
     const group = TONE_GROUPS.some(([k]) => k === o.itnGroup) ? o.itnGroup : 'all';
     const days = o.itnWin === '30' ? 30 : 7;
     return { group, days, key: group + '|' + days };
@@ -9461,6 +9463,79 @@
       + '<span class="s-kick">' + esc('Article tone · ' + wLabel) + '</span>'
       + '<h2 class="s-title">' + esc(gLabel) + '<span class="dim">how the articles read, ' + esc(wLabel) + '</span></h2>'
       + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Market tone: the S&P 500's articles, sector by sector (2026-10-21) ----
+  //
+  // The owner: "Now that we have tone populated for a lot of s&p companies,
+  // Can you add a visual under market template". The S&P 500 board (every
+  // member's readings over the window, the same channel as the industry card)
+  // gathered by sector: each sector's articles split negative, neutral and
+  // positive as one bar, with their average and how many were read, and how
+  // many of the sector's companies that covers.
+  //
+  // ORDERED BY THE AVERAGE, NEVER CALLED BETTER OR WORSE: a reading of what was
+  // written. Blue and orange, never green and red. A sector's average is over
+  // its articles (each company's average weighted by its count), so the
+  // sectors add up to the total in the figures.
+  function tplMarketTone() {
+    const need = toneBoardNeed('mkttone', O);
+    const wLabel = need.days === 30 ? 'past 30 days' : 'past 7 days';
+    const data = getToneBoard(need.group, need.days);
+    if (!data) return toneShell('Reading the articles', 'Finding', 'the readings…');
+    const T = data.total;
+    if (!T || !Array.isArray(data.rows) || !data.rows.length) {
+      return toneShell('S&P 500 · ' + wLabel, 'Article tone', 'nothing read yet', 'No article about an S&P 500 company has been read in the ' + wLabel + '.');
+    }
+    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
+    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
+    const rowOf = new Map(stocks.map((r) => [r.symbol, r]));
+    const by = new Map();
+    for (const r of data.rows) {
+      const sec = (rowOf.get(r.symbol) || {}).sector;
+      if (!sec || !(r.count > 0)) continue;
+      const g = by.get(sec) || { sector: sec, n: 0, sum: 0, pos: 0, neu: 0, neg: 0, cos: 0 };
+      g.n += r.count; g.sum += r.avg * r.count; g.pos += r.positive || 0; g.neu += r.neutral || 0; g.neg += r.negative || 0; g.cos++;
+      by.set(sec, g);
+    }
+    const members = (sec) => stocks.filter((r) => r.spMember === true && r.sector === sec).length;
+    const secs = [...by.values()].map((g) => Object.assign(g, { avg: g.sum / g.n, of: members(g.sector) })).sort((a, b) => b.avg - a.avg);
+    const SZ = ({ portrait: { f: 23, b: 22 }, square: { f: 19, b: 16 }, story: { f: 30, b: 32 } })[size.id] || { f: 23, b: 22 };
+    const vw = Math.ceil(5 * SZ.f * 0.62) + 6, cw = Math.ceil(4 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0, 30%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
+    const NEU = 'color-mix(in srgb, var(--muted) 45%, transparent)';
+    const rows = secs.map((g) => {
+      const tot = g.pos + g.neu + g.neg || 1;
+      const w = (k) => (k / tot * 100).toFixed(2) + '%';
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(g.sector) + '<span class="mt-of">' + g.cos + (g.of ? ' of ' + g.of : '') + ' companies</span></span>'
+        + '<span class="bx-t mt-t" style="height:' + SZ.b + 'px">'
+        + '<span style="width:' + w(g.neg) + ';background:' + NEG + '"></span>'
+        + '<span style="width:' + w(g.neu) + ';background:' + NEU + '"></span>'
+        + '<span style="width:' + w(g.pos) + ';background:' + POS + '"></span></span>'
+        + '<span class="bx-v"' + (colorOf(g.avg) ? ' style="color:' + colorOf(g.avg) + '"' : '') + '>' + esc(toneNum(g.avg)) + '</span>'
+        + '<span class="bx-v rm-pct">' + esc(String(g.n)) + '</span></div>';
+    }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Sector</span>'
+      + '<span><b style="color:' + NEG + '">Negative</b> · neutral · <b style="color:' + POS + '">positive</b>, share of articles</span>'
+      + '<span class="sb-hr">Tone</span><span class="sb-hr">Read</span></div>';
+    const share = (k) => Math.round(k / T.count * 100) + '% of them';
+    const covered = data.rows.length;
+    const figs = toneFig('Articles read', T.count.toLocaleString('en-US'), 'about ' + covered + ' of ' + (data.stocks || covered) + ' companies')
+      + toneFig('Average tone', toneNum(T.avg), toneLabel(T.avg).toLowerCase() + ', on −1 to +1', colorOf(T.avg))
+      + toneFig('Positive', T.positive.toLocaleString('en-US'), share(T.positive), POS)
+      + toneFig('Negative', T.negative.toLocaleString('en-US'), share(T.negative), NEG);
+    const note = 'Every article about an S&P 500 company read in the ' + wLabel + ', gathered by the company’s sector and ordered by the sector’s average; '
+      + 'the bar is how its articles split. Positive is +' + TONE_BAND.toFixed(2) + ' or more, negative −' + TONE_BAND.toFixed(2) + ' or less. '
+      + 'The S&P 500 has been read since 21 October 2026. ' + TONE_NOTE;
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc('Article tone · S&P 500 · ' + wLabel) + '</span>'
+      + '<h2 class="s-title">The S&P 500<span class="dim">how the articles read, by sector</span></h2>'
+      + '<div class="cr-figs tn-figs">' + figs + '</div>'
       + '<div class="bx-rows">' + hd + rows + '</div>'
       + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
@@ -12507,6 +12582,7 @@
     optoi: tplOptions,
     indtone: tplToneBoard,
     tonestock: tplToneStock,
+    mkttone: tplMarketTone,
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     filed: tplFiled,
@@ -13074,6 +13150,12 @@
     /* One stock's tone: the four figures stay in one row on a story, where
        stacking them two by two costs the list two headlines. */
     .sz-story .cr-figs.tn-figs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+    /* Market tone: a sector's articles as one bar, split three ways. */
+    .bx-t.mt-t { display: flex; overflow: hidden; border-radius: 6px; }
+    .bx-t.mt-t > span { display: block; height: 100%; }
+    .mt-of { display: block; font: 500 0.62em var(--mono); color: var(--faint); margin-top: 2px; }
+    /* The square has no room for a second line under eleven sectors. */
+    .sz-square .mt-of { display: none; }
     /* Headlines only: tighter, so twice as many fit. */
     .tn-list.tn-heads { gap: 10px; }
     .tn-heads .tn-it { padding-top: 10px; }
