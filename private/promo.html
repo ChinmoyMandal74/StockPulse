@@ -162,6 +162,14 @@
     #glnBox .gl-chip.off, #ilnBox .gl-chip.off { opacity: 0.45; }
     #glnBox .gl-acts, #ilnBox .gl-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     #glnBox .gl-acts span, #ilnBox .gl-acts span { font-size: 12px; color: var(--faint); }
+    #glcBox .gc-chips { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
+    #glcBox label.gc-chip { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--sans, sans-serif); text-transform: none; letter-spacing: normal;
+      color: var(--text); margin: 0; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+    #glcBox label.gc-chip:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    #glcBox label.gc-chip.off { opacity: 0.45; }
+    #glcBox .gc-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    #glcBox .gc-acts .btn { width: auto; flex: 0 0 auto; margin: 0; padding: 6px 12px; font-size: 12px; }
+    #glcBox .gc-acts span { font-size: 12px; color: var(--faint); }
     #vidBox { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--hair); }
     #vidList { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
     #vidList .vid-it { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center;
@@ -1923,6 +1931,17 @@
       </div>
       <!-- Month by month: one company's returns, year by month. The card IS
            its own scope, so no sector, industry, size or screen pickers. -->
+      <!-- At a glance (2026-10-21): the stock page's topic cards for one company. -->
+      <div id="glcBox">
+        <label>Stock</label>
+        <select id="glcSym"></select>
+        <label>Topics</label>
+        <input type="hidden" id="glcPick" />
+        <div class="gc-acts"><button class="btn" type="button" id="glcDefault">The usual six</button><span id="glcCount"></span></div>
+        <div class="gc-chips" id="glcChips"></div>
+        <p class="hint">The same cards as the top of the stock's page, worded by the same module. A square holds six
+          topics, a portrait eight, a story ten; they are drawn in the page's order.</p>
+      </div>
       <div id="monBox">
         <label>Stock</label>
         <select id="monSym"></select>
@@ -2210,6 +2229,7 @@
   <script src="/perfchart.js"></script>
   <!-- RowCard.bands, for the Bollinger bands card: the same arithmetic as the stock chart. -->
   <script src="/rowcard.js"></script>
+  <script src="/glance.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script src="/reel.js"></script>
@@ -2279,6 +2299,7 @@
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
+      { id: 'glance', name: 'At a glance', note: 'One company topic by topic, as the top of its stock page sums it up' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
@@ -2345,6 +2366,7 @@
       ['perf', 'Growth and profitability', 'prfSym'],
       ['peertrend', 'Against its peers', 'ptrSym'],
       ['months', 'Month by month', 'monSym'],
+      ['glance', 'At a glance', 'glcSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
       ['stkchart', 'Chart — any measure', 'sclSym'],
@@ -3084,6 +3106,33 @@
     // which fill the Day picker.
     const fldCache = {};
     const fldPending = {};
+    // At a glance: the stock page's cards over the rows this page holds.
+    function getGlance(symbol) {
+      const row = stocks.find((x) => x && x.symbol === symbol);
+      if (!row || typeof Glance === 'undefined') return null;
+      try { return Glance.build(row, stocks); } catch (e) { return null; }
+    }
+    function paintGlanceChips() {
+      const max = Cards.glanceMax(size.id);
+      const pickEl = $('glcPick');
+      const picked = Cards.glancePick({ glcPick: pickEl.value }, 'story');
+      if (!pickEl.value) pickEl.value = picked.join('|');
+      const shown = Cards.glancePick({ glcPick: pickEl.value }, size.id);
+      $('glcChips').innerHTML = Cards.glanceTopics().map(([id, label]) => {
+        const on = picked.includes(id), drawn = shown.includes(id);
+        const full = !on && picked.length >= max;
+        return '<label class="gc-chip' + (full || (on && !drawn) ? ' off' : '') + '"><input type="checkbox" data-t="' + esc(id) + '"'
+          + (on ? ' checked' : '') + (full ? ' disabled' : '') + '> ' + esc(label) + '</label>';
+      }).join('');
+      $('glcCount').textContent = shown.length + ' of ' + max + ' on this shape' + (picked.length > shown.length ? ' (' + (picked.length - shown.length) + ' ticked do not fit)' : '');
+      $('glcChips').querySelectorAll('input[data-t]').forEach((cb) => cb.addEventListener('change', () => {
+        const cur = Cards.glancePick({ glcPick: pickEl.value }, 'story');
+        const next = cb.checked ? cur.concat([cb.dataset.t]) : cur.filter((x) => x !== cb.dataset.t);
+        // Never empty: the last one cannot be unticked (empty means the usual six).
+        pickEl.value = (next.length ? next : cur).join('|');
+        render();
+      }));
+    }
     function getFiled(need) {
       const k = need.date || 'latest';
       if (fldCache[k]) return fldCache[k];
@@ -3180,7 +3229,7 @@
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
-      'monSym', 'monView',
+      'monSym', 'monView', 'glcSym', 'glcPick',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
@@ -3204,7 +3253,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -3942,6 +3991,7 @@
       if (vidPlaying) return;
       syncStockPickers();
       syncIndustries(false);
+      if (tpl === 'glance') paintGlanceChips();
       const stage = $('stage');
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
@@ -4065,6 +4115,7 @@
       $('evoBox').style.display = tpl === 'evolution' ? 'block' : 'none';
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
+      $('glcBox').style.display = tpl === 'glance' ? 'block' : 'none';
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -4379,6 +4430,8 @@
     for (const [v, label] of Cards.peerTrendViews()) $('ptrView').appendChild(new Option(label, v));
     // Month by month: its own listener list, and its view picker filled from
     // the module so it cannot offer a value the card does not know.
+    $('glcSym').addEventListener('change', () => { if (tpl === 'glance') render(); });
+    $('glcDefault').addEventListener('click', () => { $('glcPick').value = Cards.glanceDefault().join('|'); if (tpl === 'glance') render(); });
     ['monSym', 'monView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
     for (const [v, label] of Cards.monthViews()) $('monView').appendChild(new Option(label, v));
@@ -5288,6 +5341,8 @@
           if ([...$('prfSym').options].some((o) => o.value === keep)) $('prfSym').value = keep; }
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
+        { const keep = $('glcSym').value; $('glcSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('glcSym').options].some((o) => o.value === keep)) $('glcSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
         { const keep = $('inSym').value; $('inSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('inSym').options].some((o) => o.value === keep)) $('inSym').value = keep; }

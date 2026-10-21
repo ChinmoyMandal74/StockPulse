@@ -12197,6 +12197,8 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
       getFiled: () => fld,
+      // The At a glance card: the stock page's own cards, over the same rows.
+      getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
       getIndexPe: () => ipe,

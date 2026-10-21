@@ -53,6 +53,8 @@
   let getMargins = () => null;
   // One day's 13D/13G and 8-K filings (the Filed yesterday card), or null while it loads.
   let getFiled = () => null;
+  // One stock's At a glance cards (glance.js, built by the host from its rows), or null.
+  let getGlance = () => null;
   // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
   let getGroupLines = () => null;
   let getHolders = () => null;
@@ -11934,6 +11936,92 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- At a glance: the stock page's topic cards as a post (2026-10-21) ----
+  //
+  // The owner: "Do we have a promo card for at a glance section on a
+  // individual stock", then "build it your way". The cards at the top of
+  // /stock/<SYM> for one company, the topics picked (six by default; a square
+  // holds six, a portrait eight, a story ten), in the page's order.
+  //
+  // ONE WORDING. The cards come from glance.js, which the host runs over its
+  // own rows (getGlance: the studio over the rows it holds, the server over
+  // the snapshot), the same module and the same comparison the stock page
+  // uses, so a topic cannot read one way on the page and another in a post.
+  //
+  // DESCRIPTIVE, NEVER A VERDICT, as on the page: an arrow says where the
+  // stock sits, up or down for a price, high or low against the group its
+  // line names, and nothing adds the arrows up. Green and red only on the two
+  // price topics; amber only for a stale figure. The Signal travels with the
+  // rule that fired, in its own colour.
+  const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['growth', 'Growth'],
+    ['profit', 'Profitability'], ['value', 'Valuation'], ['vol', 'Volatility'], ['balance', 'Balance sheet'],
+    ['shortpos', 'Short position'], ['owners', 'Insiders and owners'], ['earn', 'Earnings'], ['signal', 'Signal']];
+  const GLC_DEFAULT = ['long', 'growth', 'profit', 'value', 'balance', 'earn'];
+  // Measured with every topic at its longest wording.
+  const GLC_MAX = { square: 6, portrait: 8, story: 10 };
+  // The topics to draw: the ones ticked ('|'-joined in glcPick), in the page's
+  // order, as many as the shape holds. None ticked is the default six.
+  function glancePick(opts, sizeId) {
+    const ids = GLC_TOPICS.map((t) => t[0]);
+    let p = String((opts && opts.glcPick) || '').split('|').filter((x) => ids.includes(x));
+    if (!p.length) p = GLC_DEFAULT.slice();
+    return ids.filter((id) => p.includes(id)).slice(0, GLC_MAX[sizeId] || GLC_MAX.portrait);
+  }
+  function tplGlance() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const sym = O.glcSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const n = nameOf(row);
+    const g = getGlance(sym);
+    const byId = new Map(((g && g.cards) || []).map((c) => [c.id, c]));
+    const cards = glancePick(O, size.id).map((id) => byId.get(id)).filter(Boolean);
+    if (!cards.length) return shell(sym, n, 'at a glance', 'None of the chosen topics has figures for ' + sym + ' yet.');
+    const canon = (w) => (typeof ActionRules !== 'undefined' && ActionRules.canon ? ActionRules.canon(w) : w);
+    const GLY = { up: '▲', down: '▼', flat: '●' };
+    // The type steps down with the number of topics and the longest wording.
+    const longest = Math.max(...cards.map((c) => String(c.text).length));
+    const k = cards.length;
+    const base = ({ square: k <= 4 ? 24 : 21, portrait: k <= 4 ? 28 : k <= 6 ? 24 : 21, story: k <= 4 ? 34 : k <= 6 ? 31 : k <= 8 ? 27 : 25 })[size.id] || 24;
+    const fs = base - (longest > 230 ? 2 : 0);
+    const tiles = cards.map((c, i) => {
+      const dir = c.tone === 'price' && c.arrow === 'up' ? ' gc-up' : c.tone === 'price' && c.arrow === 'down' ? ' gc-dn' : '';
+      let body = esc(c.text);
+      if (c.tone === 'signal' && c.signal) {
+        const w = canon(c.signal);
+        const raw = String(c.text);
+        const rest = raw.indexOf(String(c.signal)) === 0 ? raw.slice(String(c.signal).length) : ': ' + raw;
+        body = '<b style="color:' + (pal.tints[w] || pal.flat) + '">' + esc(w) + '</b>' + esc(rest);
+      }
+      const span = k % 2 === 1 && i === k - 1 ? ' gc-wide' : '';
+      return '<div class="gc-tile' + dir + span + '">'
+        + '<span class="gc-h"><span class="gc-a">' + (c.arrow ? GLY[c.arrow] : '·') + '</span>' + esc(c.title) + '</span>'
+        + '<span class="gc-x" style="font-size:' + fs + 'px">' + body + '</span>'
+        + (c.stale ? '<span class="gc-stale">' + esc(c.stale) + '</span>' : '') + '</div>';
+    }).join('');
+    const priceStr = row.price != null && isFinite(row.price) ? '$' + Number(row.price).toFixed(2) : null;
+    const tp = row.todayPct != null && isFinite(row.todayPct) ? Number(row.todayPct) : null;
+    const kick = [row.sector, row.industry].filter(Boolean).join(' · ') || 'One stock';
+    const note = 'Where ' + sym + ' stands on each topic, from the figures after the latest close, as the top of its page on Tickr Lab sums it up. '
+      + 'An arrow says up or down for a price, or high or low against the group its line names: its industry where enough companies carry the figure, otherwise every company tracked. '
+      + 'It is not a rating, and nothing adds the arrows up.'
+      + (cards.some((c) => c.tone === 'signal') ? ' The signal is the Balanced rule set’s mechanical reading, with the one rule that fired.' : '');
+    return chromeTop()
+      + '<div class="s-body"><div class="gc-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">at a glance</span></h2>'
+      + '<div class="sp-sub">' + esc(sym) + (priceStr ? ' · ' + esc(priceStr) : '')
+      + (tp != null ? ' · <span class="' + (tp >= 0 ? 'sp-up' : 'sp-dn') + '">' + esc((tp >= 0 ? '+' : '−') + Math.abs(tp).toFixed(2) + '% today') + '</span>' : '')
+      + '</div>'
+      + '<div class="gc-grid">' + tiles + '</div>'
+      + '<p class="s-sub wide gc-note" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Month by month: one company's returns, year by month ---------------
   //
   // THE STOCK PAGE'S GRID AS A CARD. One row per year, one column per month,
@@ -12408,6 +12496,7 @@
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     filed: tplFiled,
+    glance: tplGlance,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
     thmlines: () => tplGroupLines('thmlines'),
@@ -14208,6 +14297,29 @@
        alone, and node --check passes every time, because it is valid
        interpolation rather than a syntax error.) */
     .sp-in { height: 100%; display: flex; flex-direction: column; }
+    /* At a glance (2026-10-21): the stock page's topic cards, two across,
+       sharing the height between them; an odd last one runs the full width. */
+    .gc-in { height: 100%; display: flex; flex-direction: column; }
+    .gc-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+               grid-auto-rows: auto; align-content: stretch; gap: 16px; margin-top: 26px; }
+    .gc-tile { min-width: 0; min-height: 0; overflow: hidden; border-radius: 18px; padding: 20px 24px;
+               background: rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px; }
+    .gc-tile.gc-wide { grid-column: span 2; }
+    .gc-h { display: flex; align-items: center; gap: 10px; font: 600 15px var(--mono); text-transform: uppercase;
+            letter-spacing: 0.14em; color: var(--muted); }
+    .gc-a { font-size: 14px; color: var(--text); width: 16px; text-align: center; }
+    .gc-up .gc-a { color: var(--green); } .gc-dn .gc-a { color: var(--red); }
+    .gc-x { font-family: var(--sans); line-height: 1.38; color: var(--text); }
+    .gc-x b { font-weight: 700; }
+    .gc-stale { font-size: 15px; color: var(--amber); }
+    .gc-note { margin-top: 0; padding-top: 18px; }
+    .sz-square .gc-grid { gap: 12px; margin-top: 18px; }
+    .sz-square .gc-tile { padding: 14px 18px; gap: 6px; border-radius: 14px; }
+    .sz-square .gc-h { font-size: 13px; }
+    .sz-story .gc-grid { gap: 18px; margin-top: 34px; }
+    .sz-story .gc-tile { padding: 24px 26px; }
+    .sz-story .gc-h { font-size: 17px; }
+    .s-art.th-light .gc-tile { background: rgba(13, 16, 23, 0.05); }
     /* Filed yesterday (2026-10-20): one day's 13D/13G and 8-K filings. */
     .fd-in { height: 100%; display: flex; flex-direction: column; }
     .fd-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
@@ -15083,6 +15195,8 @@
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
+    glanceTopics: () => GLC_TOPICS.map((t) => t.slice()), glanceDefault: () => GLC_DEFAULT.slice(),
+    glanceMax: (sizeId) => GLC_MAX[sizeId] || GLC_MAX.portrait, glancePick,
     groupLinesNeed, groupLinesMax: () => GLN_MAX,
     // The sectors or industries a group Lines card can draw, largest first.
     groupNames: (dim, rows, cut) => groupList(rows || [], cut || 'All', GROUPING[dim === 'industry' ? 'industry' : dim === 'theme' ? 'theme' : 'sector']),
@@ -15230,6 +15344,7 @@
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
       getFiled = c.getFiled || (() => null);
+      getGlance = c.getGlance || (() => null);
       getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);
       getSegments = c.getSegments || (() => null);
