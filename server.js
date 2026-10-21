@@ -12327,7 +12327,7 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
 app.post('/api/prefs/theme', requireAuth, route(async (req, res) => {
   if (await isGuest(req)) return res.status(403).json({ error: 'Not on the guest preview.' });
   const theme = req.body && req.body.theme;
-  if (!['dark', 'light', 'auto'].includes(theme)) return res.status(400).json({ error: 'Choose dark, light or auto.' });
+  if (!['dark', 'light', 'navy', 'auto'].includes(theme)) return res.status(400).json({ error: 'Choose dark, light, navy or auto.' });
   const key = await prefsKey(req);
   const prefs = (await store.readPrefs(key)) || {};
   await store.writePrefs(key, { ...prefs, theme });
@@ -12368,7 +12368,7 @@ app.put('/api/prefs', requireAuth, route(async (req, res) => {
   if (incoming.layout === 'tiles') out.layout = 'tiles';
   // The site theme (2026-10-15). Dark is stored too: a choice of dark on one
   // machine has to reach another that was set to light.
-  if (['dark', 'light', 'auto'].includes(incoming.theme)) out.theme = incoming.theme;
+  if (['dark', 'light', 'navy', 'auto'].includes(incoming.theme)) out.theme = incoming.theme;
   // How many tiles a row holds: 'auto' (fill the width) or a fixed 2-6.
   if (/^(auto|[2-6])$/.test(String(incoming.tileCols || ''))) out.tileCols = String(incoming.tileCols);
   // Which column view the screener opens in: 'standard' or a view's id.

@@ -4292,7 +4292,8 @@
     // otherwise dark, on load and when the Appearance is switched with the
     // page open, until a ground is chosen by hand: from then on that choice
     // stands for the visit. A saved post that is opened sets its own.
-    const siteGround = () => (window.TickrTheme && window.TickrTheme.current() === 'light' ? 'light' : 'dark');
+    // Navy (2026-10-21) opens on the cards' own Navy ground.
+    const siteGround = () => { const t = window.TickrTheme && window.TickrTheme.current(); return t === 'light' ? 'light' : t === 'navy' ? 'navy' : 'dark'; };
     let groundChosen = false;
     $('cardTheme').value = siteGround();
     $('cardTheme').addEventListener('change', (e) => { if (e.isTrusted) groundChosen = true; render(); });

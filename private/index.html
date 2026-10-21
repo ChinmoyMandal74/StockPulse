@@ -1311,7 +1311,7 @@
                 <div class="pick theme-row" id="themeRow" style="cursor:default">
                   <span class="nm">Appearance</span>
                   <span class="theme-seg" role="group" aria-label="Appearance">
-                    <button type="button" data-theme-pick="dark">Dark</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="auto" title="Follow this computer's own light or dark setting">Auto</button>
+                    <button type="button" data-theme-pick="dark">Dark</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="navy">Navy</button><button type="button" data-theme-pick="auto" title="Follow this computer's own light or dark setting">Auto</button>
                   </span>
                 </div>
                 <!-- Members: paper positions, a simulation with pretend money. -->
@@ -4764,7 +4764,7 @@
         if (res && res.prefs && res.prefs.layout === 'tiles') setLayout('tiles', { save: false });
         // The account's theme wins over this browser's, so a choice made on
         // another machine arrives here.
-        if (res && res.prefs && /^(dark|light|auto)$/.test(String(res.prefs.theme || '')) && window.TickrTheme
+        if (res && res.prefs && /^(dark|light|navy|auto)$/.test(String(res.prefs.theme || '')) && window.TickrTheme
           && window.TickrTheme.choice() !== res.prefs.theme) window.TickrTheme.set(res.prefs.theme);
         paintThemeRow();
         if (res && res.prefs && /^(standard|[a-z0-9]{8})$/.test(String(res.prefs.activeView || ''))) activeViewId = res.prefs.activeView;

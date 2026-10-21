@@ -124,6 +124,26 @@ select option, select optgroup {
 }
 
 /* ==========================================================================
+   The navy theme (2026-10-21, the owner: "I was thinking if we can add a
+   Navy theme as well"). THE DARK PALETTE ON A NAVY GROUND, as the promo
+   cards' Navy is: only the surfaces move, so green up, red down, amber
+   notice and the Signal's colours mean and look what they do on dark, and
+   every rule written for dark applies (nothing tests for "not dark"). The
+   faintest grey is the promo Navy's, because dark's #7d8797 measures 4.2:1
+   on the raised navy panel; #8b95a5 is 5.0:1 or better on every surface
+   here. Opt-in like light: only a <html data-themeable> page turns navy.
+   ========================================================================== */
+:root[data-theme="navy"] {
+  --void: #071120;
+  --surface: #0d1a2d;          /* opaque: frozen table cells sit on it */
+  --surface-2: #112138;
+  --glass: #0a1626;
+  --panel: #16263f;
+  --faint: #8b95a5;
+}
+:root[data-theme="navy"] select option, :root[data-theme="navy"] select optgroup { background-color: #112138; }
+
+/* ==========================================================================
    The light theme (2026-10-15). Applied only where a page opts in with
    <html data-themeable> and theme.js has set data-theme="light": a page not
    yet converted keeps its dark look rather than going half-light. The

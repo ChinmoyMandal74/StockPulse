@@ -206,17 +206,17 @@
     (function () {
       const T = window.TickrTheme, btn = document.getElementById('themeBtn');
       if (!T || !btn) return;
-      const NAME = { dark: 'Dark', light: 'Light', auto: 'Auto (follows this phone)' };
+      const NAME = { dark: 'Dark', navy: 'Navy', light: 'Light', auto: 'Auto (follows this phone)' };
       const label = () => { const c = T.choice(); btn.title = 'Appearance: ' + NAME[c]; btn.setAttribute('aria-label', 'Appearance: ' + NAME[c]); };
       label();
       btn.addEventListener('click', () => {
-        const next = { dark: 'light', light: 'auto', auto: 'dark' }[T.choice()] || 'dark';
+        const next = { dark: 'navy', navy: 'light', light: 'auto', auto: 'dark' }[T.choice()] || 'dark';
         T.set(next); label();
         fetch('/api/prefs/theme', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: next }) }).catch(() => {});
       });
       fetch('/api/prefs', { cache: 'no-store' }).then((r) => r.json()).then((d) => {
         const t = d && d.prefs && d.prefs.theme;
-        if (['dark', 'light', 'auto'].includes(t) && t !== T.choice()) { T.set(t); label(); }
+        if (['dark', 'light', 'navy', 'auto'].includes(t) && t !== T.choice()) { T.set(t); label(); }
       }).catch(() => {});
     })();
   </script>
