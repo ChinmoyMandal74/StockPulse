@@ -1294,6 +1294,11 @@ function subPage({ title, heading, body, base }) {
     + `.b{display:inline-block;padding:10px 16px;border-radius:10px;border:1px solid var(--hair-2);`
     + `color:var(--text);text-decoration:none;font-size:14px;cursor:pointer;background:transparent;font-family:inherit}`
     + `.b.p{background:var(--text);color:var(--void);border-color:var(--text)}`
+    // A field the reader can SEE (2026-10-21, the owner: "The password field is almost not visible"):
+    // --hair-2 alone is 13% white on near-black. A muted border, a lifted fill, an accent ring on focus.
+    + `.f{display:block;box-sizing:border-box;width:100%;padding:11px 13px;margin:6px 0 12px;border-radius:10px;font:inherit;font-size:15px;`
+    + `color:var(--text);background:var(--surface-2);border:1px solid color-mix(in srgb,var(--muted) 80%,transparent)}`
+    + `.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}`
     + `</style></head><body><div class="wrap"><h1>${htmlEsc(heading)}</h1>${body}`
     + `<div class="row"><a class="b" href="${base}/blog">Read the blog</a>`
     + `<a class="b" href="${base}/">Home</a></div></div></body></html>`;
@@ -2305,8 +2310,7 @@ function verifyPage(base, token, email, err) {
       + (err ? `<p style="color:var(--red)">${htmlEsc(err)}</p>` : '')
       + '<form method="post" action="/verify" style="margin:0">'
       + `<input type="hidden" name="t" value="${htmlEsc(token)}">`
-      + '<input type="password" name="password" autocomplete="current-password" required minlength="1" '
-      + 'style="width:100%;padding:10px 12px;margin:6px 0 10px;border-radius:8px;border:1px solid var(--hair-2);background:transparent;color:var(--text)">'
+      + '<input class="f" type="password" name="password" autocomplete="current-password" required minlength="1" aria-label="Password" autofocus>'
       + '<button class="b p" type="submit">Finish signing up</button></form>'
       + '<p style="font-size:13px;color:var(--faint)">Did not sign up? Close this page; nothing happens without the password.</p>' });
 }
