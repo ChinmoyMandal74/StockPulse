@@ -4261,6 +4261,14 @@ async function readInsiderState() {
 
 // ---- company names --------------------------------------------------------
 
+// One company's name, a seek on the primary key: the stock page's quick first
+// draw asks for one name and must not read the whole table (2026-10-21).
+async function readNameOf(symbol) {
+  await init();
+  const r = await db.execute({ sql: 'select name from names where symbol = ?', args: [String(symbol).toUpperCase()] });
+  return r.rows.length ? (r.rows[0].name || null) : null;
+}
+
 async function readNames() {
   await init();
   const r = await db.execute('select symbol, name from names');
@@ -7857,7 +7865,7 @@ module.exports = {
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  readGroupMonths, writeGroupMonths, readFigure, writeFigures,
+  readGroupMonths, writeGroupMonths, readFigure, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

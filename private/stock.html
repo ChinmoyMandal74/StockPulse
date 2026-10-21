@@ -63,6 +63,18 @@
     .gl-card.gl-down .gl-a { color: var(--red); }
     .gl-card .gl-x { font-size: 13px; line-height: 1.55; color: var(--text); }
     .gl-card .gl-stale { font-size: 11.5px; color: var(--amber); }
+    /* The quick first draw's placeholders (2026-10-21): the shapes of At a
+       glance and the chart, breathing, until the full page replaces them. */
+    .qk-card { margin-top: 14px; }
+    .qk-card .qk-note { margin-left: 10px; font-size: 12px; color: var(--faint); }
+    .qk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+    .qk-ph { height: 132px; border-radius: 14px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3%, transparent); animation: qk-breathe 1.6s ease-in-out infinite; }
+    .qk-chart { height: 420px; border-radius: 14px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 2.5%, transparent); animation: qk-breathe 1.6s ease-in-out infinite; }
+    @keyframes qk-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .qk-ph, .qk-chart { animation: none; } }
+    @media (max-width: 760px) { .qk-grid { grid-template-columns: 1fr; } .qk-ph:nth-child(n+5) { display: none; } }
     /* A COLOUR A TOPIC (2026-10-21, the owner: "make the At a glance section
        more colorful here"), the promo card's: a stripe, a faint wash, the
        title and the headline figure. Theme tokens, so dark, navy and light
@@ -3571,6 +3583,49 @@
       if (x) x.addEventListener('click', toggleWhy);
     }
 
+    // THE QUICK FIRST DRAW (2026-10-21, the owner: "Loading the individual
+    // stock page takes time now, Can you show something first and then load
+    // the rest"). /api/stock waits on the whole snapshot, which an instance
+    // sometimes has to fetch first (4-6 seconds). /api/stock/quick answers
+    // from the stock's own rows: the header, the price and the About text are
+    // drawn from it at once, with placeholders where At a glance and the chart
+    // go, and the full page replaces it all when /api/stock lands. The chart's
+    // history is asked for now too (RowCard caches it), not after the payload.
+    let fullDrawn = false;
+    function drawQuick(q) {
+      if (fullDrawn || !q || !q.symbol) return;
+      const price = q.price != null ? curSym(q.currency) + q.price.toFixed(2) : '—';
+      const today = q.todayPct;
+      const chips = [q.sector, q.industry].filter(Boolean);
+      // #status lives inside #page: it is kept (hidden), so a failure later can still be said in it.
+      document.getElementById('page').innerHTML = `
+        <p class="lede" id="status" hidden>Loading…</p>
+        <div class="head qk-head">
+          <h1 class="sympick"><button disabled>${esc(q.symbol)}</button></h1>
+          <span class="co">${esc(q.name || '')}</span>
+          <span class="meta">${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>
+          <span class="px"><b>${esc(price)}</b>
+            <span class="${today == null ? 'na' : today >= 0 ? 'pos' : 'neg'}">${today == null ? '—' : (today >= 0 ? '+' : '') + today.toFixed(2) + '% today'}</span></span>
+        </div>
+        <section class="bezel card qk-card"><div class="core">
+          <div class="sec-h"><h2>At a glance</h2><span class="qk-note">Reading the figures…</span></div>
+          <div class="qk-grid">${'<div class="qk-ph"></div>'.repeat(12)}</div>
+        </div></section>
+        <section class="bezel card qk-card"><div class="core">
+          <div class="sec-h"><h2>Price</h2></div>
+          <div class="qk-chart"></div>
+        </div></section>
+        ${q.description ? `<section class="bezel card qk-card"><div class="core">
+          <div class="sec-h"><h2>About ${esc(q.symbol)}</h2></div>
+          <p class="about">${esc(q.description)}</p>
+        </div></section>` : ''}`;
+      const st = document.getElementById('status');
+      if (st) st.hidden = true;
+    }
+    fetch(`/api/stock/quick?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).then(drawQuick).catch(() => {});
+    try { RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD); } catch (e) { /* the chart asks again */ }
+
     (async () => {
       let payload;
       try {
@@ -3579,11 +3634,14 @@
         payload = await res.json();
         if (!res.ok) throw new Error(payload.error || 'Could not load this stock.');
       } catch (err) {
-        document.getElementById('status').innerHTML =
-          `<span class="err">${esc(err.message)}</span>`;
+        // A failure is still said, and the quick draw's header and placeholders go:
+        // #page holds only the message (#status lives inside it).
+        fullDrawn = true;
+        document.getElementById('page').innerHTML = '<p class="lede" id="status"><span class="err">' + esc(err.message) + '</span></p>';
         return;
       }
 
+      fullDrawn = true;
       stock = payload.stock;
       document.title = `${stock.symbol} — Tickr Lab`;
 

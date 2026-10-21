@@ -10435,6 +10435,36 @@ async function benchMonthEnds() {
   return rows;
 }
 
+// THE STOCK PAGE'S FIRST DRAW (2026-10-21, the owner: "Loading the individual
+// stock page takes time now, Can you show something first and then load the
+// rest"). /api/stock needs the whole snapshot (peers, At a glance, the symbol
+// picker), and an instance that must fetch it first answers in 4-6 seconds
+// rather than half of one. This answers from three per-symbol seeks and no
+// snapshot: the name, the profile's labels and description, and the last two
+// closes for the price and the day's move. The page draws the header and
+// placeholders from it at once, then the full page when /api/stock lands.
+// Same access as /api/stock; display only, nothing here is a verdict.
+app.get('/api/stock/quick', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  const [name, profile, bars] = await Promise.all([
+    store.readNameOf(symbol).catch(() => null),
+    store.readProfile(symbol).catch(() => null),
+    store.readBars(symbol, 2).catch(() => []),
+  ]);
+  if (!name && !profile && !(bars && bars.length)) return res.status(404).json({ error: 'Not in the screener.' });
+  const last = bars && bars.length ? bars[0] : null, prev = bars && bars.length > 1 ? bars[1] : null;
+  const close = last && Number(last.close) > 0 ? Number(last.close) : null;
+  const prevClose = prev && Number(prev.close) > 0 ? Number(prev.close) : null;
+  res.json({ symbol, name: name || null,
+    sector: (profile && profile.sector) || null, industry: (profile && profile.industry) || null,
+    currency: (profile && profile.currency) || null, description: (profile && profile.description) || null,
+    price: close, todayPct: close != null && prevClose != null ? (close / prevClose - 1) * 100 : null,
+    asOf: last ? String(last.datetime || '').slice(0, 10) : null });
+}));
+
 app.get('/api/stock', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
