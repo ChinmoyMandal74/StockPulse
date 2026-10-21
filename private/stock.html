@@ -3286,6 +3286,8 @@
         const cell = row.querySelector('.rc-v');
         cell.className = 'rc-v ' + ((v && v.c) || '');
         cell.textContent = v && v.t != null ? v.t : '—';
+        // The whole of a long value on hover (the headline ends in an ellipsis in the row).
+        if (label === 'News' && stock.newsLatest && stock.newsLatest.headline) cell.title = stock.newsLatest.headline; else cell.removeAttribute('title');
       });
     }
 

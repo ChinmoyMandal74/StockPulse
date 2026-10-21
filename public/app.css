@@ -512,9 +512,13 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-cap { color: var(--faint); font-size: 10.5px; line-height: 1.5;
           margin: -1px 0 6px; }
 .rc-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.75; }
-.rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A long VALUE (the News row's headline) ends in an ellipsis inside its row;
+   it used to run left over its own label, which shrank to nothing, and into
+   the next column (2026-10-21). The label keeps its width up to 60% of the row. */
+.rc-k { color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 2.5em; max-width: 60%; }
 .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
-                 white-space: nowrap; font-variant-numeric: tabular-nums; }
+                 white-space: nowrap; font-variant-numeric: tabular-nums;
+                 min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
                     color: var(--faint); font-size: 10.5px;
                     display: flex; align-items: center; gap: 12px; }
