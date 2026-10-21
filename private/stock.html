@@ -3242,6 +3242,27 @@
       } finally { newsBusy = false; }
     }
 
+    // NEWS AND TONE 7D IN "EVERYTHING THE SCREENER KNOWS" (2026-10-21, the
+    // owner: "News and Tone field is not populating on stock page"). The
+    // screener puts both on its rows in the browser, after the table paints;
+    // /api/stock sends neither, so the rows here read a dash. This page loads
+    // its own headlines and readings for the two cards above, so it sets the
+    // same fields from those and redraws those two rows with FIELD_SPEC's own
+    // getter: one formatter, the screener's.
+    function refillField(label) {
+      const spec = RowCard.FIELD_SPEC.find((f) => f[1] === label);
+      if (!spec || !stock) return;
+      let v = null;
+      try { v = spec[2](stock); } catch (e) { v = null; }
+      document.querySelectorAll('#allfields .rc-row').forEach((row) => {
+        const k = row.querySelector('.rc-k');
+        if (!k || k.textContent !== label) return;
+        const cell = row.querySelector('.rc-v');
+        cell.className = 'rc-v ' + ((v && v.c) || '');
+        cell.textContent = v && v.t != null ? v.t : '—';
+      });
+    }
+
     // A guest is refused by the route and a stock nobody reads for has no
     // rows: either way the card stays hidden rather than showing an empty box.
     let toneHave = [];
@@ -3255,7 +3276,11 @@
         const seen = new Set(more ? toneHave.map((x) => x.url) : []);
         toneHave = (more ? toneHave : []).concat((data.items || []).filter((x) => !seen.has(x.url)));
         if (!toneHave.length && !data.week) return;
-        if (!more) document.getElementById('toneWeek').innerHTML = renderToneWeek(data.week);
+        if (!more) {
+          document.getElementById('toneWeek').innerHTML = renderToneWeek(data.week);
+          const w = data.week;
+          if (stock && w && w.count) { stock.toneAvg = w.avg; stock.toneN = w.count; stock.tonePos = w.positive; stock.toneNeg = w.negative; refillField('Tone 7D'); }
+        }
         document.getElementById('toneList').innerHTML = '<div class="tone-cols">' + renderToneItems(toneHave) + '</div>'
           + (data.more ? '<button type="button" class="rng newsmore" id="toneMore">Show more</button>' : '');
         const btn = document.getElementById('toneMore');
@@ -3276,6 +3301,10 @@
         newsHave = data.items || [];
         newsTotal = Number(data.total) || newsHave.length;
         paintNews();
+        // The newest headline, for the News row below (the screener's field).
+        const newest = newsHave.filter((x) => x && x.headline && x.published_at)
+          .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at))[0];
+        if (stock && newest) { stock.newsLatest = newest; refillField('News'); }
         newsChecked(data.checkedAt);
       } catch (err) {
         box.innerHTML = '<div class="msg">Headlines unavailable right now.</div>';
