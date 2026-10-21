@@ -7440,6 +7440,27 @@
     return k > 1.5 || k < 0.67;
   };
 
+  // ONE READER OF A ROW UNDER A MEASURE'S GUARDS (2026-10-21), for the Bars
+  // card, the group Bars and the pivot's measures, so the three cannot leave
+  // out different rows. Returns { v } or { skip } with the reason: 'fund' (a
+  // companies-only measure), 'none' (no reading), 'mixed' (figures not all in
+  // dollars), 'fin' (a lender, for whom the measure means nothing), 'sign' (a
+  // multiple off a loss and the like). A NULL IS NOT A ZERO: rejected before
+  // it is coerced.
+  function barRead(r, m) {
+    if (!r) return { skip: 'none' };
+    if (m.co && (r.instrumentType === 'ETF' || IS_BENCH.has(r.symbol) || IS_SECTOR_ETF.has(r.symbol))) return { skip: 'fund' };
+    const raw = r[m.field];
+    if (raw == null || raw === '') return { skip: 'none' };
+    const v = Number(raw);
+    if (!isFinite(v)) return { skip: 'none' };
+    if (m.co && r.currency && r.currency !== 'USD') return { skip: 'mixed' };
+    if (m.noFin && r.sector === 'Financial Services') return { skip: 'fin' };
+    if (m.coh && barMixed(r)) return { skip: 'mixed' };
+    if (m.pos && !(v > 0)) return { skip: 'sign' };
+    return { v };
+  }
+
   function barFig(v, m) {
     if (v == null) return '—';
     const a = Math.abs(v);
@@ -7557,13 +7578,9 @@
     const rows = [];
     for (const r of sc.rows) {
       if (!r || r.error) continue;
-      if (m.co && isFund(r)) continue;
-      const v = read(r);
-      if (v == null) continue;
-      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
-      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
-      if (m.coh && barMixed(r)) { out.mixed++; continue; }
-      if (m.pos && !(v > 0)) { out.sign++; continue; }
+      const got = barRead(r, m);
+      if (got.skip) { if (out[got.skip] != null) out[got.skip]++; continue; }
+      const v = got.v;
       rows.push({ name: nameOf(r), v, cap: Number(r.marketCap) || 0 });
     }
     // Ties are common on a bounded scale (a dozen companies score 10 for
@@ -8160,15 +8177,9 @@
       const keys = groupKeys(r, G.field);
       if (!keys.length) continue;
       firms++;
-      const raw = r[m.field];
-      // A NULL IS NOT A ZERO: rejected before it is coerced.
-      if (raw == null || raw === '') continue;
-      const v = Number(raw);
-      if (!isFinite(v)) continue;
-      if (m.co && r.currency && r.currency !== 'USD') { out.mixed++; continue; }
-      if (m.noFin && r.sector === 'Financial Services') { out.fin++; continue; }
-      if (m.coh && barMixed(r)) { out.mixed++; continue; }
-      if (m.pos && !(v > 0)) { out.sign++; continue; }
+      const got = barRead(r, m);
+      if (got.skip) { if (out[got.skip] != null) out[got.skip]++; continue; }
+      const v = got.v;
       for (const k of keys) {
         if (!groups.has(k)) groups.set(k, { vals: [], cap: 0 });
         const g = groups.get(k);
@@ -15536,6 +15547,11 @@
     scatterMeasures: () => BAR_METRICS.map((m) => [m.key, sctName(m), m.group]),
     scatterCounts: () => SCT_COUNTS.map((c) => c.slice()),
     basketSymbols,
+    // The pivot's measures (2026-10-21): one measure's spec, a row's reading
+    // under its guards, and its figure as the Bars card writes it.
+    barSpec: (key) => { const m = BAR_BY_KEY[key]; return m ? Object.assign({}, m) : null; },
+    barRead: (r, key) => { const m = BAR_BY_KEY[key]; return m ? barRead(r, m) : { skip: 'none' }; },
+    barFig: (v, key) => { const m = BAR_BY_KEY[key]; return m ? barFig(v, m) : String(v); },
     barMetrics: () => BAR_METRICS.map((m) => [m.key,
       (m.words || ['Highest', 'Lowest'])[0] + ' ' + m.label, m.group]),
     shortedMetrics: () => Object.keys(SHRT_METRICS)

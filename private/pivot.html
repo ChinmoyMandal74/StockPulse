@@ -20,6 +20,9 @@
        words, so the order and the vocabulary cannot drift from what the Trend
        and Entry columns actually say — see the ladder note in the script. -->
   <script src="/action.js"></script>
+  <!-- The measures beyond count and market cap (2026-10-21) are the Bars card's
+       own catalogue: its fields, its guards (Cards.barRead) and its figures. -->
+  <script src="/cards.js"></script>
   <style>
     body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
     .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 28px; }
@@ -667,6 +670,63 @@
         missing: () => 0,
       },
     };
+    // ---- the popular measures (2026-10-21) ----------------------------------
+    // The owner: "make the pivot measure in the middle to all popular measures".
+    // Most of them cannot be ADDED UP (a total P/E means nothing), so each is a
+    // STAT: a returns measure is the equal-weight average of the cell's
+    // stocks, the convention the group pages use; every other one is the
+    // MIDDLE COMPANY (the median), so one or two extremes cannot lead a cell,
+    // the rule the group Lines and group Bars use. Totals are the same
+    // statistic over their own row, column or grid, never a sum of cells.
+    // The fields, the guards and the figures are the Bars card's
+    // (Cards.barSpec / barRead / barFig): a loss is not a multiple, a lender
+    // has no gross margin, a row whose figures are not all in dollars is out.
+    const STAT_KEYS = ['d', 'w1', 'm1', 'm3', 'ytd', 'y1',
+      'v200', 'rsi', 'hi52', 'rs', 'vol1', 'beta', 'qual',
+      'gm', 'om', 'pm', 'rg', 'eg', 'roe',
+      'fpe', 'tpe', 'ps', 'eve', 'peg', 'fy',
+      'shrt', 'inst', 'ins'];
+    const SKIP_WORDS = { none: 'no reading', fund: 'a fund', mixed: 'figures not all in dollars', fin: 'a lender, for whom this means nothing', sign: 'no positive reading (a loss, for a multiple)' };
+    const statOf = (vals, how) => {
+      const xs = vals.filter((v) => v != null && isFinite(v));
+      if (!xs.length) return null;
+      if (how === 'mean') return xs.reduce((a, b) => a + b, 0) / xs.length;
+      xs.sort((a, b) => a - b);
+      const i = (xs.length - 1) / 2;
+      return xs.length % 2 ? xs[i] : (xs[i - 0.5] + xs[i + 0.5]) / 2;
+    };
+    if (window.Cards && Cards.barSpec) {
+      for (const k of STAT_KEYS) {
+        const spec = Cards.barSpec(k);
+        if (!spec) continue;
+        const isRet = spec.group === 'Price moves';
+        const how = isRet ? 'mean' : 'median';
+        const read = (st) => { const r = Cards.barRead(st, k); return r.skip ? null : r.v; };
+        MEASURES['b' + k] = {
+          label: isRet ? 'Average return, ' + spec.label.replace(/^over the /, '') : 'Median ' + spec.label,
+          group: spec.group,
+          stat: how,
+          // A price return is coloured by sign, the app's language for a move;
+          // nothing else on this page may be green or red.
+          signed: isRet,
+          each: read,
+          fmt: (v) => (v == null || !isFinite(v) ? '—' : Cards.barFig(v, k)),
+          noun: isRet ? 'an equal-weight average return' : 'a middle-company figure',
+          missing: (list) => (list || []).filter((st) => read(st) == null).length,
+          missingNote: (n, list) => {
+            const why = {};
+            for (const st of (list || [])) { const r = Cards.barRead(st, k); if (r.skip) why[r.skip] = (why[r.skip] || 0) + 1; }
+            const parts = Object.entries(why).sort((a, b) => b[1] - a[1]).map(([w, c]) => c + ' ' + SKIP_WORDS[w]);
+            return '<b>' + n + '</b> of those ' + (n === 1 ? 'has' : 'have') + ' no reading that counts here (' + esc(parts.join('; ')) +
+              ') and are left out of every figure, though they still sit in their cells.';
+          },
+          about: (isRet
+            ? 'Each figure is the <b>equal-weight average</b> of the returns of the stocks behind it, '
+            : 'Each figure is the <b>middle company</b> (the median) of the stocks behind it, ')
+            + 'and a total is the same statistic over its own row, column or the whole grid, <b>never a sum of the cells</b>. ' + esc(spec.note || ''),
+        };
+      }
+    }
     let measure = 'count';
     // The measure a time axis forces, and the only one it can have: a count
     // of stocks per month is the same number twelve times, and a total market
@@ -715,6 +775,7 @@
     // would be a number nobody earned, and it would drag every total it
     // touched. The blank-versus-zero rule this page keeps meeting.
     const cellVal = (list, c) => {
+      if (M().stat) return statOf((list || []).map((st) => M().each(st)), M().stat);
       if (M().agg !== 'mean') return sumOf(list);
       let sum = 0, n = 0;
       for (const s of (list || [])) {
@@ -952,7 +1013,8 @@
       // showing money would put the biggest number halfway down the table.
       const rc = new Map(), cc = new Map();
       for (const s of rows) {
-        const w = M().each(s);
+        // A median cannot be summed into a size: a stat measure orders by how many stocks.
+        const w = M().stat ? 1 : M().each(s);
         for (const v of valuesOf(rd, s)) rc.set(v, (rc.get(v) || 0) + w);
         for (const v of valuesOf(cd, s)) cc.set(v, (cc.get(v) || 0) + w);
       }
@@ -1007,7 +1069,9 @@
           // return is the average of that row's own periods, and the footer
           // is the benchmark rather than a column sum — both computed below,
           // where the cell values are still to hand.
-          if (M().agg !== 'mean') {
+          if (M().stat) {
+            // Collected here, reduced below: a stat's total is computed from its own stocks.
+          } else if (M().agg !== 'mean') {
             rowTot.set(r, (rowTot.get(r) || 0) + v);
             colTot.set(c, (colTot.get(c) || 0) + v);
             placements += v;
@@ -1021,6 +1085,14 @@
           placeCount += list.length;
           noValue += M().missing(list);
         }
+      }
+      if (M().stat) {
+        const uniq = (lists) => { const seen = new Set(), out = []; for (const l of lists) for (const st of (l || [])) if (!seen.has(st.symbol)) { seen.add(st.symbol); out.push(st); } return out; };
+        const statList = (list) => statOf(list.map((st) => M().each(st)), M().stat);
+        for (const r of rFold.keys) { const l = uniq(cFold.keys.map((c) => cells.get(r + '|' + c))); if (l.length) rowTot.set(r, statList(l)); }
+        for (const c of cFold.keys) { const l = uniq(rFold.keys.map((r) => cells.get(r + '|' + c))); if (l.length) colTot.set(c, statList(l)); }
+        placements = statList(rows);
+        noValue = M().missing(rows);
       }
       // How many distinct industries sit inside each row value, so a caret is
       // drawn only where opening it would show something new. One industry is
@@ -1046,7 +1118,7 @@
         for (const s of rows) {
           if (!valuesOf(rd, s).map(rFold.map).includes(expanded)) continue;
           const ind = valuesOf(DIMS.industry, s)[0];
-          kc.set(ind, (kc.get(ind) || 0) + M().each(s));
+          kc.set(ind, (kc.get(ind) || 0) + (M().stat ? 1 : M().each(s)));
           const cs = [...new Set(valuesOf(cd, s).map(cFold.map))];
           for (const c of cs) {
             const k = ind + '|' + c;
@@ -1058,7 +1130,11 @@
         // so "the children add up to the parent" holds for money exactly as it
         // does for a count.
         for (const ind of kc.keys()) {
-          if (M().agg === 'mean') {
+          if (M().stat) {
+            const seen = new Set(), l = [];
+            for (const c of cFold.keys) for (const st of (kCells.get(ind + '|' + c) || [])) if (!seen.has(st.symbol)) { seen.add(st.symbol); l.push(st); }
+            kTot.set(ind, statOf(l.map((st) => M().each(st)), M().stat));
+          } else if (M().agg === 'mean') {
             kTot.set(ind, meanOf(cFold.keys.map((c) => cellVal(kCells.get(ind + '|' + c), c))));
           } else {
             let v = 0;
@@ -1173,7 +1249,7 @@
         '<span><b>' + list.length + '</b> ' + (list.length === 1 ? 'stock' : 'stocks') +
         // With money on screen the cell shows a total, so the child names it
         // too — otherwise the figure above cannot be reconciled with the rows.
-        (measure === 'count' ? '' : ', <b>' + esc(M().fmt(sumOf(list))) + '</b> in total') +
+        (measure === 'count' ? '' : M().stat ? ', <b>' + esc(M().fmt(cellVal(list))) + '</b> ' + (M().stat === 'mean' ? 'on average' : 'for the middle company') : ', <b>' + esc(M().fmt(sumOf(list))) + '</b> in total') +
         '</span>' +
         // A total can legitimately exceed the list beneath it: with a
         // multi-valued dimension on an axis, a stock is added once per bucket
@@ -1259,9 +1335,10 @@
     function totalValue(p, key) {
       const kind = key.slice(4, 5);
       const v = key.slice(6);
-      if (kind === 'r') return p.rowTot.get(v) || 0;
-      if (kind === 's') return (p.sub && p.sub.tot.get(v)) || 0;
-      if (kind === 'c') return p.colTot.get(v) || 0;
+      const z = M().stat ? null : 0;
+      if (kind === 'r') return p.rowTot.has(v) ? p.rowTot.get(v) : z;
+      if (kind === 's') return p.sub && p.sub.tot.has(v) ? p.sub.tot.get(v) : z;
+      if (kind === 'c') return p.colTot.has(v) ? p.colTot.get(v) : z;
       return p.placements;
     }
 
@@ -1316,7 +1393,7 @@
           (part ? ' title="Still running — this period is not complete"' : '') + '>' +
           dotOf(p.cd, c) + esc(clab) + (part ? '<span class="sofar">so far</span>' : '') + '</th>';
       }
-      h += '<th class="tot">' + (M().agg === 'mean' ? 'Avg' : 'Total') + '</th></tr></thead><tbody>';
+      h += '<th class="tot">' + (M().agg === 'mean' ? 'Avg' : M().stat === 'mean' ? 'All, average' : M().stat ? 'All, median' : 'Total') + '</th></tr></thead><tbody>';
 
       // One row of numbers, for a sector and for an industry inside one.
       //
@@ -1365,6 +1442,7 @@
       const totCell = (k, v, rLabel, cLabel, cls, sub) => {
         const has = totalList(p, k).length > 0;
         const on = picked && picked.key === k;
+        if (M().stat && M().signed) cls = [cls, moveCls(v)].filter(Boolean).join(' ');
         return '<td class="' + [cls, has ? 'drill' : '', on ? 'sel' : ''].filter(Boolean).join(' ') +
           '"' + (has ? ' data-k="' + esc(k) + '" data-r="' + esc(rLabel) +
             '" data-c="' + esc(cLabel) + '" data-sub="' + esc(sub || '') +
@@ -1383,7 +1461,7 @@
         let m = 0;
         if (M().signed) return 0;   // no shading for a signed measure
         for (const k of keys) for (const c of p.cKeys) {
-          const v = sumOf(cellsOf(k, c)); if (v > m) m = v;
+          const v = cellVal(cellsOf(k, c), c); if (v != null && v > m) m = v;
         }
         return m;
       };
@@ -1415,7 +1493,7 @@
           '</th>';
         h += cellsFor((c) => p.cells.get(r + '|' + c), (c) => r + '|' + c, r, '',
           denomFor(r, false));
-        h += totCell('tot:r|' + r, p.rowTot.has(r) ? p.rowTot.get(r) : 0, r, 'Total', 'tot') + '</tr>';
+        h += totCell('tot:r|' + r, p.rowTot.has(r) ? p.rowTot.get(r) : (M().stat ? null : 0), r, 'Total', 'tot') + '</tr>';
 
         // Then this sector's industries, if it is the open one. Their cells
         // select exactly like their parent's do — the `sub:` prefix is what
@@ -1428,7 +1506,7 @@
             h += '<tr class="kid"><th class="' + (ind === BLANK ? 'blankdim' : '') + '">' +
               esc(ind) + '</th>';
             h += cellsFor(at, ok, ind, r, denomFor(ind, true));
-            h += totCell('tot:s|' + ind, p.sub.tot.get(ind) || 0, ind, 'Total', 'tot', r) + '</tr>';
+            h += totCell('tot:s|' + ind, p.sub.tot.has(ind) ? p.sub.tot.get(ind) : (M().stat ? null : 0), ind, 'Total', 'tot', r) + '</tr>';
           }
         }
       }
@@ -1447,9 +1525,9 @@
         }
         h += '</tfoot></table></div>';
       } else {
-      h += '</tbody><tfoot><tr><th>Total</th>';
+      h += '</tbody><tfoot><tr><th>' + (M().stat ? 'All' : 'Total') + '</th>';
       for (const c of p.cKeys) {
-        h += totCell('tot:c|' + c, p.colTot.get(c) || 0, 'Total', c, '');
+        h += totCell('tot:c|' + c, p.colTot.has(c) ? p.colTot.get(c) : (M().stat ? null : 0), 'Total', c, '');
       }
       h += totCell('tot:a|', p.placements, 'Total', 'Total', '') +
         '</tr></tfoot></table></div>';
@@ -1524,6 +1602,8 @@
           'never counted as a flat zero, so an earlier column is an average over fewer companies.' +
           (ps.some((x) => x.partial)
             ? ' The newest column is <b>still running</b> and is marked so.' : ''));
+      } else if (M().stat) {
+        bits.push('Across <b>' + total + '</b> stocks.');
       } else if (!everyStock) {
         bits.push('Every stock is counted exactly once, across <b>' + total + '</b> stocks.');
       } else {
@@ -1531,11 +1611,12 @@
       }
       // A measure that has something of its own to say says it here.
       if (M().summary) bits.push(M().summary(p.rows));
+      if (M().about) bits.push(M().about);
       // A SUM THAT SILENTLY OMITS ROWS IS THE QUIETEST KIND OF LIE. A fund
       // reports assets under management rather than a capitalisation, so it
       // sits in its cell and contributes nothing — which has to be said, or a
       // cell reading $0 over three stocks looks like a bug instead of a fact.
-      if (p.noValue && M().missingNote) bits.push(M().missingNote(p.noValue));
+      if (p.noValue && M().missingNote) bits.push(M().missingNote(p.noValue, p.rows));
       const blanks = (p.cells.size ? 0 : 0) ||
         p.rows.filter((s) => valuesOf(p.rd, s).includes(BLANK) || valuesOf(p.cd, s).includes(BLANK)).length;
       if (blanks) {
@@ -1546,7 +1627,10 @@
         bits.push('<b>' + (p.rFolded + p.cFolded) + '</b> smaller values are folded into ' +
           '“Other”, so the grid stays readable.');
       }
-      if (p.sub) {
+      if (p.sub && M().stat) {
+        bits.push('<b>' + esc(p.sub.of) + '</b> is expanded into ' + p.sub.keys.length +
+          ' industries, each with its own figure over its own stocks: they do not add up to the sector’s, and are not meant to.');
+      } else if (p.sub) {
         // State the reconciliation rather than leaving it to be trusted: the
         // whole point of a hierarchy is that the children account for the
         // parent exactly.
@@ -1571,9 +1655,9 @@
       // the numbers it sits behind rather than merely trusted.
       if (heat !== 'off' && gridMax > 0) {
         bits.push(heat === 'row'
-          ? 'Shaded in proportion to the value, each row against its own largest cell — ' +
+          ? (M().stat ? 'Negative figures are not shaded. ' : '') + 'Shaded in proportion to the value, each row against its own largest cell — ' +
             'so the SHAPE of a small row reads like a big one.'
-          : 'Shaded in proportion to the value, against the largest cell on the grid (<b>' +
+          : (M().stat ? 'Negative figures are not shaded. ' : '') + 'Shaded in proportion to the value, against the largest cell on the grid (<b>' +
             esc(M().fmt(gridMax)) + '</b>).');
       }
       $('note').innerHTML = bits.join(' ');
@@ -1641,9 +1725,13 @@
       // on screen, showing what it is locked to, rather than vanishing.
       const mKeys = isTime() ? ['ret'] : Object.keys(MEASURES).filter((k) => k !== 'ret');
       const mSel = isTime() ? 'ret' : measure;
-      $('measure').innerHTML = mKeys.map((k) =>
-        '<option value="' + k + '"' + (k === mSel ? ' selected' : '') + '>' +
-        esc(MEASURES[k].label) + '</option>').join('');
+      const opt = (k) => '<option value="' + k + '"' + (k === mSel ? ' selected' : '') + '>' + esc(MEASURES[k].label) + '</option>';
+      if (isTime()) $('measure').innerHTML = mKeys.map(opt).join('');
+      else {
+        const groups = new Map([['Counts and totals', []]]);
+        for (const k of mKeys) { const g = MEASURES[k].group || 'Counts and totals'; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(k); }
+        $('measure').innerHTML = [...groups].map(([g, ks]) => '<optgroup label="' + esc(g) + '">' + ks.map(opt).join('') + '</optgroup>').join('');
+      }
       $('measure').disabled = isTime();
       // Shading is off for a signed measure — a return is coloured by sign.
       $('heat').disabled = !!M().signed;
@@ -1719,7 +1807,8 @@
     // Changing the measure keeps both axes and both expansions: it is the same
     // table answering a different question, and dropping the reader's place
     // would make comparing the two answers a chore.
-    $('measure').addEventListener('change', () => { measure = $('measure').value; render(); });
+    // The shading control follows the measure: a return is coloured by sign and never shaded.
+    $('measure').addEventListener('change', () => { measure = $('measure').value; $('heat').disabled = !!M().signed; render(); });
     // Shading is a way of LOOKING at the same grid, so it keeps the axes, the
     // open sector and the selection — nothing it changes is about the data.
     $('heat').addEventListener('change', () => { heat = $('heat').value; render(); });
