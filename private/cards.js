@@ -12156,10 +12156,24 @@
     // The type steps down with the number of topics and the longest wording.
     const longest = Math.max(...cards.map((c) => String(c.text).length));
     const k = cards.length;
-    const base = ({ square: k <= 4 ? 24 : 21, portrait: k <= 4 ? 28 : k <= 6 ? 24 : 21, story: k <= 4 ? 34 : k <= 6 ? 31 : k <= 8 ? 27 : 25 })[size.id] || 24;
+    const base = ({ square: k <= 4 ? 22 : 18, portrait: k <= 4 ? 26 : k <= 6 ? 22 : 17, story: k <= 4 ? 32 : k <= 6 ? 29 : k <= 8 ? 25 : 21 })[size.id] || 22;
     const fs = base - (longest > 230 ? 2 : 0);
+    // THE HEADLINE FIGURE'S SIZE, and A COLOUR A TOPIC (2026-10-21, the owner:
+    // "This visual looks very single color, Can you make it bit more eye
+    // catching"). A topic's colour names the topic, like a column group's:
+    // it never says good or bad. Green and red stay the price topics' alone,
+    // for the direction; the Signal keeps its own tint.
+    const kf = ({ square: k <= 4 ? 40 : 32, portrait: k <= 4 ? 52 : k <= 6 ? 44 : 30, story: k <= 4 ? 60 : k <= 6 ? 54 : k <= 8 ? 46 : 34 })[size.id] || 44;
+    // No green, red or amber among them: those mean price up, down and "notice this".
+    const TOPIC = { growth: '#7c9cff', profit: '#22d3ee', value: '#c4b5fd', vol: '#f0abfc', balance: '#fdba74', shortpos: '#cbd5e1', owners: '#7dd3fc', earn: '#d6c58b' };
+    const colorOfCard = (c) => (c.tone === 'signal' && c.signal ? (pal.tints[canon(c.signal)] || pal.flat)
+      : c.tone === 'price' ? (c.key && c.key.dir === 'up' ? pal.up : c.key && c.key.dir === 'down' ? pal.down : pal.flat)
+        : pal.ink(TOPIC[c.id] || '#7c9cff'));
     const tiles = cards.map((c, i) => {
-      const dir = c.tone === 'price' && c.arrow === 'up' ? ' gc-up' : c.tone === 'price' && c.arrow === 'down' ? ' gc-dn' : '';
+      // A price topic's arrow keeps its own direction (a flat month is a flat
+      // arrow, grey) even where the figure beside it is a small move.
+      const dir = c.tone === 'price' && c.arrow === 'up' ? ' gc-up' : c.tone === 'price' && c.arrow === 'down' ? ' gc-dn' : c.tone === 'price' ? ' gc-pflat' : '';
+      const tc = colorOfCard(c);
       let body = esc(c.text);
       if (c.tone === 'signal' && c.signal) {
         const w = canon(c.signal);
@@ -12168,8 +12182,9 @@
         body = '<b style="color:' + (pal.tints[w] || pal.flat) + '">' + esc(w) + '</b>' + esc(rest);
       }
       const span = k % 2 === 1 && i === k - 1 ? ' gc-wide' : '';
-      return '<div class="gc-tile' + dir + span + '">'
+      return '<div class="gc-tile' + dir + span + '" style="--tc:' + tc + '">'
         + '<span class="gc-h"><span class="gc-a">' + (c.arrow ? GLY[c.arrow] : '·') + '</span>' + esc(c.title) + '</span>'
+        + (c.key && c.key.v ? '<span class="gc-k"><b style="font-size:' + kf + 'px">' + esc(c.key.v) + '</b><i>' + esc(c.key.k) + '</i></span>' : '')
         + '<span class="gc-x" style="font-size:' + fs + 'px">' + body + '</span>'
         + (c.stale ? '<span class="gc-stale">' + esc(c.stale) + '</span>' : '') + '</div>';
     }).join('');
@@ -14493,13 +14508,20 @@
     .gc-in { height: 100%; display: flex; flex-direction: column; }
     .gc-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
                grid-auto-rows: auto; align-content: stretch; gap: 16px; margin-top: 26px; }
-    .gc-tile { min-width: 0; min-height: 0; overflow: hidden; border-radius: 18px; padding: 20px 24px;
-               background: rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 10px; }
+    .gc-tile { min-width: 0; min-height: 0; overflow: hidden; border-radius: 18px; padding: 20px 24px 20px 22px;
+               background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 14%, transparent), rgba(255, 255, 255, 0.035) 62%);
+               border-left: 4px solid var(--tc); display: flex; flex-direction: column; gap: 8px; }
+    .gc-tile .gc-h, .gc-tile .gc-a { color: var(--tc); }
+    .gc-k { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+    .gc-k b { font-family: var(--mono); font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--tc); white-space: nowrap; }
+    .gc-k i { font-style: normal; font-size: 15px; color: var(--muted); }
+    .sz-story .gc-k i { font-size: 18px; }
+    .sz-square .gc-k i { font-size: 13px; }
     .gc-tile.gc-wide { grid-column: span 2; }
     .gc-h { display: flex; align-items: center; gap: 10px; font: 600 15px var(--mono); text-transform: uppercase;
             letter-spacing: 0.14em; color: var(--muted); }
     .gc-a { font-size: 14px; color: var(--text); width: 16px; text-align: center; }
-    .gc-up .gc-a { color: var(--green); } .gc-dn .gc-a { color: var(--red); }
+    .gc-up .gc-a { color: var(--green); } .gc-dn .gc-a { color: var(--red); } .gc-pflat .gc-a { color: var(--muted); }
     .gc-x { font-family: var(--sans); line-height: 1.38; color: var(--text); }
     .gc-x b { font-weight: 700; }
     .gc-stale { font-size: 15px; color: var(--amber); }
@@ -14510,7 +14532,7 @@
     .sz-story .gc-grid { gap: 18px; margin-top: 34px; }
     .sz-story .gc-tile { padding: 24px 26px; }
     .sz-story .gc-h { font-size: 17px; }
-    .s-art.th-light .gc-tile { background: rgba(13, 16, 23, 0.05); }
+    .s-art.th-light .gc-tile { background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 12%, transparent), rgba(13, 16, 23, 0.04) 62%); }
     /* Filed yesterday (2026-10-20): one day's 13D/13G and 8-K filings. */
     .fd-in { height: 100%; display: flex; flex-direction: column; }
     .fd-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }

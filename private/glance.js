@@ -251,7 +251,41 @@
         text: s.action + (s.actionFlag && s.actionFlag !== s.action ? ': ' + String(s.actionFlag).replace(/^[^:]*:\s*/, '') : '') + '.' });
     }
 
+    // THE HEADLINE FIGURE (2026-10-21, the owner on the At a glance card: "make
+    // it bit more eye catching"). One number a topic, set large on the card,
+    // taken from the same field and formatted by the same helpers as the
+    // sentence beside it, so the two cannot disagree. `dir` is the sign, for a
+    // price topic's green or red only; every other topic is a category colour.
+    for (const c of cards) c.key = keyOf(c.id, s);
     return { symbol: s.symbol, cards };
+  }
+  function keyOf(id, s) {
+    const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + pct(v);
+    const k = (v, label, dir) => ({ v, k: label, dir: dir || null });
+    const n = (f) => num(s[f]);
+    switch (id) {
+      case 'short': { const m = n('oneMonthPct'), w = n('oneWeekPct');
+        return m != null ? k(signed(m), 'over the month', m > 0 ? 'up' : m < 0 ? 'down' : null) : w != null ? k(signed(w), 'over the week', w > 0 ? 'up' : w < 0 ? 'down' : null) : null; }
+      case 'long': { const y = n('oneYearPct');
+        return y != null ? k(signed(y), 'over the year', y > 0 ? 'up' : y < 0 ? 'down' : null) : null; }
+      case 'growth': { const r = n('revenueGrowthYoY'), e = n('earningsGrowthYoY');
+        return r != null ? k(signed(r), 'revenue, year on year') : e != null ? k(signed(e), 'earnings, year on year') : null; }
+      case 'profit': { const p = n('profitMargin');
+        return p != null ? k((p < 0 ? '−' : '') + pct(p), 'profit margin') : null; }
+      case 'value': { const f = n('forwardPe'), t = n('trailingPe');
+        return f != null && f > 0 ? k(times(f), 'forward P/E') : t != null && t > 0 ? k(times(t), 'trailing P/E') : null; }
+      case 'vol': { const v = n('vol1y');
+        return v != null ? k(pct(v, 0), 'moves in a year') : null; }
+      case 'balance': { const nc = s.sector === 'Financial Services' ? null : n('netCash'), cr = n('currentRatio');
+        return nc != null ? k(money(Math.abs(nc), s.currency), nc >= 0 ? 'net cash' : 'net debt') : cr != null ? k(cr.toFixed(1), 'current ratio') : null; }
+      case 'shortpos': { const sp = n('shortPctFloat');
+        return sp != null ? k(pct(sp), 'of the float short') : null; }
+      case 'owners': { const i = n('institutionPct');
+        return i != null ? k(pct(i), 'held by institutions') : null; }
+      case 'earn': { if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
+        const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
+      default: return null;
+    }
   }
 
   // ---- drawing ----------------------------------------------------------------
