@@ -3743,6 +3743,13 @@
           <div id="whyBox" class="bezel" hidden></div>
         </section></div>
 
+        <!-- About sits under the price and above the news (owner, 2026-10-21). -->
+        ${payload.company && payload.company.description ? `
+        <section class="bezel card" id="about" data-jump="About" data-icon="i-help"><div class="core">
+          <div class="sec-h"><h2>About ${esc(stock.symbol)}</h2></div>
+          <p class="about">${esc(payload.company.description)}</p>
+        </div></section>` : ''}
+
         <section class="bezel card" id="news" data-jump="News" data-icon="i-pulse"><div class="core">
           <div class="sec-h"><h2>News</h2>
             <span class="news-when" id="newsWhen"></span>
@@ -3836,12 +3843,6 @@
           </div>
           ${aroundHtml(payload.earningsStudy)}
           <div id="earnBody"></div>
-        </div></section>` : ''}
-
-        ${payload.company && payload.company.description ? `
-        <section class="bezel card" id="about" data-jump="About" data-icon="i-help"><div class="core">
-          <div class="sec-h"><h2>About ${esc(stock.symbol)}</h2></div>
-          <p class="about">${esc(payload.company.description)}</p>
         </div></section>` : ''}
 
         ${peersCard(payload.peers, stock.symbol)}
