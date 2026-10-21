@@ -18,7 +18,7 @@
 // PRICE round's, not this one. (This comment first said 200 "leaves the live
 // refresh its room"; 500 + 200 is 700.) At 80 the universe takes about five
 // and a half hours. A NIGHTLY round runs at ~561, which leaves no room at
-// all: do not let a run overlap 07:30-08:15 or 19:30-20:15 Eastern.
+// all: do not let a run overlap 04:00-04:45 or 16:00-16:45 Eastern (the nightly, since 2026-10-21).
 //
 // A SYMBOL THAT FAILS IS LEFT UNRECORDED, never written empty: an empty list
 // reads as "fetched, and it has never split", and --missing would then skip

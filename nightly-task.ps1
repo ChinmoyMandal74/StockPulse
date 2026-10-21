@@ -1,5 +1,5 @@
 # Register (or remove) the Windows scheduled task that drives the nightly
-# fundamentals rotation. Two firings a weekday, 07:30 and 19:30 ET.
+# fundamentals rotation. Two firings a weekday, 04:00 and 16:00 ET.
 #
 # WHY TWO RATHER THAN ONE BIGGER RUN. A round is 7 profiles (80 credits each
 # against a 610/minute ceiling), so refreshing N profiles takes N/7 minutes
@@ -14,12 +14,17 @@
 # week, which is already better than the 7-day rotation it replaces. The NEWS
 # task is separate and deliberately runs all seven days.
 #
-# WHY 19:30 AND NOT 16:15. The old GitHub schedule ran 15 minutes after the
-# close, which can store a provisional close that the next run heals. 19:30 is
-# strictly better: the close has settled. And the 07:30 run means a completed
-# nightly is already on record for the day by the time Vercel's watchdog fires
-# (23:30 UTC = 19:30 ET, drifting up to an hour), so it can never mail a false
-# "missed night" about a run that is only just starting.
+# 04:00 AND 16:00 SINCE 2026-10-21 (the owner, who chose 16:00 over 16:30 with
+# the trade-off below in front of him). Until then 07:30 and 19:30.
+#
+# THE 16:00 RUN STORES A PROVISIONAL CLOSE. It starts at the bell and prices
+# first, so the day's last bar is not yet final; the next 04:00 run reads the
+# settled close and heals it. On a FRIDAY there is no next run until Monday
+# 04:00, so the weekend shows Friday's provisional close. (19:30 was chosen in
+# the first place to avoid exactly this; the old GitHub schedule's 16:15 had
+# the same flaw.) The 04:00 run still puts a completed nightly on record long
+# before Vercel's watchdog fires (23:30 UTC), so it cannot mail a false
+# "missed night".
 #
 # Settings worth knowing, all of which bit the intraday task first:
 #   AllowStartIfOnBatteries   Task Scheduler REFUSES to start on battery by
@@ -56,8 +61,8 @@ if (-not (Test-Path $Script)) { throw "nightly-ping.js is not beside this script
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
-$morning = '07:30'
-$evening = '19:30'
+$morning = '04:00'
+$evening = '16:00'
 $days    = @('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
 
 $action = New-ScheduledTaskAction -Execute $node -Argument 'nightly-ping.js' -WorkingDirectory $Root

@@ -213,7 +213,7 @@
         fact('Checked in the last ' + S.rotateDays + ' days', num(f.ages.d1 + f.ages.d3 + f.ages.d7), num(f.ages.d1) + ' today'),
         fact('Overdue a check', num(f.overdue), f.ages.older ? num(f.ages.older) + ' past 14 days' : 'oldest ' + ago(f.oldest), f.overdue > 0),
         fact('Never fetched', num(f.missing), '', f.missing > 0)],
-      '<b>Kept up to date by</b> the nightly job on your laptop (7:30 AM and 7:30 PM Eastern, weekdays), which re-checks the '
+      '<b>Kept up to date by</b> the nightly job on your laptop (4:00 AM and 4:00 PM Eastern, weekdays), which re-checks the '
       + 'companies checked longest ago — up to 150 a run, so a full lap takes about a week. A new 10-Q can therefore take a few days to appear.'
       + (S.ready ? '' : ' <b>No contact address is configured</b> — the SEC refuses requests that do not declare one. Set MAIL_FROM, REPORT_TO or SEC_UA.'),
       '<button class="btn warm" type="button" data-run="missing"' + (f.missing && S.ready ? '' : ' disabled') + '>Fetch missing' + (f.missing ? ' (' + num(f.missing) + ')' : '') + '</button>'
@@ -240,7 +240,7 @@
         fact('Newest day it could read', S.dailyExpect),
         fact('Last run', when(dl && dl.at)),
         fact('Companies waiting', num(dl ? dl.queued : 0), '', !!(dl && dl.queued))],
-      '<b>Kept up to date by</b> the nightly job (its <i>sec daily</i> step, straight after the weekly check): the 7:30 AM run reads the day before. '
+      '<b>Kept up to date by</b> the nightly job (its <i>sec daily</i> step, straight after the weekly check): the 4:00 AM run reads the day before. '
       + 'A day the SEC has not published yet is left for the next run, a weekday with no index well in the past is a holiday, and if the SEC asks us to slow down the run stops and the companies waiting carry over. '
       + '<b>Run now</b> does the same here.',
       '<button class="btn warm" type="button" data-run="daily"' + (S.ready ? '' : ' disabled') + '>Run now</button>'
@@ -307,7 +307,7 @@
         fact('Newest fetch', when(sp.newest))],
       '<b>Kept up to date</b> by the nightly run: after its rounds it fetches the history of any newly added company and of any company whose profile reports a newer split (20 credits each, up to 100 a run). '
       + 'A company not fetched yet falls back to today’s share count, and the card says so. The command below fills everything in one paced pass — about five hours for the whole universe, '
-      + 'and it must not overlap the 7:30 AM or 7:30 PM nightly job.',
+      + 'and it must not overlap the 4:00 AM or 4:00 PM nightly job.',
       '', cmd('Fill the rest, from your machine', 'node --use-system-ca backfill-splits.js --commit --missing'));
 
     $('body').innerHTML = '<p class="grp">From the SEC</p>' + filings + daily + quality() + results + insider

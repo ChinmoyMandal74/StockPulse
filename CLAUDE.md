@@ -96,7 +96,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - After any removal, rebuild in order: `analysis-db.js --full`, `single-data.js`, `strategy-runs.js`, `lab-grid.js`.
 
 **Budgets**
-- **Twelve Data: 610 credits a minute, hard.** Prices cost 1 per symbol; a profile about 80 (`/statistics` 50, `/earnings` 20); `/splits` 20. Two jobs in one minute breach it — every job stands aside for a running refresh, and nothing overlaps the nightly windows (07:30 and 19:30 Eastern) or the intraday slots (:15 and :45). Quote the cost before bulk work.
+- **Twelve Data: 610 credits a minute, hard.** Prices cost 1 per symbol; a profile about 80 (`/statistics` 50, `/earnings` 20); `/splits` 20. Two jobs in one minute breach it — every job stands aside for a running refresh, and nothing overlaps the nightly windows (04:00 and 16:00 Eastern, weekdays, since 2026-10-21) or the intraday slots (:15 and :45). Quote the cost before bulk work.
 - **Adding a key to `emptyProfile()` makes every stored profile a gap and re-pulls the whole universe** (about 96,000 credits). Backfill first, through `mergeProfileFields()`.
 - **Turso bills rows read.** No `group by`, `count(*)` or date-only scans over big tables (`bars`, `sec_facts`, `short_interest`, `fundamentals_history`, `tech_history`). Use per-symbol seeks on `(symbol, d)` as `closesBefore` does. Run `query-plan-test.js` after touching `db.js`; put any new big table on its list.
 - Research runs against the local copy (`analysis-db.js`), never Turso.

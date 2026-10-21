@@ -11,8 +11,9 @@
 # one number.
 #
 # THE MORNING SLOT WAS 08:00 AND MOVED TO 09:00 (2026-09-30, owner), because
-# the nightly rotation now fires at 07:30 from this same laptop and takes about
-# 37 minutes. The two jobs do not fight over credits -- news costs none, the
+# the nightly rotation then fired at 07:30 from this same laptop and took about
+# 37 minutes. (Since 2026-10-21 it fires at 04:00 and 16:00; the 17:00 lap
+# starts after the 16:00 rotation's usual 40 minutes.) The two jobs do not fight over credits -- news costs none, the
 # provider is free and keyless -- but they do fight over this machine and over
 # the same Vercel instance, and a news lap landing in the middle of a rotation
 # round is the contention this file records elsewhere: a long refresh makes

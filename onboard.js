@@ -19,8 +19,8 @@
 // "WAITING" is a stock added to the universe after the server's ONBOARD_SINCE
 // with no row in onboard_state. The page at /onboarding shows the same list.
 //
-// IT REFUSES TO START INSIDE A NIGHTLY WINDOW (07:25-08:20 and 19:25-20:20
-// Eastern, weekdays). A nightly round uses ~561 of the 610 credits a minute,
+// IT REFUSES TO START INSIDE A NIGHTLY WINDOW (03:55-04:50 and 15:55-16:50
+// Eastern, weekdays; the nightly moved to 04:00 and 16:00 on 2026-10-21). A nightly round uses ~561 of the 610 credits a minute,
 // so anything charged alongside it can get the ROUND refused rather than this.
 //
 // A STEP THAT FAILS DOES NOT STOP THE REST, and the stocks are still marked
@@ -46,7 +46,7 @@ function inNightlyWindow(now) {
   const get = (t) => (p.find((x) => x.type === t) || {}).value;
   if (['Sat', 'Sun'].includes(get('weekday'))) return false;
   const m = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
-  return (m >= 7 * 60 + 25 && m <= 8 * 60 + 20) || (m >= 19 * 60 + 25 && m <= 20 * 60 + 20);
+  return (m >= 3 * 60 + 55 && m <= 4 * 60 + 50) || (m >= 15 * 60 + 55 && m <= 16 * 60 + 50);
 }
 
 const STEPS = [
@@ -73,8 +73,8 @@ const STEPS = [
   for (const [name, script, mk] of STEPS) console.log('  ' + name.padEnd(15) + 'node --use-system-ca ' + script + ' ' + mk(list).join(' '));
   if (!COMMIT) { console.log('\nDry run: nothing fetched, nothing written. Add --commit.'); return; }
   if (inNightlyWindow() && !FORCE) {
-    console.log('\nNot started: the nightly run is due or under way (7:30 AM and 7:30 PM Eastern), and both would be'
-      + '\ncompeting for the same API credits. Run this again after 8:20, or add --force.');
+    console.log('\nNot started: the nightly run is due or under way (4:00 AM and 4:00 PM Eastern), and both would be'
+      + '\ncompeting for the same API credits. Run this again after 4:50, or add --force.');
     process.exitCode = 1; return;
   }
 

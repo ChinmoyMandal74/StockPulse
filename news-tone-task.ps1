@@ -20,9 +20,9 @@
 # three hours, MU's a day, ACLS's six weeks. One read a day covered the quiet
 # stocks and missed most of the busy ones.
 #
-# 00:30, 06:30, 12:30, 18:30 LOCAL: the morning and evening slots each end an
-# hour before the 07:30 and 19:30 nightly rotations, which run from this same
-# laptop, and the 50-minute limit below makes sure of it. It uses no Twelve
+# 00:30, 06:30, 12:30, 18:30 LOCAL: each slot ends, at the 50-minute limit
+# below, well clear of the nightly rotations (04:00 and 16:00 since
+# 2026-10-21; 07:30 and 19:30 before), which run from this same laptop. It uses no Twelve
 # Data credits, so the price windows are not at stake, only the machine.
 # THE MODEL IS CLAUDE HAIKU 5.5 since 2026-10-20 (the owner: "Lets remove
 # Sonnet"), set in newstone.js. The shadow comparison that decided it is off

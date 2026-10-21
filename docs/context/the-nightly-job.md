@@ -92,3 +92,8 @@
 ## Options open interest joins the tail (2026-10-11)
 
 A sixth tail phase, `options`, after splits: `optionsRotate()` in `nightly-ping.js` calls `POST /api/options/refresh?n=25` until the route says nothing is stale (`OPT_MAX_BATCHES` 70 as a ceiling, `NIGHTLY_OPT_GAP_MS` 1500 between calls). It costs no Twelve Data credits. Only the evening run reads; the morning run finds everything fresh. See `options-open-interest.md`.
+
+## Moved to 04:00 and 16:00 (2026-10-21, the owner)
+- The laptop task (`nightly-task.ps1`, re-registered and checked live) fires weekdays at **04:00 and 16:00 Eastern**; it was 07:30 and 19:30. Wake, catch-up and the 2-hour limit unchanged.
+- **The trade-off, put to the owner before the change and chosen anyway:** the 16:00 run starts at the bell and prices first, so it stores a provisional close; the next 04:00 run heals it, but **Friday's provisional close stands until Monday 04:00**. 16:30 was offered as the alternative that avoids it.
+- Followed the time everywhere it is stated: `onboard.js`'s refusal window (03:55-04:50 and 15:55-16:50; both sides of each edge checked), `backfill-splits.js`'s note, the copy on `/edgar`, `/onboarding` and `/holdings`, the comments in `news-task.ps1` and `news-tone-task.ps1`, and CLAUDE.md's budget line. No other schedule collides: intraday ends 15:15, the news laps are 09:00/13:00/17:00, the tone runs finish by :20 past 00:30/06:30/12:30/18:30, and Vercel's daily check (23:30 UTC) now always finds the morning run on record.
