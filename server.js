@@ -15756,7 +15756,13 @@ async function toneBoardPayload(group, days) {
   const snap = await readSnapshot();
   const all = (snap && snap.stocks) || [];
   let syms;
-  if (group === 'sp' || String(group).startsWith('sp:')) {
+  // 'scope' (2026-10-21): every stock the tone loader reads, the S&P 500 and
+  // the semiconductor industries, for the Sector, Industry and Theme tone
+  // cards, which each keep their own companies out of the one read.
+  if (group === 'scope') {
+    const sp = await spMembers().catch(() => ({ set: null }));
+    syms = all.filter((s) => NewsTone.inScope(s, sp.set)).map((s) => s.symbol);
+  } else if (group === 'sp' || String(group).startsWith('sp:')) {
     const sp = await spMembers().catch(() => ({ set: null }));
     const sector = String(group).startsWith('sp:') ? String(group).slice(3) : null;
     syms = sp.set ? all.filter((s) => sp.set.has(s.symbol) && (!sector || s.sector === sector)).map((s) => s.symbol) : [];
@@ -15783,7 +15789,9 @@ async function toneBoardPayload(group, days) {
 }
 app.get('/api/news/tone/board', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const need = Cards.toneBoardNeed('indtone', { itnGroup: String(req.query.group || ''), itnWin: String(req.query.days || '') });
+  const need = req.query.group === 'scope'
+    ? { group: 'scope', days: String(req.query.days) === '30' ? 30 : 7 }
+    : Cards.toneBoardNeed('indtone', { itnGroup: String(req.query.group || ''), itnWin: String(req.query.days || '') });
   res.json(await toneBoardPayload(need.group, need.days));
 }));
 

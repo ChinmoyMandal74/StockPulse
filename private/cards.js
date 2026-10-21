@@ -9400,6 +9400,8 @@
     const o = opts || {};
     // The Market tone card asks for the S&P 500 board, the same channel.
     if (tpl === 'mkttone') { const d = o.mtnWin === '30' ? 30 : 7; return { group: 'sp', days: d, key: 'sp|' + d }; }
+    // The Sector, Industry and Theme tone cards share one read of every stock read.
+    if (GTONE[tpl]) { const d = groupToneOpts(tpl, o).days; return { group: 'scope', days: d, key: 'scope|' + d }; }
     if (tpl !== 'indtone') return null;
     const group = TONE_GROUPS.some(([k]) => k === o.itnGroup) ? o.itnGroup : 'all';
     const days = o.itnWin === '30' ? 30 : 7;
@@ -9481,6 +9483,50 @@
   // written. Blue and orange, never green and red. A sector's average is over
   // its articles (each company's average weighted by its count), so the
   // sectors add up to the total in the figures.
+// THE SPLIT ROWS, one drawer for the market card and the three group cards
+  // (2026-10-21, the owner: "apply the same to sector, industy and theme").
+  // Each item: { label, sub, n, avg, pos, neu, neg }. Ordered by the caller.
+  function toneSplit(items, first) {
+    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
+    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
+    const SZ = ({ portrait: { f: 23, b: 22 }, square: { f: 19, b: 16 }, story: { f: 30, b: 32 } })[size.id] || { f: 23, b: 22 };
+    const vw = Math.ceil(5 * SZ.f * 0.62) + 6, cw = Math.ceil(4 * SZ.f * 0.62) + 6;
+    const cols = 'minmax(0, 30%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
+    const NEU = 'color-mix(in srgb, var(--muted) 45%, transparent)';
+    const rows = items.map((g) => {
+      const tot = g.pos + g.neu + g.neg || 1;
+      const w = (k) => (k / tot * 100).toFixed(2) + '%';
+      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
+        + '<span class="bx-n">' + esc(g.label) + (g.sub ? '<span class="mt-of">' + esc(g.sub) + '</span>' : '') + '</span>'
+        + '<span class="bx-t mt-t" style="height:' + SZ.b + 'px">'
+        + '<span style="width:' + w(g.neg) + ';background:' + NEG + '"></span>'
+        + '<span style="width:' + w(g.neu) + ';background:' + NEU + '"></span>'
+        + '<span style="width:' + w(g.pos) + ';background:' + POS + '"></span></span>'
+        + '<span class="bx-v"' + (colorOf(g.avg) ? ' style="color:' + colorOf(g.avg) + '"' : '') + '>' + esc(toneNum(g.avg)) + '</span>'
+        + '<span class="bx-v rm-pct">' + esc(String(g.n)) + '</span></div>';
+    }).join('');
+    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>' + esc(first) + '</span>'
+      + '<span><b style="color:' + NEG + '">Negative</b> · neutral · <b style="color:' + POS + '">positive</b></span>'
+      + '<span class="sb-hr">Tone</span><span class="sb-hr">Read</span></div>';
+    return hd + rows;
+  }
+  // Readings summed: per-company rows from the board into one item.
+  function toneSum(list) {
+    const g = { n: 0, sum: 0, pos: 0, neu: 0, neg: 0, cos: 0 };
+    for (const r of list) { if (!(r.count > 0)) continue; g.n += r.count; g.sum += r.avg * r.count; g.pos += r.positive || 0; g.neu += r.neutral || 0; g.neg += r.negative || 0; g.cos++; }
+    g.avg = g.n ? g.sum / g.n : null;
+    return g;
+  }
+  // The four figures over the top, from a summed item.
+  function toneFigs(g, covered, of) {
+    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
+    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
+    const share = (k) => Math.round(k / g.n * 100) + '% of them';
+    return toneFig('Articles read', g.n.toLocaleString('en-US'), 'about ' + covered + ' of ' + of + ' companies')
+      + toneFig('Average tone', toneNum(g.avg), toneLabel(g.avg).toLowerCase() + ', on −1 to +1', colorOf(g.avg))
+      + toneFig('Positive', g.pos.toLocaleString('en-US'), share(g.pos), POS)
+      + toneFig('Negative', g.neg.toLocaleString('en-US'), share(g.neg), NEG);
+  }
   function tplMarketTone() {
     const need = toneBoardNeed('mkttone', O);
     const wLabel = need.days === 30 ? 'past 30 days' : 'past 7 days';
@@ -9490,44 +9536,19 @@
     if (!T || !Array.isArray(data.rows) || !data.rows.length) {
       return toneShell('S&P 500 · ' + wLabel, 'Article tone', 'nothing read yet', 'No article about an S&P 500 company has been read in the ' + wLabel + '.');
     }
-    const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
-    const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
     const rowOf = new Map(stocks.map((r) => [r.symbol, r]));
-    const by = new Map();
+    const bySec = new Map();
     for (const r of data.rows) {
       const sec = (rowOf.get(r.symbol) || {}).sector;
-      if (!sec || !(r.count > 0)) continue;
-      const g = by.get(sec) || { sector: sec, n: 0, sum: 0, pos: 0, neu: 0, neg: 0, cos: 0 };
-      g.n += r.count; g.sum += r.avg * r.count; g.pos += r.positive || 0; g.neu += r.neutral || 0; g.neg += r.negative || 0; g.cos++;
-      by.set(sec, g);
+      if (!sec) continue;
+      if (!bySec.has(sec)) bySec.set(sec, []);
+      bySec.get(sec).push(r);
     }
     const members = (sec) => stocks.filter((r) => r.spMember === true && r.sector === sec).length;
-    const secs = [...by.values()].map((g) => Object.assign(g, { avg: g.sum / g.n, of: members(g.sector) })).sort((a, b) => b.avg - a.avg);
-    const SZ = ({ portrait: { f: 23, b: 22 }, square: { f: 19, b: 16 }, story: { f: 30, b: 32 } })[size.id] || { f: 23, b: 22 };
-    const vw = Math.ceil(5 * SZ.f * 0.62) + 6, cw = Math.ceil(4 * SZ.f * 0.62) + 6;
-    const cols = 'minmax(0, 30%) minmax(0,1fr) ' + vw + 'px ' + cw + 'px';
-    const NEU = 'color-mix(in srgb, var(--muted) 45%, transparent)';
-    const rows = secs.map((g) => {
-      const tot = g.pos + g.neu + g.neg || 1;
-      const w = (k) => (k / tot * 100).toFixed(2) + '%';
-      return '<div class="bx-r" style="font-size:' + SZ.f + 'px;grid-template-columns:' + cols + '">'
-        + '<span class="bx-n">' + esc(g.sector) + '<span class="mt-of">' + g.cos + (g.of ? ' of ' + g.of : '') + ' companies</span></span>'
-        + '<span class="bx-t mt-t" style="height:' + SZ.b + 'px">'
-        + '<span style="width:' + w(g.neg) + ';background:' + NEG + '"></span>'
-        + '<span style="width:' + w(g.neu) + ';background:' + NEU + '"></span>'
-        + '<span style="width:' + w(g.pos) + ';background:' + POS + '"></span></span>'
-        + '<span class="bx-v"' + (colorOf(g.avg) ? ' style="color:' + colorOf(g.avg) + '"' : '') + '>' + esc(toneNum(g.avg)) + '</span>'
-        + '<span class="bx-v rm-pct">' + esc(String(g.n)) + '</span></div>';
-    }).join('');
-    const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Sector</span>'
-      + '<span><b style="color:' + NEG + '">Negative</b> · neutral · <b style="color:' + POS + '">positive</b></span>'
-      + '<span class="sb-hr">Tone</span><span class="sb-hr">Read</span></div>';
-    const share = (k) => Math.round(k / T.count * 100) + '% of them';
-    const covered = data.rows.length;
-    const figs = toneFig('Articles read', T.count.toLocaleString('en-US'), 'about ' + covered + ' of ' + (data.stocks || covered) + ' companies')
-      + toneFig('Average tone', toneNum(T.avg), toneLabel(T.avg).toLowerCase() + ', on −1 to +1', colorOf(T.avg))
-      + toneFig('Positive', T.positive.toLocaleString('en-US'), share(T.positive), POS)
-      + toneFig('Negative', T.negative.toLocaleString('en-US'), share(T.negative), NEG);
+    const items = [...bySec.entries()].map(([sec, list]) => { const g = toneSum(list); const of = members(sec);
+      return { label: sec, sub: g.cos + (of ? ' of ' + of : '') + ' companies', n: g.n, avg: g.avg, pos: g.pos, neu: g.neu, neg: g.neg }; })
+      .filter((g) => g.n > 0).sort((x, y) => y.avg - x.avg);
+    const total = { n: T.count, avg: T.avg, pos: T.positive, neg: T.negative };
     const note = 'Every article about an S&P 500 company read in the ' + wLabel + ', gathered by the company’s sector and ordered by the sector’s average; '
       + 'the bar is how its articles split. Positive is +' + TONE_BAND.toFixed(2) + ' or more, negative −' + TONE_BAND.toFixed(2) + ' or less. '
       + 'The S&P 500 has been read since 21 October 2026. ' + TONE_NOTE;
@@ -9535,8 +9556,69 @@
       + '<div class="s-body"><div class="bx-in">'
       + '<span class="s-kick">' + esc('Article tone · S&P 500 · ' + wLabel) + '</span>'
       + '<h2 class="s-title">The S&P 500<span class="dim">how the articles read, by sector</span></h2>'
-      + '<div class="cr-figs tn-figs">' + figs + '</div>'
-      + '<div class="bx-rows">' + hd + rows + '</div>'
+      + '<div class="cr-figs tn-figs">' + toneFigs(total, data.rows.length, data.stocks || data.rows.length) + '</div>'
+      + '<div class="bx-rows">' + toneSplit(items, 'Sector') + '</div>'
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
+  // ---- Article tone for a sector, an industry or a theme (2026-10-21) ------
+  //
+  // The market card's layout for one group. A sector draws its industries, a
+  // row each; an industry or a theme draws its companies, the ones with the
+  // most articles, ordered by their average. One read for all three: the
+  // board of every stock the loader reads ('scope'), cut here to the group's
+  // companies under the Index picker (the S&P 500 by default).
+  const GTONE = {
+    sectone: { G: 'sector', p: 'sto', title: 'by industry', first: 'Industry' },
+    indcotone: { G: 'industry', p: 'ito', title: 'by company', first: 'Company' },
+    thmtone: { G: 'theme', p: 'tto', title: 'by company', first: 'Company' },
+  };
+  const GTONE_ROWS = { portrait: 12, square: 11, story: 14 };
+  function groupToneOpts(tpl, opts) {
+    const C = GTONE[tpl]; const o = opts || {};
+    const cut = SP_CUTS.some(([k]) => k === o[C.p + 'Sp500']) ? o[C.p + 'Sp500'] : 'in';
+    return { name: o[C.p + 'Name'] || null, days: o[C.p + 'Win'] === '30' ? 30 : 7, cut };
+  }
+  function tplGroupTone(tpl) {
+    const C = GTONE[tpl], G = GROUPING[C.G];
+    const { days, cut } = groupToneOpts(tpl, O);
+    const wLabel = days === 30 ? 'past 30 days' : 'past 7 days';
+    const list = groupList(stocks, cut, G);
+    const name = groupToneOpts(tpl, O).name && list.some((g) => g.name === groupToneOpts(tpl, O).name) ? groupToneOpts(tpl, O).name : (list[0] && list[0].name);
+    const kick = 'Article tone' + (cut !== 'All' && SP_CUT_LABEL[cut] ? ' · ' + SP_CUT_LABEL[cut] : '') + ' · ' + wLabel;
+    if (!name) return toneShell(kick, 'Article tone', 'no ' + G.one, 'No ' + G.one + ' has enough companies under this index.');
+    const data = getToneBoard('scope', days);
+    if (!data) return toneShell('Reading the articles', 'Finding', 'the readings…');
+    const members = spFilter(stocks, cut).filter((r) => r && !r.error && !isFundRow(r) && groupKeys(r, G.field).includes(name));
+    const mine = new Set(members.map((r) => r.symbol));
+    const read = (data.rows || []).filter((r) => mine.has(r.symbol) && r.count > 0);
+    const T = toneSum(read);
+    if (!T.n) return toneShell(kick, name, 'nothing read yet', 'Article tone is read for the S&P 500 and the semiconductor stocks, and no article about these companies has been read in the ' + wLabel + '.');
+    const rowOf = new Map(members.map((r) => [r.symbol, r]));
+    let items, more = 0;
+    if (C.G === 'sector') {
+      const byInd = new Map();
+      for (const r of read) { const ind = (rowOf.get(r.symbol) || {}).industry || 'Other'; if (!byInd.has(ind)) byInd.set(ind, []); byInd.get(ind).push(r); }
+      const of = (ind) => members.filter((r) => r.industry === ind).length;
+      items = [...byInd.entries()].map(([ind, l]) => { const g = toneSum(l); return { label: ind, sub: g.cos + ' of ' + of(ind) + ' companies', n: g.n, avg: g.avg, pos: g.pos, neu: g.neu, neg: g.neg }; });
+    } else {
+      items = read.map((r) => { const x = rowOf.get(r.symbol) || {}; return { label: nameOf(x) || r.symbol, sub: r.symbol, n: r.count, avg: r.avg, pos: r.positive || 0, neu: r.neutral || 0, neg: r.negative || 0 }; });
+    }
+    const cap = GTONE_ROWS[size.id] || 12;
+    if (items.length > cap) { more = items.length - cap; items = items.sort((x, y) => y.n - x.n || (x.label < y.label ? -1 : 1)).slice(0, cap); }
+    items.sort((x, y) => y.avg - x.avg);
+    const note = 'Every article about the ' + G.one + '’s companies' + (cut !== 'All' && SP_CUT_PROSE[cut] ? ' in ' + SP_CUT_PROSE[cut] : '') + ' read in the ' + wLabel
+      + (C.G === 'sector' ? ', gathered by industry and ordered by each industry’s average' : ', one row a company, ordered by its average')
+      + (more ? ' (the ' + cap + ' with the most articles shown, ' + more + ' more read)' : '') + '; the bar is how the articles split. '
+      + 'Positive is +' + TONE_BAND.toFixed(2) + ' or more, negative −' + TONE_BAND.toFixed(2) + ' or less. ' + TONE_NOTE;
+    const tCls = name.length > 34 ? ' mh-l2' : name.length > 20 ? ' mh-l1' : '';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + tCls + '">' + esc(name) + '</span><span class="dim">how the articles read, ' + esc(C.title) + '</span></h2>'
+      + '<div class="cr-figs tn-figs">' + toneFigs(T, T.cos, members.length) + '</div>'
+      + '<div class="bx-rows">' + toneSplit(items, C.first) + '</div>'
       + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
@@ -12583,6 +12665,9 @@
     indtone: tplToneBoard,
     tonestock: tplToneStock,
     mkttone: tplMarketTone,
+    sectone: () => tplGroupTone('sectone'),
+    indcotone: () => tplGroupTone('indcotone'),
+    thmtone: () => tplGroupTone('thmtone'),
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     filed: tplFiled,

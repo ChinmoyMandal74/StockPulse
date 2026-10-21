@@ -1103,6 +1103,34 @@
           Read for the S&amp;P 500 and the semiconductor stocks; any other
           stock says so. A description of what was written, not a forecast.</p>
       </div>
+      <!-- Article tone for a sector, an industry, a theme (2026-10-21): the Market tone card for one group. -->
+      <div id="stoBox">
+        <label>Sector</label>
+        <select id="stoName"></select>
+        <label>Window</label>
+        <select id="stoWin"></select>
+        <label>Index</label>
+        <select id="stoSp500"></select>
+        <p class="hint">Every article about the sector&#39;s companies read in the window, gathered by industry: how they split negative, neutral and positive, the average, and how many of each industry&#39;s companies that covers. Tone is read for the S&amp;P 500 and the semiconductor stocks.</p>
+      </div>
+      <div id="itoBox">
+        <label>Industry</label>
+        <select id="itoName"></select>
+        <label>Window</label>
+        <select id="itoWin"></select>
+        <label>Index</label>
+        <select id="itoSp500"></select>
+        <p class="hint">Every article about the industry&#39;s companies read in the window, a row a company: the split, the average and the count. The ones with the most articles are shown when there are more than fit. Tone is read for the S&amp;P 500 and the semiconductor stocks.</p>
+      </div>
+      <div id="ttoBox">
+        <label>Theme</label>
+        <select id="ttoName"></select>
+        <label>Window</label>
+        <select id="ttoWin"></select>
+        <label>Index</label>
+        <select id="ttoSp500"></select>
+        <p class="hint">Every article about the theme&#39;s companies read in the window, a row a company: the split, the average and the count. The ones with the most articles are shown when there are more than fit. Tone is read for the S&amp;P 500 and the semiconductor stocks.</p>
+      </div>
       <!-- Market tone (2026-10-21): the S&P 500's articles by sector. -->
       <div id="mtnBox">
         <label>Window</label>
@@ -2275,8 +2303,11 @@
       { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'tonestock', name: 'Article tone', note: 'How the articles about one stock read — its latest, each with an AI model’s reading and summary' },
+      { id: 'sectone', name: 'Article tone, a sector', note: 'How the articles about one sector’s companies read, industry by industry: the split, the average and the coverage' },
+      { id: 'indcotone', name: 'Article tone, an industry', note: 'How the articles about one industry’s companies read, a row a company: the split, the average and the count' },
+      { id: 'thmtone', name: 'Article tone, a theme', note: 'How the articles about one theme’s companies read, a row a company: the split, the average and the count' },
       { id: 'mkttone', name: 'Article tone, the market', note: 'How the articles about the S&P 500’s companies read, sector by sector: the split, the average and the coverage' },
-      { id: 'indtone', name: 'Article tone, an industry', note: 'How the week’s articles about each company in a group read, one row a company, from an AI model’s reading of each' },
+      { id: 'indtone', name: 'Article tone, a company list', note: 'How the week’s articles about each company in a group read, one row a company, from an AI model’s reading of each' },
       { id: 'holderchg', name: 'What changed', note: 'One 13F manager or one fund, its latest filing against the one before: bought, sold, positions opened and closed, and the largest changes' },
       { id: 'holderbook', name: 'What one holder holds', note: 'One 13F manager or one fund: its largest positions in the stocks tracked here, from its latest filing' },
       { id: 'fundholders', name: 'Fund holders', note: 'Which mutual funds and ETFs hold one stock, largest first — and how much of each fund it is' },
@@ -2481,6 +2512,7 @@
       ['optsec', 'Options'],
       ['secmonths', 'Month by month'],
       ['seclines', 'Lines — any measure'],
+      ['sectone', 'Article tone'],
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
     // template for Theme"). One view to begin with; others can join it.
@@ -2498,6 +2530,7 @@
       ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
       ['thmlines', 'Lines — any measure'],
+      ['thmtone', 'Article tone'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
@@ -2505,7 +2538,8 @@
       ['indlines', 'Lines — any measure'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
-      ['indtone', 'Article tone'],
+      ['indcotone', 'Article tone'],
+      ['indtone', 'Article tone, a company list'],
     ];
     const TPL_GROUPS = [
       { name: 'Market', views: MKT_VIEWS, last: 'day' },
@@ -3224,7 +3258,7 @@
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
       'ssnName', 'ssnPeriod', 'ssnCount', 'ssnFloor', 'ssnSp500',
-      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'mtnWin', 'inSym', 'inWin',
+      'lhSym', 'rmSym', 'rmKind', 'rmPeriod', 'rmView', 'fhSym', 'hbkKind', 'hbkId', 'hbkView', 'crSym', 'bbBy', 'bbFloor', 'bbCount', 'oiSym', 'tnsSym', 'tnsView', 'itnGroup', 'itnWin', 'itnCount', 'mtnWin', 'stoName', 'stoWin', 'stoSp500', 'itoName', 'itoWin', 'itoSp500', 'ttoName', 'ttoWin', 'ttoSp500', 'inSym', 'inWin',
       'shrtMetric', 'shrtCount', 'shrtScope', 'shrtSector', 'shrtIndustry', 'shrtCap', 'shrtScreen', 'shrtSp500',
       'barMetric', 'barDir', 'barCount', 'barScope', 'barSector', 'barIndustry', 'barCap', 'barScreen', 'barSp500',
       'indMetric', 'indDir', 'indCount', 'indWeight', 'indScope', 'indSector', 'indCap', 'indScreen', 'indSp500',
@@ -4098,6 +4132,9 @@
       $('tnsBox').style.display = tpl === 'tonestock' ? 'block' : 'none';
       $('itnBox').style.display = tpl === 'indtone' ? 'block' : 'none';
       $('mtnBox').style.display = tpl === 'mkttone' ? 'block' : 'none';
+      $('stoBox').style.display = tpl === 'sectone' ? 'block' : 'none';
+      $('itoBox').style.display = tpl === 'indcotone' ? 'block' : 'none';
+      $('ttoBox').style.display = tpl === 'thmtone' ? 'block' : 'none';
       $('inBox').style.display = tpl === 'insiders' ? 'block' : 'none';
       $('bbBox').style.display = tpl === 'buybacks' ? 'block' : 'none';
       $('shrtBox').style.display = tpl === 'shorted' ? 'block' : 'none';
@@ -4720,6 +4757,16 @@
     for (const c of Cards.toneCounts()) $('itnCount').add(new Option(String(c), String(c)));
     for (const [v, label] of Cards.toneWindows()) $('mtnWin').add(new Option(label, v));
     $('mtnWin').addEventListener('change', () => { if (tpl === 'mkttone') render(); });
+    // The three group tone cards: a window, an index (the S&P 500 to start)
+    // and the group, its list re-cut when the index changes.
+    const GTONE_P = { sto: ['sectone', Cards.sectorList, false], ito: ['indcotone', Cards.industryList, true], tto: ['thmtone', Cards.themeList, false] };
+    const fillToneNames = () => { for (const [p, [, list, bySec]] of Object.entries(GTONE_P)) fillGroupNames(p + 'Name', p + 'Sp500', list, bySec); };
+    for (const [p, [t2]] of Object.entries(GTONE_P)) {
+      for (const [v, label] of Cards.toneWindows()) $(p + 'Win').add(new Option(label, v));
+      for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'in', v === 'in'));
+      $(p + 'Sp500').addEventListener('change', () => { fillGroupNames(p + 'Name', p + 'Sp500', GTONE_P[p][1], GTONE_P[p][2]); if (tpl === t2) render(); });
+      [p + 'Name', p + 'Win'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === t2) render(); }));
+    }
     $('itnCount').value = '12';
     ['itnGroup', 'itnWin', 'itnCount'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'indtone') render(); }));
     for (const [v, label] of Cards.insiderWindows()) $('inWin').add(new Option(label, v));
@@ -5497,6 +5544,7 @@
         fillOscNames();
         // The theme cards' pickers, filled with the sector ones.
         fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames();
+        fillToneNames();
         { const keep = $('tgrName').value; $('tgrName').innerHTML = Cards.themeList(stocks, 'All').map((g) => `<option value="${esc(g.name)}">${esc(g.name)} \u00b7 ${g.n}</option>`).join(''); if ([...$('tgrName').options].some((o) => o.value === keep)) $('tgrName').value = keep; }
         fillOinNames();
         // FROM THE MODULE, never a copy in the markup: a key tplDay does not
