@@ -299,10 +299,18 @@
     return '<div class="gl-grid">' + g.cards.map((c) => {
       const cls = c.tone === 'price' && c.arrow ? ' gl-' + c.arrow : c.tone === 'signal' ? ' gl-sig' : '';
       const sig = c.signal ? ' gl-s-' + String(c.signal).toLowerCase().replace(/[^a-z]+/g, '-') : '';
-      return `<a class="gl-card${cls}${sig}" href="#${esc(c.jump)}" data-jump-to="${esc(c.jump)}">`
+      // A COLOUR A TOPIC and THE HEADLINE FIGURE (2026-10-21, the owner: "make
+      // the At a glance section more colorful here"), as on the promo card. The
+      // page's stylesheet maps gl-t-<id> to a theme token; a price figure takes
+      // gl-kup / gl-kdown by its sign; the Signal its direction (gl-sd-*).
+      const topic = ' gl-t-' + esc(c.id);
+      const sd = c.signal ? ' gl-sd-' + (/Risk/.test(c.signal) ? 'risk' : /Strong/.test(c.signal) ? 'up' : /Weak/.test(c.signal) ? 'down' : 'flat') : '';
+      const kdir = c.tone === 'price' && c.key && c.key.dir ? ' gl-k' + c.key.dir : '';
+      return `<a class="gl-card${cls}${sig}${topic}${sd}${kdir}" href="#${esc(c.jump)}" data-jump-to="${esc(c.jump)}">`
         + '<span class="gl-h">'
         + (c.arrow ? `<span class="gl-a" role="img" aria-label="${esc(SAYS[c.arrow])}">${GLYPH[c.arrow]}</span>` : '<span class="gl-a gl-none" aria-hidden="true">·</span>')
         + `<span class="gl-t">${esc(c.title)}</span></span>`
+        + (c.key && c.key.v ? `<span class="gl-k"><b>${esc(c.key.v)}</b><i>${esc(c.key.k)}</i></span>` : '')
         + `<span class="gl-x">${esc(c.text)}</span>`
         + (c.stale ? `<span class="gl-stale">${esc(c.stale)}</span>` : '')
         + '</a>';

@@ -63,6 +63,31 @@
     .gl-card.gl-down .gl-a { color: var(--red); }
     .gl-card .gl-x { font-size: 13px; line-height: 1.55; color: var(--text); }
     .gl-card .gl-stale { font-size: 11.5px; color: var(--amber); }
+    /* A COLOUR A TOPIC (2026-10-21, the owner: "make the At a glance section
+       more colorful here"), the promo card's: a stripe, a faint wash, the
+       title and the headline figure. Theme tokens, so dark, navy and light
+       each get their own shade. None is green, red or amber, which mean
+       price up, down and "notice this"; the price topics take green or red
+       by the figure's sign, a flat price arrow stays grey, and the Signal
+       its direction. */
+    .gl-card { --tc: var(--accent); border-left: 3px solid var(--tc);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, transparent), color-mix(in srgb, var(--wash) 2%, transparent) 65%); }
+    .gl-card:hover { background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 16%, transparent), color-mix(in srgb, var(--wash) 4%, transparent) 65%); border-left-color: var(--tc); }
+    .gl-card.gl-t-growth { --tc: var(--accent); } .gl-card.gl-t-profit { --tc: var(--cyan); }
+    .gl-card.gl-t-value { --tc: var(--lilac); } .gl-card.gl-t-vol { --tc: var(--orchid); }
+    .gl-card.gl-t-balance { --tc: var(--peach); } .gl-card.gl-t-shortpos { --tc: var(--slate); }
+    .gl-card.gl-t-owners { --tc: var(--ice); } .gl-card.gl-t-earn { --tc: var(--sand); }
+    .gl-card.gl-t-short, .gl-card.gl-t-long { --tc: var(--muted); }
+    .gl-card.gl-kup { --tc: var(--green); } .gl-card.gl-kdown { --tc: var(--red); }
+    .gl-card.gl-sd-up { --tc: var(--green); } .gl-card.gl-sd-down { --tc: var(--red); }
+    .gl-card.gl-sd-risk { --tc: var(--amber); } .gl-card.gl-sd-flat { --tc: var(--muted); }
+    .gl-card .gl-t { color: var(--tc); }
+    .gl-card:not(.gl-up):not(.gl-down) .gl-a:not(.gl-none) { color: var(--tc); }
+    .gl-card.gl-t-short:not(.gl-up):not(.gl-down) .gl-a, .gl-card.gl-t-long:not(.gl-up):not(.gl-down) .gl-a { color: var(--muted); }
+    .gl-card .gl-k { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+    .gl-card .gl-k b { font: 700 26px var(--mono); letter-spacing: -0.03em; line-height: 1.05; color: var(--tc); white-space: nowrap; }
+    .gl-card .gl-k i { font-style: normal; font-size: 11.5px; color: var(--muted); }
+    .gl-card.gl-sig .gl-x { color: var(--text); }
     @media (max-width: 760px) { .gl-grid { grid-template-columns: 1fr; } }
     .jump {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
