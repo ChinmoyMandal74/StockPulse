@@ -9520,7 +9520,7 @@
         + '<span class="bx-v rm-pct">' + esc(String(g.n)) + '</span></div>';
     }).join('');
     const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Sector</span>'
-      + '<span><b style="color:' + NEG + '">Negative</b> · neutral · <b style="color:' + POS + '">positive</b>, share of articles</span>'
+      + '<span><b style="color:' + NEG + '">Negative</b> · neutral · <b style="color:' + POS + '">positive</b></span>'
       + '<span class="sb-hr">Tone</span><span class="sb-hr">Read</span></div>';
     const share = (k) => Math.round(k / T.count * 100) + '% of them';
     const covered = data.rows.length;
