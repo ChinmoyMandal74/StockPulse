@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/app.css" />
   <style>
     body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
-    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 32px; }
+    .page { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
         radial-gradient(46vw 40vw at 4% -8%, rgba(124, 156, 255, 0.13), transparent 62%),
@@ -47,7 +47,9 @@
                  color: var(--faint); margin-top: 6px; }
     @media (max-width: 700px) { .stats { grid-template-columns: 1fr; } }
 
-    .tbl > .core { padding: 4px 0 0; }
+    /* The table scrolls inside its card when it is wider than the page, so the
+       action buttons in the last column can never be clipped out of reach. */
+    .tbl > .core { padding: 4px 0 0; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 11px 18px;
              border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
