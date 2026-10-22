@@ -253,9 +253,9 @@
            reason the artboard size does. -->
       <label id="themeLab">Ground</label>
       <select id="cardTheme" aria-label="Ground">
-        <option value="dark" selected>Dark</option>
+        <option value="navy" selected>Navy</option>
+        <option value="dark">Dark</option>
         <option value="light">Light</option>
-        <option value="navy">Navy</option>
       </select>
 
       <div id="movBox">
@@ -4339,7 +4339,10 @@
     // page open, until a ground is chosen by hand: from then on that choice
     // stands for the visit. A saved post that is opened sets its own.
     // Navy (2026-10-21) opens on the cards' own Navy ground.
-    const siteGround = () => { const t = window.TickrTheme && window.TickrTheme.current(); return t === 'light' ? 'light' : t === 'navy' ? 'navy' : 'dark'; };
+    // NAVY IS THE DEFAULT (owner, 2026-10-22: "Make navy as the default on
+    // promo"): the Dark site opens on Navy too; only a Light site opens Light.
+    // Dark stays one pick away.
+    const siteGround = () => { const t = window.TickrTheme && window.TickrTheme.current(); return t === 'light' ? 'light' : 'navy'; };
     let groundChosen = false;
     $('cardTheme').value = siteGround();
     $('cardTheme').addEventListener('change', (e) => { if (e.isTrusted) groundChosen = true; render(); });
