@@ -31,6 +31,11 @@ const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] 
 const COMMIT = flag('--commit');
 const DAYS = Math.max(1, Math.min(45, Number(opt('--days', 4)) || 4));
 const ONLY = (opt('--symbol', '') || '').toUpperCase();
+// --reread: also read again the filings in the window whose stored reading was
+// 'not a results release' or had a figure refused, replacing only those rows.
+// For after a correction to the reader (the first fill, 2026-10-22: Tesla's
+// quarterly 'Update' judged not a release; figures printed '16.3 billion').
+const REREAD = flag('--reread');
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 40)) || 40;
 const KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -80,7 +85,12 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   const tracked = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol && r.instrumentType !== 'ETF').map((r) => [r.symbol, r]));
   let todo = events.filter((e) => e.accn && /(^|,)2\.02(,|$)/.test(e.items || '') && tracked.has(e.symbol) && (!ONLY || e.symbol === ONLY));
   const known = await store.readEarningsReleaseAccns(todo.map((e) => e.accn));
-  todo = todo.filter((e) => !known.has(e.accn)).sort((a, b) => (a.filed < b.filed ? 1 : -1));   // newest first
+  const redo = new Set();
+  if (REREAD) {
+    for (const day of [...new Set(todo.map((e) => e.filed))]) for (const r of await store.readEarningsReleasesOn(day)) if (!r.isResults || (r.problems || []).some((p) => !/^summary/.test(p))) redo.add(r.accn);
+    console.log('  reread: ' + redo.size + ' earlier readings to replace');
+  }
+  todo = todo.filter((e) => !known.has(e.accn) || redo.has(e.accn)).sort((a, b) => (a.filed < b.filed ? 1 : -1));   // newest first
   console.log(`[${new Date().toISOString()}] earnings releases since ${since}: ${todo.length} to read (${known.size} read before); model ${MODEL}; `
     + `stop at $${MAX_USD.toFixed(2)} or ${MAX_MIN} min. ` + (COMMIT ? 'COMMIT' : 'DRY RUN: nothing will be written'));
   let read = 0, results = 0, notResults = 0, failed = 0, flagged = 0, written = 0;
@@ -116,7 +126,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       console.log(`  ${e.symbol} ${e.filed}: ` + (row.isResults
         ? `${row.periodLabel || ''} revenue ${b(row.revenue)} GAAP EPS ${row.epsGaap == null ? '—' : row.epsGaap}` + (row.epsAdj != null ? ` adj ${row.epsAdj}` : '') + (row.guideKind ? ` guidance ${row.guideKind}` : '')
         : 'not a results release') + (problems.length ? ' | ' + problems.join('; ') : '') + (cost.usd != null ? ` | $${cost.usd.toFixed(4)}` : ''));
-      if (COMMIT) written += await store.writeEarningsRelease(out);
+      if (COMMIT) written += await store.writeEarningsRelease(out, { replace: redo.has(e.accn) });
     } catch (err) {
       if (err instanceof Stop) throw err;
       failed++;

@@ -59,7 +59,7 @@ const FIG = (what) => ({ type: 'object', additionalProperties: false, required: 
 const SCHEMA = { type: 'object', additionalProperties: false,
   required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'summary'],
   properties: {
-    is_results_release: { type: 'boolean', description: 'True only if this document reports the company’s financial results for a completed quarter. A business update, a preliminary estimate or a contract announcement is false.' },
+    is_results_release: { type: 'boolean', description: 'True if this document reports the company’s financial results for a completed quarter, whatever it is called (a press release, a shareholder letter, a quarterly "Update"). False for a preliminary estimate of results, a contract or deal announcement, or anything without the completed quarter’s figures.' },
     period_label: { type: 'string', description: 'The company’s own name for the quarter, e.g. "Third Quarter 2026".' },
     period_end: { type: 'string', description: 'The last day of the quarter reported, YYYY-MM-DD.' },
     currency: { type: 'string', description: 'ISO code of the reporting currency, e.g. USD.' },
@@ -99,10 +99,22 @@ function request(text, model) {
 
 // ---- checks and arithmetic -------------------------------------------------------
 const blankStr = (v) => (v == null || String(v).trim() === '' || /^[—–\-−]+$/.test(String(v).trim()) || String(v).trim().toLowerCase() === 'none' ? null : String(v).trim());
-// A printed figure as a number: commas gone, parentheses or a leading minus negative.
-function num(p) {
+// A SCALE WORD AFTER THE DIGITS ("16.3 billion" in a sentence, "$8.60 Billion"
+// in a guidance line; Capital One and Lam on the first fill): the digits are
+// what must be found in the text, and the word is the figure's own scale,
+// which outranks the unit the model gave for the table.
+const WORD = { thousand: 1e3, k: 1e3, million: 1e6, mm: 1e6, m: 1e6, billion: 1e9, bn: 1e9, b: 1e9, trillion: 1e12 };
+function split(p) {
   const s = blankStr(p);
   if (s == null) return null;
+  const m = s.match(/^(.*?\d\)?)\s*(thousand|million|billion|trillion|bn|mm|k|m|b)\.?\)?$/i);
+  return m ? { core: m[1].trim() + (/^\(/.test(s) && !/\)$/.test(m[1]) ? ')' : ''), mult: WORD[m[2].toLowerCase()] } : { core: s, mult: null };
+}
+// A printed figure as a number: commas gone, parentheses or a leading minus negative.
+function num(p) {
+  const sp = split(p);
+  if (sp == null) return null;
+  const s = sp.core;
   const neg = /^\(.*\)$/.test(s) || /^[-−–]/.test(s);
   const digits = s.replace(/[^\d.]/g, '');
   if (!/\d/.test(digits) || (digits.match(/\./g) || []).length > 1) return null;
@@ -112,8 +124,9 @@ function num(p) {
 // Is the printed figure in the text, as a whole number token (so "2.2" is not
 // found inside "12.25", nor "64" inside "64,601")?
 function inText(norm, p) {
-  const s = blankStr(p);
-  if (s == null) return true;
+  const sp = split(p);
+  if (sp == null) return true;
+  const s = sp.core;
   const core = s.replace(/[()$%\s−–-]/g, '');
   if (!/^[\d.,]+$/.test(core) || !/\d/.test(core)) return false;
   const re = new RegExp('(^|[^\\d.,])\\(?\\$?\\s?' + core.replace(/[.]/g, '\\.') + '(?![\\d]|[.,]\\d)');
@@ -131,8 +144,8 @@ function toRow(ans, text, meta) {
     const f = F || {};
     const sc = SCALE[f.unit] || null;
     const a = keep(label, f.printed), b = keep(label + ' a year earlier', f.prior_printed);
-    if ((a != null || b != null) && !sc) problems.push(label + ': no scale given');
-    const v = (s) => (s == null || !sc || num(s) == null ? null : Math.round(num(s) * sc));
+    if ((a != null && !(split(a) || {}).mult && !sc) || (b != null && !(split(b) || {}).mult && !sc)) problems.push(label + ': no scale given');
+    const v = (s) => { const w = s == null ? null : (split(s) || {}).mult; const k = w || sc; return s == null || !k || num(s) == null ? null : Math.round(num(s) * k); };
     return [v(a), v(b)];
   };
   const isRes = A.is_results_release === true;
@@ -148,7 +161,7 @@ function toRow(ans, text, meta) {
   const gKind = ['revenue_range', 'revenue_midpoint', 'revenue_growth', 'eps_range', 'other'].includes(G.kind) ? G.kind : null;
   const gUnit = blankStr(G.unit);
   const gScale = gKind && /^revenue_(range|midpoint)$/.test(gKind) ? SCALE[gUnit] || null : 1;
-  const gv = (label, p) => { const s = keep('guidance ' + label, p); const n = num(s); return n == null ? null : gScale ? n * gScale : null; };
+  const gv = (label, p) => { const s = keep('guidance ' + label, p); const n = num(s); if (n == null) return null; const w = (split(s) || {}).mult; const money = gKind && /^revenue_(range|midpoint)$/.test(gKind); return money ? ((w || gScale) ? n * (w || gScale) : null) : n; };
   const guideLow = gKind ? gv('low', G.low_printed) : null, guideHigh = gKind ? gv('high', G.high_printed) : null, guideMid = gKind ? gv('midpoint', G.mid_printed) : null;
   // The plus-or-minus can be in its own scale ("$8.60 Billion +/- $400 Million"):
   // kept as printed, never converted on a guess.
@@ -199,4 +212,4 @@ function forReader(row, earn) {
   return r;
 }
 
-module.exports = { againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

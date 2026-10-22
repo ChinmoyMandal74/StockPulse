@@ -79,6 +79,20 @@ check('row: not a results release carries no figures', row.isResults === false &
 check('row: the adjusted label is not kept without the figure', Rel.toRow(Object.assign({}, good, { eps_adjusted: { printed: '', prior_printed: '', label: 'Non-GAAP', excludes: 'x' } }), text, meta).row.epsAdjLabel === null);
 check('row: a bad period end is dropped', Rel.toRow(Object.assign({}, good, { period_end: 'Sept 30' }), text, meta).row.periodEnd === null);
 
+// A scale word on the figure (first fill: Capital One's "16.3 billion" in a
+// sentence, Lam's "$8.60 Billion +/- $400 Million"): found by its digits,
+// scaled by its own word, which outranks the table unit given.
+const prose = 'Revenue of $16.3 billion, up from $14.1 billion. Net income of $(1.2) billion. Guidance: Revenue $8.60 Billion +/- $400 Million.';
+({ row, problems } = Rel.toRow(Object.assign({}, good, { revenue: { printed: '16.3 billion', prior_printed: '14.1 billion', unit: 'millions' }, net_income: { printed: '(1.2) billion', prior_printed: '', unit: 'millions' },
+  eps_gaap_diluted: { printed: '', prior_printed: '' }, eps_adjusted: { printed: '', prior_printed: '', label: '', excludes: '' },
+  guidance: { kind: 'revenue_midpoint', period_label: 'Q4', low_printed: '', high_printed: '', mid_printed: '$8.60 Billion', plus_minus_printed: '400 Million', unit: 'millions', sentence: 'Revenue $8.60 Billion +/- $400 Million' } }), prose, meta));
+check('word: "16.3 billion" is found and scaled by its word', row.revenue === 16.3e9 && row.revenuePrior === 14.1e9, [row.revenue, row.revenuePrior, problems]);
+check('word: a negative in parentheses with a word', row.netIncome === -1.2e9, row.netIncome);
+check('word: the guidance midpoint scaled by its word, the plus-or-minus kept as printed', row.guideMid === 8.6e9 && row.guidePm === '400 Million', [row.guideMid, row.guidePm]);
+check('word: no problems', problems.length === 0, problems);
+check('word: "16 billion" is not found in "16.3 billion"', !Rel.inText(prose, '16 billion'));
+check('word: a word does not rescue a figure that is not there', Rel.toRow(Object.assign({}, good, { revenue: { printed: '17.0 billion', prior_printed: '', unit: 'millions' } }), prose, meta).row.revenue === null);
+
 // ---- year on year ----
 check('yoy', Math.abs(Rel.yoy(64601, 51242) - 26.07) < 0.01);
 check('yoy: off a loss is no percent', Rel.yoy(5, -2) === null && Rel.yoy(null, 3) === null);

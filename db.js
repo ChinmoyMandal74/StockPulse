@@ -2858,11 +2858,14 @@ function erOut(x) {
   try { o.problems = o.problems ? JSON.parse(o.problems) : []; } catch (e) { o.problems = []; }
   return o;
 }
-async function writeEarningsRelease(r) {
+// opts.replace: the loader's --reread, for a filing whose earlier reading was
+// refused or judged not a results release by a reader since corrected. Never
+// used on a clean reading.
+async function writeEarningsRelease(r, opts) {
   await init();
   const v = Object.assign({}, r, { isResults: r.isResults ? 1 : 0, problems: JSON.stringify(r.problems || []), symbol: String(r.symbol).toUpperCase() });
   const res = await db.execute({
-    sql: `insert or ignore into earnings_releases (${ER_COLS.map((c) => c[0]).join(', ')}) values (${ER_COLS.map(() => '?').join(', ')})`,
+    sql: `insert or ${opts && opts.replace ? 'replace' : 'ignore'} into earnings_releases (${ER_COLS.map((c) => c[0]).join(', ')}) values (${ER_COLS.map(() => '?').join(', ')})`,
     args: ER_COLS.map(([, k]) => (v[k] === undefined ? null : v[k])),
   });
   return res.rowsAffected || 0;
