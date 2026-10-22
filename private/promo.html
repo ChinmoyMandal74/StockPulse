@@ -1359,6 +1359,14 @@
           revenue, EPS against the estimate. Read from the SEC each weekday morning, so the newest day is
           normally yesterday.</p>
       </div>
+      <!-- Results summary (2026-10-22, Market): the reporting season across an index. -->
+      <div id="rsmBox">
+        <label>Index</label>
+        <select id="rsmSp500"></select>
+        <p class="hint">The season so far: how many of the index have reported, how many came in above, in line with or
+          below the EPS estimate, and revenue and net income growth for the reported companies combined, then by
+          sector. From each company's results press release; the provider's estimate arrives days after a report.</p>
+      </div>
       <!-- Reel (2026-10-19, admin only): one stock as a 22-second video. -->
       <div id="rlBox">
         <label>Stock</label>
@@ -2403,6 +2411,7 @@
       { id: 'seclines', name: 'Sector lines', note: 'The Lines card a line a sector: share price, volatility or any filed measure, for the sectors you tick' },
       { id: 'indlines', name: 'Industry lines', note: 'The Lines card a line an industry: share price, volatility or any filed measure, for the industries you tick' },
       { id: 'thmlines', name: 'Theme lines', note: 'The Lines card a line a theme: share price, volatility or any filed measure, for the themes you tick' },
+      { id: 'ressum', name: 'Results summary', note: 'The reporting season across an index: how many have reported, how many came in above or below the EPS estimate, growth combined, by sector' },
       { id: 'reported', name: 'Results reported', note: 'The results press releases filed on one day by companies on the screen: revenue and its change, EPS against the estimate, the largest first' },
       { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
       { id: 'reel', name: 'Reel (video)', note: 'One stock as a 22-second 9:16 video for an Instagram Reel: an opening line, its twelve figures, the Signal with its rule, a year of its price, and the end card' },
@@ -2533,6 +2542,7 @@
       ['earnahead', 'Earnings ahead'],
       ['filed', 'Filed yesterday'],
       ['reported', 'Results reported'],
+      ['ressum', 'Results summary'],
       ['mkttone', 'Article tone'],
       // Called Corrections until 2026-10-19 (the owner): renamed to match the
       // screener's Drawdown column, whose four states it counts. The id stays.
@@ -3321,6 +3331,18 @@
         .catch(() => { fldPending[k] = false; });
       return null;
     }
+    // The screener's release column, once a visit: the Results summary reads it.
+    let rcolData = null, rcolPending = false;
+    function getReleaseColumn() {
+      if (rcolData) return rcolData;
+      if (rcolPending) return null;
+      rcolPending = true;
+      fetch('/api/releases/column', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { rows: {} }))
+        .then((d) => { rcolData = d || { rows: {} }; rcolPending = false; if (tpl === 'ressum') render(); })
+        .catch(() => { rcolData = { rows: {} }; rcolPending = false; if (tpl === 'ressum') render(); });
+      return null;
+    }
     // One day's results releases, fetched once a day asked; the day picker is
     // filled from the days on file the first answer carries.
     const rptCache = {}, rptPending = {};
@@ -3396,7 +3418,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'rsmSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -3443,7 +3465,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4261,6 +4283,7 @@
       $('rlBox').style.display = tpl === 'reel' ? 'block' : 'none';
       $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
       $('rptBox').style.display = tpl === 'reported' ? 'block' : 'none';
+      $('rsmBox').style.display = tpl === 'ressum' ? 'block' : 'none';
       $('glnBox').style.display = tpl === 'seclines' ? 'block' : 'none';
       $('ilnBox').style.display = tpl === 'indlines' ? 'block' : 'none';
       $('tlnBox').style.display = tpl === 'thmlines' ? 'block' : 'none';
@@ -4604,6 +4627,9 @@
     // Results reported: its own listener list; the index cut from the module.
     for (const [v, label] of Cards.spCuts()) $('rptSp500').add(new Option(label, v));
     ['rptDay', 'rptSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'reported') render(); }));
+    // Results summary: its own list; the S&P 500 by default, the card's own default.
+    for (const [v, label] of Cards.spCuts()) $('rsmSp500').add(new Option(label, v, v === 'in', v === 'in'));
+    $('rsmSp500').addEventListener('change', () => { if (tpl === 'ressum') render(); });
     $('pbSp500').value = 'All';
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });

@@ -12275,6 +12275,9 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   let fld = null;
   const fldNeed = Cards.filedNeed(post.tpl, post.opts || {});
   if (fldNeed) { try { fld = await filedDayPayload(fldNeed.date, await isGuest(req)); } catch { fld = null; } }
+  // The Results summary card: the screener's stored release column.
+  let rcol = null;
+  if (Cards.resultsSummaryNeed(post.tpl, post.opts || {})) { try { rcol = await store.readFigure('releaseColumn'); } catch { rcol = null; } }
   // The Results reported card, likewise.
   let rptd = null;
   const rptNeed = Cards.reportedNeed(post.tpl, post.opts || {});
@@ -12304,6 +12307,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getMargins: () => mgins,
       getFiled: () => fld,
       getReported: () => rptd,
+      getReleaseColumn: () => rcol || { rows: {} },
       // The At a glance card: the stock page's own cards, over the same rows.
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,

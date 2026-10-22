@@ -55,6 +55,8 @@
   let getFiled = () => null;
   // One day's results press releases (earnings_releases), or null while it loads.
   let getReported = () => null;
+  // The screener's release column (each company's newest results release), or null while it loads.
+  let getReleaseColumn = () => null;
   // One stock's At a glance cards (glance.js, built by the host from its rows), or null.
   let getGlance = () => null;
   // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
@@ -12301,6 +12303,137 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Results summary: a reporting season across an index (2026-10-22) ----
+  //
+  // The owner: "If I have a summarize the data at the entire s&p level on
+  // earning and which company did better than estimates ... add a visual, you
+  // can call it Results Summary". The shape the earnings round-ups use
+  // (FactSet's weekly Earnings Insight is the usual reference): how many of
+  // the index have reported this season, how many came in above, in line with
+  // or below the EPS estimate, and growth for the reported companies combined;
+  // then the same by sector.
+  //
+  // FROM THE RELEASE COLUMN (getReleaseColumn: the stored figure the loader
+  // writes, each company's newest results release with the provider's
+  // estimate joined), over the host's rows for the index cut and the sector.
+  //
+  // THE SEASON is the calendar quarter nearest each release's period end
+  // (a fiscal quarter ending in August or October counts with September's,
+  // as the round-ups count it): the quarter most of the cut's recent
+  // releases fall in.
+  //
+  // ABOVE OR BELOW is the figure the provider reports (the adjusted one, or
+  // GAAP where it matches that) against its estimate, to the cent. A company
+  // whose estimate has not arrived is counted as such, never guessed: the
+  // provider's estimate comes days after a report (backlog 48e).
+  //
+  // GROWTH COMBINED is the sum over the companies reporting in US dollars
+  // with both quarters printed: other money is in its own currency and is
+  // never added across companies. Reported companies only, not a blend with
+  // estimates for the rest.
+  //
+  // NO RANKING: no list of the largest beats or misses. Blue and orange, as
+  // the tone cards, never green and red: an estimate is not a price.
+  function resultsSummaryNeed(tpl) { return tpl === 'ressum' ? {} : null; }
+  function rsQuarterOf(d) {
+    const t = Date.parse(String(d) + 'T12:00:00Z'), y = Number(String(d).slice(0, 4));
+    if (!isFinite(t) || !y) return null;
+    let best = null;
+    for (let yy = y - 1; yy <= y + 1; yy++) for (let q = 1; q <= 4; q++) {
+      const end = Date.UTC(yy, q * 3, 0, 12);
+      const gap = Math.abs(t - end);
+      if (!best || gap < best.gap) best = { y: yy, q, gap };
+    }
+    return best ? best.y + '-Q' + best.q : null;
+  }
+  function tplResultsSummary() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const col = getReleaseColumn();
+    if (!col) return shell('Results summary', 'Reading', 'the releases…');
+    const cut = O.rsmSp500 || 'in';
+    const members = spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol) && x.instrumentType !== 'ETF'), cut);
+    const label = cut !== 'All' && SP_CUT_LABEL[cut] ? SP_CUT_LABEL[cut] : 'Every company tracked';
+    const rows = members.map((m) => ({ m, r: (col.rows || {})[m.symbol] })).filter((x) => x.r && x.r.periodEnd);
+    if (!rows.length) return shell('Results summary · ' + label, 'No results', 'releases on file yet', 'Results releases are read each weekday morning from the SEC.');
+    // The season: the quarter most of the last 75 days' releases fall in.
+    const newest = rows.reduce((a, x) => (x.r.filed > a ? x.r.filed : a), '');
+    const recentFrom = new Date(Date.parse(newest + 'T12:00:00Z') - 75 * 86400000).toISOString().slice(0, 10);
+    const tally = {};
+    for (const x of rows) if (x.r.filed >= recentFrom) { const q = rsQuarterOf(x.r.periodEnd); if (q) tally[q] = (tally[q] || 0) + 1; }
+    const season = Object.keys(tally).sort((a, b) => tally[b] - tally[a] || (a < b ? 1 : -1))[0];
+    const inSeason = rows.filter((x) => rsQuarterOf(x.r.periodEnd) === season);
+    const outcome = (r) => {
+      const pv = r.provider;
+      if (!pv || pv.estimate == null) return 'none';
+      const v = pv.matches === 'adjusted' ? r.epsAdj : pv.matches === 'gaap' ? r.epsGaap : null;
+      if (v == null) return 'none';
+      const d = Math.round((v - pv.estimate) * 100);
+      return d > 0 ? 'above' : d < 0 ? 'below' : 'inline';
+    };
+    const sum = (list) => {
+      const o = { n: list.length, above: 0, inline: 0, below: 0, none: 0, rev: 0, revP: 0, ni: 0, niP: 0, revN: 0, niN: 0 };
+      for (const x of list) {
+        o[outcome(x.r)]++;
+        if ((x.r.currency || 'USD') === 'USD') {
+          if (x.r.revenue != null && x.r.revenuePrior > 0) { o.rev += x.r.revenue; o.revP += x.r.revenuePrior; o.revN++; }
+          if (x.r.netIncome != null && x.r.netIncomePrior != null) { o.ni += x.r.netIncome; o.niP += x.r.netIncomePrior; o.niN++; }
+        }
+      }
+      o.est = o.above + o.inline + o.below;
+      o.revG = o.revP > 0 ? (o.rev / o.revP - 1) * 100 : null;
+      o.niG = o.niP > 0 ? (o.ni / o.niP - 1) * 100 : null;
+      return o;
+    };
+    const all = sum(inSeason);
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : null);
+    const sg = (v) => { if (v == null) return '—'; const t = Math.abs(v).toFixed(1); return (Number(t) === 0 ? '' : v > 0 ? '+' : '−') + t + '%'; };
+    const [qy, qq] = season.split('-Q');
+    const qName = 'Q' + qq + ' ' + qy;
+    const asOf = new Date(newest + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const ABOVE = pal.ink('#60a5fa'), BELOW = pal.ink('#fb923c');
+    const tile = (k, v, sub, c) => '<div class="rs-t"><span class="rs-k">' + esc(k) + '</span><b' + (c ? ' style="color:' + c + '"' : '') + '>' + esc(v) + '</b><span class="rs-s">' + esc(sub) + '</span></div>';
+    const tiles = '<div class="rs-tiles">'
+      + tile('Reported', String(all.n), 'of ' + members.length + ' companies (' + pct(all.n, members.length) + '%)')
+      + tile('Above the estimate', all.est ? pct(all.above, all.est) + '%' : '—', all.est ? all.above + ' of ' + all.est + ' with an estimate' : 'no estimate on file yet', all.est ? ABOVE : null)
+      + tile('Revenue growth', sg(all.revG), 'on a year ago, ' + all.revN + ' combined')
+      + tile('Net income growth', sg(all.niG), 'on a year ago, ' + all.niN + ' combined')
+      + '</div>';
+    // The four outcomes as one bar, each part its share of the reported.
+    const seg = (n, c, cls) => (n ? '<i class="' + cls + '" style="flex:' + n + (c ? ';background:' + c : '') + '"></i>' : '');
+    const bar = '<div class="rs-bar">' + seg(all.above, ABOVE, 'rs-ab') + seg(all.inline, null, 'rs-il') + seg(all.below, BELOW, 'rs-be') + seg(all.none, null, 'rs-no') + '</div>'
+      + '<div class="rs-leg"><span><i style="background:' + ABOVE + '"></i>' + all.above + ' above</span><span><i class="rs-il"></i>' + all.inline + ' in line</span>'
+      + '<span><i style="background:' + BELOW + '"></i>' + all.below + ' below</span><span><i class="rs-no"></i>' + all.none + ' estimate not yet on file</span></div>';
+    // By sector: every sector of the cut, the most reported first.
+    const secs = {};
+    for (const m of members) if (m.sector) secs[m.sector] = secs[m.sector] || { size: 0, list: [] };
+    for (const m of members) if (m.sector) secs[m.sector].size++;
+    for (const x of inSeason) if (x.m.sector && secs[x.m.sector]) secs[x.m.sector].list.push(x);
+    const secRows = Object.keys(secs).map((k) => ({ k, size: secs[k].size, s: sum(secs[k].list) }))
+      .sort((a, b) => b.s.n - a.s.n || b.size - a.size || (a.k < b.k ? -1 : 1));
+    const maxRows = { square: 11, portrait: 11, story: 11 }[size.id] || 11;
+    const table = '<div class="rs-tab"><div class="rs-r rs-hd"><span class="rs-sec">Sector</span><span>Reported</span><span>Above est.</span><span>Below est.</span><span>Revenue</span></div>'
+      + secRows.slice(0, maxRows).map((x) => '<div class="rs-r"><span class="rs-sec">' + esc(x.k) + '</span>'
+        + '<span>' + x.s.n + '<em> of ' + x.size + '</em></span>'
+        + '<span' + (x.s.est ? ' style="color:' + ABOVE + '"' : '') + '>' + (x.s.est ? pct(x.s.above, x.s.est) + '%<em> of ' + x.s.est + '</em>' : '—') + '</span>'
+        + '<span' + (x.s.below ? ' style="color:' + BELOW + '"' : '') + '>' + (x.s.est ? x.s.below + '<em> of ' + x.s.est + '</em>' : '—') + '</span>'
+        + '<span>' + esc(sg(x.s.revG)) + '</span></div>').join('')
+      + (secRows.length > maxRows ? '<div class="fd-more">and ' + (secRows.length - maxRows) + ' more sectors</div>' : '') + '</div>';
+    const note = 'The ' + qName + ' reporting season for ' + (cut !== 'All' && SP_CUT_PROSE[cut] ? SP_CUT_PROSE[cut] : 'every company tracked') + ', as of ' + asOf + ': each company’s results press release, read by an AI model, '
+      + 'a fiscal quarter counted with the calendar quarter it ends nearest. Above or below is the EPS the price data provider reports (most often the company’s adjusted figure) against its estimate, to the cent; '
+      + 'the provider’s estimate arrives days after a report, so recent reporters may not have one yet. Growth is the reported companies’ quarters added together against the same quarters a year earlier, US-dollar reporters only. '
+      + 'A record of what was reported, not a reading of the market.';
+    return chromeTop()
+      + '<div class="s-body"><div class="rs-in">'
+      + '<span class="s-kick">' + esc('Results summary · ' + label) + '</span>'
+      + '<h2 class="s-title">' + esc(qName) + ' results<br><span class="dim">' + esc(all.n + ' of ' + members.length + ' reported') + '</span></h2>'
+      + tiles + bar + table
+      + '<p class="s-sub wide rs-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- At a glance: the stock page's topic cards as a post (2026-10-21) ----
   //
   // The owner: "Do we have a promo card for at a glance section on a
@@ -13029,6 +13162,7 @@
     margins: () => marginsCard('margins'),
     filed: tplFiled,
     reported: tplReported,
+    ressum: tplResultsSummary,
     glance: tplGlance,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
@@ -14927,6 +15061,32 @@
     .rp-noest .rp-row { grid-template-columns: 96px minmax(0, 1fr) 210px 170px; }
     .rp-noest .rp-vs { display: none; }
     .sz-square .rp-noest .rp-row { grid-template-columns: 88px minmax(0, 1fr) 190px 150px; }
+    /* Results summary (2026-10-22): four figures, the outcomes as one bar, a
+       row a sector. Blue and orange for above and below, never green and red. */
+    .rs-in { height: 100%; display: flex; flex-direction: column; }
+    .rs-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+    .rs-t { border: 1px solid var(--hair-2); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+    .rs-k { display: block; font: 600 13px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rs-t b { display: block; margin-top: 6px; font: 700 40px var(--mono); letter-spacing: -0.02em; color: var(--text); }
+    .rs-s { display: block; margin-top: 4px; font-size: 14px; line-height: 1.3; color: var(--muted); }
+    .rs-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin-top: 22px; gap: 3px; }
+    .rs-bar i { display: block; min-width: 4px; }
+    .rs-bar .rs-il, .rs-leg i.rs-il { background: var(--muted); }
+    .rs-bar .rs-no, .rs-leg i.rs-no { background: var(--hair-2); }
+    .rs-leg { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font: 500 15px var(--mono); color: var(--muted); }
+    .rs-leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .rs-tab { margin-top: 22px; }
+    .rs-r { display: grid; grid-template-columns: minmax(0, 1fr) 150px 160px 130px 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--hair); font: 600 19px var(--mono); color: var(--text); }
+    .rs-r > span:not(.rs-sec) { text-align: right; white-space: nowrap; }
+    .rs-r em { font-style: normal; font-weight: 500; font-size: 14px; color: var(--faint); }
+    .rs-r.rs-hd { font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); border-bottom-color: var(--hair-2); padding-top: 0; }
+    .rs-sec { font: 500 18px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rs-note { margin-top: auto; padding-top: 16px; }
+    .sz-square .rs-tiles { margin-top: 14px; gap: 10px; } .sz-square .rs-t { padding: 10px 12px; } .sz-square .rs-t b { font-size: 30px; } .sz-square .rs-s { font-size: 12px; }
+    .sz-square .rs-bar { margin-top: 14px; height: 16px; } .sz-square .rs-tab { margin-top: 12px; } .sz-square .rs-r { padding: 5px 0; font-size: 16px; } .sz-square .rs-sec { font-size: 15px; }
+    .rs-r.rs-hd .rs-sec { font: inherit; }
+    .sz-story .rs-r.rs-hd { font-size: 15px; }
+    .sz-story .rs-t b { font-size: 48px; } .sz-story .rs-r { padding: 13px 0; font-size: 22px; } .sz-story .rs-sec { font-size: 21px; } .sz-story .rs-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sz-square .rp-row { padding: 7px 0; font-size: 18px; grid-template-columns: 88px minmax(0, 1fr) 170px 130px 210px; }
     .sz-square .rp-sym, .sz-square .rp-rev, .sz-square .rp-eps { font-size: 18px; }
     .sz-square .fd-row { padding: 7px 0; font-size: 19px; }
@@ -15781,7 +15941,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
-    reportedNeed,
+    reportedNeed, resultsSummaryNeed,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     glanceTopics: () => GLC_TOPICS.map((t) => t.slice()), glanceDefault: () => GLC_DEFAULT.slice(),
     glanceMax: (sizeId) => GLC_MAX[sizeId] || GLC_MAX.portrait, glancePick,
@@ -15939,6 +16099,7 @@
       getMargins = c.getMargins || (() => null);
       getFiled = c.getFiled || (() => null);
       getReported = c.getReported || (() => null);
+      getReleaseColumn = c.getReleaseColumn || (() => null);
       getGlance = c.getGlance || (() => null);
       getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);

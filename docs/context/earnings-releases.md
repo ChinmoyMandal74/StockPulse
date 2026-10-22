@@ -116,6 +116,23 @@ The owner: "Why only 3 columns, Why not include all the columns ... Just call it
 
 **Coverage builds through the season:** 153 companies on 2026-10-22, most of the universe by mid-November.
 
+### The Results summary card (2026-10-22)
+The owner: "If I have a summarize the data at the entire s&p level on earning and which company did better than estimates, what should be referred, and can you add a visual, you can call it Results Summary."
+
+- **The reference** is the shape of the earnings round-ups, FactSet's weekly Earnings Insight being the usual one:
+  - how many of the index have reported this season;
+  - how many came in above, in line with or below the EPS estimate;
+  - growth for the reported companies combined;
+  - the same by sector.
+- **The template** is `ressum`, in the Market group after Results reported. Its control is `rsmSp500`, defaulting to the S&P 500.
+- **The data** is the screener's stored release column (`getReleaseColumn`; the studio through `/api/releases/column`, the phone through the figure), over the host's rows for the index cut and the sector. No new read.
+- **The season** is the calendar quarter nearest each release's period end, so a fiscal quarter ending in August or October counts with September's. The card uses the quarter most of the cut's releases from the last 75 days fall in.
+- **Above, in line, below:** the figure the provider reports (the adjusted one, or GAAP where that is what it matches) against its estimate, to the cent. A company with no estimate yet is counted as "estimate not yet on file", never guessed.
+- **Growth combined:** the sum of the reported quarters against the same quarters a year earlier, US-dollar reporters only, both quarters printed. It covers reported companies only, with no blend of estimates for the rest.
+  - **Net income growth is shown for the index only.** By sector it swung on a few companies with tiny or loss-making prior quarters (Financial Services +1,281%, Industrials −98% on the first draw), so the sector table shows Below est. in its place.
+- **No ranking:** no list of the biggest beats or misses. Above is blue and below is orange, as on the tone cards, never green and red.
+- **First draw** (S&P 500, Q3 2026, 2026-10-22): 87 of 500 reported; 44 of 53 with an estimate came in above, 4 in line, 5 below; revenue +12.2% over 83 companies; net income +29.3% over 85. Every headline figure matched an independent count made in the test harness. All 11 sectors fit on every size.
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.
