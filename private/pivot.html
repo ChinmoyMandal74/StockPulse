@@ -910,7 +910,7 @@
       { k: 'shortName',     t: 'Name',       l: 1, nm: 1, f: (s) => s.shortName || s.name || '' },
       { k: 'capBand',       t: 'Size',       l: 1 },
       { k: 'marketCap',     t: 'Market cap', f: (s) => fmtMoney(s.marketCap) },
-      { k: 'price',         t: 'Price',      f: (s) => (s.price == null ? null : '$' + Number(s.price).toFixed(2)) },
+      // Price LEFT 2026-10-21 (the owner); the measure's column now follows Market cap.
       { k: 'todayPct',      t: 'Today',      mv: 1 },
       { k: 'oneWeekPct',    t: '1W',         mv: 1 },
       { k: 'oneMonthPct',   t: '1M',         mv: 1 },
@@ -925,7 +925,7 @@
     ];
     // THE MEASURE'S OWN COLUMN (2026-10-21, the owner: "The drill down table also
     // needs to show the measure thats selected"). A popular measure gets a
-    // column after Price, read through the measure's own reader (its guards:
+    // column after Market cap, read through the measure's own reader (its guards:
     // a loss reads a dash for a multiple), so the stocks can be checked against
     // the cell's middle company or average above. Where the measure already
     // has a column (the month's return, market cap) that column is lit instead
@@ -936,7 +936,7 @@
       const field = m.stat && measure.charAt(0) === 'b' && window.Cards ? (Cards.barSpec(measure.slice(1)) || {}).field : measure === 'mcap' ? 'marketCap' : null;
       const cols = DETAIL_COLS.map((c) => Object.assign({}, c, { lit: !!field && c.k === field }));
       if (m.stat && !cols.some((c) => c.lit)) {
-        const at = cols.findIndex((c) => c.k === 'price') + 1;
+        const at = cols.findIndex((c) => c.k === 'marketCap') + 1;
         cols.splice(at, 0, { k: MEAS_COL, t: m.label.replace(/^(Median|Average return,) /, ''), lit: true, meas: 1,
           mv: m.signed ? 1 : 0, raw: (st) => m.each(st), f: (st) => { const v = m.each(st); return v == null ? null : m.fmt(v); } });
       }
