@@ -268,6 +268,50 @@ const SCHEMA = [
      fetched_at   integer,
      primary key (symbol, d)
    )`,
+  // Earnings releases (2026-10-22, releases.js): each results 8-K's press
+  // release read by an AI model into fixed fields, one row per filing,
+  // written once and never replaced. A filing that is not a results release
+  // is recorded too (is_results 0) so it is not read again.
+  `create table if not exists earnings_releases (
+     accn            text primary key,
+     symbol          text not null,
+     filed           text not null,
+     is_results      integer not null,
+     period_end      text,
+     period_label    text,
+     currency        text,
+     revenue         real,
+     revenue_prior   real,
+     op_income       real,
+     op_income_prior real,
+     net_income      real,
+     net_income_prior real,
+     eps_gaap        real,
+     eps_gaap_prior  real,
+     eps_adj         real,
+     eps_adj_prior   real,
+     eps_adj_label   text,
+     eps_adj_excludes text,
+     guide_kind      text,
+     guide_period    text,
+     guide_low       real,
+     guide_high      real,
+     guide_mid       real,
+     guide_pm        text,
+     guide_unit      text,
+     guide_sentence  text,
+     summary         text,
+     url             text,
+     exhibit         text,
+     problems        text,
+     model           text,
+     in_tok          integer,
+     out_tok         integer,
+     usd             real,
+     read_at         integer
+   )`,
+  'create index if not exists idx_earnings_releases_symbol on earnings_releases (symbol, filed)',
+  'create index if not exists idx_earnings_releases_filed on earnings_releases (filed)',
   // Blog posts (2026-09-16). PUBLIC when published — the only table in here
   // whose rows a stranger can read — so the routes serve `status = 'published'`
   // only and the body is rendered to HTML server-side, escaped first.
@@ -2796,6 +2840,54 @@ async function writePriceCursor(n) {
     args: [String(v)],
   });
   return v;
+}
+
+// ---- earnings releases (releases.js) ----------------------------------------
+// One row per results 8-K, written ONCE: `insert or ignore` on the filing
+// number, so a reading is never replaced. Reads are seeks on the filing day
+// (the /filings page) or the symbol (a stock's own), both indexed.
+const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['is_results', 'isResults'], ['period_end', 'periodEnd'], ['period_label', 'periodLabel'], ['currency', 'currency'],
+  ['revenue', 'revenue'], ['revenue_prior', 'revenuePrior'], ['op_income', 'opIncome'], ['op_income_prior', 'opIncomePrior'], ['net_income', 'netIncome'], ['net_income_prior', 'netIncomePrior'],
+  ['eps_gaap', 'epsGaap'], ['eps_gaap_prior', 'epsGaapPrior'], ['eps_adj', 'epsAdj'], ['eps_adj_prior', 'epsAdjPrior'], ['eps_adj_label', 'epsAdjLabel'], ['eps_adj_excludes', 'epsAdjExcludes'],
+  ['guide_kind', 'guideKind'], ['guide_period', 'guidePeriod'], ['guide_low', 'guideLow'], ['guide_high', 'guideHigh'], ['guide_mid', 'guideMid'], ['guide_pm', 'guidePm'], ['guide_unit', 'guideUnit'], ['guide_sentence', 'guideSentence'],
+  ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt']];
+function erOut(x) {
+  const o = {};
+  for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
+  o.isResults = Number(o.isResults) === 1;
+  try { o.problems = o.problems ? JSON.parse(o.problems) : []; } catch (e) { o.problems = []; }
+  return o;
+}
+async function writeEarningsRelease(r) {
+  await init();
+  const v = Object.assign({}, r, { isResults: r.isResults ? 1 : 0, problems: JSON.stringify(r.problems || []), symbol: String(r.symbol).toUpperCase() });
+  const res = await db.execute({
+    sql: `insert or ignore into earnings_releases (${ER_COLS.map((c) => c[0]).join(', ')}) values (${ER_COLS.map(() => '?').join(', ')})`,
+    args: ER_COLS.map(([, k]) => (v[k] === undefined ? null : v[k])),
+  });
+  return res.rowsAffected || 0;
+}
+async function readEarningsReleasesOn(day) {
+  await init();
+  const r = await db.execute({ sql: 'select * from earnings_releases where filed = ?', args: [String(day)] });
+  return r.rows.map(erOut);
+}
+async function readEarningsReleases(symbol, limit = 8) {
+  await init();
+  const r = await db.execute({ sql: 'select * from earnings_releases where symbol = ? order by filed desc limit ?', args: [String(symbol).toUpperCase(), Number(limit) || 8] });
+  return r.rows.map(erOut);
+}
+// Which of these filings have been read already, so a run reads only new ones.
+async function readEarningsReleaseAccns(accns) {
+  await init();
+  const out = new Set();
+  const list = [...new Set((accns || []).map(String))];
+  for (let i = 0; i < list.length; i += 300) {
+    const part = list.slice(i, i + 300);
+    const r = await db.execute({ sql: `select accn from earnings_releases where accn in (${part.map(() => '?').join(',')})`, args: part });
+    for (const x of r.rows) out.add(String(x.accn));
+  }
+  return out;
 }
 
 // ---- earnings history -----------------------------------------------------
@@ -5907,7 +5999,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_tone', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series'];
+  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series', 'earnings_releases'];
 
 // Remove a symbol from the database entirely.
 //
@@ -7883,7 +7975,8 @@ module.exports = {
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure, writeFigures, readNameOf,
+  readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
+  writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

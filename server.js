@@ -56,6 +56,8 @@ const Glance = require('./private/glance.js');
 const Paper = require('./paper.js');
 // The next report date when the provider gives none (fetchProfile, earndate-load.js).
 const EarnDate = require('./earndate.js');
+// Earnings releases read by an AI model (release-load.js writes, these routes read).
+const Releases = require('./releases.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -15205,11 +15207,19 @@ async function filedDayPayload(asked, guest, withCompanies) {
       items: Events8k.detail(e.items).filter((i) => i.code !== '9.01').map((i) => ({ name: i.name, title: i.title, notable: i.notable })),
       url: Events8k.url(ids[e.symbol], e.accn, e.doc) }));
   const out = { date, days, through: (st && st.through) || null, holders, events };
+  // The /filings page also lists the day's results releases as read by the
+  // model (releases.js, earnings_releases), each with the price provider's
+  // EPS beside it: one indexed read on the day, one seek a company.
+  if (withCompanies) {
+    const rel = (await store.readEarningsReleasesOn(date).catch(() => [])).filter((r) => r.isResults && keep(r.symbol));
+    const earn = await Promise.all(rel.map((r) => store.readEarnings(r.symbol).catch(() => [])));
+    out.releases = rel.map((r, i) => Releases.forReader(r, earn[i]));
+  }
   // The /filings page names each company and lets a reader cut by sector and
   // index: those come from the snapshot (held in memory per instance), stamped
   // with the two index flags. The card has the rows already and skips this.
   if (withCompanies) {
-    const want = new Set([...holders, ...events].map((x) => x.symbol));
+    const want = new Set([...holders, ...events, ...(out.releases || [])].map((x) => x.symbol));
     const snap = await readSnapshot().catch(() => null);
     const rows = ((snap && snap.stocks) || []).filter((r) => r && want.has(r.symbol))
       .map((r) => ({ symbol: r.symbol, name: r.shortName || r.name || r.symbol, sector: r.sector || null, industry: r.industry || null,
@@ -15226,6 +15236,16 @@ app.get('/api/filings', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
   res.json(await filedDayPayload(String(req.query.date || ''), false, true));
+}));
+// One company's earnings releases as read (releases.js), newest first, with
+// the provider's EPS beside each. Signed in; a guest only for the guest stocks.
+app.get('/api/releases', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  const [rows, earn] = await Promise.all([store.readEarningsReleases(symbol, 8), store.readEarnings(symbol).catch(() => [])]);
+  res.json({ symbol, releases: rows.filter((r) => r.isResults).map((r) => Releases.forReader(r, earn)) });
 }));
 app.get('/api/filings/day', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

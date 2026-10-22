@@ -83,6 +83,13 @@
     .fl-link { color: var(--accent); text-decoration: none; font-size: 12px; white-space: nowrap; }
     .fl-link:hover { text-decoration: underline; }
     .fl-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    /* Results reported (earnings_releases, 2026-10-22). Growth figures are not
+       price moves, so they stay uncoloured; amber marks what needs noticing. */
+    .fl-wrap td .fl-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; font-family: var(--sans); white-space: normal; }
+    .fl-wrap td .fl-amb { color: var(--amber); }
+    .fl-wrap tr.fl-rhead td { border-bottom: 0; padding-bottom: 4px; }
+    .fl-wrap tr.fl-rsum td { padding-top: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .fl-wrap td.fl-out { max-width: 260px; color: var(--muted); font-size: 12px; line-height: 1.5; }
     .fl-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
     .fl-who { font: inherit; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
               text-decoration: underline; text-decoration-color: var(--hair-2); text-underline-offset: 3px; }
@@ -125,7 +132,8 @@
       <h1>Filings</h1>
       <p class="lede">Every filing by a holder crossing 5% of a company (Schedules 13D and 13G) and every company
         announcement (Form 8-K) about the stocks tracked here, a day at a time. Read each morning from the SEC's
-        index of the previous business day, so the newest day is normally yesterday.</p>
+        index of the previous business day, so the newest day is normally yesterday. Results releases filed that day
+        are listed first, their figures copied from the release by an AI model and checked against its text.</p>
     </header>
 
     <div class="fl-days" id="days"></div>
@@ -145,6 +153,10 @@
     </div>
     <div class="fl-count" id="count"></div>
 
+    <section class="fl-sec" id="secR" hidden>
+      <h2>Results reported · earnings releases</h2>
+      <div class="bezel"><div class="core" style="padding:0"><div class="fl-wrap" id="rel"></div></div></div>
+    </section>
     <section class="fl-sec" id="secH">
       <h2>5% holders · Schedules 13D and 13G</h2>
       <div class="bezel"><div class="core" style="padding:0"><div class="fl-wrap" id="hold"><div class="fl-empty">Reading the filings&hellip;</div></div></div></div>
@@ -163,6 +175,12 @@
       what kind of event it reports; the ones marked in amber are worth noticing (a bankruptcy, a restatement warning,
       an auditor change, a listing notice and the like). The filing itself, linked on each row, is where what happened
       is written. A filing is a record, not a reading of the stock.</p>
+    <p class="fl-foot">Results reported: each company's results press release (the 8-K's Exhibit 99.1), read by an
+      AI model (Claude Haiku) that copies the figures out as printed; every figure is then checked against the
+      release's own text and one that cannot be found there is left out. "EPS, as reported" is the GAAP diluted
+      figure; the adjusted one is the company's own, under its own name (hover for what it leaves out), and has no
+      standard definition. The estimate and the provider's figure come from the price data provider. A summary
+      describes what the release says; it is not advice.</p>
   </main>
 
   <script>
@@ -229,9 +247,11 @@
       const E = data.events.filter((e) => inCut(e.symbol) && hit(e.symbol, e.label) && (state.form === 'all' || state.form === '8K') && (!notable || e.notable))
         .sort((a, b) => (b.notable ? 1 : 0) - (a.notable ? 1 : 0) || cap(b.symbol) - cap(a.symbol));
       const showH = state.form !== '8K', showE = state.form === 'all' || state.form === '8K';
+      const RL = (data.releases || []).filter((r) => inCut(r.symbol) && hit(r.symbol, r.summary)).sort((a, b) => cap(b.symbol) - cap(a.symbol));
+      $('secR').hidden = !showE || !RL.length;
       $('secH').hidden = !showH; $('secE').hidden = !showE;
-      const companies = new Set([...(showH ? H : []), ...(showE ? E : [])].map((x) => x.symbol)).size;
-      $('count').textContent = (showH ? H.length + ' holder filing' + (H.length === 1 ? '' : 's') + ' · ' : '') + (showE ? E.length + ' 8-K' + (E.length === 1 ? '' : 's') + ' · ' : '') + companies + ' compan' + (companies === 1 ? 'y' : 'ies');
+      const companies = new Set([...(showH ? H : []), ...(showE ? E : []), ...(showE ? RL : [])].map((x) => x.symbol)).size;
+      $('count').textContent = (showE && RL.length ? RL.length + ' results release' + (RL.length === 1 ? '' : 's') + ' · ' : '') + (showH ? H.length + ' holder filing' + (H.length === 1 ? '' : 's') + ' · ' : '') + (showE ? E.length + ' 8-K' + (E.length === 1 ? '' : 's') + ' · ' : '') + companies + ' compan' + (companies === 1 ? 'y' : 'ies');
       const coCell = (s) => '<td class="fl-co"><a href="/stock/' + encodeURIComponent(s) + '">' + we(s) + '</a><span>' + we(co(s).name || '') + '</span></td>';
       const link = (u) => (u ? '<a class="fl-link" href="' + we(u) + '" target="_blank" rel="noopener">sec.gov &#8599;</a>' : '');
       const none = 'Nothing of this kind matches on ' + long(data.date) + '.';
@@ -240,11 +260,42 @@
           + H.map((h) => '<tr>' + coCell(h.symbol) + '<td>' + (h.holder ? '<button class="fl-who" data-who="' + we(h.holder) + '" title="Every 13D and 13G this holder filed about the stocks tracked here">' + we(h.holder) + '</button>' : 'Not named') + '</td>'
             + '<td><span class="fl-form' + (h.kind === 'D' ? ' fl-d' : '') + '">' + (h.kind === 'D' ? '13D' : '13G') + (h.amended ? ' amended' : '') + '</span></td>'
             + '<td class="fl-num">' + we(h.pctWord || '—') + '</td><td>' + link(h.url) + '</td></tr>').join('') + '</tbody></table>';
+      $('rel').innerHTML = !RL.length ? '' : '<table><thead><tr><th>Company</th><th class="fl-num">Revenue</th><th class="fl-num">EPS, as reported</th><th class="fl-num">EPS, the company\u2019s adjusted</th><th class="fl-num">Estimate</th><th>Outlook</th><th>Release</th></tr></thead><tbody>'
+        + RL.map((r) => relRow(r, coCell(r.symbol))).join('') + '</tbody></table>';
       $('ev').innerHTML = !E.length ? '<div class="fl-empty">' + we(none) + '</div>'
         : '<table><thead><tr><th>Company</th><th>What it reports</th><th>Filing</th></tr></thead><tbody>'
           + E.map((e) => '<tr>' + coCell(e.symbol) + '<td>'
             + ((e.items && e.items.length) ? e.items.map((i) => '<span class="fl-item' + (i.notable ? ' fl-on' : '') + '" title="' + we(i.title || '') + '">' + we(i.name) + '</span>').join('') : we(e.label))
             + '</td><td>' + link(e.url) + '</td></tr>').join('') + '</tbody></table>';
+    }
+    // ONE RESULTS RELEASE: the figures as the company printed them (the model
+    // copies, our code scales), each change on a year earlier, and the price
+    // provider's EPS beside them. A figure the release does not contain was
+    // refused on reading and is a dash; the row says how many.
+    const pre = (cur) => (!cur || cur === 'USD' ? '$' : cur + ' ');
+    const money = (v, cur) => { if (v == null) return '\u2014'; const a = Math.abs(v), sg = v < 0 ? '\u2212' : '';
+      return sg + pre(cur) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
+    const eps = (v, cur) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + pre(cur) + Math.abs(v).toFixed(2));
+    const chg = (a, b) => { if (a == null || b == null || !(b > 0)) return ''; const p = (a / b - 1) * 100; return (p > 0 ? '+' : p < 0 ? '\u2212' : '') + Math.abs(p).toFixed(1) + '% on a year ago'; };
+    function relRow(r, co) {
+      const cur = r.currency;
+      const pv = r.provider;
+      let est = '\u2014';
+      if (pv && pv.estimate != null) {
+        const vs = pv.matches === 'adjusted' ? r.epsAdj : pv.matches === 'gaap' ? r.epsGaap : null;
+        const d = vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100;
+        est = eps(pv.estimate, cur) + (d == null ? '' : '<span class="fl-sub">' + (d === 0 ? 'in line with it' : eps(Math.abs(d), cur) + (d > 0 ? ' above' : ' below')) + (pv.matches === 'gaap' ? ', as reported' : '') + '</span>');
+      }
+      if (pv && pv.matches === 'differs') est += '<span class="fl-sub fl-amb" title="The price provider gives ' + we(eps(pv.actual, cur)) + ' for this report, which is neither figure in the release.">Provider\u2019s ' + we(eps(pv.actual, cur)) + ' matches neither</span>';
+      const figs = (r.problems || []).filter((p) => !/^summary/.test(p)), probs = figs.length;
+      return '<tr class="fl-rhead">' + co
+        + '<td class="fl-num">' + we(money(r.revenue, cur)) + '<span class="fl-sub">' + we(chg(r.revenue, r.revenuePrior)) + '</span></td>'
+        + '<td class="fl-num">' + we(eps(r.epsGaap, cur)) + '<span class="fl-sub">' + (r.epsGaapPrior != null ? 'a year ago ' + we(eps(r.epsGaapPrior, cur)) : '') + '</span></td>'
+        + '<td class="fl-num">' + (r.epsAdj == null ? '\u2014' : we(eps(r.epsAdj, cur)) + '<span class="fl-sub" title="' + we((r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')) + '">' + we(r.epsAdjLabel || 'adjusted') + '</span>') + '</td>'
+        + '<td class="fl-num">' + est + '</td>'
+        + '<td class="fl-out"' + (r.guideSentence ? ' title="' + we(r.guideSentence) + '"' : '') + '>' + (r.guideSentence ? we(r.guideSentence.length > 150 ? r.guideSentence.slice(0, 147) + '\u2026' : r.guideSentence) : '\u2014') + '</td>'
+        + '<td>' + (r.url ? '<a class="fl-link" href="' + we(r.url) + '" target="_blank" rel="noopener">' + we(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '<span class="fl-sub">' + we(r.periodLabel || '') + '</span></td></tr>'
+        + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (probs ? ' <span class="fl-amb" title="' + we(figs.join('; ')) + '">' + probs + ' figure' + (probs === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</td></tr>';
     }
     // ONE HOLDER (2026-10-21): every 13D/13G it filed about the tracked
     // stocks, all days on file, and its 13F book when the name matches one.
