@@ -24,6 +24,9 @@
     /* Everything is scoped under .lp: app.css owns .btn, .card, .tab and more,
        and the subscribe box (.subbox) brings its own h2. */
     body { overflow-x: clip; font-size: 16px; line-height: 1.6; }
+    /* Every in-page link (the nav, the feature chips, the footer) stops below
+       the sticky bar, which is 64px tall, with a little air. */
+    html { scroll-padding-top: calc(76px + env(safe-area-inset-top, 0px)); }
     .lp a { color: inherit; }
     .lp .w { max-width: 1180px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
     .lp main > section { padding-block: 84px; }
@@ -109,7 +112,6 @@
                 border: 1px solid var(--hair); border-radius: 20px; padding: 32px; }
     /* Stacked, every feature in view; the screenshot alternates sides so the
        column reads as a tour. The jump links land clear of the sticky bar. */
-    .lp .pane { scroll-margin-top: 84px; }
     .lp .pane + .pane { margin-top: 22px; }
     .lp .pane.flip { grid-template-columns: 1.2fr 0.8fr; }
     .lp .pane.flip > div:first-child { order: 2; }
