@@ -93,6 +93,16 @@ check('word: no problems', problems.length === 0, problems);
 check('word: "16 billion" is not found in "16.3 billion"', !Rel.inText(prose, '16 billion'));
 check('word: a word does not rescue a figure that is not there', Rel.toRow(Object.assign({}, good, { revenue: { printed: '17.0 billion', prior_printed: '', unit: 'millions' } }), prose, meta).row.revenue === null);
 
+// The release's stated scale outranks "units" (TD SYNNEX, first fill).
+const inThou = 'Consolidated Statements of Operations (in thousands, except per share amounts) | Revenue | 21,558,406 | 18,912,117';
+({ row, problems } = Rel.toRow(Object.assign({}, good, { revenue: { printed: '21,558,406', prior_printed: '18,912,117', unit: 'units' }, eps_gaap_diluted: { printed: '', prior_printed: '' }, eps_adjusted: { printed: '', prior_printed: '', label: '', excludes: '' }, guidance: { kind: 'none', period_label: '', low_printed: '', high_printed: '', mid_printed: '', plus_minus_printed: '', unit: 'none', sentence: '' } }), inThou, meta));
+check('scale: "units" under "(in thousands)" is read in thousands', row.revenue === 21558406e3 && row.revenuePrior === 18912117e3 && problems.length === 0, [row.revenue, problems]);
+({ row, problems } = Rel.toRow(Object.assign({}, good, { revenue: { printed: '21,558,406', prior_printed: '', unit: 'units' }, eps_gaap_diluted: { printed: '', prior_printed: '' }, eps_adjusted: { printed: '', prior_printed: '', label: '', excludes: '' }, guidance: { kind: 'none', period_label: '', low_printed: '', high_printed: '', mid_printed: '', plus_minus_printed: '', unit: 'none', sentence: '' } }), inThou + ' Segment table (in millions) 21,558', meta));
+check('scale: two stated scales: the one stated before the figure', row.revenue === 21558406e3 && problems.length === 0, [row.revenue, problems]);
+({ row, problems } = Rel.toRow(Object.assign({}, good, { revenue: { printed: '21,558,406', prior_printed: '', unit: 'units' }, eps_gaap_diluted: { printed: '', prior_printed: '' }, eps_adjusted: { printed: '', prior_printed: '', label: '', excludes: '' }, guidance: { kind: 'none', period_label: '', low_printed: '', high_printed: '', mid_printed: '', plus_minus_printed: '', unit: 'none', sentence: '' } }), 'Revenue | 21,558,406 | then a table (in thousands) and another (in millions)', meta));
+check('scale: two stated, none before the figure: refused, not guessed', row.revenue === null && problems.some((p) => /more than one scale/.test(p)), problems);
+check('scale: a stated unit other than "units" is left alone', Rel.toRow(good, text + ' (in thousands)', meta).row.revenue === 64601e6);
+
 // ---- year on year ----
 check('yoy', Math.abs(Rel.yoy(64601, 51242) - 26.07) < 0.01);
 check('yoy: off a loss is no percent', Rel.yoy(5, -2) === null && Rel.yoy(null, 3) === null);

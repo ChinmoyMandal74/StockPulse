@@ -36,6 +36,9 @@ const ONLY = (opt('--symbol', '') || '').toUpperCase();
 // For after a correction to the reader (the first fill, 2026-10-22: Tesla's
 // quarterly 'Update' judged not a release; figures printed '16.3 billion').
 const REREAD = flag('--reread');
+// --force (with --symbol): read that company's filings in the window again,
+// replacing even clean readings. For a fault the checks could not see (a scale).
+const FORCE = flag('--force') && !!ONLY;
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 40)) || 40;
 const KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -86,6 +89,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   let todo = events.filter((e) => e.accn && /(^|,)2\.02(,|$)/.test(e.items || '') && tracked.has(e.symbol) && (!ONLY || e.symbol === ONLY));
   const known = await store.readEarningsReleaseAccns(todo.map((e) => e.accn));
   const redo = new Set();
+  if (FORCE) for (const e of todo) if (known.has(e.accn)) redo.add(e.accn);
   if (REREAD) {
     for (const day of [...new Set(todo.map((e) => e.filed))]) for (const r of await store.readEarningsReleasesOn(day)) if (!r.isResults || (r.problems || []).some((p) => !/^summary/.test(p))) redo.add(r.accn);
     console.log('  reread: ' + redo.size + ' earlier readings to replace');

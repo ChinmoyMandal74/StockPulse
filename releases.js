@@ -140,9 +140,25 @@ function toRow(ans, text, meta) {
   const norm = String(text || '').replace(/\s+/g, ' ');
   const problems = [];
   const keep = (label, p) => { const s = blankStr(p); if (s == null) return null; if (!inText(norm, s)) { problems.push(label + ' "' + s + '" is not in the release'); return null; } return s; };
+  // THE SCALE THE RELEASE STATES. On the first fill TD SYNNEX's revenue,
+  // printed "21,558,406" under "(in thousands)", came back as "units" and was
+  // stored as $21.6 million; the digits were right, so the text check could
+  // not see it. A figure the model calls "units" (and that carries no scale
+  // word) takes the release's stated scale when it states exactly one, and is
+  // refused when it states several.
+  const declared = new Set([...norm.matchAll(/\bin (thousands|millions|billions)\b/gi)].map((m) => m[1].toLowerCase()));
   const money = (label, F) => {
     const f = F || {};
-    const sc = SCALE[f.unit] || null;
+    let sc = SCALE[f.unit] || null;
+    if (f.unit === 'units' && !(split(f.printed) || {}).mult && declared.size) {
+      // Several stated: the one stated last BEFORE the figure's first place in
+      // the text, as a reader takes a table's heading.
+      const at = blankStr(f.printed) == null ? -1 : norm.indexOf(split(f.printed).core.replace(/[()$\s]/g, ''));
+      const before = at < 0 ? [] : [...norm.slice(0, at).matchAll(/\bin (thousands|millions|billions)\b/gi)];
+      if (declared.size === 1) sc = SCALE[[...declared][0]];
+      else if (before.length) sc = SCALE[before[before.length - 1][1].toLowerCase()];
+      else { if (blankStr(f.printed) != null) problems.push(label + ': the release states more than one scale and the figure’s is not clear'); return [null, null]; }
+    }
     const a = keep(label, f.printed), b = keep(label + ' a year earlier', f.prior_printed);
     if ((a != null && !(split(a) || {}).mult && !sc) || (b != null && !(split(b) || {}).mult && !sc)) problems.push(label + ': no scale given');
     const v = (s) => { const w = s == null ? null : (split(s) || {}).mult; const k = w || sc; return s == null || !k || num(s) == null ? null : Math.round(num(s) * k); };

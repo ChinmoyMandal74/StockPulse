@@ -35,7 +35,25 @@ The owner showed a newsletter's earnings round-up (revenue and EPS against estim
 - **The loader:** `node --use-system-ca release-load.js` is a dry run (it still calls the model); `--commit` writes. Options: `--days N` (default 4, at most 45), `--symbol S`, `--max-usd` (default 2), `--max-minutes` (default 40). Newest first.
 - **The schedule:** `release-task.ps1` registers **TickrLab earnings releases**, weekdays at 07:00 local, `--days 5`, at most $2 or 40 minutes, logging to `release.log`. That is after the 04:00 nightly, whose `sec daily` phase records the previous business day's 8-Ks; a Friday's are read on Monday.
 - **SEC:** two fetches a filing (the index headers, then the exhibit), sequential, declared user agent (the server's own `REPORT_TO`/`MAIL_FROM` address), 400ms apart. A 429 or 403 stops the run.
-- **The first fill** (2026-10-22): 31 days back, 185 filings.
+- **Correcting readings:**
+  - `--reread` replaces only the readings that were refused or judged not results.
+  - `--force --symbol S` replaces a company's readings in the window, for a fault the checks could not see.
+  - Every other row is left as written.
+
+### The first fill (2026-10-22)
+- **Volume and cost:** 31 days back, 185 results 8-Ks, $0.34, 12 minutes.
+- **Three reader faults** were found on it, fixed, and their rows re-read:
+  1. **Tesla's quarterly "Update" and some shareholder letters were judged "not a results release".** The question now names those forms.
+  2. **Figures printed with a scale word were refused by the text check.** Examples: "16.3 billion" in Capital One's prose, "$8.60 Billion" in Lam's guidance. A scale word is now split off (`split`): the digits are checked against the text, and the word is the figure's scale.
+  3. **TD SYNNEX's revenue was stored as $21.6 million instead of billion.** It is printed in thousands, and the model said "units". A figure called "units" now takes the scale the release states ("in thousands"). If it states several, it takes the one stated last before the figure; if none comes before it, the figure is refused, not guessed.
+- **After the fixes:** 153 results releases and 32 others.
+  - All 32 "not results" calls were checked against the stored summaries and are right: preliminary updates, an acquisition, restated figures, operating data, a deliveries report. Eleven filings had no press-release exhibit.
+  - Refused figures left: one company's (Lam's EPS guidance range, worked out from a midpoint). Its sentence is kept.
+- **Against the 10-Q,** for the 31 releases whose 10-Q is filed:
+  - GAAP EPS matches 23 of 24.
+  - Net income matches 26 of 29.
+  - Revenue matches 24 of 29. The differences were SNX, since fixed, plus definitions: Paychex's total against service revenue, Jefferies' net revenues, Prudential's total revenues, and Applied Digital's continuing operations, which is the figure its release headlines.
+- **Against Twelve Data:** 75 of the 80 with a provider figure match (46 adjusted, 29 GAAP). The 5 that differ are definitional (Citi, Progressive, Prologis) or have no EPS in the release.
 
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
