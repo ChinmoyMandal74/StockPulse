@@ -256,6 +256,9 @@
     table.ch td.nm { color: var(--muted); max-width: 26ch; overflow: hidden;
                      text-overflow: ellipsis; }
     table.ch td.na { color: var(--faint); }
+    /* The selected measure's column: a faint accent wash down it, its heading in accent. */
+    table.ch thead th.lit { color: var(--accent); }
+    table.ch td.lit { background: color-mix(in srgb, var(--accent) 7%, transparent); font-weight: 600; }
 
     .msg { padding: 40px 0; color: var(--muted); font-size: 13px; }
     .err { color: var(--red); }
@@ -911,10 +914,8 @@
       { k: 'todayPct',      t: 'Today',      mv: 1 },
       { k: 'oneWeekPct',    t: '1W',         mv: 1 },
       { k: 'oneMonthPct',   t: '1M',         mv: 1 },
-      // In window order, so the row reads left to right as time passing —
-      // the screener's own ordering, and 3M/6M between 1M and 1Y is where
-      // the eye already expects them.
-      { k: 'threeMonthPct', t: '3M',         mv: 1 },
+      // In window order, so the row reads left to right as time passing.
+      // 3M LEFT 2026-10-21 (the owner): its width went to the measure's column.
       { k: 'sixMonthPct',   t: '6M',         mv: 1 },
       { k: 'ytdPct',        t: 'YTD',        mv: 1 },
       { k: 'oneYearPct',    t: '1Y',         mv: 1 },
@@ -922,6 +923,25 @@
       { k: 'industry',      t: 'Industry',   l: 1 },
       { k: 'action',        t: 'Signal',     l: 1 },
     ];
+    // THE MEASURE'S OWN COLUMN (2026-10-21, the owner: "The drill down table also
+    // needs to show the measure thats selected"). A popular measure gets a
+    // column after Price, read through the measure's own reader (its guards:
+    // a loss reads a dash for a multiple), so the stocks can be checked against
+    // the cell's middle company or average above. Where the measure already
+    // has a column (the month's return, market cap) that column is lit instead
+    // of drawn twice. Count and Signal moves add nothing.
+    const MEAS_COL = 'meas';
+    function detailCols() {
+      const m = M();
+      const field = m.stat && measure.charAt(0) === 'b' && window.Cards ? (Cards.barSpec(measure.slice(1)) || {}).field : measure === 'mcap' ? 'marketCap' : null;
+      const cols = DETAIL_COLS.map((c) => Object.assign({}, c, { lit: !!field && c.k === field }));
+      if (m.stat && !cols.some((c) => c.lit)) {
+        const at = cols.findIndex((c) => c.k === 'price') + 1;
+        cols.splice(at, 0, { k: MEAS_COL, t: m.label.replace(/^(Median|Average return,) /, ''), lit: true, meas: 1,
+          mv: m.signed ? 1 : 0, raw: (st) => m.each(st), f: (st) => { const v = m.each(st); return v == null ? null : m.fmt(v); } });
+      }
+      return cols;
+    }
     // Biggest first, because "who is in this bucket" is answered by the names
     // that carry it. Every column is sortable, so this is only a starting point.
     let dSort = 'marketCap';
@@ -1185,14 +1205,14 @@
     // What a column shows for one stock, and what it SORTS on — deliberately
     // the same reader, because a column that sorts on something other than the
     // number printed in it is the quietest way to make a table lie.
-    const dRaw = (col, s) => s[col.k];
+    const dRaw = (col, s) => (col.raw ? col.raw(s) : s[col.k]);
     function dText(col, s) {
       const v = col.f ? col.f(s) : (col.mv ? fmtMove(dRaw(col, s)) : dRaw(col, s));
       return v == null || v === '' ? null : String(v);
     }
 
     function detailRows(list) {
-      const col = DETAIL_COLS.find((c) => c.k === dSort) || DETAIL_COLS[0];
+      const col = detailCols().find((c) => c.k === dSort) || DETAIL_COLS[0];
       // Blanks sort last in BOTH directions. A missing market cap is not the
       // smallest one — the same rule the screener's own columns follow.
       return list.slice().sort((a, b) => {
@@ -1235,6 +1255,7 @@
     // checked against the number in the cell above.
     function paintDetail(p) {
       const host = $('detail');
+      if (!detailCols().some((c) => c.k === dSort)) { dSort = 'marketCap'; dDir = -1; }
       if (!picked) {
         host.innerHTML = '';
         document.body.classList.remove('picked');
@@ -1264,17 +1285,18 @@
         '<span class="spacer"></span>' +
         '<button class="btn quiet" id="dclear" type="button">Clear selection</button></div>';
       h += '<div class="bezel card"><div class="core"><div class="detailwrap"><table class="ch"><thead><tr>';
-      for (const c of DETAIL_COLS) {
-        h += '<th data-k="' + esc(c.k) + '" class="' + (c.l ? 'l' : '') +
+      const DCOLS = detailCols();
+      for (const c of DCOLS) {
+        h += '<th data-k="' + esc(c.k) + '" class="' + (c.l ? 'l' : '') + (c.lit ? ' lit' : '') +
           (c.k === dSort ? ' on' : '') + '" title="Sort by ' + esc(c.t) + '">' + esc(c.t) +
           (c.k === dSort ? (dDir < 0 ? ' ↓' : ' ↑') : '') + '</th>';
       }
       h += '</tr></thead><tbody>';
       for (const s of detailRows(list)) {
         h += '<tr>';
-        for (const c of DETAIL_COLS) {
+        for (const c of DCOLS) {
           const t = dText(c, s);
-          const cls = [c.l ? 'l' : '', c.nm ? 'nm' : '', t == null ? 'na' : '',
+          const cls = [c.l ? 'l' : '', c.nm ? 'nm' : '', t == null ? 'na' : '', c.lit ? 'lit' : '',
             c.mv ? moveCls(dRaw(c, s)) : ''].filter(Boolean).join(' ');
           h += '<td' + (cls ? ' class="' + cls + '"' : '') + '>' +
             (t == null ? '—'
