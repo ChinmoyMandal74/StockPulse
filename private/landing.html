@@ -103,10 +103,16 @@
     /* ---- tour ---- */
     .lp .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 30px; }
     .lp .tb { font: 500 14px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--hair-2); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
-    .lp .tb[aria-selected="true"] { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .lp .tb { text-decoration: none; }
+    .lp .tb:hover { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
     .lp .pane { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 36px; margin-top: 26px; align-items: center; background: var(--surface);
                 border: 1px solid var(--hair); border-radius: 20px; padding: 32px; }
-    .lp .pane[hidden] { display: none !important; }
+    /* Stacked, every feature in view; the screenshot alternates sides so the
+       column reads as a tour. The jump links land clear of the sticky bar. */
+    .lp .pane { scroll-margin-top: 84px; }
+    .lp .pane + .pane { margin-top: 22px; }
+    .lp .pane.flip { grid-template-columns: 1.2fr 0.8fr; }
+    .lp .pane.flip > div:first-child { order: 2; }
     .lp .pane > div { min-width: 0; }
     .lp .pane ul { margin: 16px 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 8px; }
     .lp .pane p { color: var(--muted); margin-top: 12px; }
@@ -215,10 +221,11 @@
 
     @media (max-width: 1000px) { .lp-nav { display: none; } }
     @media (max-width: 900px) {
-      .lp-hero .w, .lp .pane, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
+      .lp-hero .w, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
       .lp .stack { justify-self: center; max-width: 360px; } .lp .stackcap { justify-self: center; text-align: center; }
       .lp-nums .w { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .lp .grid, .lp .depth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .lp .pane.flip > div:first-child { order: 0; }
       .lp .themes { grid-template-columns: 1fr; }
       .lp footer .cols { grid-template-columns: 1fr 1fr; }
     }
@@ -309,15 +316,18 @@
     <div class="w">
       <span class="eyebrow">The product</span>
       <h2 class="h2">What you get on day one.</h2>
-      <div class="tabs" role="tablist" aria-label="Product tour">
-        <button class="tb" role="tab" id="t-screener" aria-selected="true" aria-controls="p-screener">Screener</button>
-        <button class="tb" role="tab" id="t-stock" aria-selected="false" aria-controls="p-stock">Stock pages</button>
-        <button class="tb" role="tab" id="t-pivot" aria-selected="false" aria-controls="p-pivot">Pivot</button>
-        <button class="tb" role="tab" id="t-visuals" aria-selected="false" aria-controls="p-visuals">Visuals</button>
-        <button class="tb" role="tab" id="t-filings" aria-selected="false" aria-controls="p-filings">Filings and ownership</button>
-      </div>
+      <!-- Every feature is shown, one after another (the owner, 2026-10-22:
+           behind tabs "someone can easily miss the product features"). The
+           chips are jump links, not switches. -->
+      <nav class="tabs" aria-label="Jump to a feature">
+        <a class="tb" href="#p-screener">Screener</a>
+        <a class="tb" href="#p-stock">Stock pages</a>
+        <a class="tb" href="#p-pivot">Pivot</a>
+        <a class="tb" href="#p-visuals">Visuals</a>
+        <a class="tb" href="#p-filings">Filings and ownership</a>
+      </nav>
 
-      <div class="pane" role="tabpanel" id="p-screener" aria-labelledby="t-screener">
+      <div class="pane" id="p-screener">
         <div>
           <h3 class="h3">One table, every stock, measured nightly.</h3>
           <p><span data-k="columns">{{columns}}</span> columns, grouped by what they answer: how it moved, where it sits, what the business earns, who owns it, what the news says.</p>
@@ -335,7 +345,7 @@
         </div>
       </div>
 
-      <div class="pane" role="tabpanel" id="p-stock" aria-labelledby="t-stock" hidden>
+      <div class="pane flip" id="p-stock">
         <div>
           <h3 class="h3">A page for every company.</h3>
           <p>At a glance cards up top, then the chart, the filings, earnings, insiders, institutions, funds, short interest, options and news.</p>
@@ -344,7 +354,7 @@
         <div class="shot"><img src="/img/landing/glance-navy.jpg" width="1376" height="709" alt="The At a glance section of NVIDIA's stock page" loading="lazy" /></div>
       </div>
 
-      <div class="pane" role="tabpanel" id="p-pivot" aria-labelledby="t-pivot" hidden>
+      <div class="pane" id="p-pivot">
         <div>
           <h3 class="h3">The market two ways at once.</h3>
           <p>Sector against size, theme against trend, industry against index. Each cell opens the stocks behind it.</p>
@@ -353,7 +363,7 @@
         <div class="shot"><img src="/img/landing/pivot-navy.jpg" width="1440" height="860" alt="The pivot: sectors by company size, middle forward P/E, Technology opened into its industries" loading="lazy" /></div>
       </div>
 
-      <div class="pane" role="tabpanel" id="p-visuals" aria-labelledby="t-visuals" hidden>
+      <div class="pane flip" id="p-visuals">
         <div>
           <h3 class="h3">Cards for social posts.</h3>
           <p>Market snapshots, sector and industry bars, single-stock spotlights, the day's filings, article tone. Made from the latest close, every time.</p>
@@ -362,7 +372,7 @@
         <div class="shot" style="max-width:420px;justify-self:center"><img src="/img/landing/card-secbars.jpg" width="1080" height="1350" alt="Sector bars card" loading="lazy" /></div>
       </div>
 
-      <div class="pane" role="tabpanel" id="p-filings" aria-labelledby="t-filings" hidden>
+      <div class="pane" id="p-filings">
         <div>
           <h3 class="h3">What the company filed, and who holds it.</h3>
           <p>Read from the SEC, every day: 10-Ks and 10-Qs, 8-K announcements, 5% holders, insider trades, institutions' 13Fs and fund holdings.</p>
@@ -659,19 +669,6 @@
 </div>
 
 <script>
-  // The product tour's tabs.
-  (function () {
-    const tabs = [...document.querySelectorAll('.lp .tb')];
-    function pick(t) {
-      for (const x of tabs) {
-        const on = x === t;
-        x.setAttribute('aria-selected', on ? 'true' : 'false');
-        document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
-      }
-    }
-    tabs.forEach((t) => t.addEventListener('click', () => pick(t)));
-  })();
-
   // The figures are claims about the product, so they come from the product.
   // The route has already written them in (from its cache, or last-known
   // values); this refreshes them and draws the four live rows. A failed call

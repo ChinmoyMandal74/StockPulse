@@ -91,7 +91,7 @@ The landing page was rebuilt from a draft the owner approved (modelled on koyfin
 - hero with three real cards, dated;
 - figure strip;
 - who it is for (investors, content creators);
-- tabbed product tour (screener, stock pages, pivot, visuals, filings);
+- product tour (screener, stock pages, pivot, visuals, filings): **all five shown at once**, stacked, the screenshot alternating sides (`.pane.flip`). The chips above are jump links, not tabs; they were tabs until the owner said, the same day, that "someone can easily miss the product features". On a phone the text sits above its picture in every pane;
 - **Three themes** (Dark, Navy and Light screenshots);
 - the 23 stock-page sections;
 - Article tone (three stored readings, dated, static);
