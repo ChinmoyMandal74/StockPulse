@@ -8054,6 +8054,88 @@ async function runPriceSlice() {
 //
 // A REFUSED PULL CHANGES NOTHING AND SAYS SO: ensureProfiles keeps the
 // cached values, and no bar is written from a refused price.
+// ---- the recon's "provider behind" refresh (2026-10-22) ---------------------
+// The owner, of /recon: "Can you do something wherein I can do a refresh only
+// for these provider behind cases". Twelve Data's figures for a company that
+// has reported are only as fresh as our last pull of its profile, so this
+// re-pulls just those, a batch at a time, and then rebuilds the screen and the
+// recon rows once.
+//
+// CREDITS: a profile is about 80, the limit 610 a minute, so a batch is at
+// most six companies and the page waits a minute between batches. It refuses
+// inside the nightly windows and the intraday price slots, when another job
+// is spending the same minute, and stands aside for a running refresh.
+// A pull Twelve Data answers with the old quarter is "not updated at the
+// provider": re-pulling again soon will not help (Costco, four weeks).
+const RECON_BATCH = 6;
+function creditWindowBusy(now) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now || new Date());
+  const get = (t) => (p.find((x) => x.type === t) || {}).value;
+  if (['Sat', 'Sun'].includes(get('weekday'))) return null;
+  const m = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
+  if ((m >= 3 * 60 + 55 && m <= 4 * 60 + 50) || (m >= 15 * 60 + 55 && m <= 16 * 60 + 50)) return 'the nightly refresh window';
+  const mm = m % 60;
+  if (m >= 9 * 60 + 10 && m <= 16 * 60 + 20 && ((mm >= 13 && mm <= 20) || (mm >= 43 && mm <= 50))) return 'an intraday price slot';
+  return null;
+}
+// The behind companies of the newest season, from the stored recon.
+async function reconBehind() {
+  const seasons = await store.readReconSeasons();
+  if (!seasons.length) return { season: null, symbols: [] };
+  const rows = await store.readRecon(seasons[0]);
+  return { season: seasons[0], symbols: rows.filter((r) => !r.tdCurrent).map((r) => r.symbol), rows };
+}
+app.get('/api/recon/behind', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const b = await reconBehind();
+  res.json({ season: b.season, symbols: b.symbols, batch: RECON_BATCH, creditsEach: 80, busy: creditWindowBusy() });
+}));
+// One batch: force-pull the profiles of up to six behind companies.
+app.post('/api/recon/refresh-behind', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!API_KEY) return res.status(500).json({ error: 'No market data key is configured.' });
+  const busy = creditWindowBusy();
+  if (busy) return res.status(409).json({ error: 'Not now: it is ' + busy + ', when another job spends the same minute’s credits. Try again in a few minutes.' });
+  if (await standAside(res)) return;
+  const b = await reconBehind();
+  const asked = String(req.query.symbols || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  // Only companies the recon has as behind, and no more than a batch.
+  const batch = asked.filter((s) => b.symbols.includes(s)).slice(0, RECON_BATCH);
+  if (!batch.length) return res.status(400).json({ error: 'None of those is behind.' });
+  const startedAt = Date.now();
+  const profiles = await ensureProfiles(batch, batch.length, true);
+  const byRow = new Map((b.rows || []).map((r) => [r.symbol, r]));
+  const out = batch.map((s) => {
+    const p = profiles[s] || {};
+    const pulled = !!(p.fetchedAt && p.fetchedAt >= startedAt - 1000);
+    const r = byRow.get(s);
+    const report = p.lastEarningsDate ? String(p.lastEarningsDate).slice(0, 10) : null;
+    const caught = !!(pulled && report && r && r.filed && Math.abs(Date.parse(report + 'T12:00:00Z') - Date.parse(r.filed + 'T12:00:00Z')) <= 5 * 86400000);
+    return { symbol: s, pulled, report, caughtUp: caught };
+  });
+  logAct(req, 'refresh', 'recon-behind:' + batch.join(','));
+  res.json({ results: out });
+}));
+// Once at the end: the screen rebuilt from the archive (the refresh-stock
+// route's own step 3) and the behind companies' recon rows rewritten.
+app.post('/api/recon/refresh-finish', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await standAside(res)) return;
+  const r = await computeStocks(null, { archivePrices: true, noProfiles: true });
+  if (!r.ok) return res.status(r.status || 502).json({ error: 'The screen could not be rebuilt: ' + r.error });
+  await finishLiveRefresh(r.payload, {});
+  const b = await reconBehind();
+  const td = new Map(((r.payload && r.payload.stocks) || []).map((x) => [x.symbol, x]));
+  const rows = [];
+  for (const s of b.symbols) {
+    const rel = (await store.readEarningsReleases(s, 1).catch(() => [])).find((x) => x.isResults);
+    if (rel) rows.push(Releases.reconRow(rel, td.get(s)));
+  }
+  await store.writeRecon(rows.filter((x) => x.season === b.season));
+  logAct(req, 'refresh', 'recon-finish');
+  res.json({ rewritten: rows.length, caughtUp: rows.filter((x) => x.tdCurrent).length, stillBehind: rows.filter((x) => !x.tdCurrent).map((x) => x.symbol) });
+}));
+
 app.post('/api/admin/refresh-stock', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();

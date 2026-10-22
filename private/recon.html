@@ -68,6 +68,10 @@
     .rc-st.differs { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
     .rc-st.behind, .rc-st.none { color: var(--faint); }
     .rc-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .rc-run { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 4px 14px; }
+    .rc-runmsg { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .rc-runmsg b { color: var(--text); }
+    .rc-runmsg .rc-warn { color: var(--amber); }
     .rc-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
     .rc-foot b { color: var(--muted); }
     @media (max-width: 900px) { .page { padding: 0 16px; } .rc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hide-sm { display: none !important; } }
@@ -99,6 +103,12 @@
     </header>
 
     <div class="rc-bar" id="seasons"></div>
+    <!-- Re-pull Twelve Data for the provider-behind companies only (2026-10-22). -->
+    <div class="rc-run" id="run" hidden>
+      <button class="btn" id="runBtn" type="button"></button>
+      <button class="btn" id="stopBtn" type="button" hidden>Stop after this batch</button>
+      <span class="rc-runmsg" id="runMsg"></span>
+    </div>
     <div class="rc-tiles" id="tiles"></div>
     <div class="rc-bar">
       <span id="chips"></span>
@@ -216,7 +226,70 @@
     $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(paint, 150); });
     $('sector').addEventListener('change', paint);
     $('sort').addEventListener('change', paint);
+    // ---- REFRESH THE PROVIDER-BEHIND COMPANIES ----------------------------------
+    // Twelve Data re-pulled for just these, six at a time a minute apart (a
+    // profile is about 80 credits, the limit 610 a minute), then the screen and
+    // their recon rows rebuilt once. The server refuses a batch in the nightly
+    // windows and the intraday price slots; the page waits a minute and tries again.
+    let behind = null, stopAsked = false, running = false;
+    async function loadBehind(keepMsg) {
+      try {
+        const r = await fetch('/api/recon/behind', { cache: 'no-store' });
+        if (!r.ok) return;
+        behind = await r.json();
+        const n = behind.symbols.length;
+        $('run').hidden = !n && !running && !keepMsg;
+        $('runBtn').hidden = !n;
+        if (!running) {
+          const credits = n * (behind.creditsEach || 80), mins = Math.ceil(n / (behind.batch || 6));
+          $('runBtn').textContent = 'Refresh Twelve Data for the ' + n + ' behind';
+          if (!keepMsg) $('runMsg').innerHTML = 'About <b>' + credits.toLocaleString('en-US') + ' credits</b>, ' + mins + ' minute' + (mins === 1 ? '' : 's') + ' (six companies a minute), then the screen is rebuilt once.'
+            + (behind.busy ? ' <span class="rc-warn">Right now is ' + we(behind.busy) + ': a batch would wait.</span>' : '');
+        }
+      } catch (e) { /* the table stands without it */ }
+    }
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    $('runBtn').addEventListener('click', async () => {
+      if (running || !behind || !behind.symbols.length) return;
+      const list = behind.symbols.slice(), size = behind.batch || 6;
+      if (!window.confirm('Re-pull Twelve Data for ' + list.length + ' companies? About ' + (list.length * (behind.creditsEach || 80)).toLocaleString('en-US') + ' credits.')) return;
+      running = true; stopAsked = false;
+      $('runBtn').disabled = true; $('stopBtn').hidden = false;
+      const caught = [], notUpdated = [], refused = [];
+      let i = 0, last = 0, b = 0;
+      const batches = Math.ceil(list.length / size);
+      try {
+        while (i < list.length && !stopAsked) {
+          const wait = last ? 61000 - (Date.now() - last) : 0;
+          for (let t = wait; t > 0; t -= 1000) { $('runMsg').innerHTML = 'Batch ' + (b + 1) + ' of ' + batches + ' in ' + Math.ceil(t / 1000) + 's (the per-minute credit limit). ' + caught.length + ' caught up so far.'; await sleep(1000); if (stopAsked) break; }
+          if (stopAsked) break;
+          const part = list.slice(i, i + size);
+          $('runMsg').innerHTML = 'Batch ' + (b + 1) + ' of ' + batches + ': pulling ' + we(part.join(', ')) + '…';
+          last = Date.now();
+          const r = await fetch('/api/recon/refresh-behind?symbols=' + encodeURIComponent(part.join(',')), { method: 'POST' });
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 409) { $('runMsg').innerHTML = '<span class="rc-warn">' + we(d.error || 'Busy.') + '</span> Waiting a minute.'; await sleep(60000); continue; }
+          if (!r.ok) throw new Error(d.error || ('The server answered ' + r.status));
+          for (const x of d.results || []) (x.caughtUp ? caught : x.pulled ? notUpdated : refused).push(x.symbol);
+          i += part.length; b++;
+        }
+        $('runMsg').innerHTML = 'Rebuilding the screen and the recon rows…';
+        const f = await fetch('/api/recon/refresh-finish', { method: 'POST' });
+        const fd = await f.json().catch(() => ({}));
+        if (!f.ok) throw new Error(fd.error || ('The server answered ' + f.status));
+        $('runMsg').innerHTML = (stopAsked ? 'Stopped. ' : 'Done. ') + '<b>' + caught.length + ' caught up</b>'
+          + (notUpdated.length ? '; <span class="rc-warn">' + notUpdated.length + ' not updated at the provider</span> (Twelve Data still gives the old quarter: ' + we(notUpdated.join(', ')) + ')' : '')
+          + (refused.length ? '; ' + refused.length + ' refused by the provider (' + we(refused.join(', ')) + ')' : '') + '.';
+      } catch (e) {
+        $('runMsg').innerHTML = '<span class="rc-warn">' + we(e.message) + '</span>';
+      }
+      running = false; $('runBtn').disabled = false; $('stopBtn').hidden = true;
+      // The result stays on screen; the button relabels for whoever is still behind.
+      await load(); await loadBehind(true);
+    });
+    $('stopBtn').addEventListener('click', () => { stopAsked = true; $('stopBtn').hidden = true; });
     load();
+    loadBehind();
   </script>
 </body>
 </html>

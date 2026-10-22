@@ -174,6 +174,19 @@ The owner: "Build me a recon page only for s&p 500 only for these important that
 - **Each figure is checked on its own:** two quarters agreeing with each other prove nothing, since a slip applied to both still agrees.
 - **A scan of every stored release found exactly those two.** Both were re-read: Synchrony's net income is now $892 million (its year-earlier figure was refused as not in the release), and CSX's year-earlier figure is $694 million.
 
+**"Provider behind" is not always a few days.** Measured on 2026-10-22: 29 of the 31 were one or two days behind, and the nightly would have caught them. Costco (28 days) and Fastenal (8) had been re-pulled after their releases and Twelve Data still gave the previous quarter.
+
+**Refreshing only the behind (2026-10-22).** The owner: "Can you do something wherein I can do a refresh only for these provider behind cases."
+- **The button** on `/recon`: "Refresh Twelve Data for the N behind", with the cost beside it (N × 80 credits, six companies a minute). It asks before spending.
+- **The routes** (admin):
+  - `GET /api/recon/behind` lists the newest season's companies not on the same report.
+  - `POST /api/recon/refresh-behind?symbols=` force-pulls up to six profiles (`RECON_BATCH`) through `ensureProfiles`. It refuses a company that is not behind. It says per company whether it was pulled and whether it caught up.
+  - `POST /api/recon/refresh-finish` rebuilds the snapshot once without profiles (`computeStocks` with `noProfiles`), as refresh-one-stock does. It then rewrites the recon rows of the behind companies, which freezes Twelve Data's side for those that caught up.
+- **The page drives the loop:** one batch a request, the next 61 seconds after the previous one started, so it stays under 610 a minute. It stops between batches on Stop.
+- **Credit windows:** a batch is refused with a 409 in the nightly windows (03:55–04:50 and 15:55–16:50 Eastern, weekdays) and the intraday slots (:13–:20 and :43–:50, 9:10–16:20). The page waits a minute and tries again. Each batch also stands aside for a running refresh.
+- **The end** stays on screen with three counts: caught up; **not updated at the provider** (pulled, and Twelve Data still gives the old quarter, as with Costco); and refused by the provider.
+- **Testing:** on an in-memory database with a dummy key, so nothing was spent. Checked: anonymous and guest refused; a company not behind refused; six per batch; a refused pull never counted as caught up; two batches 62 s apart; then one finish; the result surviving the reload. The test caught the reload painting over the result. The window clock was checked at eight times on both sides of each window.
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.
