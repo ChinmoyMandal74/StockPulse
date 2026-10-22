@@ -2305,6 +2305,43 @@ are mapped, which is why none was patched from the Long run side.
   need a rule that is not the industry name (for example interest expense
   as a share of revenue), measured on the whole sector first.
 
+## 47. Make the GitHub repository private — 2026-10-21
+
+*Area: Infrastructure · Status: Open · Note: the owner asked whether it could be done, then for it on the backlog; nothing changed. Checked against production on the day*
+
+The repository (`ChinmoyMandal74/StockPulse`, a personal account) is public:
+the code, CLAUDE.md, everything in `docs/` and every commit message are
+readable by anyone. No secret is in it (`.env` was never committed), but
+those files describe how the site works in detail. Making it private is one
+setting on GitHub (repo Settings, General, Danger Zone, Change visibility);
+it is the owner's to flip, not something done from this machine.
+
+What depends on it being public, checked 2026-10-21:
+
+- **Deploys: unaffected.** Vercel deploys a private repo from a personal
+  account on every plan; a push to `main` keeps deploying.
+- **`/backlog` and `/research`: unaffected as things stand.** `docText()`
+  reads the bundled file first and falls back to `raw.githubusercontent.com`
+  only when `docs/` is not in the function; production answered
+  `source: file` for both. If a build ever stopped bundling `docs/`, the
+  fallback would fail on a private repo (members read `/research`), so the
+  fallback would want a token too, or the docs copied into `private/`.
+- **`/buildlog` will break.** It reads the commit history from the GitHub
+  API, unauthenticated; a private repo needs a token, and production has no
+  `GITHUB_TOKEN`. Before flipping: a fine-grained personal access token
+  limited to this repository with read-only Contents, added to Vercel as
+  `GITHUB_TOKEN` (the route already sends it when set); it takes effect on
+  the next push.
+- **GitHub Actions:** `nightly-refresh.yml` is manual-only now, so private
+  Actions minutes (2,000 free a month) do not matter.
+
+After flipping: confirm `/buildlog` loads, and update every note that
+assumes the repository is public: CLAUDE.md's "The repository is public"
+line, `docs/context/the-build-log.md` (which says no token is needed),
+`docs/context/the-backlog-page.md` and the `docText` comment in server.js.
+Entry 44(c), the research files tracked in git, is the same question for a
+smaller set of files and would be settled by this.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
