@@ -1038,6 +1038,11 @@
       background: none; color: var(--muted); cursor: pointer; font-family: var(--sans);
       transition: background 0.4s var(--ease), color 0.4s var(--ease); }
     .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
+    /* Last Earning AI Extracted (2026-10-22): text cut to one line, read on hover. */
+    td.grp-aier.er-tx > span { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    td.grp-aier.er-amb { color: var(--amber); }
+    td.grp-aier a.er-a { color: inherit; text-decoration: underline; text-decoration-color: var(--hair-2); text-underline-offset: 3px; }
+    td.grp-aier a.er-a:hover { color: var(--accent); text-decoration-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -1543,6 +1548,7 @@
         <th class="group grp-report" data-group="report" colspan="3">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="9">Long run</th>
         <th class="group grp-own" data-group="own" colspan="12">Ownership</th>
+        <th class="group grp-aier" data-group="aier" colspan="18">Last Earning AI Extracted</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1682,6 +1688,24 @@
         <th class="grp-own" data-key="instChange" title="The change in the shares held by all 13F filers between them, last published quarter end against the one before, in percent. Up means institutions as a group held more shares than a quarter earlier. It includes managers who newly crossed the $100 million filing line, so a small rise is not always buying. A snapshot that is months old. Blank where either quarter is missing. Updated once a quarter.">13F<br>chg</th>
         <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. From the SEC, updated as each company's filings are re-read.">5%<br>filing</th>
         <th class="grp-own" data-key="optPcr" title="Put options open on the stock for every call option open, from the Options Clearing Corporation&#39;s count as of the last trading day&#39;s close. 1.0 is as many puts as calls. It counts contracts outstanding and says nothing about direction: a put can be a bet on a fall, insurance on shares someone owns, or one leg of a neutral trade. Blank where the stock has no listed options or fewer than a thousand contracts open.">Put/Call<br>OI</th>
+        <th class="left grp-aier" data-key="erFiled" title="The day the company filed its newest results release with the SEC, and how long ago. Click a date to open the release itself. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Reported</th>
+        <th class="grp-aier" data-key="erPeriodEnd" title="The last day of the quarter the release reports, as the company states it. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Quarter<br>end</th>
+        <th class="grp-aier" data-key="erRevenue" title="Total revenue for the quarter, as printed, in the company’s reporting currency. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Revenue</th>
+        <th class="grp-aier" data-key="erRevYoY" title="Revenue against the same quarter a year earlier, from the two figures the release prints. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Rev<br>YoY</th>
+        <th class="grp-aier" data-key="erOpIncome" title="GAAP income (loss) from operations for the quarter, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Op.<br>income</th>
+        <th class="grp-aier" data-key="erOpYoY" title="Operating income against the same quarter a year earlier. Blank where the earlier quarter was a loss: from a loss there is no rate. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Op. inc.<br>YoY</th>
+        <th class="grp-aier" data-key="erNetIncome" title="GAAP net income (loss) attributable to the company for the quarter, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Net<br>income</th>
+        <th class="grp-aier" data-key="erNiYoY" title="Net income against the same quarter a year earlier. Blank where the earlier quarter was a loss. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">NI<br>YoY</th>
+        <th class="grp-aier" data-key="erEps" title="GAAP diluted earnings (loss) per share for the quarter, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>GAAP</th>
+        <th class="grp-aier" data-key="erEpsYoY" title="GAAP diluted EPS against the same quarter a year earlier. Blank where the earlier quarter was a loss. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>YoY</th>
+        <th class="grp-aier" data-key="erEpsAdj" title="The company’s own adjusted EPS for the quarter (its non-GAAP figure, or an EPS it gives excluding an item), under its own name, which the cell’s note gives with what it leaves out. Adjusted EPS has no standard definition. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>adj.</th>
+        <th class="grp-aier" data-key="erEpsAdjYoY" title="The adjusted EPS against the same quarter a year earlier, where the release prints both. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Adj. EPS<br>YoY</th>
+        <th class="grp-aier" data-key="erEst" title="The price data provider’s EPS estimate for the report. It arrives when the provider’s earnings history is next updated, often days after the release. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>est.</th>
+        <th class="grp-aier" data-key="erVsEst" title="How far the figure the provider reports (the adjusted one, or GAAP where the company gives none) is above or below its estimate, per share. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">vs<br>est.</th>
+        <th class="grp-aier" data-key="erGuideVsQ" title="The company’s revenue outlook for the coming period (the middle of its range, or its midpoint) against this quarter’s revenue. Blank where the outlook is not a revenue figure. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Guide<br>vs Q</th>
+        <th class="left grp-aier" data-key="erGuide" title="The company’s outlook sentence, word for word. Type in the filter row to find a word. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Outlook</th>
+        <th class="left grp-aier" data-key="erTenQ" title="The release against the quarter’s 10-Q once it is filed: Matches, Differs (the 10-Q’s line can be a different one, such as continuing operations), or Waiting. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">10-Q</th>
+        <th class="left grp-aier" data-key="erSummary" title="Two or three sentences of what the release reports, written by the model. Facts only. Type in the filter row to find a word. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Summary</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -1708,6 +1732,7 @@
   <script src="/filters.js"></script>
   <script src="/consoledo.js"></script>
   <script src="/rowcard.js"></script>
+  <script src="/releaseview.js"></script>
   <script src="/newstype.js"></script>
   <script src="/drillpop.js"></script>
   <script src="/track.js"></script>
@@ -1751,14 +1776,14 @@
     // Option A (owner, 2026-10-19): Relative split into Range and level (id kept)
     // and Risk; Fundamentals into Valuation, Profitability, Growth, Financial
     // position, Dividends and returns, Reporting. The ids are stored keys.
-    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own'];
+    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own', 'aier'];
     const GROUP_COLORS_DARK = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
       info: '#7c9cff', rank: '#a3e635', act: '#5eead4', chart: '#a8a29e',
       short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', react: '#f472b6', trend: '#fbbf24',
-      size: '#94a3b8', lrun: '#d6c58b', own: '#f0abfc',
+      size: '#94a3b8', lrun: '#d6c58b', own: '#f0abfc', aier: '#93c5fd',
       risk: '#fdba74', value: '#fb7185', profit: '#818cf8', growth: '#38bdf8', finpos: '#c4b5fd', divs: '#facc15', report: '#8b93a7',
     };
     // THE LIGHT THEME (2026-10-15). These tints are pastels tuned for black; on
@@ -1770,7 +1795,7 @@
     const LIGHT_TINT = {
       '#7c9cff': '#2e5fe8', '#a3e635': '#4a770e', '#5eead4': '#0f766e', '#a8a29e': '#57534e',
       '#34d399': '#157a51', '#a78bfa': '#6d3fd4', '#fb923c': '#b44902', '#22d3ee': '#0d6c80',
-      '#f472b6': '#b81b66', '#fbbf24': '#9d5a07', '#94a3b8': '#475569', '#fb7185': '#c81e37', '#f0abfc': '#a21caf', '#d6c58b': '#6f6118',
+      '#f472b6': '#b81b66', '#fbbf24': '#9d5a07', '#94a3b8': '#475569', '#fb7185': '#c81e37', '#f0abfc': '#a21caf', '#d6c58b': '#6f6118', '#93c5fd': '#1d4ed8',
       '#fdba74': '#c2410c', '#818cf8': '#4338ca', '#38bdf8': '#0369a1', '#c4b5fd': '#6d28d9', '#facc15': '#a16207', '#8b93a7': '#5b6675',
     };
     const ink = (c) => (document.documentElement.getAttribute('data-theme') === 'light' && LIGHT_TINT[c]) || c;
@@ -1786,6 +1811,7 @@
       // stays `size`, so no saved view, screen, tile or collapse key moves.
       size: 'Scale', value: 'Valuation', profit: 'Profitability', growth: 'Growth', finpos: 'Financial position',
       divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
+      aier: 'Last Earning AI Extracted',
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
@@ -3849,7 +3875,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="114">${s.error}</td>
+            <td class="na" colspan="132">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4015,6 +4041,7 @@
           ${signedPctCell(s.instChange, 'grp-own', s.instPeriod ? 'Shares held by 13F filers at ' + s.instPeriod + ' against the quarter before' : '')}
           ${lastHolderCell(s)}`}
           ${optPcrCell(s)}
+          ${isFund ? naRun(18, 'grp-aier') : aierCells(s)}
           ${removeBtn}
         </tr>`;
     }
@@ -4029,7 +4056,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 139;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 157;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4214,7 +4241,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="116">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="134">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4292,6 +4319,7 @@
       loadSparklines();
       loadLatestNews();
       loadToneColumn();
+      loadReleaseColumn();
       // After the table paints, like the news and the sparklines: a
       // decoration — or in this case a caveat — must not make the data wait.
       loadSecFiled();
@@ -4336,6 +4364,47 @@
         title: 'Last seven days: ' + s.toneN + ' article' + (s.toneN === 1 ? '' : 's') + ' read, ' + s.tonePos + ' positive, ' + s.toneNeg + ' negative; average ' + num + ' (' + word + '). Click for the articles.',
         html: '<a class="tn-v" href="/stock/' + encodeURIComponent(s.symbol) + '#tone">' + num + '</a><span class="tn-n">' + s.toneN + '</span>',
       };
+    }
+    // LAST EARNING AI EXTRACTED (2026-10-22): each company's newest results
+    // release as read (releases.js), merged into the rows from
+    // /api/releases/column after the table paints, as Tone 7D is. The
+    // formatting is the shared module's (releaseview.js), so a figure reads
+    // the same here, on /filings and on the stock page. Growth is not a price
+    // move: no green or red; amber only where the 10-Q differs.
+    function aierCells(s) {
+      const RV = window.ReleaseView;
+      if (!RV || !s.erFiled) return naRun(18, 'grp-aier');
+      const cur = s.erCurrency, inCur = cur && cur !== 'USD' ? ' In ' + cur + ', the reporting currency.' : '';
+      const td = (html, title, cls) => `<td class="grp-aier${cls ? ' ' + cls : ''}"${attr(title)}>${html}</td>`;
+      const days = Math.max(0, Math.round((Date.now() - new Date(s.erFiled + 'T12:00:00').getTime()) / 86400000));
+      const dshort = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const txt = (v, cls) => (v ? `<td class="left grp-aier er-tx${cls ? ' ' + cls : ''}"${attr(v)}><span>${we(v)}</span></td>` : `<td class="left grp-aier na">\u2014</td>`);
+      const money = (v, what) => (v == null ? `<td class="na grp-aier">\u2014</td>` : td(we(RV.money(v, cur)), what + inCur));
+      const eps = (v, what) => (v == null ? `<td class="na grp-aier">\u2014</td>` : td(we(RV.eps(v, cur)), what + inCur));
+      return [
+        `<td class="left grp-aier er-tx"${attr('Results release filed ' + s.erFiled + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : '') + '. Click to open the release.')}><span>`
+          + (s.erUrl ? `<a class="er-a" href="${we(s.erUrl)}" target="_blank" rel="noopener">${we(dshort(s.erFiled))}</a>` : we(dshort(s.erFiled)))
+          + ` <span class="na">${days === 0 ? 'today' : days + 'd'}</span></span></td>`,
+        s.erPeriodEnd ? td(we(dshort(s.erPeriodEnd)), s.erPeriodLabel || 'Quarter ended ' + s.erPeriodEnd) : `<td class="na grp-aier">\u2014</td>`,
+        money(s.erRevenue, 'Revenue for the quarter'),
+        signedPctCell(s.erRevYoY, 'grp-aier', 'Revenue against the same quarter a year earlier'),
+        money(s.erOpIncome, 'Income from operations for the quarter'),
+        signedPctCell(s.erOpYoY, 'grp-aier', 'Operating income against the same quarter a year earlier'),
+        money(s.erNetIncome, 'Net income for the quarter'),
+        signedPctCell(s.erNiYoY, 'grp-aier', 'Net income against the same quarter a year earlier'),
+        eps(s.erEps, 'GAAP diluted EPS'),
+        signedPctCell(s.erEpsYoY, 'grp-aier', 'GAAP diluted EPS against the same quarter a year earlier'),
+        eps(s.erEpsAdj, (s.erEpsAdjLabel || 'Adjusted EPS') + (s.erEpsAdjExcludes ? ', leaving out ' + s.erEpsAdjExcludes : '') + '.'),
+        signedPctCell(s.erEpsAdjYoY, 'grp-aier', 'Adjusted EPS against the same quarter a year earlier'),
+        eps(s.erEst, 'The price data provider\u2019s estimate'),
+        s.erVsEst == null ? `<td class="na grp-aier">\u2014</td>`
+          : td((s.erVsEst > 0 ? '+' : s.erVsEst < 0 ? '\u2212' : '') + we(RV.eps(Math.abs(s.erVsEst), cur)),
+            (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur)),
+        signedPctCell(s.erGuideVsQ, 'grp-aier', s.erGuide || ''),
+        txt(s.erGuide),
+        s.erTenQ ? td(we(s.erTenQ), s.erTenQNote || '', 'left' + (s.erTenQ === 'Differs' ? ' er-amb' : '')) : `<td class="left grp-aier na">\u2014</td>`,
+        txt(s.erSummary),
+      ].join('');
     }
     function toneCell(s) {
       const b = toneBits(s);
@@ -5920,6 +5989,23 @@
         if (sortKey === 'toneAvg') render(); else paintToneCells();
       } catch (e) {
         // A guest is refused (members only), and the column stays blank.
+      }
+    }
+
+    let relColLoaded = false;
+    async function loadReleaseColumn() {
+      if (relColLoaded || !window.ReleaseView) return;
+      relColLoaded = true;
+      try {
+        const data = await api('GET', '/api/releases/column');
+        const rows = data.rows || {};
+        for (const list of [baseStocks, stocks]) {
+          for (const s of list) Object.assign(s, window.ReleaseView.fields(rows[s.symbol] || null));
+        }
+        // Eighteen columns: one rebuild of the window, not a cell-by-cell refill.
+        render();
+      } catch (e) {
+        // A guest is refused (members only), and the group stays blank.
       }
     }
 

@@ -80,6 +80,42 @@ The owner chose four of seven next steps and put the rest on the backlog (entry 
 - **The runs log:** `earnings_release_runs`, one row per committed run, kept. `/news-runs` has an **Earnings releases** section like Article tone's: the last run, 7 and 30 days, the table. It warns after three days without a run, on a failure, at the cost cap, or when filings could not be read.
 - **The provider's estimate comes late.** Twelve Data's EPS history gains a quarter only when the company's profile is next pulled, often days after the report. On 2026-10-22 none of the 49 releases from the 21st had one (META's next report was estimated as the 28th). The card leaves the estimate column off when none of its rows has one and says why; the pages show a dash. Fetching `/earnings` at read time would close this; it is backlog 48(e), with its credit cost.
 
+### On the screener: the group "Last Earning AI Extracted" (2026-10-22)
+The owner: "Why only 3 columns, Why not include all the columns ... Just call it 'Last Earning AI Extracted'". So all of it went in, as one group (id `aier`, colour azure `#93c5fd`, light `#1d4ed8`, token `--azure`).
+
+**The 18 columns:**
+- **Dates:** Reported (a link to the release, with the days since) and Quarter end.
+- **Money:** Revenue, Operating income and Net income, each with its change on a year ago.
+- **EPS:** GAAP and adjusted (hover for the company's label and what it leaves out), each with its change on a year ago.
+- **Against the estimate:** the EPS estimate, and the gap per share.
+- **Outlook:** Guide vs Q, the outlook sentence, the 10-Q state, and the summary.
+
+**How the cells behave:**
+- Money is in the reporting currency.
+- Growth is uncoloured: it is not a price move.
+- A change off a loss is blank.
+- Text is cut to one line and read in full on hover.
+- 10-Q Differs is amber.
+
+**Where the data comes from:**
+- **One stored figure** (`fig:releaseColumn`) holds each company's newest results release of the last 130 days (`Rel.columnRows`, joined with the provider's estimate). The loader writes it after every committed run; `--column-only` rebuilds just that.
+- **`/api/releases/column`** (members) serves it. The screener fetches it after it paints and merges it into its rows with `ReleaseView.fields`, the one mapping, which the stock page's All fields uses too. Like Tone 7D it is never stamped on a snapshot row.
+- **The Signal boundary was proved behaviourally** on the 1,283 real rows: the group absent, present and lying, identical verdicts. The same method, lying about `vs200ma`, changes every verdict.
+
+**Guide vs Q only compares a quarter's outlook.** The comparison is the range's middle, or the printed midpoint, against this quarter's revenue, and only when the outlook's period names a quarter and not a year. On the first draw Medpace's full-year guidance read +297% against one quarter.
+
+**The column bookkeeping:** `PAD_SPAN` 139 to 157, the error row 114 to 132, the empty row 116 to 134, and the fund `naRun(18)`.
+
+**The other places a group is named:** `GROUPS`, the colours and light tint, and the labels in `index.html`; `GROUP_ORDER`, the colours, the labels and `FUND_NA_GROUPS` in `rowcard.js`; `mobile.html`, `mobile-setup.html`, `columns.html`, `app.css`, and `TILE_FIELD_RE` in `server.js`.
+
+**`filters.js`:** Reported and Quarter end filter as days since; Outlook and Summary as text; 10-Q as a category.
+
+**Two `FIELD_SPEC` labels were renamed to stay unique** (the stock page refills by label): "Release filed" and "Net income, quarter".
+
+**The stock page's All fields:** the group's section is absent when the page first draws (every field empty then), so `loadReleases` builds that section alone and appends it.
+
+**Coverage builds through the season:** 153 companies on 2026-10-22, most of the universe by mid-November.
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.

@@ -564,7 +564,7 @@ const DEEP_SPAN_DAYS = 1826;        // five years, the 5Y column's requirement
 // when it is warm; never a cache miss here, which would hold the page on three
 // grouped counts. Cold, the last-known values stand and the page's own fetch
 // of /api/about-stats replaces them.
-const LANDING_DEFAULTS = { symbols: '1,283', fields: '151', columns: '133', screens: '32', portfolios: '28', since: '2006', articles: '—', asof: '—' };
+const LANDING_DEFAULTS = { symbols: '1,283', fields: '169', columns: '150', screens: '32', portfolios: '28', since: '2006', articles: '—', asof: '—' };
 function landingFigures(html) {
   const v = Object.assign({}, LANDING_DEFAULTS);
   const d = aboutStatsCache && Date.now() - aboutStatsCache.at < ABOUT_TTL_MS ? aboutStatsCache.body : null;
@@ -11549,7 +11549,7 @@ const fieldKeyNow = (f) => (Object.prototype.hasOwnProperty.call(FIELD_KEY_MOVED
 // `lrun` is the Long run group, 2026-10-19.
 // Option A's groups (2026-10-19) replace `fund`; a stored `fund|…` key is
 // translated by fieldKeyNow before it is tested here.
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|risk|react|trend|size|value|profit|growth|finpos|divs|report|lrun|own)\|[^|]{1,32}$/;
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|risk|react|trend|size|value|profit|growth|finpos|divs|report|lrun|own|aier)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];
@@ -15265,6 +15265,20 @@ async function releasesDayPayload(asked) {
   const earn = await Promise.all(rel.map((r) => store.readEarnings(r.symbol).catch(() => [])));
   return { date, days, releases: rel.map((r, i) => Releases.forReader(r, earn[i])) };
 }
+// THE SCREENER'S "Last Earning AI Extracted" GROUP: each company's newest results
+// release, one stored figure the loader writes after each run (releases.js
+// columnRows). Fetched by the screener after the table paints and merged into
+// its rows there, as Tone 7D is: never stamped on a snapshot row, never read
+// by the Signal. Members only; kept ten minutes per instance.
+let releaseColHeld = null;
+app.get('/api/releases/column', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
+    releaseColHeld = { at: Date.now(), fig: await store.readFigure('releaseColumn').catch(() => null) };
+  }
+  const f = releaseColHeld.fig;
+  res.json(f && f.rows ? f : { at: null, rows: {} });
+}));
 app.get('/api/releases/day', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(await releasesDayPayload(String(req.query.date || '')));

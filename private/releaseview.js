@@ -56,5 +56,51 @@
   }
   // Figures the release did not contain as given (the summary's own note is not one).
   const refused = (r) => (r.problems || []).filter((p) => !/^summary/.test(p));
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay };
+
+  // THE SCREENER'S GROUP "Last Earning AI Extracted" (2026-10-22): one release
+  // as the row fields the columns read, er-prefixed so nothing else on a row
+  // is touched. The screener merges these after it paints (and after the
+  // Signal is scored); the stock page fills its All fields from the same. A
+  // change off a loss or a zero is no percentage, as everywhere.
+  const yoy = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
+  const FIELD_KEYS = ['erFiled', 'erPeriodEnd', 'erPeriodLabel', 'erCurrency', 'erUrl', 'erRevenue', 'erRevYoY', 'erOpIncome', 'erOpYoY', 'erNetIncome', 'erNiYoY',
+    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erGuideVsQ', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
+  const TENQ_WORD = { match: 'Matches', differs: 'Differs', none: 'Not comparable' };
+  function tenQText(r) {
+    if (!r || !r.secCheck) return 'The quarter’s 10-Q is not filed yet, or not read yet.';
+    if (r.secCheck === 'match') return 'Matches its ' + (r.secForm || '10-Q') + (r.secFiled ? ' filed ' + shortDay(r.secFiled) : '') + '.';
+    if (r.secCheck === 'none') return 'The 10-Q carries none of the same figures to compare.';
+    const d = r.secDiffers || [], said = [];
+    if (d.includes('revenue')) said.push('revenue ' + money(r.secRevenue, r.currency));
+    if (d.includes('net income')) said.push('net income ' + money(r.secNetIncome, r.currency));
+    if (d.includes('diluted EPS')) said.push('diluted EPS ' + eps(r.secEps, r.currency));
+    return 'The ' + (r.secForm || '10-Q') + (r.secFiled ? ' filed ' + shortDay(r.secFiled) : '') + ' has ' + said.join(', ') + '; the release’s line can be a different one.';
+  }
+  function fields(r) {
+    const o = {};
+    for (const k of FIELD_KEYS) o[k] = null;
+    if (!r || !r.isResults && r.isResults !== undefined) return o;
+    const pv = r.provider;
+    const basis = pv && pv.estimate != null ? (pv.matches === 'adjusted' && r.epsAdj != null ? 'adjusted' : pv.matches === 'gaap' && r.epsGaap != null ? 'gaap' : null) : null;
+    const vs = basis === 'adjusted' ? r.epsAdj : basis === 'gaap' ? r.epsGaap : null;
+    // Next quarter's revenue outlook against this quarter's revenue: the
+    // range's middle, or the printed midpoint. Money guidance FOR A QUARTER
+    // only: a full-year outlook against one quarter read +297% for Medpace
+    // on the first draw. A period naming both ("Third Quarter and Full Year")
+    // is left out too.
+    const quarterly = /quarter|\bq[1-4]\b/i.test(r.guidePeriod || '') && !/full|year|annual/i.test(r.guidePeriod || '');
+    const mid = !quarterly ? null : r.guideKind === 'revenue_range' && r.guideLow != null && r.guideHigh != null ? (r.guideLow + r.guideHigh) / 2
+      : r.guideKind === 'revenue_midpoint' ? r.guideMid : null;
+    Object.assign(o, {
+      erFiled: r.filed || null, erPeriodEnd: r.periodEnd || null, erPeriodLabel: r.periodLabel || null, erCurrency: r.currency || null, erUrl: r.url || null,
+      erRevenue: r.revenue, erRevYoY: yoy(r.revenue, r.revenuePrior), erOpIncome: r.opIncome, erOpYoY: yoy(r.opIncome, r.opIncomePrior),
+      erNetIncome: r.netIncome, erNiYoY: yoy(r.netIncome, r.netIncomePrior), erEps: r.epsGaap, erEpsYoY: yoy(r.epsGaap, r.epsGaapPrior),
+      erEpsAdj: r.epsAdj, erEpsAdjYoY: yoy(r.epsAdj, r.epsAdjPrior), erEpsAdjLabel: r.epsAdj != null ? r.epsAdjLabel || null : null, erEpsAdjExcludes: r.epsAdj != null ? r.epsAdjExcludes || null : null,
+      erEst: pv && pv.estimate != null ? pv.estimate : null, erVsEst: vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100, erVsEstBasis: basis,
+      erGuideVsQ: mid != null && r.revenue > 0 ? (mid / r.revenue - 1) * 100 : null, erGuide: r.guideSentence || null,
+      erTenQ: r.secCheck ? TENQ_WORD[r.secCheck] || null : 'Waiting', erTenQNote: tenQText(r), erSummary: r.summary || null,
+    });
+    return o;
+  }
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText };
 })(typeof window !== 'undefined' ? window : globalThis);

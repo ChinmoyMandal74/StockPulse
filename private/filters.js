@@ -19,9 +19,9 @@
   // A score column filters on the 1-10 rating the cell shows, not the 0-100
   // score behind it.
   const RATING_FOR = { qualityScore: 'qualityRating' };
-  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder']);
+  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember']);
+    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:
@@ -181,6 +181,11 @@
       // tooltip said 10. The card-dating lesson, one line apart.
       return x.lastEarningsDate
         ? Math.round((Date.now() - new Date(x.lastEarningsDate + 'T12:00:00').getTime()) / 86400000) : null;
+    }
+    // The results release's two dates (Last Earning AI Extracted) filter as
+    // days since, like the report date above.
+    if (key === 'erFiled' || key === 'erPeriodEnd') {
+      return x[key] ? Math.round((Date.now() - new Date(x[key] + 'T12:00:00').getTime()) / 86400000) : null;
     }
     if (key === 'fresh3mHigh') return x.fresh3mHigh ? 'Yes' : 'No';
     // A NULL IS NOT A NO. With no holdings file imported every row is

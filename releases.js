@@ -258,4 +258,26 @@ function tenQCheck(row, facts) {
     result: !compared ? 'none' : differs.length ? 'differs' : 'match', differs };
 }
 
-module.exports = { tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+// THE SCREENER'S COLUMN (2026-10-22, the owner: the group "Last Earning AI
+// Extracted", every column). Each company's newest results release in the
+// window, as a reader is handed it (forReader: the changes and the provider's
+// estimate joined), less the release link's long prose duplicates. Built by
+// the loader after each run and stored as one figure, so the screener reads
+// one row; the page maps a row to its columns (ReleaseView.fields).
+function columnRows(releases, earnBySymbol) {
+  const latest = {};
+  for (const r of releases || []) {
+    if (!r || !r.isResults || !r.symbol) continue;
+    const cur = latest[r.symbol];
+    if (!cur || r.filed > cur.filed || (r.filed === cur.filed && String(r.accn) > String(cur.accn))) latest[r.symbol] = r;
+  }
+  const out = {};
+  for (const sym of Object.keys(latest)) {
+    const f = forReader(latest[sym], (earnBySymbol && earnBySymbol[sym]) || []);
+    for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt']) delete f[k];
+    out[sym] = f;
+  }
+  return out;
+}
+
+module.exports = { columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

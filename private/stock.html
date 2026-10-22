@@ -3361,6 +3361,26 @@
         if (!res.ok) return;
         const list = ((await res.json()).releases || []).slice(0, 4);
         if (!list.length) return;
+        // The All fields section's Last Earning AI Extracted rows, from the newest
+        // release, through the same mapping the screener uses.
+        // The section is left out when the page first draws (every field of a
+        // group empty), so it is built here, from the group's rows alone, and
+        // appended; a second call refills it in place.
+        if (stock && window.RowCard) {
+          Object.assign(stock, window.ReleaseView.fields(list[0]));
+          const box = document.querySelector('#allfields .fields');
+          const have = box && [...box.querySelectorAll('.rc-row .rc-k')].some((k) => k.textContent === 'Release filed');
+          if (box && !have) {
+            const only = {};
+            for (const k of window.ReleaseView.FIELD_KEYS) only[k] = stock[k];
+            const tmp = document.createElement('div');
+            tmp.innerHTML = RowCard.buildSections(Object.assign({ symbol: stock.symbol }, only), { colors: RowCard.GROUP_COLORS, labels: RowCard.GROUP_LABELS });
+            const sec = [...tmp.querySelectorAll('.rc-sec')].find((x) => x.querySelector('.rc-k') && [...x.querySelectorAll('.rc-k')].some((k) => k.textContent === 'Release filed'));
+            if (sec) box.appendChild(sec);
+          } else {
+            for (const f of RowCard.FIELD_SPEC) if (f[0] === 'aier') refillField(f[1]);
+          }
+        }
         const RV = window.ReleaseView, e = RV.esc;
         const fig = (k, v, sub) => '<div><span class="rl-k">' + k + '</span><span class="rl-v">' + v + '</span>' + (sub || '') + '</div>';
         const sub = (t, title) => (t ? '<span class="rv-sub"' + (title ? ' title="' + e(title) + '"' : '') + '>' + e(t) + '</span>' : '');

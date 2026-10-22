@@ -2892,6 +2892,13 @@ function erOut(x) {
   try { o.secDiffers = o.secDiffers ? JSON.parse(o.secDiffers) : []; } catch (e) { o.secDiffers = []; }
   return o;
 }
+// Every results release filed on or after a day: the screener column's build
+// (release-load.js), a range seek on the filing-day index of a small table.
+async function readEarningsReleasesSince(sinceDay) {
+  await init();
+  const r = await db.execute({ sql: 'select * from earnings_releases where filed >= ? and is_results = 1', args: [String(sinceDay)] });
+  return r.rows.map(erOut);
+}
 // Results releases not yet compared with their 10-Q, filed on or after a day:
 // a range seek on the filing-day index of a small table.
 async function readReleasesToCheck(sinceDay) {
@@ -8054,7 +8061,7 @@ module.exports = {
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
-  readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

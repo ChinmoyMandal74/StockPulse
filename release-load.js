@@ -39,6 +39,22 @@ const REREAD = flag('--reread');
 // --force (with --symbol): read that company's filings in the window again,
 // replacing even clean readings. For a fault the checks could not see (a scale).
 const FORCE = flag('--force') && !!ONLY;
+// --column-only: rebuild the screener's column (the stored figure) and stop;
+// no SEC fetch, no model call. Every committed run rebuilds it at its end too.
+const COLUMN_ONLY = flag('--column-only');
+// The window the column covers: a quarter and a month, so a company that
+// reported early last season still shows until it reports again.
+const COLUMN_DAYS = 130;
+async function writeColumn() {
+  const since = etDay(Date.now() - COLUMN_DAYS * 86400000);
+  const rel = await store.readEarningsReleasesSince(since);
+  const syms = [...new Set(rel.map((r) => r.symbol))];
+  const earnBy = {};
+  for (const s of syms) earnBy[s] = await store.readEarnings(s).catch(() => []);
+  const rows = Rel.columnRows(rel, earnBy);
+  await store.writeFigures({ releaseColumn: { at: Date.now(), days: COLUMN_DAYS, rows } });
+  console.log('  screener column: ' + Object.keys(rows).length + ' companies written');
+}
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 40)) || 40;
 const KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -89,6 +105,7 @@ async function recordRun() {
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
+  if (COLUMN_ONLY) { await writeColumn(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
   const since = etDay(Date.now() - DAYS * 86400000);
@@ -169,6 +186,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
     } catch (err) { console.log('  10-Q check failed: ' + String(err.message).slice(0, 120)); }
   }
   Object.assign(RUN, { checked, differs: differ });
+  if (COMMIT) { try { await writeColumn(); } catch (err) { console.log('  screener column failed: ' + String(err.message).slice(0, 120)); } }
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   await recordRun();

@@ -119,6 +119,50 @@ check('10-Q: nothing both sides carry is "none"', Rel.tenQCheck({ isResults: tru
 check('10-Q: a non-results reading is not checked', Rel.tenQCheck(Object.assign({}, rel, { isResults: false }), facts) === null);
 check('10-Q: the newest filing for the quarter wins', Rel.tenQCheck(rel, facts.concat([{ periodType: 'Q', periodEnd: '2026-08-31', form: '10-Q/A', filed: '2026-10-20', revenue: 1, netIncome: 1, epsDiluted: 1 }])).form === '10-Q/A');
 
+// ---- the screener's column (Last Earning AI Extracted) ----
+const relA = { accn: 'a1', symbol: 'AAA', filed: '2026-07-20', isResults: true, revenue: 90, revenuePrior: 80, epsGaap: 1, problems: ['x'] };
+const relB = { accn: 'a2', symbol: 'AAA', filed: '2026-10-20', isResults: true, revenue: 100, revenuePrior: 80, opIncome: 10, opIncomePrior: -5, netIncome: 8, netIncomePrior: 4,
+  epsGaap: 1.2, epsGaapPrior: 0.6, epsAdj: 1.5, epsAdjPrior: 1.0, epsAdjLabel: 'Adjusted EPS', guideKind: 'revenue_range', guideLow: 105, guideHigh: 115, guidePeriod: 'Fourth quarter 2026',
+  guideSentence: 'Q4 revenue of $105-115.', summary: 'It reported.', secCheck: 'differs', secDiffers: ['revenue'], secRevenue: 99, currency: 'USD', url: 'u', problems: [] };
+const relC = { accn: 'c1', symbol: 'CCC', filed: '2026-10-21', isResults: false };
+const col = Rel.columnRows([relA, relB, relC], { AAA: [{ date: '2026-10-21', epsEstimate: 1.4, epsActual: 1.5 }] });
+check('column: the newest release per company', col.AAA && col.AAA.filed === '2026-10-20');
+check('column: a non-results filing is not a row', !col.CCC);
+check('column: bookkeeping dropped, the guide period kept', !('problems' in col.AAA) && !('accn' in col.AAA) && col.AAA.guidePeriod === 'Fourth quarter 2026');
+check('column: the provider joined', col.AAA.provider && col.AAA.provider.matches === 'adjusted' && col.AAA.provider.estimate === 1.4);
+global.window = globalThis;
+require('./private/releaseview.js');
+const RV = globalThis.ReleaseView;
+const fl = RV.fields(col.AAA);
+check('fields: every key, er-prefixed', RV.FIELD_KEYS.every((k) => k in fl) && Object.keys(fl).every((k) => /^er[A-Z]/.test(k)));
+check('fields: changes on a year ago', Math.abs(fl.erRevYoY - 25) < 1e-9 && fl.erNiYoY === 100 && Math.abs(fl.erEpsYoY - 100) < 1e-9 && Math.abs(fl.erEpsAdjYoY - 50) < 1e-9);
+check('fields: no change off a loss', fl.erOpYoY === null);
+check('fields: against the estimate, on the figure the provider matched', fl.erVsEst === 0.1 && fl.erVsEstBasis === 'adjusted' && fl.erEst === 1.4);
+check('fields: a quarter’s outlook against the quarter', Math.abs(fl.erGuideVsQ - 10) < 1e-9);
+check('fields: a full-year outlook is not set against a quarter', RV.fields(Object.assign({}, col.AAA, { guidePeriod: 'Full year 2026' })).erGuideVsQ === null);
+check('fields: the 10-Q word and note', fl.erTenQ === 'Differs' && /has revenue \$99/.test(fl.erTenQNote));
+check('fields: waiting before a 10-Q', RV.fields(Object.assign({}, col.AAA, { secCheck: null })).erTenQ === 'Waiting');
+check('fields: no release, every field null', RV.FIELD_KEYS.every((k) => RV.fields(null)[k] === null));
+
+// ---- THE BOUNDARY: the group never reaches the Signal ----
+// Scored with the er fields absent, present and lying, the verdicts must be
+// the same. Real rows when a snapshot file is given (node releases-test.js
+// <snapshot.json>), else the rows above dressed as stocks.
+require('./private/action.js');
+const A = global.ActionRules;
+const snapPath = process.argv[2];
+const baseRows = snapPath ? (JSON.parse(require('fs').readFileSync(snapPath, 'utf8')).stocks || []).filter((x) => x && x.symbol) : [];
+if (baseRows.length) {
+  const verdicts = (rs) => A.apply(rs.map((x) => ({ ...x })), undefined).map((x) => JSON.stringify(x));
+  const strip = (x) => { const y = { ...x }; for (const k of RV.FIELD_KEYS) delete y[k]; return y; };
+  const absent = verdicts(baseRows.map(strip));
+  const present = verdicts(baseRows.map((x) => Object.assign(strip(x), RV.fields(col.AAA))));
+  const lying = verdicts(baseRows.map((x, i) => { const y = strip(x); for (const k of RV.FIELD_KEYS) y[k] = i % 2 ? 1e12 : -1e12; return y; }));
+  check('boundary: rows scored', absent.length > 1000, absent.length);
+  check('boundary: verdicts identical with the group present', absent.every((x, i) => x === present[i]), absent.findIndex((x, i) => x !== present[i]));
+  check('boundary: verdicts identical with the group lying', absent.every((x, i) => x === lying[i]), absent.findIndex((x, i) => x !== lying[i]));
+} else console.log('(boundary on real rows: pass a snapshot file to run it)');
+
 // ---- year on year ----
 check('yoy', Math.abs(Rel.yoy(64601, 51242) - 26.07) < 0.01);
 check('yoy: off a loss is no percent', Rel.yoy(5, -2) === null && Rel.yoy(null, 3) === null);

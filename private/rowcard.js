@@ -180,6 +180,8 @@
   };
 
   // --- what a row contains, in table order -----------------------------------
+  // A per-share figure in the reporting currency, for the release fields.
+  const erEps = (n, code) => (ok(n) ? { t: (n < 0 ? '−' : '') + (!code || code === 'USD' ? '$' : code + ' ') + Math.abs(n).toFixed(2), c: '', n, u: 'num' } : null);
   const FIELD_SPEC = [
     ['info',  'Portfolios',     (s) => V.text((s.portfolios || []).join(', '))],
     ['info',  'Price',          (s) => ok(s.price) ? { t: curSym(s.currency) + s.price.toFixed(1), c: '' } : null],
@@ -489,6 +491,28 @@
     ['lrun',  'Dividend /yr 5Y', (s) => V.smag(s.divGrowth5y)],
     ['lrun',  'Interest cover', (s) => (ok(s.intCover) ? { t: Number(s.intCover).toFixed(1) + '×', c: '', n: Number(s.intCover), u: 'num' } : null)],
     ['lrun',  'F-score',        (s) => (ok(s.fScore) ? { t: s.fScore + ' of 9', c: '', n: Number(s.fScore), u: 'num' } : null)],
+    // LAST EARNING AI EXTRACTED (2026-10-22): each company's newest results
+    // release as read by releases.js, merged into a row from the release
+    // column (the screener) or the stock's own releases (the stock page).
+    // Money in the reporting currency; growth uncoloured; never the Signal.
+    ['aier',  'Release filed',  (s) => (s.erFiled ? V.text(new Date(s.erFiled + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })) : null)],
+    ['aier',  'Quarter end',    (s) => V.text(s.erPeriodLabel || s.erPeriodEnd)],
+    ['aier',  'Revenue',        (s) => V.money(s.erRevenue, s.erCurrency)],
+    ['aier',  'Revenue YoY',    (s) => V.smag(s.erRevYoY)],
+    ['aier',  'Operating income', (s) => V.money(s.erOpIncome, s.erCurrency)],
+    ['aier',  'Op. income YoY', (s) => V.smag(s.erOpYoY)],
+    ['aier',  'Net income, quarter', (s) => V.money(s.erNetIncome, s.erCurrency)],
+    ['aier',  'Net income YoY', (s) => V.smag(s.erNiYoY)],
+    ['aier',  'EPS GAAP',       (s) => erEps(s.erEps, s.erCurrency)],
+    ['aier',  'EPS YoY',        (s) => V.smag(s.erEpsYoY)],
+    ['aier',  'EPS adjusted',   (s) => { const v = erEps(s.erEpsAdj, s.erCurrency); return v && s.erEpsAdjLabel ? Object.assign(v, { t: v.t + ' (' + s.erEpsAdjLabel + ')' }) : v; }],
+    ['aier',  'Adj. EPS YoY',   (s) => V.smag(s.erEpsAdjYoY)],
+    ['aier',  'EPS estimate',   (s) => erEps(s.erEst, s.erCurrency)],
+    ['aier',  'vs estimate',    (s) => { const v = erEps(s.erVsEst == null ? null : Math.abs(s.erVsEst), s.erCurrency); return v ? Object.assign(v, { t: (s.erVsEst > 0 ? '+' : s.erVsEst < 0 ? '−' : '') + v.t, n: s.erVsEst }) : null; }],
+    ['aier',  'Guide vs quarter', (s) => V.smag(s.erGuideVsQ)],
+    ['aier',  'Outlook',        (s) => V.text(s.erGuide)],
+    ['aier',  '10-Q',           (s) => (s.erTenQ ? { t: s.erTenQ, c: s.erTenQ === 'Differs' ? 'warn' : '' } : null)],
+    ['aier',  'Summary',        (s) => V.text(s.erSummary)],
     ['own',   'Shares out',     (s) => V.count(s.sharesOutstanding)],
     // The diluted share count against the fiscal year before, from the filings:
     // dilution when it rises, buybacks net of issuance when it falls.
@@ -515,7 +539,7 @@
 
   // Option A (owner, 2026-10-19): Relative split into Range and level (id
   // kept) and Risk; Fundamentals into six. The screener's group list matches.
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own'];
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own', 'aier'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
@@ -529,7 +553,7 @@
     rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)',
     size: 'var(--steel, #94a3b8)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)',
     risk: 'var(--peach, #fdba74)', value: 'var(--red, #fb7185)', profit: 'var(--indigo, #818cf8)', growth: 'var(--sky, #38bdf8)',
-    finpos: 'var(--lilac, #c4b5fd)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)',
+    finpos: 'var(--lilac, #c4b5fd)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)', aier: 'var(--azure, #93c5fd)',
   };
   // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
   // band). The group ID is unchanged, so every saved key that names it still
@@ -538,6 +562,7 @@
     info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
     rel: 'Range and level', risk: 'Risk', react: 'Reactions', trend: 'Trend', size: 'Scale', value: 'Valuation', profit: 'Profitability',
     growth: 'Growth', finpos: 'Financial position', divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
+    aier: 'Last Earning AI Extracted',
   };
 
   // ---- price history -------------------------------------------------------
@@ -1233,7 +1258,7 @@
   // XLK 41.5). A distribution yield is one of the most-read numbers about an
   // ETF; NA there would destroy a true figure to satisfy a rule about the
   // group it happens to sit in.
-  const FUND_NA_GROUPS = ['size', 'own', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun'];
+  const FUND_NA_GROUPS = ['size', 'own', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'aier'];
   const FUND_HAS = new Set([
     'value|Trailing P/E', 'divs|Dividend yield', 'divs|Dividend rate',
     'divs|Ex-dividend', 'report|Last split',
