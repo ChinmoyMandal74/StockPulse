@@ -1,388 +1,707 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- The signed-out home page (rebuilt 2026-10-22 from the approved draft).
+     Navy by design, so the theme is fixed here and theme.js is not loaded.
+     The figures in double-brace placeholders are filled by the / route from the
+     /api/about-stats cache, with last-known values when it is cold; the script
+     at the bottom then refreshes them from the same route. -->
+<html lang="en" data-theme="navy">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Tickr Lab — one screen for every stock you follow</title>
-  <meta name="description" content="From data to decisions. A nightly stock screener: returns, trend and company quality measured the same way every night, mechanical Signal rules that name the one rule that fired, and twenty years of daily bars behind every number." />
-  <meta property="og:title" content="Tickr Lab — one screen for every stock you follow" />
-  <meta property="og:description" content="From data to decisions. Returns, trend and quality measured the same way every night, mechanical Signal rules, and twenty years of bars behind every number." />
+  <title>Tickr Lab: every US stock, measured the same way after every close</title>
+  <meta name="description" content="A stock screener, a page for every company and post-ready visuals for people who follow US stocks and the people who write about them. Free during the beta." />
+  <meta property="og:title" content="Tickr Lab: every US stock, measured the same way after every close" />
+  <meta property="og:description" content="A screener, a page for every company and post-ready visuals. Returns, trend, filings, ownership and a plain reading of where each stock stands. Free during the beta." />
   <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://www.tickrlab.com/img/landing/screener-navy.jpg" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <meta name="theme-color" content="#050505" />
+  <meta name="theme-color" content="#071120" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
   <style>
-    body { min-height: 100dvh; padding: 0 0 0; overflow-x: clip; }
-    .page { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 28px; }
-    .aura {
-      background:
-        radial-gradient(52vw 46vw at 8% -12%, rgba(52, 211, 153, 0.13), transparent 62%),
-        radial-gradient(50vw 44vw at 96% 2%, rgba(124, 156, 255, 0.13), transparent 64%); }
+    /* Everything is scoped under .lp: app.css owns .btn, .card, .tab and more,
+       and the subscribe box (.subbox) brings its own h2. */
+    body { overflow-x: clip; font-size: 16px; line-height: 1.6; }
+    .lp a { color: inherit; }
+    .lp .w { max-width: 1180px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+    .lp main > section { padding-block: 84px; }
+    .lp main > section.tight { padding-top: 20px; }
+    .lp .h2 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1.08; font-weight: 600; letter-spacing: -0.03em; text-wrap: balance; }
+    .lp .h3 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+    .lp p { margin: 0; }
+    .lp .eyebrow { display: block; margin-bottom: 12px; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); }
+    .lp .lede { color: var(--muted); font-size: 18px; max-width: 62ch; margin-top: 14px; }
+    .lp .note { margin-top: 12px; font: 12px var(--mono); color: var(--faint); }
 
-    /* ---- nav ------------------------------------------------------------ */
-    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center;
-                padding: 16px 20px 0; pointer-events: none; }
-    .nav {
-      pointer-events: auto; display: flex; align-items: center; gap: 8px; width: min(1120px, 100%);
-      padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
-      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
-      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset);
+    /* ---- top bar ---- */
+    .lp-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: color-mix(in srgb, var(--void) 82%, transparent);
+              backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--hair); }
+    .lp-bar .w { display: flex; align-items: center; gap: 20px; height: 64px; }
+    .lp .mark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; }
+    .lp .glyph { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--green);
+                 background: linear-gradient(160deg, color-mix(in srgb, var(--green) 22%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+                 border: 1px solid color-mix(in srgb, var(--green) 28%, transparent); }
+    .lp .glyph svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .lp .beta { font: 600 10.5px var(--mono); letter-spacing: 0.12em; color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+                border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    .lp-nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+    .lp-nav a { text-decoration: none; } .lp-nav a:hover { color: var(--text); }
+    .lp-bar .sp { flex: 1; }
+    .lp .b { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--sans); text-decoration: none; padding: 10px 16px; border-radius: 10px;
+             border: 1px solid var(--hair-2); color: var(--text); background: transparent; cursor: pointer; white-space: nowrap; }
+    .lp .b:hover { border-color: var(--muted); }
+    .lp .b.pri { background: var(--accent); border-color: var(--accent); color: var(--void); }
+    .lp .b.pri:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
+    .lp .b:focus-visible, .lp .tb:focus-visible, .lp summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ---- hero ---- */
+    .lp-hero { padding-block: 64px 40px !important; position: relative; overflow: hidden; }
+    .lp-hero::before { content: ""; position: absolute; inset: -20% -10% auto auto; width: 720px; height: 720px; pointer-events: none;
+                       background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 16%, transparent), transparent); }
+    .lp-hero .w { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; position: relative; }
+    .lp-hero h1 { margin: 6px 0 0; font-size: clamp(40px, 5.6vw, 66px); line-height: 1.02; font-weight: 600; letter-spacing: -0.045em; text-wrap: balance; }
+    .lp-hero h1 em { font-style: normal; color: var(--accent); }
+    .lp-hero .lede { margin-top: 20px; }
+    .lp .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+    .lp .free { margin-top: 16px; font-size: 13.5px; color: var(--faint); }
+    .lp .free b { color: var(--text); font-weight: 600; }
+    .lp .stack { position: relative; aspect-ratio: 4 / 5; max-width: 440px; width: 100%; justify-self: end; }
+    .lp .stack figure { position: absolute; inset: 0; margin: 0; border-radius: 18px; overflow: hidden; border: 1px solid var(--hair-2);
+                        box-shadow: 0 40px 90px -30px color-mix(in srgb, var(--strong) 80%, transparent); background: var(--surface); }
+    .lp .stack img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lp .stack figure:nth-child(1) { transform: rotate(-4deg) translate(-38px, 14px) scale(0.92); opacity: 0.55; }
+    .lp .stack figure:nth-child(2) { transform: rotate(3deg) translate(30px, 8px) scale(0.95); opacity: 0.75; }
+    .lp .stack figure:nth-child(3) { z-index: 2; }
+    @media (prefers-reduced-motion: no-preference) {
+      .lp .stack figure:nth-child(3) { animation: lp-lift 7s ease-in-out infinite; }
+      @keyframes lp-lift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
     }
-    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto; }
-    .nav .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center;
-                  justify-content: center; color: var(--green);
-                  background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
-                  border: 1px solid rgba(52, 211, 153, 0.24); }
-    .nav a.link { color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none; padding: 8px 12px; border-radius: 10px; }
-    .nav a.link:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+    .lp .stackcap { margin-top: 18px; font: 12px var(--mono); color: var(--faint); max-width: 440px; justify-self: end; text-align: right; }
 
-    /* ---- hero ----------------------------------------------------------- */
-    .hero { padding: 72px 0 26px; }
-    .kicker { display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px 5px 9px; border-radius: 999px;
-              border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.035); font-size: 11px;
-              letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-    .kicker .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 9px var(--green); }
-    h1 { margin: 22px 0 0; font-size: clamp(42px, 7vw, 82px); font-weight: 600; line-height: 0.94;
-         letter-spacing: -0.05em; max-width: 16ch; }
-    h1 em { font-style: normal; color: var(--green); }
-    .sub { margin: 22px 0 0; max-width: 62ch; font-size: clamp(15px, 1.7vw, 18px); line-height: 1.6; color: var(--muted); }
-    .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
-    .cta .btn { padding: 12px 20px; font-size: 14px; }
-    .cta .btn-primary { background: var(--green); color: #04150e; border-color: transparent; font-weight: 600; }
-    .cta .btn-primary:hover { filter: brightness(1.08); }
-    .under { margin-top: 14px; font-size: 12.5px; color: var(--faint); }
+    /* ---- live numbers ---- */
+    .lp-nums { border-block: 1px solid var(--hair); background: color-mix(in srgb, var(--surface) 55%, transparent); padding-block: 26px; }
+    .lp-nums .w { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 18px; }
+    .lp .num b { display: block; font: 600 26px var(--mono); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .lp .num span { font-size: 12.5px; color: var(--faint); }
+    .lp .livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 3px;
+                   box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 18%, transparent); }
 
-    /* ---- strip ---------------------------------------------------------- */
-    .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 42px 0 8px; }
-    .strip .core { padding: 18px 20px; }
-    .strip .n { font-family: var(--mono); font-size: clamp(20px, 2.4vw, 28px); font-weight: 500; letter-spacing: -0.03em; }
-    .strip .n.g { color: var(--green); } .strip .n.b { color: var(--accent); }
-    .strip .n.p { color: var(--accent-2); } .strip .n.c { color: #22d3ee; }
-    .strip .l { margin-top: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--faint); }
+    /* ---- panels shared by several sections ---- */
+    .lp .pnl { background: var(--surface); border: 1px solid var(--hair); border-radius: 18px; padding: 26px; min-width: 0; }
+    .lp .pnl ul { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; font-size: 14.5px; }
+    .lp .tag { font: 500 11.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+    .lp .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 36px; }
+    .lp .two .pnl { padding: 30px; display: flex; flex-direction: column; gap: 14px; }
+    .lp .two .pnl.cr .tag { color: var(--orange); }
+    .lp .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 34px; }
+    .lp .three .pnl { display: flex; flex-direction: column; gap: 10px; }
+    .lp .three .pnl p { color: var(--muted); font-size: 14.5px; }
+    .lp .three .tag { color: var(--accent-2); }
 
-    /* ---- sections ------------------------------------------------------- */
-    section { padding: 62px 0; border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 52px; }
-    section:first-of-type { border-top: 0; margin-top: 0; }
-    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--green); }
-    h2 { margin: 14px 0 0; font-size: clamp(26px, 3.6vw, 40px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.05; max-width: 20ch; }
-    .lede { margin: 16px 0 0; max-width: 68ch; font-size: 15px; line-height: 1.7; color: var(--muted); }
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 34px; }
-    .card .core { padding: 22px 24px; height: 100%; box-sizing: border-box; }
-    .card h3 { margin: 0 0 9px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-    .card p { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--muted); }
-    .card .tag { display: inline-block; margin-bottom: 12px; font-family: var(--mono); font-size: 10.5px;
-                 letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
-                 border: 1px solid var(--hair); border-radius: 99px; padding: 2px 9px; }
+    /* ---- tour ---- */
+    .lp .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 30px; }
+    .lp .tb { font: 500 14px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--hair-2); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+    .lp .tb[aria-selected="true"] { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .lp .pane { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 36px; margin-top: 26px; align-items: center; background: var(--surface);
+                border: 1px solid var(--hair); border-radius: 20px; padding: 32px; }
+    .lp .pane[hidden] { display: none !important; }
+    .lp .pane > div { min-width: 0; }
+    .lp .pane ul { margin: 16px 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 8px; }
+    .lp .pane p { color: var(--muted); margin-top: 12px; }
+    .lp .shot { border-radius: 14px; border: 1px solid var(--hair-2); background: var(--surface-2); overflow: hidden; min-width: 0; }
+    .lp .shot img { display: block; width: 100%; height: auto; }
+    .lp .scroll { overflow-x: auto; width: 100%; }
+    .lp .rows { width: 100%; font: 13px var(--mono); border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    .lp .rows th { text-align: right; font: 500 10.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); padding: 10px 12px; border-bottom: 1px solid var(--hair); }
+    .lp .rows th:first-child, .lp .rows td:first-child { text-align: left; }
+    .lp .rows td { text-align: right; padding: 11px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .lp .rows .up { color: var(--green); } .lp .rows .dn { color: var(--red); }
+    .lp .rows th.sg, .lp .rows td.sg { text-align: left; font-family: var(--sans); font-size: 12.5px; color: var(--muted); white-space: normal; min-width: 200px; }
+    .lp .rows td.sg b { color: var(--text); font-weight: 600; }
 
-    /* ---- the honest bit ------------------------------------------------- */
-    .quote > .core { padding: 34px 38px; border: 1px solid rgba(52, 211, 153, 0.22); }
-    .quote p { margin: 0; font-size: clamp(17px, 2.2vw, 22px); line-height: 1.5; letter-spacing: -0.02em; }
-    .quote .who { margin-top: 16px; font-size: 12.5px; color: var(--faint); }
+    /* ---- themes ---- */
+    .lp .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 34px; }
+    .lp .themes figure { margin: 0; min-width: 0; }
+    .lp .themes .shot { aspect-ratio: 4 / 3; }
+    .lp .themes .shot img { height: 100%; object-fit: cover; object-position: left top; }
+    .lp .themes figcaption { margin-top: 12px; display: flex; align-items: baseline; gap: 10px; }
+    .lp .themes figcaption b { font-size: 15px; }
+    .lp .themes figcaption span { font-size: 13.5px; color: var(--muted); }
 
-    /* ---- table preview -------------------------------------------------- */
-    .shot > .core { padding: 0; overflow: hidden; }
-    .shot table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .shot th { background: var(--surface-2); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.14em;
-               color: var(--faint); font-weight: 500; padding: 9px 14px; text-align: right; white-space: nowrap; }
-    .shot th:first-child, .shot td:first-child, .shot th.l, .shot td.l { text-align: left; }
-    .shot td { padding: 10px 14px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.045);
-               font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .shot td.nm { font-family: var(--sans); color: var(--text); }
-    .shot td.up { color: var(--green); } .shot td.dn { color: var(--red); }
-    .shot .verdict { font-family: var(--sans); font-size: 12px; }
-    .shot .v-buy { color: var(--green); } .shot .v-hold { color: var(--amber); } .shot .v-avoid { color: var(--red); }
-    .shot-note { margin: 12px 4px 0; font-size: 11.5px; color: var(--faint); }
+    /* ---- the stock page, all of it ---- */
+    .lp .depth { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-top: 34px; }
+    .lp .dcol { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 18px; min-width: 0; border-top: 3px solid var(--c, var(--accent)); }
+    .lp .dcol h3 { margin: 0; font: 500 11.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--c, var(--accent)); }
+    .lp .dcol ul { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+    .lp .dcol li > b { display: block; font-size: 14.5px; font-weight: 600; }
+    .lp .dcol li > span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+    .lp .glshot { margin-top: 22px; }
 
-    /* ---- faq ------------------------------------------------------------ */
-    .faq { margin-top: 28px; }
-    details { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 16px 2px; }
-    details summary { cursor: pointer; font-size: 15px; font-weight: 500; list-style: none; display: flex; gap: 12px; align-items: center; }
-    details summary::-webkit-details-marker { display: none; }
-    details summary::after { content: '+'; margin-left: auto; color: var(--faint); font-family: var(--mono); }
-    details[open] summary::after { content: '\\2212'; }
-    details p { margin: 12px 0 0; font-size: 13.5px; line-height: 1.7; color: var(--muted); max-width: 74ch; }
+    /* ---- article tone ---- */
+    .lp .tone { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 40px; align-items: start; }
+    .lp .tone ul.pts { margin: 18px 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 8px; }
+    .lp .art { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; }
+    .lp .art + .art { margin-top: 12px; }
+    .lp .art .h { display: flex; gap: 12px; align-items: baseline; }
+    .lp .chip { flex: none; font: 600 12px var(--mono); padding: 2px 9px; border-radius: 999px; border: 1.5px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .lp .chip.pos { color: var(--sky); border-color: var(--sky); } .lp .chip.neg { color: var(--orange); border-color: var(--orange); }
+    .lp .art .t { font-weight: 600; font-size: 15px; line-height: 1.35; }
+    .lp .art .s { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .lp .art .m { font: 12px var(--mono); color: var(--faint); }
 
-    /* ---- close ---------------------------------------------------------- */
-    .close { text-align: center; padding: 74px 0 40px; }
-    .close h2 { margin: 0 auto; max-width: 18ch; }
-    .close .cta { justify-content: center; }
-    footer { border-top: 1px solid rgba(255, 255, 255, 0.06); padding: 30px 0 50px; margin-top: 20px; }
-    .frow { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; font-size: 12.5px; color: var(--faint); }
-    .frow .ftag { color: var(--green); letter-spacing: .1em; text-transform: uppercase; font-size: 10.5px; margin-left: -10px; }
-    .frow a { color: var(--muted); text-decoration: none; }
-    .frow a:hover { color: var(--text); text-decoration: underline; }
-    .frow .sp { margin-left: auto; }
-    .legal { margin-top: 16px; font-size: 11.5px; line-height: 1.7; color: var(--faint); max-width: 90ch; }
+    /* ---- screens ---- */
+    .lp .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 30px; }
+    .lp .sgp { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+    .lp .sgp h3 { margin: 0; font: 500 11.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+    .lp .sgp .names { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .lp .sgp .names span { font-size: 13px; border: 1px solid var(--hair-2); border-radius: 999px; padding: 3px 10px; }
 
-    @media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .strip { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 640px) {
-      .page { padding: 0 16px; } .hide-sm { display: none !important; }
-      .hero { padding: 46px 0 10px; } section { padding: 46px 0; margin-top: 34px; }
-      .shot .opt { display: none; }
+    /* ---- data grid ---- */
+    .lp .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 34px; }
+    .lp .tile { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 18px; min-width: 0; }
+    .lp .tile h3 { margin: 0; font-size: 15.5px; }
+    .lp .tile p { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+    .lp .tile .src { font: 11.5px var(--mono); color: var(--faint); margin-top: 10px; }
+
+    /* ---- how we work ---- */
+    .lp .honest { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: start; }
+    .lp .rec .big { font: 600 56px var(--mono); letter-spacing: -0.05em; line-height: 1; }
+    .lp .rec .big small { font-size: 22px; color: var(--faint); letter-spacing: 0; }
+    .lp .rec p { color: var(--muted); margin-top: 12px; font-size: 15px; }
+    .lp .words { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .lp .words span { font: 500 12.5px var(--sans); border: 1px solid var(--hair-2); border-radius: 999px; padding: 5px 12px; color: var(--muted); }
+
+    /* ---- compare ---- */
+    .lp .cmp { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 14.5px; min-width: 760px; }
+    .lp .cmp th, .lp .cmp td { padding: 14px 16px; border-bottom: 1px solid var(--hair); text-align: left; vertical-align: top; }
+    .lp .cmp thead th { font: 500 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+    .lp .cmp thead th.us { color: var(--accent); }
+    .lp .cmp td { color: var(--muted); }
+    .lp .cmp td.us { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--text); }
+    .lp .cmp tbody th { font: 600 14.5px var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); width: 22%; }
+
+    /* ---- plans ---- */
+    .lp .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 34px; }
+    .lp .plan { padding: 30px; border-radius: 20px; }
+    .lp .plan.now { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent) inset; }
+    .lp .plan .price { font: 600 40px var(--mono); letter-spacing: -0.04em; margin-top: 14px; }
+    .lp .plan .price small { font: 500 14px var(--sans); color: var(--faint); letter-spacing: 0; margin-left: 6px; }
+    .lp .plan ul { margin-top: 18px; gap: 8px; }
+    .lp .plan ul b { color: var(--text); }
+    .lp .soon { display: inline-block; font: 600 10.5px var(--mono); letter-spacing: 0.12em; color: var(--accent-2); border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent); border-radius: 999px; padding: 2px 8px; }
+    .lp .plan .fine { color: var(--faint); font-size: 13.5px; margin-top: 18px; }
+
+    /* ---- faq ---- */
+    .lp details { border-bottom: 1px solid var(--hair); padding: 18px 0; }
+    .lp summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+    .lp summary::-webkit-details-marker { display: none; }
+    .lp summary::after { content: "+"; color: var(--faint); font: 400 20px var(--mono); }
+    .lp details[open] summary::after { content: "\2212"; }
+    .lp details p { color: var(--muted); margin-top: 10px; max-width: 72ch; }
+
+    /* ---- close and footer ---- */
+    .lp .closer { text-align: center; }
+    .lp .closer .lede { margin: 16px auto 0; }
+    .lp .closer .cta { justify-content: center; }
+    .lp .subwrap .subbox { margin-top: 0; }
+    .lp footer { border-top: 1px solid var(--hair); padding-block: 44px 56px; color: var(--faint); font-size: 13.5px; margin-top: 64px; }
+    .lp footer .cols { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 24px; }
+    .lp footer h4 { margin: 0 0 10px; font: 500 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+    .lp footer .cols a.mark { display: flex; padding: 0; color: var(--text); }
+    .lp footer .cols a:not(.mark) { display: block; text-decoration: none; padding: 3px 0; } .lp footer .cols a:hover { color: var(--text); }
+    .lp footer .legal { margin-top: 30px; max-width: 90ch; line-height: 1.6; }
+
+    @media (max-width: 1000px) { .lp-nav { display: none; } }
+    @media (max-width: 900px) {
+      .lp-hero .w, .lp .pane, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
+      .lp .stack { justify-self: center; max-width: 360px; } .lp .stackcap { justify-self: center; text-align: center; }
+      .lp-nums .w { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .lp .grid, .lp .depth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .lp .themes { grid-template-columns: 1fr; }
+      .lp footer .cols { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .lp main > section { padding-block: 60px; }
+      .lp-nums .w { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .lp .grid, .lp .depth { grid-template-columns: 1fr; }
+      .lp-bar .signin { display: none; }
+      .lp .pane { padding: 20px; }
     }
   </style>
 </head>
 <body>
-  <div class="aura" aria-hidden="true"></div>
-  <div class="grain" aria-hidden="true"></div>
-  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
-    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13.4"/><path d="M13.4 6.6 18.8 12l-5.4 5.4"/></symbol>
-  </svg>
+<div class="lp">
+<header class="lp-bar">
+  <div class="w">
+    <a class="mark" href="/"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a>
+    <span class="beta">BETA</span>
+    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/blog">Blog</a></nav>
+    <span class="sp"></span>
+    <a class="b signin" href="/login">Sign in</a>
+    <a class="b pri" href="/login?mode=register">Join the beta</a>
+  </div>
+</header>
 
-  <div class="nav-wrap">
-    <nav class="nav">
-      <span class="mark">
-        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
-        <span class="wordmark">Tickr Lab</span>
-      </span>
-      <a class="link hide-sm" href="#what">What it is</a>
-      <a class="link hide-sm" href="#rules">The rules</a>
-      <a class="link hide-sm" href="/about">About</a>
-      <a class="link" href="/blog">Blog</a>
-      <a class="btn" href="/login">Sign in</a>
-      <a class="btn btn-primary" href="/login?guest=1">Try it</a>
-    </nav>
+<main id="top">
+  <section class="lp-hero">
+    <div class="w">
+      <div>
+        <span class="eyebrow">Public beta · free while in beta</span>
+        <h1>Every US stock, measured <em>the same way</em> after every close.</h1>
+        <p class="lede">A screener, a page for every company and post-ready visuals, for people who follow US stocks and for the people who write about them. Returns, trend, company filings, who owns it, and a plain reading of where each stock stands, all in one place.</p>
+        <div class="cta"><a class="b pri" href="/login?mode=register">Join the beta, free</a><a class="b" href="/login?guest=1">Look around as a guest</a></div>
+        <p class="free"><b>Free during the beta.</b> No card asked for. Paid plans come later, for research, backtesting and AI.</p>
+      </div>
+      <div style="display:grid">
+        <div class="stack" aria-label="Three cards made by Tickr Lab">
+          <figure><img src="/img/landing/card-indbars.jpg" width="1080" height="1350" alt="Industry bars card: the past month's middle-company return by industry in the S&amp;P 500" /></figure>
+          <figure><img src="/img/landing/card-secbars.jpg" width="1080" height="1350" alt="Sector bars card: the past month's middle-company return by sector" /></figure>
+          <figure><img src="/img/landing/card-glance.jpg" width="1080" height="1350" alt="At a glance card for NextEra Energy" /></figure>
+        </div>
+        <p class="stackcap">Real cards from the visuals studio, made from the close of October 21, 2026.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="lp-nums" aria-label="Figures from the latest close">
+    <div class="w">
+      <div class="num"><b data-k="symbols">{{symbols}}</b><span>US-listed stocks and funds</span></div>
+      <div class="num"><b data-k="fields">{{fields}}</b><span>fields on every stock</span></div>
+      <div class="num"><b>23</b><span>sections on a stock page</span></div>
+      <div class="num"><b data-k="screens">{{screens}}</b><span>ready-made screens</span></div>
+      <div class="num"><b data-k="since">{{since}}</b><span>prices go back to</span></div>
+      <div class="num"><b data-k="articles">{{articles}}</b><span>articles read by AI this week</span></div>
+      <div class="num"><b><span class="livedot"></span><span data-k="asof">{{asof}}</span></b><span>last refresh, ET</span></div>
+    </div>
   </div>
 
-  <main class="page">
-    <div class="hero">
-      <span class="kicker"><span class="pip"></span>From data to decisions</span>
-      <h1>One screen for <em>every stock</em> you follow.</h1>
-      <p class="sub">Tickr Lab measures returns, trend and company quality the same way every night, on a fixed scale, and shows
-        its working. No tips, no watch-this-space — a consistent way to see where every stock you track stands,
-        and how it got there.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="/login?guest=1">See it with real data
-          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow" /></svg></a>
-        <a class="btn" href="/blog">Read the blog</a>
+  <section id="who">
+    <div class="w">
+      <span class="eyebrow">Who it is for</span>
+      <h2 class="h2">Two kinds of people use it.</h2>
+      <div class="two">
+        <div class="pnl">
+          <span class="tag">Individual investors</span>
+          <h3 class="h3">Follow US stocks without twenty open tabs.</h3>
+          <p style="color:var(--muted)">One table for the whole market, a page for every company, and a reason behind every number.</p>
+          <ul>
+            <li>Screen <span data-k="symbols">{{symbols}}</span> stocks on returns, trend, valuation, growth, margins and ownership</li>
+            <li>Click any number to see its history</li>
+            <li>Alerts, saved screens and paper positions to try an idea with pretend money</li>
+          </ul>
+        </div>
+        <div class="pnl cr" id="creators">
+          <span class="tag">Content creators</span>
+          <h3 class="h3">Post-ready market visuals, made from tonight's data.</h3>
+          <p style="color:var(--muted)">Pick a card, choose a size, download. Every card carries its date and a not-advice line.</p>
+          <ul>
+            <li>Dozens of cards for the market, sectors, industries, themes and single stocks</li>
+            <li>Instagram sizes: feed, square and story, in Dark, Navy or Light</li>
+          </ul>
+        </div>
       </div>
-      <p class="under">The preview needs no account and no card. Members get the full universe.</p>
     </div>
+  </section>
 
-    <div class="strip">
-      <div class="bezel"><div class="core"><div class="n g" id="sSymbols">271</div><div class="l">Stocks tracked</div></div></div>
-      <div class="bezel"><div class="core"><div class="n b" id="sCols">—</div><div class="l">Columns per stock</div></div></div>
-      <div class="bezel"><div class="core"><div class="n p" id="sYears">—</div><div class="l">Of daily history</div></div></div>
-      <div class="bezel"><div class="core"><div class="n c">4:15pm ET</div><div class="l">Refreshed daily</div></div></div>
+  <section id="tour" class="tight">
+    <div class="w">
+      <span class="eyebrow">The product</span>
+      <h2 class="h2">What you get on day one.</h2>
+      <div class="tabs" role="tablist" aria-label="Product tour">
+        <button class="tb" role="tab" id="t-screener" aria-selected="true" aria-controls="p-screener">Screener</button>
+        <button class="tb" role="tab" id="t-stock" aria-selected="false" aria-controls="p-stock">Stock pages</button>
+        <button class="tb" role="tab" id="t-pivot" aria-selected="false" aria-controls="p-pivot">Pivot</button>
+        <button class="tb" role="tab" id="t-visuals" aria-selected="false" aria-controls="p-visuals">Visuals</button>
+        <button class="tb" role="tab" id="t-filings" aria-selected="false" aria-controls="p-filings">Filings and ownership</button>
+      </div>
+
+      <div class="pane" role="tabpanel" id="p-screener" aria-labelledby="t-screener">
+        <div>
+          <h3 class="h3">One table, every stock, measured nightly.</h3>
+          <p><span data-k="columns">{{columns}}</span> columns, grouped by what they answer: how it moved, where it sits, what the business earns, who owns it, what the news says.</p>
+          <ul><li>Filter on any column; <span data-k="screens">{{screens}}</span> ready-made screens</li><li>A Signal on every row, with the one rule that produced it</li><li>Tiles for the phone</li></ul>
+        </div>
+        <div>
+          <div class="shot"><img src="/img/landing/screener-navy.jpg" width="1440" height="860" alt="The Tickr Lab screener in the Navy theme" loading="lazy" /></div>
+          <div class="shot" id="liveRows" style="margin-top:14px" hidden><div class="scroll">
+            <table class="rows" aria-label="Four stocks from the guest preview, as of the latest close">
+              <thead><tr><th>Stock</th><th>Today</th><th>1M</th><th>1Y</th><th>Fwd P/E</th><th class="sg">Signal</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div></div>
+          <p class="note" id="liveNote" hidden>Four of the guest-preview stocks, from the latest close.</p>
+        </div>
+      </div>
+
+      <div class="pane" role="tabpanel" id="p-stock" aria-labelledby="t-stock" hidden>
+        <div>
+          <h3 class="h3">A page for every company.</h3>
+          <p>At a glance cards up top, then the chart, the filings, earnings, insiders, institutions, funds, short interest, options and news.</p>
+          <ul><li>Each topic in a sentence, with its headline number</li><li>Compared against the company's own industry</li><li>Article tone: an AI reading of each news article, for the S&amp;P 500</li></ul>
+        </div>
+        <div class="shot"><img src="/img/landing/glance-navy.jpg" width="1376" height="709" alt="The At a glance section of NVIDIA's stock page" loading="lazy" /></div>
+      </div>
+
+      <div class="pane" role="tabpanel" id="p-pivot" aria-labelledby="t-pivot" hidden>
+        <div>
+          <h3 class="h3">The market two ways at once.</h3>
+          <p>Sector against size, theme against trend, industry against index. Each cell opens the stocks behind it.</p>
+          <ul><li>28 measures: returns, valuation, margins, growth, ownership</li><li>Each cell is the middle company, so one outlier cannot lead</li><li>Months or years across the top for returns over time</li></ul>
+        </div>
+        <div class="shot"><img src="/img/landing/pivot-navy.jpg" width="1440" height="860" alt="The pivot: sectors by company size, middle forward P/E, Technology opened into its industries" loading="lazy" /></div>
+      </div>
+
+      <div class="pane" role="tabpanel" id="p-visuals" aria-labelledby="t-visuals" hidden>
+        <div>
+          <h3 class="h3">Cards for social posts.</h3>
+          <p>Market snapshots, sector and industry bars, single-stock spotlights, the day's filings, article tone. Made from the latest close, every time.</p>
+          <ul><li>Feed, square and story sizes</li><li>Dark, Navy or Light</li><li>Each card dated, with a not-advice line</li></ul>
+        </div>
+        <div class="shot" style="max-width:420px;justify-self:center"><img src="/img/landing/card-secbars.jpg" width="1080" height="1350" alt="Sector bars card" loading="lazy" /></div>
+      </div>
+
+      <div class="pane" role="tabpanel" id="p-filings" aria-labelledby="t-filings" hidden>
+        <div>
+          <h3 class="h3">What the company filed, and who holds it.</h3>
+          <p>Read from the SEC, every day: 10-Ks and 10-Qs, 8-K announcements, 5% holders, insider trades, institutions' 13Fs and fund holdings.</p>
+          <ul><li>Yesterday's filings, a day at a time</li><li>Who added and who cut, quarter on quarter</li><li>Revenue by segment, capital returns, margins</li></ul>
+        </div>
+        <div class="shot"><img src="/img/landing/filings-navy.jpg" width="1440" height="900" alt="The Filings page: one day's 13D, 13G and 8-K filings" loading="lazy" /></div>
+      </div>
     </div>
+  </section>
 
-    <section id="what">
-      <span class="eyebrow">What it is</span>
-      <h2>A screener that explains itself.</h2>
-      <p class="lede">Most screens hand you a number and leave. Every score here opens into the factors behind it,
-        every signal names the single rule that produced it, and every percentage can be traced to bars going
-        back to 2005.</p>
-      <div class="cards">
-        <div class="bezel card"><div class="core">
-          <span class="tag">Measures</span>
-          <h3>A fixed scale, not a ranking</h3>
-          <p>Every measure is taken against constants rather than against today's list — so a number means the
-            same thing in a weak quarter as a strong one, and adding a stock doesn't move everyone else's.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">Signal</span>
-          <h3>Rules, not a black box</h3>
-          <p>Ordered rule lists where the first match wins, and the caution rules sit above every Strong rule. Click a
-            signal and the whole ladder opens: which rung fired, which were never reached, and how far the price
-            can fall before the answer changes.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">Your view</span>
-          <h3><span class="colN">100+</span> columns, or the nine you want</h3>
-          <p>Filter every column, save your own column views, keep personal lists over the shared universe, and
-            start from ready-made screens — day gainers, fresh highs, cheap and growing.</p>
-        </div></div>
+  <section id="themes">
+    <div class="w">
+      <span class="eyebrow">Three themes</span>
+      <h2 class="h2">Dark, Navy or Light. Your choice, on every device.</h2>
+      <p class="lede">Pick one under Appearance and every page follows: the screener, the stock pages, the pivot and the cards you make.</p>
+      <div class="themes">
+        <figure><div class="shot"><img src="/img/landing/screener-dark.jpg" width="1440" height="860" alt="The screener in the Dark theme" loading="lazy" /></div>
+          <figcaption><b>Dark</b><span>Near-black, for long sessions</span></figcaption></figure>
+        <figure><div class="shot"><img src="/img/landing/screener-navy.jpg" width="1440" height="860" alt="The screener in the Navy theme" loading="lazy" /></div>
+          <figcaption><b>Navy</b><span>Deep blue, softer on the eyes</span></figcaption></figure>
+        <figure><div class="shot"><img src="/img/landing/screener-light.jpg" width="1440" height="860" alt="The screener in the Light theme" loading="lazy" /></div>
+          <figcaption><b>Light</b><span>Paper white, for daylight</span></figcaption></figure>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="filings">
-      <span class="eyebrow">Beyond the price</span>
-      <h2>What the company filed, not only what it trades at.</h2>
-      <p class="lede">A price says what the market did. The rest comes from each company's own filings with the
-        SEC, read from the source and shown with a link back to the filing.</p>
-      <div class="cards">
-        <div class="bezel card"><div class="core">
-          <span class="tag">Filings</span>
-          <h3>Revenue, profit and margins by quarter</h3>
-          <p>From each company's own quarterly and annual reports, with whether its margin is wider or narrower
-            than a year ago. A company that reports in another currency is converted at the rate of each period,
-            not today's.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">Drawdowns</span>
-          <h3>Corrections, counted</h3>
-          <p>Which stocks sit in a pullback, a correction or a bear market against their 52-week high, how often
-            each has fallen 10% or more in five years, and how long it took to come back. A record, never a
-            forecast.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">Events</span>
-          <h3>What happened, and who holds it</h3>
-          <p>Every current report a company files, named by what it was about: results, an officer leaving, a
-            new agreement. Insider trades, short interest, and every holder reporting more than 5%, with the
-            stake they state.</p>
-        </div></div>
+  <section id="stockpage" class="tight">
+    <div class="w">
+      <span class="eyebrow">One company, all of it</span>
+      <h2 class="h2">23 sections on every stock page.</h2>
+      <p class="lede">What usually takes a broker, a filings site, a news reader and a spreadsheet, on one page that opens on a summary and goes as deep as you scroll.</p>
+      <div class="depth">
+        <div class="dcol" style="--c: var(--accent)">
+          <h3>The summary</h3>
+          <ul>
+            <li><b>At a glance</b><span>Twelve topics in a sentence each, with the headline number</span></li>
+            <li><b>About</b><span>What the company does</span></li>
+            <li><b>All fields</b><span>All <span data-k="fields">{{fields}}</span> fields, grouped, each with its history a click away</span></li>
+            <li><b>Similar stocks</b><span>Its closest peers by business and by how they trade</span></li>
+          </ul>
+        </div>
+        <div class="dcol" style="--c: var(--cyan)">
+          <h3>The price</h3>
+          <ul>
+            <li><b>Price</b><span>Chart with averages, bands, RSI, volume and the index beside it</span></li>
+            <li><b>Months</b><span>Every month's return, year by year</span></li>
+            <li><b>Drawdowns</b><span>Every fall from a high, how deep and how long</span></li>
+            <li><b>Short interest</b><span>The short position over time</span></li>
+            <li><b>Options</b><span>Open calls and puts, by expiry</span></li>
+          </ul>
+        </div>
+        <div class="dcol" style="--c: var(--accent-2)">
+          <h3>The business</h3>
+          <ul>
+            <li><b>Earnings</b><span>Every report against the estimate, and the next date</span></li>
+            <li><b>Growth</b><span>Revenue, profit and margin by quarter and year</span></li>
+            <li><b>Statements</b><span>Income, balance sheet and cash flow</span></li>
+            <li><b>Revenue mix</b><span>Where the revenue comes from, by segment</span></li>
+            <li><b>Capital returns</b><span>Buybacks, dividends and the share count</span></li>
+            <li><b>Against peers</b><span>The same measures against its closest rivals</span></li>
+          </ul>
+        </div>
+        <div class="dcol" style="--c: var(--orange)">
+          <h3>Filings and owners</h3>
+          <ul>
+            <li><b>SEC EDGAR</b><span>Its filings, read from the source</span></li>
+            <li><b>Events</b><span>Every 8-K, named by what it reports</span></li>
+            <li><b>Large holders</b><span>Anyone crossing 5%, from 13D and 13G</span></li>
+            <li><b>Insiders</b><span>Officers' and directors' trades, summed up</span></li>
+            <li><b>Institutions</b><span>13F managers, who added and who cut</span></li>
+            <li><b>Funds</b><span>The mutual funds and ETFs that hold it</span></li>
+          </ul>
+        </div>
+        <div class="dcol" style="--c: var(--orchid)">
+          <h3>The news</h3>
+          <ul>
+            <li><b>News</b><span>The latest headlines, a click from the source</span></li>
+            <li><b>Article tone</b><span>Each article read by AI: its tone and a two-sentence summary</span></li>
+          </ul>
+        </div>
       </div>
-    </section>
+      <div class="shot glshot"><img src="/img/landing/glance-navy.jpg" width="1376" height="709" alt="The At a glance section of NVIDIA's stock page: twelve topics, each with its headline figure" loading="lazy" /></div>
+      <p class="note">The top of NVIDIA's page after the close of October 21, 2026.</p>
+    </div>
+  </section>
 
-    <section id="rules">
-      <span class="eyebrow">The table</span>
-      <h2>What a row actually looks like.</h2>
-      <p class="lede">Scores, the day's move, the trend state, and the signal with its reason — the same shape for
-        every stock, every night.</p>
-      <div class="bezel shot" style="margin-top:28px"><div class="core">
-        <table>
-          <thead><tr>
-            <th class="l">Name</th><th>Qual.</th><th>Today</th><th>1Y</th>
-            <th class="opt">5Y</th><th class="l">Trend</th><th class="l">Signal</th>
-          </tr></thead>
+  <section id="tone">
+    <div class="w tone">
+      <div>
+        <span class="eyebrow">Article tone</span>
+        <h2 class="h2">Every article read in full, summed up in two sentences.</h2>
+        <p class="lede">An AI model reads each article in a stock's news feed and says what kind of piece it is, how its content leans from −1 to +1, and what it reports, in its own words. You read twenty articles in the time it takes to open two.</p>
+        <ul class="pts">
+          <li>Every S&amp;P 500 company and the semiconductor stocks, through the day</li>
+          <li>Only articles mainly about the company count; a passing mention is left out</li>
+          <li>The week's average on every stock page, in the screener and on cards</li>
+          <li>A description of what was written. It never feeds the Signal</li>
+        </ul>
+      </div>
+      <div>
+        <div class="art"><div class="h"><span class="chip neg">Negative −0.80</span><span class="t">Bear of the Day: NIKE (NKE)</span></div>
+          <p class="s">A Zacks columnist labels Nike a bear pick, citing falling earnings estimates, shrinking revenue and a premium valuation. The piece argues the stock's recent stabilization is unlikely to be a sustained recovery.</p>
+          <p class="m">NKE · Yahoo Finance · Analyst view</p></div>
+        <div class="art"><div class="h"><span class="chip pos">Positive +0.35</span><span class="t">JPMorgan Upgrades Intel Stock Following Strong Management Execution</span></div>
+          <p class="s">JPMorgan raised its view on Intel to a neutral stance from a negative one, citing a solid start by management and AI-related demand, and the shares rose nearly 3%. The article also cites strong Q2 results and better 18A output, but flags tight supply, an expected PC demand drop in 2026 and heavy capital spending that may weigh on cash flow.</p>
+          <p class="m">INTC · TIKR · Analyst view</p></div>
+        <div class="art"><div class="h"><span class="chip">Neutral +0.10</span><span class="t">Intel Vs. Micron: Who Is More Exposed By Chinese Rival CXMT's Progress?</span></div>
+          <p class="s">The article compares how Chinese memory maker CXMT's push into server DRAM affects Micron and Intel, arguing Micron faces the more direct pricing threat as a pure memory seller. It notes Micron's very strong results, long-term customer agreements and HBM lead as a cushion, while Intel could gain from cheaper memory.</p>
+          <p class="m">MU · 24/7 Wall St. · Industry</p></div>
+        <p class="note">Three readings from October 2026, as stored. Members see the latest on every stock page.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens" class="tight">
+    <div class="w">
+      <span class="eyebrow">Ready-made screens</span>
+      <h2 class="h2"><span data-k="screens">{{screens}}</span> screens to start from, one click each.</h2>
+      <p class="lede">Each one sets the filters, the sort and the columns. Change anything and save it as your own.</p>
+      <div class="screens">
+        <div class="sgp"><h3>Market movers</h3><div class="names"><span>Day gainers</span><span>Day losers</span><span>Recent 52-week highs</span><span>Recent 52-week lows</span><span>Most active</span><span>Day gainers by value</span><span>Day losers by value</span><span>At a record high</span></div></div>
+        <div class="sgp"><h3>How it moved</h3><div class="names"><span>Climbing in a straight line</span><span>Falling in a straight line</span><span>Trading in a range</span><span>Up, but a rough ride</span><span>Held up when chips fell</span></div></div>
+        <div class="sgp"><h3>Value and growth</h3><div class="names"><span>Undervalued growth</span><span>Growth technology</span><span>Undervalued large caps</span><span>Aggressive small caps</span><span>Cheap, growing and profitable</span><span>Business improving, price isn't</span><span>Cheap against its own industry</span><span>Cheap vs peers, growing and profitable</span></div></div>
+        <div class="sgp"><h3>Technical</h3><div class="names"><span>Upside breakouts</span><span>Bullish right now</span><span>Bearish right now</span><span>Bouncing off the lows</span><span>Just started moving</span><span>Overextended</span></div></div>
+        <div class="sgp"><h3>Earnings</h3><div class="names"><span>Reporting in the next 14 days</span><span>Drifting after a beat</span></div></div>
+        <div class="sgp"><h3>Signal and shorts</h3><div class="names"><span>Very Strong signals</span><span>Signal changed today</span><span>Most shorted</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="yours" class="tight">
+    <div class="w">
+      <span class="eyebrow">Make it yours</span>
+      <h2 class="h2">Your lists, your columns, your alerts.</h2>
+      <div class="three">
+        <div class="pnl">
+          <span class="tag">Your own themes</span>
+          <h3 class="h3">Group stocks your way.</h3>
+          <p>Make up to ten lists of your own, beside the <span data-k="portfolios">{{portfolios}}</span> themes built in: a watchlist, an idea, a sector you follow.</p>
+          <ul><li>A tab of its own on the screener</li><li>Works in screens, the pivot and the cards</li></ul>
+        </div>
+        <div class="pnl">
+          <span class="tag">Your own views</span>
+          <h3 class="h3">Show only the columns you read.</h3>
+          <p>Start from a ready-made view or build your own from any of the <span data-k="columns">{{columns}}</span> columns, and switch between them in one click.</p>
+          <ul><li>Up to ten saved views</li><li>Dark, Navy or Light, and the layout you left, on every device</li></ul>
+        </div>
+        <div class="pnl">
+          <span class="tag">Alerts</span>
+          <h3 class="h3">Hear when something changes.</h3>
+          <p>Up to five alerts, each watching one stock, shown the next time you open the site.</p>
+          <ul><li>Price rises above or falls below a level</li><li>Crosses its 50- or 200-day average</li><li>Signal is upgraded or downgraded</li><li>RSI crosses a level</li><li>Sets a new 52-week high or low</li><li>Moves more than a set % in a day</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="data" class="tight">
+    <div class="w">
+      <span class="eyebrow">Data</span>
+      <h2 class="h2">Everything a stock page needs, refreshed on a schedule.</h2>
+      <p class="lede">Prices twice a day and every half hour while the market is open; filings each morning; news through the day.</p>
+      <div class="grid">
+        <div class="tile"><h3>Prices</h3><p>Daily closes back to <span data-k="since">{{since}}</span>, refreshed during market hours.</p><div class="src">Twelve Data</div></div>
+        <div class="tile"><h3>Fundamentals</h3><p>Valuation, margins, growth, balance sheet, earnings.</p><div class="src">Twelve Data · SEC</div></div>
+        <div class="tile"><h3>Company filings</h3><p>10-K and 10-Q figures, segments, capital returns.</p><div class="src">SEC EDGAR</div></div>
+        <div class="tile"><h3>8-K announcements</h3><p>Every material event, named by its item.</p><div class="src">SEC EDGAR</div></div>
+        <div class="tile"><h3>5% holders</h3><p>Schedules 13D and 13G, the next morning.</p><div class="src">SEC EDGAR</div></div>
+        <div class="tile"><h3>Institutions</h3><p>13F managers, who added and who cut.</p><div class="src">SEC 13F</div></div>
+        <div class="tile"><h3>Funds</h3><p>Which mutual funds and ETFs hold each stock.</p><div class="src">SEC N-PORT</div></div>
+        <div class="tile"><h3>Insider trades</h3><p>Open-market buys and sales, from Form 4s.</p><div class="src">SEC Form 4</div></div>
+        <div class="tile"><h3>Short interest</h3><p>Twice-monthly positions, with history.</p><div class="src">FINRA</div></div>
+        <div class="tile"><h3>Options</h3><p>Open calls and puts by expiry.</p><div class="src">OCC</div></div>
+        <div class="tile"><h3>News and tone</h3><p>Headlines, and an AI reading of each article's tone.</p><div class="src">Google News · Yahoo Finance</div></div>
+        <div class="tile"><h3>Index membership</h3><p>S&amp;P 500 and Nasdaq 100.</p><div class="src">SPY and QQQ holdings</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="honest">
+    <div class="w honest">
+      <div>
+        <span class="eyebrow">How we work</span>
+        <h2 class="h2">A reading of where a stock stands. Not a tip.</h2>
+        <p class="lede">Every stock gets one of six words after each close, from a fixed set of rules, and the rule that fired is shown beside it. The words describe strength. They are not instructions to trade, and nothing here ranks winners or sets price targets.</p>
+        <div class="words"><span>Very Weak</span><span>Weak</span><span>Neutral</span><span>Strong – Elevated Risk</span><span>Strong</span><span>Very Strong</span></div>
+      </div>
+      <div class="pnl rec">
+        <div class="big">11<small> backtests</small></div>
+        <p>We have tested whether these readings predict returns eleven different ways. Ten came back flat. Every test is written up, including the ones that failed.</p>
+        <p style="color:var(--faint);font-size:13.5px">The full research register opens with the paid Research plan.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="compare" class="tight">
+    <div class="w">
+      <span class="eyebrow">Compared</span>
+      <h2 class="h2">Where Tickr Lab fits.</h2>
+      <p class="lede">Most people already use one of these. Tickr Lab is built to sit beside them, for the nightly look across the whole market.</p>
+      <div class="scroll">
+        <table class="cmp">
+          <thead><tr><th></th><th class="us">Tickr Lab</th><th>Yahoo Finance</th><th>Google Finance</th><th>TradingView</th></tr></thead>
           <tbody>
-            <tr><td class="nm">Example Semis</td><td>8</td><td class="up">+2.4%</td><td class="up">+61.2%</td>
-                <td class="up opt">+318%</td><td class="l verdict">Strong uptrend</td>
-                <td class="l verdict v-buy">Strong — above the 200-day, pullback done</td></tr>
-            <tr><td class="nm">Example Bank</td><td>6</td><td class="up">+0.3%</td><td class="up">+12.9%</td>
-                <td class="up opt">+74%</td><td class="l verdict">Above 200D</td>
-                <td class="l verdict v-hold">Neutral — extended above its trend</td></tr>
-            <tr><td class="nm">Example Retail</td><td>3</td><td class="dn">−1.8%</td><td class="dn">−22.4%</td>
-                <td class="dn opt">−41%</td><td class="l verdict">Breakdown</td>
-                <td class="l verdict v-avoid">Weak — below both averages</td></tr>
+            <tr><th>Best known for</th><td class="us">A nightly reading of every US stock, with filings and ownership in one table</td><td>Quotes, news and a stock screener</td><td>Quick quotes and simple watchlists</td><td>Charting and a large community of shared ideas</td></tr>
+            <tr><th>Every number explained</th><td class="us">Click any cell for its history and how it was worked out</td><td>Figures shown, not explained</td><td>Figures shown, not explained</td><td>Indicators you configure</td></tr>
+            <tr><th>Filings and ownership</th><td class="us">8-Ks, 13D/13G, insiders, 13F institutions and funds, read daily from the SEC</td><td>Holders and insider pages</td><td>Limited</td><td>Limited</td></tr>
+            <tr><th>Visuals for posting</th><td class="us">Dozens of dated cards in Instagram sizes</td><td>No</td><td>No</td><td>Chart snapshots</td></tr>
+            <tr><th>Markets covered</th><td class="us">US-listed stocks only, <span data-k="symbols">{{symbols}}</span> of them</td><td>Global</td><td>Global</td><td>Global, many asset classes</td></tr>
+            <tr><th>Price</th><td class="us">Free during the beta</td><td>Free, with paid tiers</td><td>Free</td><td>Free, with paid tiers</td></tr>
           </tbody>
         </table>
-      </div></div>
-      <p class="shot-note">Illustration, not live data — the names are made up. The live table carries <span class="colN">100+</span> columns
-        across thirteen groups.</p>
-    </section>
-
-    <section>
-      <span class="eyebrow">What we will not do</span>
-      <h2>Tell you something works when it doesn't.</h2>
-      <p class="lede">Every signal here has been tested against twenty years of bars, and the results are written
-        down — including the ones that failed. Eleven framings have been tried and ten came back flat, and each feature
-        built on one was removed rather than quietly kept.</p>
-      <div class="bezel quote" style="margin-top:28px"><div class="core">
-        <p>The screener is descriptive rather than predictive, and that is a legitimate thing for it to be: a
-          consistent way to see where every stock stands and how each got there.</p>
-        <p class="who">— from the project's own research log</p>
-      </div></div>
-    </section>
-
-    <section>
-      <span class="eyebrow">Under it</span>
-      <h2>The data, and how fresh it is.</h2>
-      <div class="cards">
-        <div class="bezel card"><div class="core">
-          <span class="tag">Nightly</span>
-          <h3>Fifteen minutes after the close</h3>
-          <p>Prices, scores and signals are rebuilt every trading evening, with prices refreshed through the
-            session. Every run is logged: how long it took, what it cost, what failed.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">History</span>
-          <h3>Twenty years of daily bars</h3>
-          <p>Over a million rows, back to 2005, kept so a chart, a backtest and the screener all read from the same
-            archive rather than three different ones.</p>
-        </div></div>
-        <div class="bezel card"><div class="core">
-          <span class="tag">Fundamentals</span>
-          <h3>Recorded, not just shown</h3>
-          <p>Revenue, margins, cash, debt, share count and the dividend are stored each night, so the movement is
-            there later — the data provider only ever returns today. The SEC filings behind them are re-read
-            for every company about once a week.</p>
-        </div></div>
       </div>
-    </section>
+      <p class="note">The other three columns describe each service in general terms, as of October 2026.</p>
+    </div>
+  </section>
 
-    <section>
-      <span class="eyebrow">Questions</span>
-      <h2>The ones worth asking.</h2>
-      <div class="faq">
-        <details><summary>Is this investment advice?</summary>
-          <p>No. The Signal column is a mechanical reading of the table — rules applied to numbers, naming the rule
-            that fired. It knows nothing about you, your tax position or your timeline, and it is not a
-            recommendation. Nothing here is personalised advice.</p></details>
-        <details><summary>Can I try it without an account?</summary>
-          <p>Yes. The guest preview opens the whole table on twenty stocks — every column, every signal, one from
-            each sector — with no account and no card. The whole universe, your own lists and alerts need an
-            account: ask for an invite code on the sign-up form and it is emailed to you. Nothing is stored about
-            a visitor beyond a visit log.</p></details>
-        <details><summary>Where does the data come from?</summary>
-          <p>Prices and fundamentals come from Twelve Data. Company filings, insider trades, current reports and
-            large-holder filings come from the SEC; short interest from FINRA; exchange rates from the European
-            Central Bank; headlines from public news feeds; the NASDAQ reference list from NASDAQ. Quality, the
-            trend states and the Signals are computed here from those inputs.</p></details>
-        <details><summary>How often is it wrong?</summary>
-          <p>A feed can be. ADR fundamentals in particular can be incoherent, and a refused data pull leaves a gap
-            rather than a guess. Where a number is uncertain the table shows it blank instead of filling it in.</p></details>
-        <details><summary>Who is it for?</summary>
-          <p>Someone who follows a few dozen to a few hundred stocks and wants one consistent view of them, rather
-            than a tip service. It is an independent project run in the open, not a brokerage.</p></details>
-      </div>
-    </section>
-
-    <div class="close">
-      <h2>Look at the real thing.</h2>
-      <p class="lede" style="margin:16px auto 0">The preview opens on live data in a couple of clicks.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="/login?guest=1">Try the preview
-          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow" /></svg></a>
-        <a class="btn" href="/blog">Read the blog</a>
+  <section id="plans" class="tight">
+    <div class="w">
+      <span class="eyebrow">Plans</span>
+      <h2 class="h2">Free while we are in beta.</h2>
+      <div class="plans">
+        <div class="pnl plan now">
+          <span class="beta">BETA · NOW</span>
+          <div class="price">$0<small>during the beta</small></div>
+          <ul>
+            <li>The full screener: <span data-k="columns">{{columns}}</span> columns, <span data-k="screens">{{screens}}</span> ready-made screens</li>
+            <li>Every stock page, all 23 sections</li>
+            <li>Article tone, summarized by AI</li>
+            <li>Your own themes and column views</li>
+            <li>Pivot view with 28 measures</li>
+            <li>Visuals: cards in three sizes and three themes</li>
+            <li>Alerts and paper positions</li>
+          </ul>
+          <div class="cta"><a class="b pri" href="/login?mode=register">Join the beta</a></div>
+        </div>
+        <div class="pnl plan">
+          <span class="soon">COMING LATER · PAID</span>
+          <div class="price" style="color:var(--muted)">Paid plans</div>
+          <ul>
+            <li><b>Research</b>: every backtest written up, the indicator lab and the strategy studies</li>
+            <li><b>Backtesting</b>: test your own screens and rules on past data</li>
+            <li><b>AI</b>: ask questions about the screen and get company summaries</li>
+          </ul>
+          <p class="fine">No prices yet. Members will hear before anything changes.</p>
+        </div>
       </div>
     </div>
+  </section>
 
-    <!-- The same box the blog carries, filled in by the route from ONE
-         definition. It sits AFTER the call to action rather than before it: the
-         preview is what this page is for, and an email address is the smaller
-         ask from someone not ready to click it. -->
-    %SUBSCRIBE%
-
-    <footer>
-      <div class="frow">
-        <span class="wordmark">Tickr Lab</span>
-        <span class="ftag">From data to decisions</span>
-        <a href="/about">About</a>
-        <a href="/blog">Blog</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <a href="/login">Sign in</a>
-        <a href="/login?guest=1">Guest preview</a>
-        <!-- The handle written out, not just linked: on a footer somebody
-             reads it as often as they click it. rel="me" is what lets the
-             two profiles verify each other. -->
-        <a href="https://instagram.com/tickr_lab" target="_blank" rel="me noopener">@tickr_lab</a>
-        <span class="sp"></span>
-        <span id="fresh"></span>
+  <section id="faq" class="tight">
+    <div class="w">
+      <span class="eyebrow">Questions</span>
+      <h2 class="h2">The ones people ask.</h2>
+      <div style="margin-top:20px">
+        <details><summary>What does "beta" mean here?</summary><p>The product works and is used every day, but it is still changing. Some things will move or be renamed, and there may be rough edges.</p></details>
+        <details><summary>Is it really free?</summary><p>Yes, during the beta. Research, backtesting and AI will come later as paid options, and what each plan includes will be said clearly before anything is charged.</p></details>
+        <details><summary>Can I look before signing up?</summary><p>Yes. The guest preview opens the whole table on twenty stocks, every column and every Signal, with no account. Joining the beta opens all of them; ask for an invite code on the sign-up form if one is needed.</p></details>
+        <details><summary>Is this investment advice?</summary><p>No. Every reading describes where a stock stands, with the rule that produced it. It knows nothing about you, it is not a recommendation, and nothing on the site ranks winners or sets targets.</p></details>
+        <details><summary>Which stocks are covered?</summary><p>US-listed stocks and a few index funds, <span data-k="symbols">{{symbols}}</span> today, including every S&amp;P 500 company. The list is chosen by hand and includes companies that have fallen a long way, so the screen is not only today's leaders.</p></details>
+        <details><summary>Where does the data come from?</summary><p>Prices and fundamentals from Twelve Data. Company filings, insider trades, 8-Ks, large-holder filings, 13Fs and fund holdings from the SEC; short interest from FINRA; options from the OCC; exchange rates from the European Central Bank; headlines from public news feeds. The Signals and every derived figure are worked out here from those inputs.</p></details>
+        <details><summary>Can I use the cards in my own posts?</summary><p>Yes. That is what they are for. Each card carries the Tickr Lab mark, its date and a not-advice line.</p></details>
       </div>
-      <p class="legal">Tickr Lab is an information tool, not a broker, adviser or recommendation service. Scores and
-        Signals are mechanical readings of published data and may be wrong, stale or incomplete. Nothing here
-        is personalised financial advice — do your own research, and consider a professional before you act.</p>
-    </footer>
-  </main>
+    </div>
+  </section>
 
-  <script>
-    // Two numbers on this page are claims about the product, so they come from
-    // the product rather than from the copy. Public, cached, and the page reads
-    // fine if the call fails — the markup ships with the last known values.
+  <section class="closer">
+    <div class="w">
+      <h2 class="h2">Look at the real thing.</h2>
+      <p class="lede">The guest preview opens twenty stocks with no sign-up. The beta opens all of them, free.</p>
+      <div class="cta"><a class="b pri" href="/login?mode=register">Join the beta, free</a><a class="b" href="/login?guest=1">Look around as a guest</a></div>
+    </div>
+  </section>
+
+  <!-- The same box the blog carries, filled in by the route from ONE
+       definition, after the call to action: an email address is the smaller
+       ask from someone not ready to click it. -->
+  <div class="w subwrap">%SUBSCRIBE%</div>
+</main>
+
+<footer>
+  <div class="w">
+    <div class="cols">
+      <div><a class="mark" href="/" style="font-size:16px"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a><p style="margin-top:12px">tickrlab.com · in public beta</p></div>
+      <div><h4>Product</h4><a href="#tour">Screener</a><a href="#stockpage">Stock pages</a><a href="#themes">Themes</a><a href="#creators">Visuals</a><a href="#data">Data</a></div>
+      <div><h4>Try it</h4><a href="/login?mode=register">Join the beta</a><a href="/login?guest=1">Guest preview</a><a href="/login">Sign in</a><a href="/blog">Blog</a></div>
+      <div><h4>About</h4><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+        <!-- rel="me" lets the two profiles verify each other. -->
+        <a href="https://instagram.com/tickr_lab" target="_blank" rel="me noopener">@tickr_lab</a></div>
+    </div>
+    <p class="legal">Tickr Lab shows mechanical readings of public data. It is an information tool, not a broker or adviser, and nothing on it is a recommendation about any security. Data comes from Twelve Data, the SEC, FINRA, the OCC and news publishers, and can be late or wrong.</p>
+  </div>
+</footer>
+</div>
+
+<script>
+  // The product tour's tabs.
+  (function () {
+    const tabs = [...document.querySelectorAll('.lp .tb')];
+    function pick(t) {
+      for (const x of tabs) {
+        const on = x === t;
+        x.setAttribute('aria-selected', on ? 'true' : 'false');
+        document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+      }
+    }
+    tabs.forEach((t) => t.addEventListener('click', () => pick(t)));
+  })();
+
+  // The figures are claims about the product, so they come from the product.
+  // The route has already written them in (from its cache, or last-known
+  // values); this refreshes them and draws the four live rows. A failed call
+  // leaves the page as served.
+  (function () {
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const set = (k, v) => { if (v == null || v === '') return; document.querySelectorAll('[data-k="' + k + '"]').forEach((e) => { e.textContent = v; }); };
+    // The rule text can open with the word itself ('Strong: clean entry'); said once.
+    const rule = (r) => { const t = String(r.rule || ''), p = r.signal + ':'; return t.startsWith(p) ? t.slice(p.length).trim() : t; };
+    const pct = (v) => (v == null ? '<td>—</td>' : '<td class="' + (v > 0 ? 'up' : v < 0 ? 'dn' : '') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%</td>');
     fetch('/api/about-stats').then((r) => r.json()).then((d) => {
-      if (d && d.symbols) document.getElementById('sSymbols').textContent = d.symbols.toLocaleString();
-      if (d && d.columns) {
-        document.getElementById('sCols').textContent = d.columns;
-        // The same figure wherever the copy quotes it, so prose cannot go stale
-        // the way "85 columns" did while the strip above it stayed right.
-        document.querySelectorAll('.colN').forEach((el) => { el.textContent = d.columns; });
+      if (!d) return;
+      if (d.symbols) set('symbols', d.symbols.toLocaleString('en-US'));
+      if (d.fields) set('fields', d.fields);
+      if (d.columns) set('columns', d.columns);
+      if (d.screens) set('screens', d.screens);
+      if (d.portfolios) set('portfolios', d.portfolios);
+      if (d.articles != null) set('articles', d.articles.toLocaleString('en-US'));
+      if (d.bars && d.bars.earliest) set('since', String(d.bars.earliest).slice(0, 4));
+      if (d.updatedAt) set('asof', new Date(d.updatedAt).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+      const rows = (d.preview || []).filter((r) => r && r.symbol);
+      if (rows.length) {
+        document.querySelector('#liveRows tbody').innerHTML = rows.map((r) => '<tr><td>' + esc(r.symbol) + '</td>' + pct(r.today) + pct(r.m1) + pct(r.y1)
+          + '<td>' + (r.fpe != null && r.fpe > 0 ? r.fpe.toFixed(1) + '×' : '—') + '</td>'
+          + '<td class="sg">' + (r.signal ? '<b>' + esc(r.signal) + '</b>' + (rule(r) ? ' · ' + esc(rule(r)) : '') : '—') + '</td></tr>').join('');
+        document.getElementById('liveRows').hidden = false;
+        document.getElementById('liveNote').hidden = false;
       }
-      if (d && d.bars && d.bars.earliest && d.bars.latest) {
-        const y = Math.floor((Date.parse(d.bars.latest) - Date.parse(d.bars.earliest)) / 31557600000);
-        if (y > 0) document.getElementById('sYears').textContent = y + ' yrs';
-      }
-      if (d && d.updatedAt) {
-        document.getElementById('fresh').textContent = 'Data as of ' +
-          new Date(d.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      }
-    }).catch(() => { /* the page is not about this number */ });
-  </script>
+    }).catch(() => { /* the page reads as served */ });
+  })();
+</script>
 </body>
 </html>

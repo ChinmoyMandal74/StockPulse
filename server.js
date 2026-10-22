@@ -377,8 +377,8 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
       ref: req.headers['referer'] || req.headers['referrer'] || null,
       userEmail: null,
     }).catch(() => { /* a logging failure must never block the page */ });
-    return res.type('html').send(
-      pageTemplate('landing.html').replace('%SUBSCRIBE%', () => subscribeBox('home')));
+    return res.type('html').send(landingFigures(
+      pageTemplate('landing.html').replace('%SUBSCRIBE%', () => subscribeBox('home'))));
   }
   // isSignedIn() above already resolved and cached the user on req, so this
   // costs nothing extra. Null means either a pre-accounts row or someone signed
@@ -557,6 +557,52 @@ const ABOUT_TTL_MS = 60 * 60 * 1000;
 const SESSIONS_PER_DAY = 0.69;      // trading days per calendar day, the /quality page's ratio
 const DEEP_SPAN_DAYS = 1826;        // five years, the 5Y column's requirement
 
+// The landing page's {{figures}}, written in on the server so a crawler or a
+// slow connection gets them without the script. From the about-stats cache
+// when it is warm; never a cache miss here, which would hold the page on three
+// grouped counts. Cold, the last-known values stand and the page's own fetch
+// of /api/about-stats replaces them.
+const LANDING_DEFAULTS = { symbols: '1,283', fields: '151', columns: '133', screens: '32', portfolios: '28', since: '2006', articles: '—', asof: '—' };
+function landingFigures(html) {
+  const v = Object.assign({}, LANDING_DEFAULTS);
+  const d = aboutStatsCache && Date.now() - aboutStatsCache.at < ABOUT_TTL_MS ? aboutStatsCache.body : null;
+  if (d) {
+    if (d.symbols) v.symbols = d.symbols.toLocaleString('en-US');
+    if (d.fields) v.fields = String(d.fields);
+    if (d.columns) v.columns = String(d.columns);
+    if (d.screens) v.screens = String(d.screens);
+    if (d.portfolios) v.portfolios = String(d.portfolios);
+    if (d.articles != null) v.articles = d.articles.toLocaleString('en-US');
+    if (d.bars && d.bars.earliest) v.since = String(d.bars.earliest).slice(0, 4);
+    if (d.updatedAt) v.asof = new Date(d.updatedAt).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+  return html.replace(/\{\{([a-z]+)\}\}/g, (m, k) => htmlEsc(v[k] != null ? v[k] : '—'));
+}
+
+// Four guest stocks as the landing page's example rows: the day's move, two
+// returns, forward P/E and the Signal with the rule that fired. Nothing a guest
+// cannot already see; Article tone (members only) is never in it. Served the
+// way the screener serves them (the read-path stamps over the whole universe,
+// since stampPeerValue is cross-sectional, then the engine), so the verdicts
+// match the guest preview's. Paid once an hour, on an about-stats miss.
+// A function, not a constant: GUEST_SYMBOLS is declared further down the file.
+const landingRows = () => ['NVDA', 'NEE', 'GOOGL', 'XOM'].filter((s) => GUEST_SYMBOLS.includes(s));
+async function landingPreview() {
+  const LANDING_ROWS = landingRows();
+  const snap = (await readSnapshot()) || {};
+  const all = (snap.stocks || []).filter((r) => r && r.symbol).map((r) => Object.assign({}, r));
+  const [, pf] = await Promise.all([serveStamps(all), readPortfolios()]);
+  scoreActionInto(all);
+  finishServe(all, pf);
+  const rows = all.filter((r) => LANDING_ROWS.includes(r.symbol));
+  const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  return LANDING_ROWS.map((s) => rows.find((r) => r.symbol === s)).filter(Boolean).map((r) => ({
+    symbol: r.symbol, name: r.name || null,
+    today: num(r.todayPct), m1: num(r.oneMonthPct), y1: num(r.oneYearPct), fpe: num(r.forwardPe),
+    signal: r.action ? Action.canon(r.action) : null, rule: r.actionFlag || null,
+  }));
+}
+
 app.get('/api/about-stats', route(async (req, res) => {
   // ONLY AN ADMIN MAY SKIP THE CACHE (backlog 44b). This route is public, and a
   // miss runs grouped counts over three large tables, billed per row read:
@@ -597,10 +643,24 @@ app.get('/api/about-stats', route(async (req, res) => {
     // so the busiest symbol's row count IS the number of recorded days.
     const recordedDays = Object.values(roll.fund).reduce((a, x) => Math.max(a, x.n), 0);
 
+    // The landing page's live parts (2026-10-22). Articles read this week is a
+    // sum over the tone loader's own run log, a few dozen rows. The preview
+    // rows are four GUEST stocks, which the guest preview already shows anyone,
+    // scored by the same engine as /api/stocks; the snapshot is held in memory
+    // per instance, and a failure here costs the rows, never the figures.
+    const [toneRuns, preview] = await Promise.all([
+      store.readToneRuns(Date.now() - 7 * 86400000).catch(() => []),
+      landingPreview().catch(() => []),
+    ]);
+    const articles = toneRuns.reduce((a, r) => a + (Number(r.scored) || 0), 0);
+
     const body = {
       symbols: universe.length,
       portfolios: Object.keys(portfolios || {}).length,
       columns: columnCatalogue().length,
+      fields: (RowCard && RowCard.FIELD_SPEC || []).length || null,
+      articles: toneRuns.length ? articles : null,
+      preview,
       screens: screenCount,
       updatedAt: updatedAt || null,
       bars: { symbols: held.length, earliest, latest, sessions, deep },

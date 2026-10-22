@@ -85,3 +85,34 @@ The **ninth** time an unscoped rule on this project has captured later markup, a
 - Verified: **99 checks over three suites.** The provider is stubbed so every message can be read back — what a mail CONTAINS is most of this feature, and a test that only counted sends would pass over a broadcast with no unsubscribe in it. 25 subscribers against a batch of 20 so **the second round is SHORT**, the case an even division would hide; only the confirmed one is mailed; a second press mails nobody; a refused address is reported without stopping the rest; and the role walk has member, guest and stranger refused on all three routes while anyone at all may subscribe.
 - **Two test faults worth keeping.** A fixture whose unsub tokens were not hex minted links that could never work, and **the suite passed anyway because it only checked they were DISTINCT** — it now takes one out of a delivered message and follows it. And counting `<script>` in the DOM found one on this machine that belonged to **Kaspersky**, which injects its own into every page: "this page ships no JavaScript" is a property of the response and is measured there.
 
+### The rebuild (2026-10-22): beta, plans, three themes
+The landing page was rebuilt from a draft the owner approved (modelled on koyfin.com's product-first layout). It is fixed Navy (`<html data-theme="navy">`, no theme.js), and every class is scoped under `.lp`. Sections in order:
+- nav with a BETA badge;
+- hero with three real cards, dated;
+- figure strip;
+- who it is for (investors, content creators);
+- tabbed product tour (screener, stock pages, pivot, visuals, filings);
+- **Three themes** (Dark, Navy and Light screenshots);
+- the 23 stock-page sections;
+- Article tone (three stored readings, dated, static);
+- ready-made screens;
+- make it yours (own themes, views, alerts);
+- data sources;
+- how we work (six words, 11 backtests);
+- compared with Yahoo, Google Finance and TradingView;
+- plans (Beta $0 now; Research, Backtesting and AI paid later, no prices);
+- FAQ, closing call to action, subscribe box, footer.
+
+Notes:
+- **Join the beta** links to `/login?mode=register`. The guest door stays `/login?guest=1`.
+- **Images** live in `public/img/landing/` (public by nature: marketing). The screenshots were taken as a member over the live snapshot (no admin controls), or from production read-only. They are dated in the copy because they do not refresh; retake them when the look changes.
+- **Live figures:** `/api/about-stats` gained three fields:
+  - `fields`: the FIELD_SPEC length;
+  - `articles`: tone articles scored in the last 7 days, summed from `news_tone_runs`;
+  - `preview`: four guest stocks (NVDA, NEE, GOOGL, XOM) with today, 1M, 1Y, forward P/E, and the Signal with its rule.
+- **The preview is served like the screener:** `serveStamps` over the whole universe, then `scoreActionInto`, then `finishServe`, so its verdicts match the guest preview. It is paid on a cache miss only (hourly) and carries no tone data.
+- **The route writes the figures in:** `landingFigures` fills the double-brace placeholders from the about-stats cache when warm, else from `LANDING_DEFAULTS` (last-known values). It never causes a cache miss. The page's script then refreshes the figures and draws the four rows.
+  - Do not put a literal double-brace lowercase word anywhere in the page: the filler replaces every such token.
+- **Copy rules kept:** no Reel or video claims (videos are admin only); no buy/sell/hold wording; the compare column is general and dated.
+- **Upkeep:** update `LANDING_DEFAULTS` and the dated captions when the figures move a lot.
+
