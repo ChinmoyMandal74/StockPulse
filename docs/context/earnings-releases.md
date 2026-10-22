@@ -148,6 +148,32 @@ The owner: "Can you now create the same card for sector industry and theme." It 
 - **The theme default:** blank means the theme with the most companies reporting in the last 75 days. The first theme alphabetically had none on the first draw.
 - **Checked** in the real studio over production's data, every size: every headline count matched an independent recount, and the company tables keep reported first. Micron's +379% revenue growth looked like a misread and is not: Twelve Data's own figures agree (+379.3%, $133B over twelve months).
 
+### The Signal-input recon: `/recon` (2026-10-22)
+The owner: "Build me a recon page only for s&p 500 only for these important that we need for signal calculation showing Twelve data and our AI-extracted release, This should be at the quarterly level starting this current quarter, Also show the release date."
+
+- **Admin only** (`/recon`, `/api/recon`), linked from the admin console. S&P 500 members (today's list), a reporting season at a time, from 2026 Q3 on.
+- **The Signal's fundamentals inputs** (Established, Balanced), side by side:
+  - Revenue growth and earnings growth: the quarter on the year earlier on both sides (Twelve Data's earnings growth is net income's; Micron matched to the decimal). These carry a gap in points and are amber past 0.5.
+  - Profit margin and net income positive: twelve months at Twelve Data, one quarter in the release. Shown side by side, never called a match.
+  - FCF margin: not extracted from releases.
+- **The dates:** the release's filing date, the quarter end, and Twelve Data's last report date.
+- **Status:** Agrees, Differs, Provider behind (Twelve Data's report date not within five days of the release, its figures shown grey), Incomplete, No release yet.
+- **History:** `signal_recon`, one row per company per season, written by the loader after every committed run and with `--column-only` (`writeRecon`).
+  - The release's side takes the newest reading.
+  - Twelve Data's side is refreshed while it is behind and **frozen** (`td_frozen_at`) the first time it is on the same report, so each season keeps the figures that described it.
+  - Never pruned; on the per-symbol list. `releases.js`: `seasonOf`, `reconRow`, `reconStatus`.
+  - The freeze was tested on an in-memory database and proved by reverting it.
+- **First reading** (2026 Q3, 2026-10-22): 87 of 500 released; Twelve Data on the same report for 56, behind for 31. Revenue growth agrees 32 of 54, earnings growth 39 of 55.
+  - Most differences are definitions (banks' revenue lines, and Twelve Data's earnings growth not being plain net income for some companies: Halliburton, Southwest and GM, where the release's EPS moved with its net income).
+
+**What the recon found: a scale the text check cannot see.** Synchrony's net income was stored as $892 billion and CSX's year-earlier net income as $694 billion. The digits were in the release, so the text check passed them.
+- **The new guard (`toRow`, with `meta.ref` from the loader):**
+  - A net income whose implied share count (net income ÷ EPS) is not within a fifth to five times the company's shares is refused and named.
+  - So is a quarter's revenue not within a tenth to ten times a quarter of the provider's twelve-month revenue.
+- **The share count is market value ÷ price,** not the provider's share count: that one can be wrong (CME's reads 359,275).
+- **Each figure is checked on its own:** two quarters agreeing with each other prove nothing, since a slip applied to both still agrees.
+- **A scan of every stored release found exactly those two.** Both were re-read: Synchrony's net income is now $892 million (its year-earlier figure was refused as not in the release), and CSX's year-earlier figure is $694 million.
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.

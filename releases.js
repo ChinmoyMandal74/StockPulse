@@ -184,11 +184,41 @@ function toRow(ans, text, meta) {
   const guidePm = gKind === 'revenue_midpoint' ? keep('guidance plus-or-minus', G.plus_minus_printed) : null;
   let summary = blankStr(A.summary);
   if (summary && BANNED.test(summary)) { problems.push('summary used a word the site does not use; dropped'); summary = null; }
+  // A SCALE THE TEXT CHECK CANNOT SEE (the recon, 2026-10-22: Synchrony's net
+  // income stored as $892 billion, printed "892" in millions). The digits are
+  // in the text, so only a figure against the company's size catches it. With
+  // the reference the loader passes (meta.ref: shares outstanding and twelve
+  // months' revenue from the price data), a net income whose implied share
+  // count (net income / EPS) is not within a fifth to five times the shares
+  // outstanding, or a quarter's revenue not within a tenth to ten times a
+  // quarter of the twelve months', is refused and named. A scale slip is a
+  // thousandfold, far outside both; a real quarter is well inside.
+  const ref = meta.ref || {};
+  let revenueG = revenue, revenuePriorG = revenuePrior, netIncomeG = netIncome, netIncomePriorG = netIncomePrior;
+  // EACH FIGURE ON ITS OWN against the reference. Two quarters agreeing with
+  // each other prove nothing: a scale slip applied to both still agrees. The
+  // share count is the loader's market value over price (market value is the
+  // one money figure reliably in dollars), not the provider's share count,
+  // which can itself be wrong (CME's reads 359,275 where its figures imply
+  // 359 million). CSX's year-earlier net income, stored as $694 billion, is
+  // refused this way and its current quarter kept.
+  const near = (a, b, lo, hi) => a > 0 && b > 0 && a / b >= lo && a / b <= hi;
+  const implied = (ni, e) => (ni == null || e == null || Math.abs(e) < 0.005 ? null : Math.abs(ni / e));
+  const shNow = implied(netIncome, epsGaap), shPrior = implied(netIncomePrior, epsGaapPrior);
+  if (ref.shares > 0) {
+    if (shNow != null && !near(shNow, ref.shares, 0.2, 5)) { problems.push('net income ' + netIncome + ' does not fit the share count (scale doubtful)'); netIncomeG = null; }
+    if (shPrior != null && !near(shPrior, ref.shares, 0.2, 5)) { problems.push('net income a year earlier ' + netIncomePrior + ' does not fit the share count (scale doubtful)'); netIncomePriorG = null; }
+  }
+  if (ref.revenueTtm > 0) {
+    const q = ref.revenueTtm / 4;
+    if (revenue > 0 && !near(revenue, q, 0.1, 10)) { problems.push('revenue ' + revenue + ' does not fit twelve months’ revenue (scale doubtful)'); revenueG = null; }
+    if (revenuePrior > 0 && !near(revenuePrior, q, 0.1, 10)) { problems.push('revenue a year earlier ' + revenuePrior + ' does not fit twelve months’ revenue (scale doubtful)'); revenuePriorG = null; }
+  }
   const pe = blankStr(A.period_end);
   const row = {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
     isResults: isRes, periodEnd: pe && /^\d{4}-\d{2}-\d{2}$/.test(pe) ? pe : null, periodLabel: blankStr(A.period_label), currency: blankStr(A.currency),
-    revenue, revenuePrior, opIncome, opIncomePrior, netIncome, netIncomePrior, epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
+    revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
     epsAdjLabel: epsAdj != null ? blankStr(J.label) : null, epsAdjExcludes: epsAdj != null ? blankStr(J.excludes) : null,
     guideKind: gKind, guidePeriod: gKind ? blankStr(G.period_label) : null, guideLow, guideHigh, guideMid, guidePm,
     guideUnit: gKind ? gUnit : null, guideSentence: gKind ? blankStr(G.sentence) : null, summary,
@@ -280,4 +310,58 @@ function columnRows(releases, earnBySymbol) {
   return out;
 }
 
-module.exports = { columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+// ---- THE SIGNAL-INPUT RECON (2026-10-22, the owner: "a recon page only for
+// s&p 500 only for these important that we need for signal calculation
+// showing Twelve data and our AI-extracted release ... quarterly level
+// starting this current quarter, Also show the release date"). Display and
+// checking only: the Signal reads Twelve Data's figures, as before.
+//
+// THE SEASON a release belongs to: the calendar quarter nearest its period
+// end, so a fiscal quarter ending in August or October counts with
+// September's (cards.js restates this for the Results summary; it has no
+// requires).
+function seasonOf(periodEnd) {
+  const t = Date.parse(String(periodEnd) + 'T12:00:00Z'), y = Number(String(periodEnd).slice(0, 4));
+  if (!isFinite(t) || !y) return null;
+  let best = null;
+  for (let yy = y - 1; yy <= y + 1; yy++) for (let q = 1; q <= 4; q++) {
+    const gap = Math.abs(t - Date.UTC(yy, q * 3, 0, 12));
+    if (!best || gap < best.gap) best = { s: yy + '-Q' + q, gap };
+  }
+  return best ? best.s : null;
+}
+// One company's quarter, both sides. The release's figures are the quarter's
+// (Twelve Data's growth figures are the quarter's too, on the year earlier:
+// Micron matched to the decimal); its margins are twelve months', the
+// release's one quarter's, so those two are shown side by side, never called
+// a match. Twelve Data is ON THE SAME REPORT when its last report date is
+// within five days of the release's filing.
+function reconRow(rel, td) {
+  const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const t = td || {};
+  const report = t.lastEarningsDate ? String(t.lastEarningsDate).slice(0, 10) : null;
+  const current = !!(report && rel.filed && Math.abs(Date.parse(report + 'T12:00:00Z') - Date.parse(rel.filed + 'T12:00:00Z')) <= 5 * 86400000);
+  return {
+    symbol: rel.symbol, season: seasonOf(rel.periodEnd), accn: rel.accn || null, filed: rel.filed || null, periodEnd: rel.periodEnd || null,
+    periodLabel: rel.periodLabel || null, currency: rel.currency || null,
+    aiRevG: yoy(rel.revenue, rel.revenuePrior), aiNiG: yoy(rel.netIncome, rel.netIncomePrior),
+    aiPmQ: rel.revenue > 0 && rel.netIncome != null ? rel.netIncome / rel.revenue * 100 : null,
+    aiNiPos: rel.netIncome == null ? null : rel.netIncome > 0,
+    tdReport: report, tdCurrent: current,
+    tdRevG: n(t.revenueGrowthYoY), tdNiG: n(t.earningsGrowthYoY), tdPm: n(t.profitMargin), tdNiTtm: n(t.netIncomeTtm), tdFcfM: n(t.fcfMargin),
+  };
+}
+// Agreement on the two inputs both sides define the same way: within half a
+// point. 'behind' while Twelve Data is on an older report.
+const RECON_TOL = 0.5;
+function reconStatus(r) {
+  if (!r) return { status: 'none', differs: [] };
+  if (!r.tdCurrent) return { status: 'behind', differs: [] };
+  const differs = [];
+  if (r.aiRevG != null && r.tdRevG != null && Math.abs(r.aiRevG - r.tdRevG) > RECON_TOL) differs.push('revenue growth');
+  if (r.aiNiG != null && r.tdNiG != null && Math.abs(r.aiNiG - r.tdNiG) > RECON_TOL) differs.push('earnings growth');
+  const compared = (r.aiRevG != null && r.tdRevG != null) || (r.aiNiG != null && r.tdNiG != null);
+  return { status: !compared ? 'incomplete' : differs.length ? 'differs' : 'agrees', differs };
+}
+
+module.exports = { seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

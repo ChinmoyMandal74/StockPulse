@@ -833,6 +833,13 @@ app.get('/visitors', route(async (req, res) => {
 }));
 
 // Admin only: the news job's log — every batch of headline fetches.
+// THE SIGNAL-INPUT RECON (2026-10-22): Twelve Data's fundamentals beside the
+// AI-extracted release, S&P 500, a season at a time. Admin only.
+app.get('/recon', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'recon');
+  res.sendFile(path.join(__dirname, 'private', 'recon.html'));
+}));
 app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');
@@ -15282,6 +15289,24 @@ app.get('/api/releases/column', requireMember, route(async (req, res) => {
   }
   const f = releaseColHeld.fig;
   res.json(f && f.rows ? f : { at: null, rows: {} });
+}));
+// The recon's data: the season asked for (else the newest), its stored rows
+// with their agreement, and today's S&P 500 members so a company with no
+// release yet is listed as such. The members are today's list: a company that
+// joined or left since is shown as it stands now.
+app.get('/api/recon', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(403).json({ error: 'Admin only.' });
+  res.set('Cache-Control', 'no-store');
+  const seasons = await store.readReconSeasons();
+  const season = seasons.includes(String(req.query.season || '')) ? String(req.query.season) : seasons[0] || null;
+  const [rows, snap, sp] = await Promise.all([season ? store.readRecon(season) : [], readSnapshot(), spMembers()]);
+  const bySym = new Map(rows.map((r) => [r.symbol, r]));
+  const members = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && sp.set && sp.set.has(x.symbol) && x.instrumentType !== 'ETF')
+    .map((x) => ({ symbol: x.symbol, name: x.shortName || x.name || x.symbol, sector: x.sector || null, cap: x.marketCap == null ? null : Number(x.marketCap) }));
+  const out = members.map((m) => { const r = bySym.get(m.symbol) || null; return Object.assign(m, { row: r }, Releases.reconStatus(r)); });
+  // A row for a company no longer in today's list stays visible too.
+  for (const r of rows) if (!members.some((m) => m.symbol === r.symbol)) out.push(Object.assign({ symbol: r.symbol, name: r.symbol, sector: null, cap: null, row: r, left: true }, Releases.reconStatus(r)));
+  res.json({ season, seasons, tolerance: Releases.RECON_TOL, spAsOf: sp.asOf || null, rows: out });
 }));
 app.get('/api/releases/day', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

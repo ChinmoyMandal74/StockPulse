@@ -55,6 +55,25 @@ async function writeColumn() {
   await store.writeFigures({ releaseColumn: { at: Date.now(), days: COLUMN_DAYS, rows } });
   console.log('  screener column: ' + Object.keys(rows).length + ' companies written');
 }
+// THE SIGNAL-INPUT RECON (/recon): each S&P 500 member's newest results
+// release beside Twelve Data's figures as they stand, one row per company
+// per season from the 2026 Q3 season on (the owner: 'starting this current
+// quarter'). db.js freezes Twelve Data's side once it is on the same report.
+const RECON_FROM = '2026-Q3';
+async function writeRecon() {
+  const st = await store.fundNewest('spy');
+  const held = st && st.asOf ? await store.readFundHoldings('spy', st.asOf) : null;
+  const sp = new Set(((held && held.holdings) || []).map((h) => String(h.symbol).toUpperCase()));
+  if (!sp.size) { console.log('  recon: no S&P 500 list on file, skipped'); return; }
+  const snap = await store.readSnapshot();
+  const td = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol).map((r) => [r.symbol, r]));
+  const rel = await store.readEarningsReleasesSince(etDay(Date.now() - COLUMN_DAYS * 86400000));
+  const latest = {};
+  for (const r of rel) if (sp.has(r.symbol) && (!latest[r.symbol] || r.filed > latest[r.symbol].filed)) latest[r.symbol] = r;
+  const rows = Object.values(latest).map((r) => Rel.reconRow(r, td.get(r.symbol))).filter((x) => x.season && x.season >= RECON_FROM);
+  const n = await store.writeRecon(rows);
+  console.log('  recon: ' + n + ' S&P 500 rows written (' + rows.filter((x) => x.tdCurrent).length + ' with Twelve Data on the same report)');
+}
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 40)) || 40;
 const KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -105,7 +124,7 @@ async function recordRun() {
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
-  if (COLUMN_ONLY) { await writeColumn(); process.exit(0); }
+  if (COLUMN_ONLY) { await writeColumn(); await writeRecon(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
   const since = etDay(Date.now() - DAYS * 86400000);
@@ -141,6 +160,8 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
         problems = ['the filing has no EX-99 exhibit'];
       } else {
         meta.url = base + ex.file; meta.exhibit = ex.type;
+        // The company's size, for the reader's scale guard (releases.js toRow).
+        { const t = tracked.get(e.symbol) || {}; const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v)); const cap = n(t.marketCap), px = n(t.price); meta.ref = { shares: cap > 0 && px > 0 ? cap / px : n(t.sharesOutstanding), revenueTtm: n(t.revenueTtm) }; }
         const html = await sec(meta.url);
         if (!html) { console.log(`  ${e.symbol} ${e.filed}: the exhibit did not load; next run`); failed++; continue; }
         const text = Rel.toText(html);
@@ -151,6 +172,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       read++;
       if (row.isResults) results++; else notResults++;
       if (problems.length) flagged++;
+      delete row.ref;
       const out = Object.assign(row, { problems, model: ex ? MODEL : null, inTok: cost.inTok, outTok: cost.outTok, usd: cost.usd, readAt: Date.now() });
       const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
       console.log(`  ${e.symbol} ${e.filed}: ` + (row.isResults
@@ -187,6 +209,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   }
   Object.assign(RUN, { checked, differs: differ });
   if (COMMIT) { try { await writeColumn(); } catch (err) { console.log('  screener column failed: ' + String(err.message).slice(0, 120)); } }
+  if (COMMIT) { try { await writeRecon(); } catch (err) { console.log('  recon failed: ' + String(err.message).slice(0, 120)); } }
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   await recordRun();

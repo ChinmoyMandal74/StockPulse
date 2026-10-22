@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Signal inputs recon — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The Filings page's shell. Everything this page adds is prefixed rc- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent); backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
+    .mark .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent)); border: 1px solid color-mix(in srgb, var(--green) 24%, transparent); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px; border-radius: 999px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3.5%, transparent); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    h1 { margin: 20px 0 0; font-size: clamp(34px, 4.4vw, 52px); font-weight: 600; line-height: 0.96; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 92ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .rc-bar { display: flex; align-items: center; gap: 8px; margin: 0 4px 12px; flex-wrap: wrap; }
+    .rc-chip { font: 500 12px var(--sans); padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
+    .rc-chip.on { color: var(--text); border-color: var(--accent); }
+    .rc-chip b { font-family: var(--mono); font-weight: 600; margin-left: 4px; }
+    .rc-bar select, .rc-bar input[type=search] { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
+    .rc-bar input[type=search] { flex: 1; min-width: 180px; }
+    .rc-bar input[type=search]::placeholder { color: var(--faint); }
+    .rc-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+    .rc-tile .core { padding: 14px 16px; }
+    .rc-tile .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+    .rc-tile .v { margin-top: 6px; font: 600 24px var(--mono); letter-spacing: -0.02em; }
+    .rc-tile .s { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    .rc-wrap { overflow-x: auto; }
+    .rc-wrap table { width: 100%; border-collapse: collapse; }
+    .rc-wrap th, .rc-wrap td { padding: 8px 10px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: right; white-space: nowrap; }
+    .rc-wrap thead th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; }
+    .rc-wrap thead tr.rc-grp th { color: var(--muted); border-bottom: 0; padding-bottom: 2px; text-align: center; }
+    .rc-wrap thead tr.rc-grp th.rc-g { border-bottom: 1px solid var(--hair-2); }
+    .rc-wrap th.l, .rc-wrap td.l { text-align: left; }
+    .rc-wrap td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .rc-wrap td.rc-co { font-family: var(--sans); }
+    .rc-wrap td.rc-co a { color: var(--text); text-decoration: none; font: 600 12.5px var(--mono); }
+    .rc-wrap td.rc-co a:hover { color: var(--accent); }
+    .rc-wrap td.rc-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 1px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .rc-wrap td.rc-sep, .rc-wrap th.rc-sep { border-left: 1px solid var(--hair-2); }
+    .rc-wrap td.rc-stale { color: var(--faint); }
+    .rc-wrap td.rc-diff { color: var(--amber); }
+    .rc-wrap td.rc-na { color: var(--faint); }
+    .rc-st { display: inline-block; font: 500 11px var(--sans); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hair-2); color: var(--muted); }
+    .rc-st.agrees { color: var(--text); border-color: var(--muted); }
+    .rc-st.differs { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
+    .rc-st.behind, .rc-st.none { color: var(--faint); }
+    .rc-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .rc-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
+    .rc-foot b { color: var(--muted); }
+    @media (max-width: 900px) { .page { padding: 0 16px; } .rc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span><span class="wordmark hide-sm">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Data check · admin</span>
+      <h1>Signal inputs recon</h1>
+      <p class="lede">For every S&amp;P 500 company, a reporting season at a time: the fundamentals the Signal reads from Twelve Data,
+        beside the same figures from the company's own results press release as read by the AI model. The Signal reads
+        Twelve Data's figures only; this page checks them. Each season's Twelve Data figures are kept once Twelve Data reaches
+        the same report, so a past season shows what described it.</p>
+    </header>
+
+    <div class="rc-bar" id="seasons"></div>
+    <div class="rc-tiles" id="tiles"></div>
+    <div class="rc-bar">
+      <span id="chips"></span>
+      <select id="sector" aria-label="Sector"><option value="">All sectors</option></select>
+      <select id="sort" aria-label="Sort">
+        <option value="cap">Largest first</option>
+        <option value="filed">Newest release first</option>
+        <option value="gap">Largest gap first</option>
+      </select>
+      <input type="search" id="q" placeholder="Ticker or company" aria-label="Find a ticker or company" />
+    </div>
+    <div class="bezel"><div class="core" style="padding:0"><div class="rc-wrap" id="tbl"><div class="rc-empty">Reading the recon&hellip;</div></div></div></div>
+
+    <p class="rc-foot">
+      <b>Revenue growth</b> and <b>earnings growth</b> are the quarter against the same quarter a year earlier on both sides
+      (Twelve Data's earnings growth is net income's), so they should agree; the gap is in points and amber past the tolerance.
+      <b>Profit margin</b> and <b>net income</b> are twelve months at Twelve Data and one quarter in the release, so they are set side
+      by side and never called a match. <b>FCF margin</b> is not extracted from releases yet. <b>Provider behind</b>: Twelve Data's
+      last report date is not within five days of the release, so its figures still describe the quarter before (shown grey).
+      A bank's revenue can be a different line on the two sides (net revenue against total revenue). Status: Agrees, Differs,
+      Provider behind, Incomplete (nothing both sides carry), No release yet.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const qs = new URLSearchParams(location.search);
+    const state = { season: qs.get('season') || '', status: qs.get('status') || 'all' };
+    let data = null;
+    const STATUS = [['all', 'All'], ['agrees', 'Agrees'], ['differs', 'Differs'], ['behind', 'Provider behind'], ['incomplete', 'Incomplete'], ['none', 'No release yet']];
+    const pct = (v, dp) => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(dp == null ? 1 : dp) + '%');
+    const lvl = (v) => (v == null || !isFinite(v) ? '—' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%');
+    const day = (d) => (d ? new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—');
+    const money = (v) => { if (v == null || !isFinite(v)) return '—'; const a = Math.abs(v); return (v < 0 ? '−' : '') + '$' + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : (a / 1e6).toFixed(0) + 'M'); };
+    const seasonName = (s) => (s ? 'Q' + s.split('-Q')[1] + ' ' + s.split('-Q')[0] : '');
+
+    async function load() {
+      try {
+        const r = await fetch('/api/recon' + (state.season ? '?season=' + encodeURIComponent(state.season) : ''), { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        data = await r.json();
+        state.season = data.season || '';
+        const keep = $('sector').value;
+        const secs = [...new Set(data.rows.map((x) => x.sector).filter(Boolean))].sort();
+        $('sector').innerHTML = '<option value="">All sectors</option>' + secs.map((s) => '<option>' + we(s) + '</option>').join('');
+        if (secs.includes(keep)) $('sector').value = keep;
+        paint();
+      } catch (e) { $('tbl').innerHTML = '<div class="rc-empty">' + we(e.message) + '</div>'; }
+    }
+    function gapOf(x) {
+      const r = x.row;
+      if (!r || !r.tdCurrent) return -1;
+      const g = [r.aiRevG != null && r.tdRevG != null ? Math.abs(r.aiRevG - r.tdRevG) : 0, r.aiNiG != null && r.tdNiG != null ? Math.abs(r.aiNiG - r.tdNiG) : 0];
+      return Math.max(...g);
+    }
+    function paint() {
+      if (!data) return;
+      const tol = data.tolerance || 0.5;
+      $('seasons').innerHTML = !data.seasons.length ? '<span class="rc-empty" style="padding:0 6px">No season on file yet: the reader writes the first rows on its next run.</span>'
+        : data.seasons.map((s) => '<button class="rc-chip' + (s === data.season ? ' on' : '') + '" data-s="' + we(s) + '">' + we(seasonName(s)) + ' season</button>').join('')
+          + (data.spAsOf ? '<span style="font-size:12px;color:var(--faint);margin-left:6px">S&amp;P 500 list of ' + we(data.spAsOf) + '</span>' : '');
+      $('seasons').querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => { state.season = b.dataset.s; sync(); load(); }));
+      const all = data.rows;
+      const count = (k) => all.filter((x) => x.status === k).length;
+      const released = all.filter((x) => x.row).length, same = all.filter((x) => x.row && x.row.tdCurrent);
+      const revC = same.filter((x) => x.row.aiRevG != null && x.row.tdRevG != null), revA = revC.filter((x) => Math.abs(x.row.aiRevG - x.row.tdRevG) <= tol);
+      const niC = same.filter((x) => x.row.aiNiG != null && x.row.tdNiG != null), niA = niC.filter((x) => Math.abs(x.row.aiNiG - x.row.tdNiG) <= tol);
+      const tile = (k, v, s) => '<div class="bezel rc-tile"><div class="core"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div></div>';
+      $('tiles').innerHTML = tile('S&amp;P 500 members', all.filter((x) => !x.left).length, 'today’s list')
+        + tile('Released', released, seasonName(data.season) + ' results releases read')
+        + tile('Same report', same.length, 'Twelve Data on the release’s report; ' + (released - same.length) + ' still behind')
+        + tile('Revenue growth agrees', revC.length ? revA.length + ' of ' + revC.length : '—', 'within ' + tol + ' points, same report')
+        + tile('Earnings growth agrees', niC.length ? niA.length + ' of ' + niC.length : '—', 'within ' + tol + ' points, same report');
+      $('chips').innerHTML = STATUS.map(([k, l]) => '<button class="rc-chip' + (state.status === k ? ' on' : '') + '" data-st="' + k + '">' + l + '<b>' + (k === 'all' ? all.length : count(k)) + '</b></button>').join(' ');
+      $('chips').querySelectorAll('[data-st]').forEach((b) => b.addEventListener('click', () => { state.status = b.dataset.st; sync(); paint(); }));
+      const sector = $('sector').value, q = $('q').value.trim().toLowerCase(), sort = $('sort').value;
+      let list = all.filter((x) => (state.status === 'all' || x.status === state.status) && (!sector || x.sector === sector)
+        && (!q || x.symbol.toLowerCase().includes(q) || String(x.name || '').toLowerCase().includes(q)));
+      list = list.slice().sort((a, b) => sort === 'filed' ? String((b.row || {}).filed || '').localeCompare(String((a.row || {}).filed || ''))
+        : sort === 'gap' ? gapOf(b) - gapOf(a) : (b.cap || 0) - (a.cap || 0));
+      if (!list.length) { $('tbl').innerHTML = '<div class="rc-empty">Nothing matches.</div>'; return; }
+      const td = (v, cls, title) => '<td' + (cls ? ' class="' + cls + '"' : '') + (title ? ' title="' + we(title) + '"' : '') + '>' + v + '</td>';
+      const diffCell = (a, b) => { if (a == null || b == null) return td('—', 'rc-na'); const d = a - b, t = Math.abs(d).toFixed(1); return td((Number(t) === 0 ? '' : d > 0 ? '+' : '−') + t, Math.abs(d) > tol ? 'rc-diff' : ''); };
+      const yn = (v) => (v == null ? '—' : v ? 'Yes' : 'No');
+      const STW = { agrees: 'Agrees', differs: 'Differs', behind: 'Provider behind', incomplete: 'Incomplete', none: 'No release yet' };
+      $('tbl').innerHTML = '<table><thead>'
+        + '<tr class="rc-grp"><th colspan="4"></th><th class="rc-g rc-sep" colspan="3">Revenue growth</th><th class="rc-g rc-sep" colspan="3">Earnings growth</th>'
+        + '<th class="rc-g rc-sep" colspan="2">Profit margin</th><th class="rc-g rc-sep" colspan="2">Net income positive</th><th class="rc-g rc-sep" colspan="2">FCF margin</th><th class="rc-sep"></th></tr>'
+        + '<tr><th class="l">Company</th><th>Release filed</th><th>Quarter end</th><th title="Twelve Data’s last report date">TD report</th>'
+        + '<th class="rc-sep">Twelve Data</th><th>AI release</th><th>Gap</th><th class="rc-sep">Twelve Data</th><th>AI release</th><th>Gap</th>'
+        + '<th class="rc-sep">TD, 12 months</th><th>AI, quarter</th><th class="rc-sep">TD, 12 months</th><th>AI, quarter</th><th class="rc-sep">Twelve Data</th><th>AI release</th><th class="rc-sep l">Status</th></tr></thead><tbody>'
+        + list.map((x) => {
+          const r = x.row;
+          const co = '<td class="rc-co l"><a href="/stock/' + encodeURIComponent(x.symbol) + '">' + we(x.symbol) + '</a><span>' + we(x.name || '') + (x.left ? ' (left the index)' : '') + '</span></td>';
+          if (!r) return '<tr>' + co + td('—', 'rc-na') + td('—', 'rc-na') + td('—', 'rc-na') + '<td class="rc-sep rc-na" colspan="12">No ' + we(seasonName(data.season)) + ' results release on file yet.</td><td class="rc-sep l"><span class="rc-st none">No release yet</span></td></tr>';
+          const st = r.tdCurrent ? '' : 'rc-stale';
+          const stTitle = r.tdCurrent ? '' : 'Twelve Data is still on its report of ' + (r.tdReport || 'an earlier date') + ': this describes the quarter before.';
+          return '<tr>' + co
+            + td(day(r.filed), '', r.periodLabel || '') + td(day(r.periodEnd)) + td(day(r.tdReport), r.tdCurrent ? '' : 'rc-stale', stTitle)
+            + td(pct(r.tdRevG), 'rc-sep ' + st, stTitle) + td(pct(r.aiRevG)) + (r.tdCurrent ? diffCell(r.aiRevG, r.tdRevG) : td('—', 'rc-na'))
+            + td(pct(r.tdNiG), 'rc-sep ' + st, stTitle) + td(pct(r.aiNiG)) + (r.tdCurrent ? diffCell(r.aiNiG, r.tdNiG) : td('—', 'rc-na'))
+            + td(lvl(r.tdPm), 'rc-sep ' + st, stTitle) + td(lvl(r.aiPmQ))
+            + td(r.tdNiTtm == null ? '—' : yn(r.tdNiTtm > 0), 'rc-sep ' + st, r.tdNiTtm == null ? '' : 'Twelve months: ' + money(r.tdNiTtm)) + td(yn(r.aiNiPos))
+            + td(lvl(r.tdFcfM), 'rc-sep ' + st, stTitle) + td('not extracted', 'rc-na')
+            + '<td class="rc-sep l"><span class="rc-st ' + x.status + '" title="' + we(x.differs && x.differs.length ? 'Differs on ' + x.differs.join(' and ') : '') + '">' + STW[x.status] + '</span></td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    function sync() {
+      const p = new URLSearchParams();
+      if (state.season) p.set('season', state.season);
+      if (state.status !== 'all') p.set('status', state.status);
+      history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
+    }
+    let timer = null;
+    $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(paint, 150); });
+    $('sector').addEventListener('change', paint);
+    $('sort').addEventListener('change', paint);
+    load();
+  </script>
+</body>
+</html>

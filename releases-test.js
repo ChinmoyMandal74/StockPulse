@@ -163,6 +163,45 @@ if (baseRows.length) {
   check('boundary: verdicts identical with the group lying', absent.every((x, i) => x === lying[i]), absent.findIndex((x, i) => x !== lying[i]));
 } else console.log('(boundary on real rows: pass a snapshot file to run it)');
 
+// ---- the size guard: a scale the text check cannot see (Synchrony, 2026-10-22) ----
+const syfText = 'Net earnings | 892 | 1,100 | Diluted EPS | $ 2.68 | $ 2.86 | Revenue 3,800 | 3,700';
+const syf = { is_results_release: true, period_label: 'Q3', period_end: '2026-09-30', currency: 'USD',
+  revenue: { printed: '3,800', prior_printed: '3,700', unit: 'millions' }, operating_income: { printed: '', prior_printed: '', unit: 'millions' },
+  net_income: { printed: '892', prior_printed: '1,100', unit: 'billions' }, eps_gaap_diluted: { printed: '2.68', prior_printed: '2.86' },
+  eps_adjusted: { printed: '', prior_printed: '', label: '', excludes: '' }, guidance: { kind: 'none', period_label: '', low_printed: '', high_printed: '', mid_printed: '', plus_minus_printed: '', unit: 'none', sentence: '' }, summary: 'It reported.' };
+let gr = Rel.toRow(syf, syfText, Object.assign({}, meta, { symbol: 'SYF', ref: { shares: 370e6, revenueTtm: 15e9 } }));
+check('size: $892 billion against 370 million shares and $2.68 EPS is refused', gr.row.netIncome === null && gr.row.netIncomePrior === null && gr.problems.filter((p) => /share count/.test(p)).length === 2, gr.problems);
+gr = Rel.toRow(Object.assign({}, syf, { net_income: { printed: '892', prior_printed: '1,100', unit: 'millions' } }), syfText, Object.assign({}, meta, { symbol: 'SYF', ref: { shares: 370e6, revenueTtm: 15e9 } }));
+check('size: $892 million fits (892M / 2.68 = 333M shares)', gr.row.netIncome === 892e6 && gr.row.netIncomePrior === 1100e6 && gr.problems.length === 0, gr.problems);
+gr = Rel.toRow(Object.assign({}, syf, { revenue: { printed: '3,800', prior_printed: '3,700', unit: 'billions' }, net_income: { printed: '892', prior_printed: '1,100', unit: 'millions' } }), syfText, Object.assign({}, meta, { symbol: 'SYF', ref: { shares: 370e6, revenueTtm: 15e9 } }));
+check('size: revenue a thousand times a quarter of twelve months is refused', gr.row.revenue === null && gr.problems.some((p) => /twelve months/.test(p)), gr.problems);
+// A slip applied to both quarters still agrees with itself: each is checked on its own.
+gr = Rel.toRow(syf, syfText, Object.assign({}, meta, { symbol: 'SYF', ref: { shares: 370e6, revenueTtm: 15e9 } }));
+check('size: a slip on both quarters is refused on both', gr.row.netIncome === null && gr.row.netIncomePrior === null);
+// CSX: only the year-earlier figure slipped; it alone is refused.
+gr = Rel.toRow(Object.assign({}, syf, { net_income: { printed: '892', prior_printed: '1,100', unit: 'millions' }, eps_gaap_diluted: { printed: '2.68', prior_printed: '0.03' } }), syfText + ' 0.03', Object.assign({}, meta, { symbol: 'CSX', ref: { shares: 370e6, revenueTtm: 15e9 } }));
+check('size: only the figure that slipped is refused', gr.row.netIncome === 892e6 && gr.row.netIncomePrior === null && gr.problems.length === 1, gr.problems);
+check('size: no reference, no refusal (the guard needs the company’s size)', Rel.toRow(syf, syfText, Object.assign({}, meta, { symbol: 'SYF' })).row.netIncome === 892e9);
+
+// ---- the Signal-input recon ----
+check('season: a September quarter', Rel.seasonOf('2026-09-30') === '2026-Q3');
+check('season: a fiscal quarter ending in August or October counts with September’s', Rel.seasonOf('2026-08-31') === '2026-Q3' && Rel.seasonOf('2026-10-25') === '2026-Q3');
+check('season: a December quarter, and a January one', Rel.seasonOf('2026-12-31') === '2026-Q4' && Rel.seasonOf('2027-01-28') === '2026-Q4');
+check('season: no date, no season', Rel.seasonOf(null) === null);
+const relR = { symbol: 'MU', accn: 'x', filed: '2026-09-30', periodEnd: '2026-09-03', periodLabel: 'Fourth Quarter 2026', revenue: 54229e6, revenuePrior: 11315e6, netIncome: 37701e6, netIncomePrior: 3201e6, currency: 'USD' };
+const tdNow = { lastEarningsDate: '2026-09-30', revenueGrowthYoY: 379.3, earningsGrowthYoY: 1077.8, profitMargin: 50.1, netIncomeTtm: 60e9, fcfMargin: 30 };
+let rr = Rel.reconRow(relR, tdNow);
+check('recon: the release’s growth on its own figures', Math.abs(rr.aiRevG - 379.27) < 0.01 && Math.abs(rr.aiNiG - 1077.79) < 0.01, [rr.aiRevG, rr.aiNiG]);
+check('recon: the quarter’s margin and sign', Math.abs(rr.aiPmQ - 69.52) < 0.01 && rr.aiNiPos === true);
+check('recon: Twelve Data on the same report, its figures carried', rr.tdCurrent === true && rr.tdRevG === 379.3 && rr.tdFcfM === 30 && rr.season === '2026-Q3');
+check('recon: agrees within half a point', Rel.reconStatus(rr).status === 'agrees');
+rr = Rel.reconRow(relR, Object.assign({}, tdNow, { revenueGrowthYoY: 370 }));
+check('recon: a gap past half a point differs, and says on what', Rel.reconStatus(rr).status === 'differs' && Rel.reconStatus(rr).differs.join() === 'revenue growth');
+rr = Rel.reconRow(relR, Object.assign({}, tdNow, { lastEarningsDate: '2026-06-25' }));
+check('recon: an older report is "behind", never compared', rr.tdCurrent === false && Rel.reconStatus(rr).status === 'behind');
+check('recon: no release is "none"', Rel.reconStatus(null).status === 'none');
+check('recon: nothing both sides carry is "incomplete"', Rel.reconStatus(Rel.reconRow(Object.assign({}, relR, { revenue: null, netIncome: null }), tdNow)).status === 'incomplete');
+
 // ---- year on year ----
 check('yoy', Math.abs(Rel.yoy(64601, 51242) - 26.07) < 0.01);
 check('yoy: off a loss is no percent', Rel.yoy(5, -2) === null && Rel.yoy(null, 3) === null);

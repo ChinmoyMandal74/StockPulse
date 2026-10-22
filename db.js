@@ -333,6 +333,36 @@ const SCHEMA = [
      error       text
    )`,
   'create index if not exists idx_earnings_release_runs_started on earnings_release_runs (started_at)',
+  // The Signal-input recon (2026-10-22, /recon): one row per S&P 500 company
+  // per reporting season, the release's figures beside Twelve Data's. Twelve
+  // Data's side is refreshed while it is still on an older report and FROZEN
+  // (td_frozen_at) once it reaches the same report, so each quarter keeps the
+  // figures that described it. Accumulates by season; never pruned.
+  `create table if not exists signal_recon (
+     symbol       text not null,
+     season       text not null,
+     accn         text,
+     filed        text,
+     period_end   text,
+     period_label text,
+     currency     text,
+     ai_rev_g     real,
+     ai_ni_g      real,
+     ai_pm_q      real,
+     ai_ni_pos    integer,
+     td_report    text,
+     td_current   integer,
+     td_rev_g     real,
+     td_ni_g      real,
+     td_pm        real,
+     td_ni_ttm    real,
+     td_fcf_m     real,
+     first_seen   integer,
+     updated_at   integer,
+     td_frozen_at integer,
+     primary key (symbol, season)
+   )`,
+  'create index if not exists idx_signal_recon_season on signal_recon (season)',
   // Blog posts (2026-09-16). PUBLIC when published — the only table in here
   // whose rows a stranger can read — so the routes serve `status = 'published'`
   // only and the body is rendered to HTML server-side, escaped first.
@@ -2972,6 +3002,52 @@ async function readEarningsReleaseAccns(accns) {
     for (const x of r.rows) out.add(String(x.accn));
   }
   return out;
+}
+
+// ---- the Signal-input recon (/recon) -----------------------------------------
+// One upsert per company and season. The release's side always takes the
+// newest reading; Twelve Data's side only until it is frozen, which happens
+// the first time it is on the same report.
+async function writeRecon(rows) {
+  await init();
+  const now = Date.now();
+  const b = (v) => (v == null ? null : v ? 1 : 0);
+  const stmts = (rows || []).filter((r) => r && r.symbol && r.season).map((r) => ({
+    sql: `insert into signal_recon (symbol, season, accn, filed, period_end, period_label, currency, ai_rev_g, ai_ni_g, ai_pm_q, ai_ni_pos,
+            td_report, td_current, td_rev_g, td_ni_g, td_pm, td_ni_ttm, td_fcf_m, first_seen, updated_at, td_frozen_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(symbol, season) do update set
+            accn = excluded.accn, filed = excluded.filed, period_end = excluded.period_end, period_label = excluded.period_label, currency = excluded.currency,
+            ai_rev_g = excluded.ai_rev_g, ai_ni_g = excluded.ai_ni_g, ai_pm_q = excluded.ai_pm_q, ai_ni_pos = excluded.ai_ni_pos,
+            td_report  = case when signal_recon.td_frozen_at is null then excluded.td_report  else signal_recon.td_report end,
+            td_current = case when signal_recon.td_frozen_at is null then excluded.td_current else signal_recon.td_current end,
+            td_rev_g   = case when signal_recon.td_frozen_at is null then excluded.td_rev_g   else signal_recon.td_rev_g end,
+            td_ni_g    = case when signal_recon.td_frozen_at is null then excluded.td_ni_g    else signal_recon.td_ni_g end,
+            td_pm      = case when signal_recon.td_frozen_at is null then excluded.td_pm      else signal_recon.td_pm end,
+            td_ni_ttm  = case when signal_recon.td_frozen_at is null then excluded.td_ni_ttm  else signal_recon.td_ni_ttm end,
+            td_fcf_m   = case when signal_recon.td_frozen_at is null then excluded.td_fcf_m   else signal_recon.td_fcf_m end,
+            td_frozen_at = case when signal_recon.td_frozen_at is null and excluded.td_current = 1 then excluded.updated_at else signal_recon.td_frozen_at end,
+            updated_at = excluded.updated_at`,
+    args: [r.symbol, r.season, r.accn, r.filed, r.periodEnd, r.periodLabel, r.currency, r.aiRevG, r.aiNiG, r.aiPmQ, b(r.aiNiPos),
+      r.tdReport, b(r.tdCurrent), r.tdRevG, r.tdNiG, r.tdPm, r.tdNiTtm, r.tdFcfM, now, now, r.tdCurrent ? now : null],
+  }));
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100), 'write');
+  return stmts.length;
+}
+async function readRecon(season) {
+  await init();
+  const r = await db.execute({ sql: 'select * from signal_recon where season = ?', args: [String(season)] });
+  const bool = (v) => (v == null ? null : Number(v) === 1);
+  return r.rows.map((x) => ({ symbol: String(x.symbol), season: x.season, accn: x.accn, filed: x.filed, periodEnd: x.period_end, periodLabel: x.period_label, currency: x.currency,
+    aiRevG: x.ai_rev_g, aiNiG: x.ai_ni_g, aiPmQ: x.ai_pm_q, aiNiPos: bool(x.ai_ni_pos),
+    tdReport: x.td_report, tdCurrent: bool(x.td_current), tdRevG: x.td_rev_g, tdNiG: x.td_ni_g, tdPm: x.td_pm, tdNiTtm: x.td_ni_ttm, tdFcfM: x.td_fcf_m,
+    firstSeen: x.first_seen, updatedAt: x.updated_at, tdFrozenAt: x.td_frozen_at }));
+}
+// The seasons on file, newest first (a small table: the distinct read is cheap).
+async function readReconSeasons() {
+  await init();
+  const r = await db.execute('select distinct season from signal_recon order by season desc');
+  return r.rows.map((x) => String(x.season));
 }
 
 // ---- earnings history -----------------------------------------------------
@@ -6083,7 +6159,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_tone', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series', 'earnings_releases'];
+  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series', 'earnings_releases', 'signal_recon'];
 
 // Remove a symbol from the database entirely.
 //
@@ -8061,6 +8137,7 @@ module.exports = {
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
+  writeRecon, readRecon, readReconSeasons,
   readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
