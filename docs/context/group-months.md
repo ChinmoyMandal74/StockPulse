@@ -44,3 +44,50 @@ The owner, of Against its peers: "can I have this chart at the theme level, you 
 - **The eight largest by market value today** when a theme holds more (the series route's limit, `LINE_MAX_SYMS`); the note says how many of how many. Five years (21 quarter ends).
 - **The series come through the Lines card's channel**: `getLineSeries` in the studio, and `linesNeed` now answers for `thmgrowth` too, so the phone draws a saved one through the route it already had.
 - Checked: drawn from the real snapshot with stand-in series (the companies asked for, the note for a 35-company theme, the share view, no accent line); the real `promo.html` loading it, looked at. Not looked at with real filings.
+
+### Day by day: the last eight weeks (2026-10-22)
+
+The owner: "create a promo similar to month by month and call it Day by Day, Only limit it to last 8 weeks hardcoded, Apply it anywhere we have the month by month sub template."
+
+**Four templates, each placed right after Month by month in its group:**
+
+| template | group | controls |
+|---|---|---|
+| `days` | Stock spotlight | `dbdSym`, `dbdView` |
+| `mktdays` | Market | `gdkGroup`, `gdkView` |
+| `secdays` | Sector | `gdsName`, `gdsView` |
+| `thmdays` | Theme | `gdtName`, `gdtView` |
+
+`View` is the month cards' own (`Cards.monthViews()`): the own return, or that less the S&P 500 fund's.
+
+**The grid** (`dayDraw` in `cards.js`, styled by the month grid's `mh-*` classes plus `dd-grid`):
+- A row is a week, newest at the top, labelled by its Monday. The columns are Mon to Fri, then Week.
+- The Week figure is the week's sessions compounded; the running week is outlined.
+- The foot counts the weeks each weekday was up.
+- **Eight weeks is hardcoded** (`WEEKS` in `groupdays.js`, `DBD_WEEKS` in `cards.js`): the week of the newest session and the seven before it, on every size.
+
+**Empty cells mean two different things:**
+- A weekday the market was closed (a holiday) is a shaded empty slot. Its week still has a figure.
+- A day still to come this week, or a session with no return on file, is plain empty. A missing session leaves its week without a figure, as a missing month leaves a year.
+
+**The arithmetic is `groupdays.js`, one module for both kinds of card:**
+- **The calendar is the S&P 500 fund's bar dates.** A company's day is struck against the previous session on that calendar, never against its own previous bar. A hole in a company's bars therefore costs two days (the missing one and the day after), not a two-day move filed under one day.
+- **A day past ten times (`MAX_DAY`) is a break, not a return.** It is left out of the average and reported in the build's `broken` list.
+- **Group days are equal weight, today's members, no funds**, the same rules as the month cards.
+
+**Data:**
+- **One stock:** `GET /api/days?symbol=` (`daysFor`: two per-symbol `readBars` of 70 rows, kept ten minutes). Same access as `/api/months`: signed in, and a guest only for the guest stocks.
+- **Every group:** built by `groupDaysBuild` **inside `POST /api/group-months/rebuild`**, right after the months.
+  - `nightly-ping.js`'s `months` phase already calls that route, so the days needed no new phase and no change to the scheduled task.
+  - The answer carries the days' result under `days`; the months' fields stay at the top, which is what the ping prints.
+  - A days failure never costs the months their answer.
+- **The read** is `readBarsWindow` from the session before the window to the newest: on the real universe, 1,259 companies, about 48,000 rows in 2.2 seconds.
+- **Storage:** `app_meta` `group_days`, replaced by each build. It is derived from the bars, which are the history.
+- **Reading the build:** `GET /api/group-days` (members only). The studio fetches it once a visit, and the phone's `/api/m/post` reads it for a saved post (`daysNeed`, `groupDaysNeed`; `getDays`, `getGroupDays`).
+
+**Housekeeping:** `CONTROL_IDS` grew to 383, so `POST_OPT_MAX` went from 400 to 500.
+
+**Checked:**
+- **`groupdays-test.js`, 53 checks:** the window, the holiday, the hole, a late listing, the break, the sub-cent floor, groups and funds, what the four cards draw on each size, the fallback without an index. The break, holiday-slot and to-come guards were each proved by reverting them.
+- **The real studio over production's bars (read only):** all four cards on all three sizes, looked at. NVDA's newest day and SPY's matched the snapshot's own Today figures, and the market's newest day matched the snapshot's average.
+- **The real server on an in-memory database:** the rebuild, the tiers (anonymous, guest, admin), and a saved post of each card drawn by the phone route.

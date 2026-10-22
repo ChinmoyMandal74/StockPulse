@@ -1901,6 +1901,31 @@
         <p class="hint">The average of the theme’s companies each month, every company counting the same;
           a fund in the theme is left out. Today’s members, applied to every past month.</p>
       </div>
+      <!-- Day by day (groupdays.js, 2026-10-22): the last eight weeks, a row a
+           week. One box each, like the month cards beside them. -->
+      <div id="gdkBox">
+        <label>Market</label>
+        <select id="gdkGroup"></select>
+        <label>Show</label>
+        <select id="gdkView"></select>
+        <p class="hint">The last eight weeks, a row a week: the average of the members’ returns each session, every
+          company counting the same. Built once a day, with the nightly run.</p>
+      </div>
+      <div id="gdsBox">
+        <label>Sector</label>
+        <select id="gdsName"></select>
+        <label>Show</label>
+        <select id="gdsView"></select>
+        <p class="hint">The last eight weeks of one sector, a row a week, every company counting the same.</p>
+      </div>
+      <div id="gdtBox">
+        <label>Theme</label>
+        <select id="gdtName"></select>
+        <label>Show</label>
+        <select id="gdtView"></select>
+        <p class="hint">The last eight weeks of one theme, a row a week, every company counting the same; a fund in
+          the theme is left out.</p>
+      </div>
       <div id="mvgBox">
         <label>Period</label>
         <select id="mvgPeriod"></select>
@@ -2027,6 +2052,14 @@
         <p class="hint">A record, not a seasonal pattern: with about ten
           readings a month, one month always looks special by chance. The
           square card holds the newest eight years.</p>
+      </div>
+      <div id="dbdBox">
+        <label>Stock</label>
+        <select id="dbdSym"></select>
+        <label>Show</label>
+        <select id="dbdView"></select>
+        <p class="hint">The last eight weeks, a row a week and a column a weekday, each cell that session’s return;
+          the Week column is its sessions compounded.</p>
       </div>
       <!-- Evolution. Like the spotlight, the card IS its own scope, so there
            is no evoSector/evoIndustry/evoCap/evoScreen and INDUSTRY_PREFIXES
@@ -2326,6 +2359,8 @@
       { id: 'pullback', name: 'Pulled back', note: 'Fell hard today and now near the 200-day average — a scatter of the fallers and a numbered list of those in the band' },
       { id: 'idxpe', name: 'Valuation', note: 'The index’s P/E and the typical member’s, quarter by quarter for ten years' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
+      { id: 'mktdays', name: 'Market, day by day', note: 'The market over the last eight weeks, a row a week — the average of every company’s return each session, equal weight' },
+      { id: 'secdays', name: 'Sector, day by day', note: 'One sector over the last eight weeks, a row a week — the average of its companies’ returns each session, equal weight' },
       { id: 'secmonths', name: 'Sector, month by month', note: 'One sector year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'thmgrowth', name: 'Theme growth', note: 'A theme’s companies on revenue, earnings, margin or value, quarter by quarter — the peer chart for a theme' },
       { id: 'thmrank', name: 'Theme ranking', note: 'Themes ranked on one measure — the average of each theme’s companies, a company counting in each of its themes' },
@@ -2333,6 +2368,7 @@
       { id: 'thmspot', name: 'Theme spotlight', note: 'One theme in full: its line against the S&P 500, a dozen figures and where its companies sit' },
       { id: 'thmmargin', name: 'Theme margins', note: 'One theme’s combined margin over five years, and each company’s' },
       { id: 'optthm', name: 'Theme options', note: 'Open options contracts across one theme’s companies, puts against calls' },
+      { id: 'thmdays', name: 'Theme, day by day', note: 'One theme over the last eight weeks, a row a week — the average of its companies’ returns each session, equal weight' },
       { id: 'thmmonths', name: 'Theme, month by month', note: 'One theme year by month — the average of its companies’ returns each month, equal weight' },
       { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
       { id: 'corrections', name: 'Market drawdowns', note: 'How many companies are near their high, in a pullback, a correction or a bear market (the screener’s Drawdown column, counted) — beside how far each index is from its own high' },
@@ -2381,6 +2417,7 @@
       { id: 'spotlight', name: 'Stock spotlight', note: 'One company in full \u2014 its line, its year, its figures, its signal' },
       { id: 'perf', name: 'Growth and profitability', note: 'One company’s revenue and net income as bars, its net margin as a line, quarter by quarter or year by year' },
       { id: 'peertrend', name: 'Against its peers', note: 'One company and its closest peers on revenue, earnings, margin or value, quarter by quarter' },
+      { id: 'days', name: 'Day by day', note: 'One company over the last eight weeks, a row a week — each cell that session’s return' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'glance', name: 'At a glance', note: 'One company topic by topic, as the top of its stock page sums it up' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
@@ -2449,6 +2486,7 @@
       ['perf', 'Growth and profitability', 'prfSym'],
       ['peertrend', 'Against its peers', 'ptrSym'],
       ['months', 'Month by month', 'monSym'],
+      ['days', 'Day by day', 'dbdSym'],
       ['glance', 'At a glance', 'glcSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
@@ -2479,6 +2517,7 @@
       ['beat', 'Beating the index'],
       ['movegrid', 'Moves by sector'],
       ['mktmonths', 'Month by month'],
+      ['mktdays', 'Day by day'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
       ['filed', 'Filed yesterday'],
@@ -2551,6 +2590,7 @@
       ['secmargin', 'Margins'],
       ['optsec', 'Options'],
       ['secmonths', 'Month by month'],
+      ['secdays', 'Day by day'],
       ['seclines', 'Lines — any measure'],
       ['secbars', 'Bars — any measure'],
       ['sectone', 'Article tone'],
@@ -2570,6 +2610,7 @@
       ['thmmargin', 'Margins'],
       ['optthm', 'Options'],
       ['thmmonths', 'Month by month'],
+      ['thmdays', 'Day by day'],
       ['thmlines', 'Lines — any measure'],
       ['thmbars', 'Bars — any measure'],
       ['thmtone', 'Article tone'],
@@ -3027,6 +3068,31 @@
         .catch(() => { delete ipePending[cut]; });
       return null;
     }
+    // Day by day: every group's last eight weeks (one stored value, fetched once
+    // a visit) and one symbol's (fetched once a symbol).
+    let gdData = null, gdPending = false;
+    function getGroupDays() {
+      if (gdData) return gdData;
+      if (gdPending) return null;
+      gdPending = true;
+      fetch('/api/group-days', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { days: [], groups: {} }))
+        .then((d) => { gdData = d || { days: [], groups: {} }; gdPending = false; if (Cards.groupDaysNeed(tpl, controlOpts())) render(); })
+        .catch(() => { gdData = { days: [], groups: {} }; gdPending = false; if (Cards.groupDaysNeed(tpl, controlOpts())) render(); });
+      return null;
+    }
+    const dbdCache = {}, dbdPending = {};
+    function getDays(symbol) {
+      if (!symbol) return null;
+      if (dbdCache[symbol]) return dbdCache[symbol];
+      if (dbdPending[symbol]) return null;
+      dbdPending[symbol] = true;
+      fetch('/api/days?symbol=' + encodeURIComponent(symbol), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { days: [], r: [], idx: [] }))
+        .then((d) => { dbdCache[symbol] = d || { days: [], r: [], idx: [] }; delete dbdPending[symbol]; if (Cards.daysNeed(tpl, controlOpts())) render(); })
+        .catch(() => { delete dbdPending[symbol]; });
+      return null;
+    }
     let gmData = null, gmPending = false;
     function getGroupMonths() {
       if (gmData) return gmData;
@@ -3314,12 +3380,12 @@
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
-      'monSym', 'monView', 'glcSym', 'glcPick',
+      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
@@ -3343,7 +3409,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4192,6 +4258,7 @@
       $('pbBox').style.display = tpl === 'pullback' ? 'block' : 'none';
       $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
       $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
+      for (const [box, id] of [['gdkBox', 'mktdays'], ['gdsBox', 'secdays'], ['gdtBox', 'thmdays'], ['dbdBox', 'days']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('egrBox').style.display = tpl === 'earngrow' ? 'block' : 'none';
       $('barBox').style.display = tpl === 'bars' ? 'block' : 'none';
       $('indBox').style.display = tpl === 'industries' ? 'block' : 'none';
@@ -4536,6 +4603,10 @@
     ['monSym', 'monView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
     for (const [v, label] of Cards.monthViews()) $('monView').appendChild(new Option(label, v));
+    // Day by day: the four cards' own listener list; the views are the month cards'.
+    for (const [v, label] of Cards.monthViews()) $('dbdView').appendChild(new Option(label, v));
+    [['dbdSym', 'days'], ['dbdView', 'days'], ['gdkGroup', 'mktdays'], ['gdkView', 'mktdays'], ['gdsName', 'secdays'], ['gdsView', 'secdays'], ['gdtName', 'thmdays'], ['gdtView', 'thmdays']].forEach(([id, t]) =>
+      $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     for (const [v, label] of Cards.evoValues()) $('evoValue').appendChild(new Option(label, v));
     // The two-stock card offers the same market measures and opens on P/E,
     // the owner's default for a pair.
@@ -5474,6 +5545,8 @@
           if ([...$('prfSym').options].some((o) => o.value === keep)) $('prfSym').value = keep; }
         { const keep = $('monSym').value; $('monSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
+        { const keep = $('dbdSym').value; $('dbdSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('dbdSym').options].some((o) => o.value === keep)) $('dbdSym').value = keep; }
         { const keep = $('glcSym').value; $('glcSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('glcSym').options].some((o) => o.value === keep)) $('glcSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
@@ -5719,7 +5792,11 @@
           fill('gmkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
           for (const id of ['gmkView', 'gscView', 'gthView']) fill(id, Cards.monthViews());
           fill('gscName', Cards.sectors(stocks).map((n) => [n, n]));
-          fill('gthName', Cards.groupMonthThemes(stocks).map((n) => [n, n])); }
+          fill('gthName', Cards.groupMonthThemes(stocks).map((n) => [n, n]));
+          fill('gdkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
+          for (const id of ['gdkView', 'gdsView', 'gdtView']) fill(id, Cards.monthViews());
+          fill('gdsName', Cards.sectors(stocks).map((n) => [n, n]));
+          fill('gdtName', Cards.groupMonthThemes(stocks).map((n) => [n, n])); }
         { const keep = $('mvgPeriod').value;
           $('mvgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
           if ([...$('mvgPeriod').options].some((o) => o.value === keep)) $('mvgPeriod').value = keep; }

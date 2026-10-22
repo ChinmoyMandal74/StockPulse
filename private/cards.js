@@ -75,6 +75,9 @@
   let getPeerTrend = () => null;
   // Month by month for every group (the daily build), or null while it loads.
   let getGroupMonths = () => null;
+  // Day by day: one symbol's last eight weeks (/api/days), and every group's (the daily build).
+  let getDays = () => null;
+  let getGroupDays = () => null;
   // The index P/E history for a cut (the daily build), or null while it loads.
   let getIndexPe = () => null;
   // One figure's history for one company (the screener's drill-down), or null while it loads.
@@ -12537,6 +12540,151 @@
     });
   }
 
+  // ---- Day by day: the last eight weeks, for a stock or a group -------------
+  //
+  // (2026-10-22, the owner: "create a promo similar to month by month and call
+  // it Day by Day, Only limit it to last 8 weeks hardcoded, Apply it anywhere
+  // we have the month by month sub template".) The month grid one scale down:
+  // a row a week, newest at the top, a column a weekday and a Week column.
+  // Four templates: one stock beside Month by month, and the market, a sector
+  // and a theme beside theirs.
+  //
+  // THE ARITHMETIC IS groupdays.js's, done on the server for both: the stock's
+  // returns (/api/days) and every group's (the daily build) arrive as returns
+  // on the S&P 500 fund's sessions. This only adds a week up and draws.
+  //
+  // A HOLIDAY IS NO CELL, and a week with one still has a figure: the week is
+  // its sessions compounded. A session the series has no return for leaves
+  // the week without one, as a missing month leaves a year.
+  const DBD_TPLS = { mktdays: 'gdk', secdays: 'gds', thmdays: 'gdt' };
+  const DBD_WEEKS = 8;
+  const DBD_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const DBD_CAP = { raw: 3, rel: 2 };
+  function daysNeed(tpl, opts) {
+    if (tpl !== 'days') return null;
+    return { symbol: (opts && opts.dbdSym) || null };
+  }
+  function groupDaysNeed(tpl) { return DBD_TPLS[tpl] ? {} : null; }
+  const dbdNoon = (d) => Date.parse(d + 'T12:00:00Z');
+  const dbdMonday = (d) => { const t = dbdNoon(d), wd = new Date(t).getUTCDay(); return new Date(t - ((wd + 6) % 7) * 86400000).toISOString().slice(0, 10); };
+  // THE GRID. G: days (oldest first), r and idx (returns on those days, in
+  // percent, or null), view, name, kick(text), and the words that differ.
+  function dayDraw(G) {
+    const days = G.days || [];
+    const own = {}, ix = {};
+    days.forEach((d, k) => {
+      if (G.r && G.r[k] != null && isFinite(Number(G.r[k]))) own[d] = Number(G.r[k]);
+      if (G.idx && G.idx[k] != null && isFinite(Number(G.idx[k]))) ix[d] = Number(G.idx[k]);
+    });
+    // The index reading needs the index on most sessions; without it the card
+    // falls back to the own return AND SAYS SO, as the month card does.
+    const rel = G.view === 'rel' && Object.keys(ix).length >= Math.max(5, Math.floor(days.length / 2));
+    const val = (d) => (own[d] == null ? null : !rel ? own[d] : ix[d] == null ? null : own[d] - ix[d]);
+    const weeks = [...new Set(days.map(dbdMonday))].sort().reverse().slice(0, DBD_WEEKS);
+    const lastWeek = days.length ? dbdMonday(days[days.length - 1]) : null;
+    const compound = (src, wk) => {
+      let level = 1, any = false;
+      for (const d of days) { if (dbdMonday(d) !== wk) continue; if (src[d] == null) return null; level *= 1 + src[d] / 100; any = true; }
+      return any ? (level - 1) * 100 : null;
+    };
+    const valW = (wk) => { const o = compound(own, wk); if (o == null || !rel) return o; const i = compound(ix, wk); return i == null ? null : o - i; };
+    const cap = rel ? DBD_CAP.rel : DBD_CAP.raw;
+    const cell = (v, c, extra) => {
+      if (v == null || !isFinite(v)) return '<span class="mh-c mh-na' + (extra ? ' ' + extra : '') + '"></span>';
+      const r = Math.round(v * 10) / 10;
+      const a = Math.round((0.10 + 0.40 * Math.min(Math.abs(v) / c, 1)) * 100);
+      const cls = r > 0 ? 'mh-up' : r < 0 ? 'mh-dn' : 'mh-flat';
+      const txt = (r > 0 ? '+' : r < 0 ? '−' : '') + (Math.abs(r) >= 100 ? Math.round(Math.abs(r)) : Math.abs(r).toFixed(1));
+      return '<span class="mh-c ' + cls + (extra ? ' ' + extra : '') + '" style="--a:' + a + '%">' + txt + '</span>';
+    };
+    const dateOf = (wk, i) => new Date(dbdNoon(wk) + i * 86400000).toISOString().slice(0, 10);
+    const label = (wk) => MON_NAMES[Number(wk.slice(5, 7)) - 1] + ' ' + Number(wk.slice(8, 10));
+    const inCal = new Set(days);
+    const lastDay = days.length ? days[days.length - 1] : '';
+    // A session still to come this week is empty; only a weekday the market
+    // skipped inside the window is drawn as closed.
+    const slot = (d) => (d > lastDay ? '<span class="mh-c mh-na"></span>' : '<span class="mh-c mh-na dd-off"></span>');
+    const body = weeks.map((wk) => '<span class="mh-y">' + label(wk) + '</span>'
+      + DBD_DAYS.map((_, i) => { const d = dateOf(wk, i); return inCal.has(d) ? cell(val(d), cap) : slot(d); }).join('')
+      + cell(valW(wk), cap * 2.5, 'mh-yr' + (wk === lastWeek ? ' mh-part' : ''))).join('');
+    let ups = 0, all = 0;
+    const foot = DBD_DAYS.map((_, i) => {
+      let u = 0, n = 0;
+      for (const wk of weeks) { const d = dateOf(wk, i); if (!inCal.has(d)) continue; const v = val(d); if (v == null) continue; n++; if (v > 0) u++; }
+      ups += u; all += n;
+      return '<span class="mh-f">' + (n ? u + '/' + n : '') + '</span>';
+    }).join('');
+    const base = all ? Math.round(ups / all * 100) : null;
+    const fellBack = G.view === 'rel' && !rel;
+    const note = (rel
+      ? 'Each cell is the day’s price return less the S&P 500’s, in points — whether it beat the market that day, not whether it rose. '
+      : (G.cellNote || 'Each cell is the price return for that session, close to close, in percent; dividends are not included. '))
+      + (G.extraNote || '')
+      + 'A shaded empty cell is a day the market was closed; a plain empty one has no return on file. The Week column is its sessions compounded, and the outlined one is the week still running. The bottom row counts the weeks each weekday was '
+      + (rel ? 'ahead' : 'up')
+      + (base == null ? '. ' : '; across every day shown the figure is ' + base + '%. ')
+      + 'Eight readings a weekday is a record of what happened, not a pattern to trade.';
+    const n = G.name;
+    return chromeTop()
+      + '<div class="s-body"><div class="mh-in">'
+      + '<span class="s-kick">' + esc(G.kick(weeks.length + (weeks.length === 1 ? ' week' : ' weeks'))) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span><span class="dim">'
+      + esc('day by day' + (G.dimExtra || '') + (rel ? ', against the S&P 500' : fellBack ? ' — own return, no index reading held' : ''))
+      + '</span></h2>'
+      + '<div class="mh-grid dd-grid" style="grid-template-rows:auto repeat(' + weeks.length + ',minmax(0,1fr)) auto;'
+      + 'max-height:calc(' + weeks.length + ' * var(--mh-row) + 90px)">'
+        + '<span class="mh-h"></span>' + DBD_DAYS.map((d) => '<span class="mh-h">' + d + '</span>').join('')
+        + '<span class="mh-h">Week</span>'
+        + body
+        + '<span class="mh-f mh-fl">' + (rel ? 'Ahead' : 'Up') + '</span>' + foot + '<span class="mh-f"></span>'
+      + '</div>'
+      + '<p class="s-sub wide" style="--fs:17px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+  const dbdShell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+    + '<span class="s-kick">' + esc(kick) + '</span>'
+    + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+    + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+  function tplDays() {
+    const sym = O.dbdSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((r) => r.symbol === sym);
+    if (!row) return dbdShell('Nothing to chart', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const data = getDays(sym);
+    if (!data) return dbdShell('Reading the archive', 'Drawing', 'the days…');
+    const days = Array.isArray(data.days) ? data.days : [];
+    const have = (data.r || []).filter((v) => v != null).length;
+    if (!days.length || !have) return dbdShell(nameOf(row), 'Day by day', 'nothing on file', 'No session in the last eight weeks has a return for ' + sym + '.');
+    return dayDraw({
+      days, r: data.r, idx: data.idx, view: O.dbdView, name: nameOf(row),
+      kick: (wks) => (row.sector ? row.sector + ' · ' : '') + sym + ' · ' + wks,
+    });
+  }
+  function groupDaysCard(tpl) {
+    const P = DBD_TPLS[tpl];
+    const data = getGroupDays();
+    if (!data) return dbdShell('Reading the archive', 'Drawing', 'the days…');
+    const days = Array.isArray(data.days) ? data.days : [];
+    let key, name, what;
+    if (tpl === 'mktdays') {
+      const m = GM_MARKETS.find(([k]) => k === O.gdkGroup) || GM_MARKETS[0];
+      key = m[0]; name = m[0] === 'all' ? 'The market' : m[1]; what = m[0] === 'all' ? 'Every company tracked' : m[1];
+    } else if (tpl === 'secdays') {
+      name = O.gdsName || [...new Set(stocks.map((x) => x.sector).filter(Boolean))].sort()[0] || ''; key = 'sec:' + name; what = 'Sector';
+    } else {
+      name = O.gdtName || groupMonthThemes(stocks)[0] || ''; key = 'thm:' + name; what = 'Theme';
+    }
+    const g = data.groups && data.groups[key];
+    if (!days.length || !g) {
+      return dbdShell(what, name || 'Nothing chosen', 'day by day', days.length ? 'No company in this group has a session on record.' : 'The days have not been built yet. They are built once a day, with the nightly run.');
+    }
+    return dayDraw({
+      days, r: g.r, idx: data.idx, view: O[P + 'View'], name, dimExtra: ', equal weight',
+      kick: (wks) => what + ' · ' + g.members.toLocaleString() + (g.members === 1 ? ' company' : ' companies') + ' today · ' + wks,
+      cellNote: 'Each cell is the average of the members’ price returns that session, in percent, each company counting the same; dividends are not included. ',
+      extraNote: 'The members are today’s ' + g.members.toLocaleString() + '. ',
+    });
+  }
+
   // ---- Against its peers: one measure, quarter by quarter ------------------
   //
   // THE STOCK PAGE'S CARD AS A POSTER. One company and the Similar-stocks
@@ -12817,6 +12965,10 @@
     mktmonths: () => groupMonthsCard('mktmonths'),
     secmonths: () => groupMonthsCard('secmonths'),
     thmmonths: () => groupMonthsCard('thmmonths'),
+    mktdays: () => groupDaysCard('mktdays'),
+    secdays: () => groupDaysCard('secdays'),
+    thmdays: () => groupDaysCard('thmdays'),
+    days: tplDays,
     figure: tplFigure,
     optmkt: () => optGroupCard('optmkt'),
     optsec: () => optGroupCard('optsec'),
@@ -12992,6 +13144,17 @@
     .mh-yr { font-weight: 800; }
     .mh-f { color: var(--faint); font-size: 14px; text-align: center; padding-top: 5px; }
     .mh-f.mh-fl { text-align: left; }
+    /* Day by day: seven tracks, a wider label for the week's date, and a
+       closed day drawn as a faint slot rather than a gap. */
+    /* Always eight rows, so the rows take the room the month grid leaves to
+       its extra years: measured on each artboard with the note at its longest. */
+    .mh-grid.dd-grid { grid-template-columns: 96px repeat(5, minmax(0, 1fr)) 120px; font-size: 24px; --mh-row: 96px; }
+    .sz-square .mh-grid.dd-grid { font-size: 21px; --mh-row: 62px; }
+    .sz-story .mh-grid.dd-grid { font-size: 28px; --mh-row: 132px; }
+    .dd-grid .mh-y { font-size: 17px; }
+    .sz-story .dd-grid .mh-y { font-size: 21px; }
+    .dd-grid .mh-h { font-size: 15px; }
+    .dd-grid .mh-c.dd-off { background: var(--hair); opacity: 0.35; }
     .sz-story .mh-f { font-size: 17px; }
     .mh-in .s-sub { margin-top: auto; padding-top: 16px; }
     /* ---- Bars: any one measure, ranked -----------------------------------
@@ -15590,6 +15753,7 @@
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
     groupMonthsNeed, groupMonthThemes, indexPeNeed,
+    daysNeed, groupDaysNeed,
     indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
     groupMonthMarkets: () => GM_MARKETS.map((m) => m.slice()),
@@ -15687,6 +15851,8 @@
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
       getGroupMonths = c.getGroupMonths || (() => null);
+      getDays = c.getDays || (() => null);
+      getGroupDays = c.getGroupDays || (() => null);
       getIndexPe = c.getIndexPe || (() => null);
       getDrill = c.getDrill || (() => null);
       getPerf = c.getPerf || (() => null);

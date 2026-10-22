@@ -11840,7 +11840,7 @@ const POST_OPT_KEY = /^[a-z]{3,6}[A-Z][A-Za-z0-9]{0,20}$/;
 // which is four more controls from breaching a cap whose whole failure mode is
 // silence. 200 against 87 — this is a guard against a page being used as free
 // storage, not a budget, so the headroom costs nothing.
-const POST_OPT_MAX = 400;   // 274 real controls on 2026-10-13, after the theme cards; raised from 300 before it bit
+const POST_OPT_MAX = 500;   // 383 real controls on 2026-10-22, after the Day by day cards; raised from 400 before it bit
 
 function cleanPosts(raw) {
   const known = new Set(Cards.ids);
@@ -12244,6 +12244,12 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   const ipeNeed = Cards.indexPeNeed(post.tpl, post.opts || {});
   if (ipeNeed) { try { ipe = await figStored('pe:' + ipeNeed.cut); } catch { ipe = null; } }
 
+  // Day by day, a stock and every group, likewise only when asked for.
+  let days = null, gdays = null;
+  const dbdNeed = Cards.daysNeed(post.tpl, post.opts || {});
+  if (dbdNeed && dbdNeed.symbol && /^[A-Z0-9.-]{1,15}$/.test(String(dbdNeed.symbol).toUpperCase())) { try { days = await daysFor(String(dbdNeed.symbol).toUpperCase()); } catch { days = null; } }
+  if (Cards.groupDaysNeed(post.tpl, post.opts || {})) { try { gdays = await groupDaysStored(); } catch { gdays = null; } }
+
   // Month by month for a group: the stored daily build, only when asked for.
   let gmonths = null;
   if (Cards.groupMonthsNeed(post.tpl, post.opts || {})) { try { gmonths = await groupMonthsStored(); } catch { gmonths = null; } }
@@ -12295,6 +12301,8 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
+      getDays: () => days,
+      getGroupDays: () => gdays,
       getIndexPe: () => ipe,
       getHolders: () => lholders,
       getSegments: () => rmix,
@@ -16148,10 +16156,74 @@ async function groupMonthsStored() {
   return body && body.groups ? body : null;
 }
 // The cron secret or an admin: the nightly run asks for it after its rounds.
+// Day by day (groupdays.js) is built in the same request, after the months:
+// nightly-ping.js's 'months' phase already calls this, so the days need no
+// phase of their own. Its own failure never costs the months their answer.
 app.post('/api/group-months/rebuild', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
-  res.json(await groupMonthsBuild());
+  const months = await groupMonthsBuild();
+  let days;
+  try { days = await groupDaysBuild(); } catch (e) { console.error('group days build failed:', e.message); days = { built: false, reason: 'the build failed' }; }
+  res.json(Object.assign({}, months, { days }));
+}));
+
+// ---- day by day: the last eight weeks, a stock or every group ----------------
+// (2026-10-22.) Every company's closes since the Monday before the window, in
+// one bounded read (readBarsWindow, five range queries on (symbol, d), about
+// 54,000 rows), averaged per group on the S&P 500 fund's sessions, stored.
+const GroupDays = require('./groupdays.js');
+async function benchDayBars() {
+  return store.readBars(BENCHMARK, 70);
+}
+async function groupDaysBuild() {
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
+  const benchBars = await benchDayBars();
+  const P = GroupDays.plan(benchBars.map((b) => String(b.datetime).slice(0, 10)));
+  if (!P.days.length || !P.base) return { built: false, reason: 'no index sessions on file' };
+  const [, pf] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfolios()]);
+  const symbols = rows.filter((x) => x.instrumentType !== 'ETF').map((x) => String(x.symbol).toUpperCase());
+  const t0 = Date.now();
+  const barsBySym = await store.readBarsWindow(symbols, P.base, P.latest);
+  const built = GroupDays.build({ rows, barsBySym, benchBars, themesOf: (sym) => membershipOf(sym, pf) });
+  // A build that found no company with a return is not written over one that has.
+  if (!built.groups.all || !built.groups.all.r.some((v) => v != null)) return { built: false, reason: 'no returns worked out' };
+  const body = Object.assign({ at: Date.now() }, built);
+  await store.writeGroupDays(body);
+  groupDaysMemo = { at: Date.now(), body };
+  return { built: true, latest: built.latest, days: built.days.length, companies: built.companies, groups: Object.keys(built.groups).length, broken: built.broken, ms: Date.now() - t0 };
+}
+let groupDaysMemo = null;
+async function groupDaysStored() {
+  if (groupDaysMemo && Date.now() - groupDaysMemo.at < 10 * 60 * 1000) return groupDaysMemo.body;
+  const body = await store.readGroupDays();
+  if (body && body.groups) groupDaysMemo = { at: Date.now(), body };
+  return body && body.groups ? body : null;
+}
+app.get('/api/group-days', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json((await groupDaysStored()) || { at: null, days: [], groups: {} });
+}));
+// One company: two per-symbol reads, kept ten minutes. ONE assembly for this
+// route and the phone's saved-post route.
+const daysCache = new Map();
+async function daysFor(symbol) {
+  const hit = daysCache.get(symbol);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.body;
+  const [bars, benchBars] = await Promise.all([store.readBars(symbol, 70), benchDayBars()]);
+  const body = GroupDays.forStock({ symbol, bars, benchBars });
+  boundedSet(daysCache, symbol, { at: Date.now(), body });
+  return body;
+}
+app.get('/api/days', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) {
+    return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  }
+  res.json(await daysFor(symbol));
 }));
 // Members, like the pivot's own period axis: a group is the whole universe.
 app.get('/api/group-months', requireMember, route(async (req, res) => {

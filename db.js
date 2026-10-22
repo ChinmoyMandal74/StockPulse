@@ -3118,6 +3118,24 @@ async function writeGroupMonths(obj) {
   });
 }
 
+// Day by day for every group: the last eight weeks, built with the month
+// build (groupdays.js). One row, replaced by each build like group_months:
+// it is derived from the bars, which are the history.
+async function readGroupDays() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'group_days'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+
+async function writeGroupDays(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('group_days', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
+
 // The filings quality reading, built on the daily pass (secquality.js).
 async function readSecQuality() {
   await init();
@@ -7865,7 +7883,7 @@ module.exports = {
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  readGroupMonths, writeGroupMonths, readFigure, writeFigures, readNameOf,
+  readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,
