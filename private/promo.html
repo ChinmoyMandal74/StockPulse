@@ -1367,6 +1367,28 @@
           below the EPS estimate, and revenue and net income growth for the reported companies combined, then by
           sector. From each company's results press release; the provider's estimate arrives days after a report.</p>
       </div>
+      <!-- Results summary for a sector, an industry, a theme (2026-10-22). -->
+      <div id="rssBox">
+        <label>Sector</label>
+        <select id="rssName"></select>
+        <label>Index</label>
+        <select id="rssSp500"></select>
+        <p class="hint">The season so far for one sector: how many have reported, above or below the EPS estimate, growth combined, then a row an industry.</p>
+      </div>
+      <div id="rsiBox">
+        <label>Industry</label>
+        <select id="rsiName"></select>
+        <label>Index</label>
+        <select id="rsiSp500"></select>
+        <p class="hint">The season so far for one industry, then a row a company: when it reported, where it came in against the estimate, its revenue growth. Those not yet reported last.</p>
+      </div>
+      <div id="rstBox">
+        <label>Theme</label>
+        <select id="rstName"></select>
+        <label>Index</label>
+        <select id="rstSp500"></select>
+        <p class="hint">The season so far for one theme, then a row a company, as for an industry. A fund in the theme is left out.</p>
+      </div>
       <!-- Reel (2026-10-19, admin only): one stock as a 22-second video. -->
       <div id="rlBox">
         <label>Stock</label>
@@ -2411,6 +2433,9 @@
       { id: 'seclines', name: 'Sector lines', note: 'The Lines card a line a sector: share price, volatility or any filed measure, for the sectors you tick' },
       { id: 'indlines', name: 'Industry lines', note: 'The Lines card a line an industry: share price, volatility or any filed measure, for the industries you tick' },
       { id: 'thmlines', name: 'Theme lines', note: 'The Lines card a line a theme: share price, volatility or any filed measure, for the themes you tick' },
+      { id: 'secressum', name: 'Sector results summary', note: 'One sector’s reporting season: how many have reported, above or below the EPS estimate, growth combined, by industry' },
+      { id: 'indressum', name: 'Industry results summary', note: 'One industry’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
+      { id: 'thmressum', name: 'Theme results summary', note: 'One theme’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
       { id: 'ressum', name: 'Results summary', note: 'The reporting season across an index: how many have reported, how many came in above or below the EPS estimate, growth combined, by sector' },
       { id: 'reported', name: 'Results reported', note: 'The results press releases filed on one day by companies on the screen: revenue and its change, EPS against the estimate, the largest first' },
       { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
@@ -2615,6 +2640,7 @@
       ['secdays', 'Day by day'],
       ['seclines', 'Lines — any measure'],
       ['secbars', 'Bars — any measure'],
+      ['secressum', 'Results summary'],
       ['sectone', 'Article tone'],
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
@@ -2635,6 +2661,7 @@
       ['thmdays', 'Day by day'],
       ['thmlines', 'Lines — any measure'],
       ['thmbars', 'Bars — any measure'],
+      ['thmressum', 'Results summary'],
       ['thmtone', 'Article tone'],
     ];
     const IND_VIEWS = [
@@ -2642,6 +2669,7 @@
       ['indspot', 'Spotlight'],
       ['indlines', 'Lines — any measure'],
       ['indbars', 'Bars — any measure'],
+      ['indressum', 'Results summary'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
       ['indcotone', 'Article tone'],
@@ -3339,8 +3367,8 @@
       rcolPending = true;
       fetch('/api/releases/column', { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : { rows: {} }))
-        .then((d) => { rcolData = d || { rows: {} }; rcolPending = false; if (tpl === 'ressum') render(); })
-        .catch(() => { rcolData = { rows: {} }; rcolPending = false; if (tpl === 'ressum') render(); });
+        .then((d) => { rcolData = d || { rows: {} }; rcolPending = false; if (Cards.resultsSummaryNeed(tpl)) render(); })
+        .catch(() => { rcolData = { rows: {} }; rcolPending = false; if (Cards.resultsSummaryNeed(tpl)) render(); });
       return null;
     }
     // One day's results releases, fetched once a day asked; the day picker is
@@ -3418,7 +3446,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'rsmSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'rsmSp500', 'rssName', 'rssSp500', 'rsiName', 'rsiSp500', 'rstName', 'rstSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -4284,6 +4312,7 @@
       $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
       $('rptBox').style.display = tpl === 'reported' ? 'block' : 'none';
       $('rsmBox').style.display = tpl === 'ressum' ? 'block' : 'none';
+      for (const [b, id] of [['rssBox', 'secressum'], ['rsiBox', 'indressum'], ['rstBox', 'thmressum']]) $(b).style.display = tpl === id ? 'block' : 'none';
       $('glnBox').style.display = tpl === 'seclines' ? 'block' : 'none';
       $('ilnBox').style.display = tpl === 'indlines' ? 'block' : 'none';
       $('tlnBox').style.display = tpl === 'thmlines' ? 'block' : 'none';
@@ -4630,6 +4659,10 @@
     // Results summary: its own list; the S&P 500 by default, the card's own default.
     for (const [v, label] of Cards.spCuts()) $('rsmSp500').add(new Option(label, v, v === 'in', v === 'in'));
     $('rsmSp500').addEventListener('change', () => { if (tpl === 'ressum') render(); });
+    // The three group summaries: every stock by default, a group picker each.
+    for (const p of ['rss', 'rsi', 'rst']) for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'All', v === 'All'));
+    [['rssName', 'secressum'], ['rssSp500', 'secressum'], ['rsiName', 'indressum'], ['rsiSp500', 'indressum'], ['rstName', 'thmressum'], ['rstSp500', 'thmressum']].forEach(([id, t]) =>
+      $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     $('pbSp500').value = 'All';
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
@@ -5860,7 +5893,13 @@
           fill('gdkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
           for (const id of ['gdkView', 'gdsView', 'gdtView']) fill(id, Cards.monthViews());
           fill('gdsName', Cards.sectors(stocks).map((n) => [n, n]));
-          fill('gdtName', Cards.groupMonthThemes(stocks).map((n) => [n, n])); }
+          fill('gdtName', Cards.groupMonthThemes(stocks).map((n) => [n, n]));
+          // Results summary: a sector (Technology first, as the card opens), an industry (Semiconductors), a theme.
+          fill('rssName', Cards.sectors(stocks).map((n) => [n, n]));
+          if (!$('rssName').dataset.set && [...$('rssName').options].some((o) => o.value === 'Technology')) { $('rssName').value = 'Technology'; $('rssName').dataset.set = '1'; }
+          fill('rsiName', Cards.industries(stocks, 'All').map((n) => [n, n]));
+          if (!$('rsiName').dataset.set && [...$('rsiName').options].some((o) => o.value === 'Semiconductors')) { $('rsiName').value = 'Semiconductors'; $('rsiName').dataset.set = '1'; }
+          fill('rstName', [['', 'The theme with the most reported']].concat(Cards.groupMonthThemes(stocks).map((n) => [n, n]))); }
         { const keep = $('mvgPeriod').value;
           $('mvgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
           if ([...$('mvgPeriod').options].some((o) => o.value === keep)) $('mvgPeriod').value = keep; }

@@ -133,6 +133,21 @@ The owner: "If I have a summarize the data at the entire s&p level on earning an
 - **No ranking:** no list of the biggest beats or misses. Above is blue and below is orange, as on the tone cards, never green and red.
 - **First draw** (S&P 500, Q3 2026, 2026-10-22): 87 of 500 reported; 44 of 53 with an estimate came in above, 4 in line, 5 below; revenue +12.2% over 83 companies; net income +29.3% over 85. Every headline figure matched an independent count made in the test harness. All 11 sectors fit on every size.
 
+### Results summary for a sector, an industry and a theme (2026-10-22)
+The owner: "Can you now create the same card for sector industry and theme." It is one builder (`tplResultsSummary(tpl)`, `RS_TPLS`) with four templates.
+
+| template | group | table | controls |
+|---|---|---|---|
+| `ressum` | Market | a row a sector | `rsmSp500` (S&P 500 by default) |
+| `secressum` | Sector | a row an industry | `rssName` (Technology first), `rssSp500` (every stock) |
+| `indressum` | Industry | a row a company | `rsiName` (Semiconductors first), `rsiSp500` |
+| `thmressum` | Theme | a row a company | `rstName` (blank: the theme with the most reported), `rstSp500` |
+
+- **A company row** shows the ticker and name, the day it reported, where it came in against the estimate ("$1.60 above" in blue, "below" in orange, "in line", "no estimate yet") and its revenue growth. Reported companies come first, the largest first, then those not yet reported, in grey. The rows are not ranked by the size of a beat.
+- **The season is always the whole cut's,** not the group's: a group of six left to itself could settle on another quarter than the market's.
+- **The theme default:** blank means the theme with the most companies reporting in the last 75 days. The first theme alphabetically had none on the first draw.
+- **Checked** in the real studio over production's data, every size: every headline count matched an independent recount, and the company tables keep reported first. Micron's +379% revenue growth looked like a misread and is not: Twelve Data's own figures agree (+379.3%, $133B over twelve months).
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.
