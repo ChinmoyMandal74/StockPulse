@@ -86,7 +86,10 @@
     /* Results reported (earnings_releases, 2026-10-22). Growth figures are not
        price moves, so they stay uncoloured; amber marks what needs noticing. */
     .fl-wrap td .fl-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; font-family: var(--sans); white-space: normal; }
-    .fl-wrap td .fl-amb { color: var(--amber); }
+    .fl-wrap td .fl-amb, .fl-wrap .rv-amb { color: var(--amber); }
+    .fl-wrap .rv-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; font-family: var(--sans); white-space: normal; }
+    .fl-wrap .rv-sub.rv-amb { color: var(--amber); }
+    .fl-wrap .rv-ok { color: var(--faint); }
     .fl-wrap tr.fl-rhead td { border-bottom: 0; padding-bottom: 4px; }
     .fl-wrap tr.fl-rsum td { padding-top: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
     .fl-wrap td.fl-out { max-width: 260px; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -183,6 +186,7 @@
       describes what the release says; it is not advice.</p>
   </main>
 
+  <script src="/releaseview.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const we = (t) => String(t == null ? '' : t)
@@ -269,33 +273,23 @@
             + '</td><td>' + link(e.url) + '</td></tr>').join('') + '</tbody></table>';
     }
     // ONE RESULTS RELEASE: the figures as the company printed them (the model
-    // copies, our code scales), each change on a year earlier, and the price
-    // provider's EPS beside them. A figure the release does not contain was
-    // refused on reading and is a dash; the row says how many.
-    const pre = (cur) => (!cur || cur === 'USD' ? '$' : cur + ' ');
-    const money = (v, cur) => { if (v == null) return '\u2014'; const a = Math.abs(v), sg = v < 0 ? '\u2212' : '';
-      return sg + pre(cur) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
-    const eps = (v, cur) => (v == null ? '\u2014' : (v < 0 ? '\u2212' : '') + pre(cur) + Math.abs(v).toFixed(2));
-    const chg = (a, b) => { if (a == null || b == null || !(b > 0)) return ''; const p = (a / b - 1) * 100; return (p > 0 ? '+' : p < 0 ? '\u2212' : '') + Math.abs(p).toFixed(1) + '% on a year ago'; };
+    // copies, our code scales), each change on a year earlier, the price
+    // provider's estimate and the check against the 10-Q, all written out by
+    // the one shared module (releaseview.js) the stock page uses too.
+    const RV = window.ReleaseView;
     function relRow(r, co) {
-      const cur = r.currency;
-      const pv = r.provider;
-      let est = '\u2014';
-      if (pv && pv.estimate != null) {
-        const vs = pv.matches === 'adjusted' ? r.epsAdj : pv.matches === 'gaap' ? r.epsGaap : null;
-        const d = vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100;
-        est = eps(pv.estimate, cur) + (d == null ? '' : '<span class="fl-sub">' + (d === 0 ? 'in line with it' : eps(Math.abs(d), cur) + (d > 0 ? ' above' : ' below')) + (pv.matches === 'gaap' ? ', as reported' : '') + '</span>');
-      }
-      if (pv && pv.matches === 'differs') est += '<span class="fl-sub fl-amb" title="The price provider gives ' + we(eps(pv.actual, cur)) + ' for this report, which is neither figure in the release.">Provider\u2019s ' + we(eps(pv.actual, cur)) + ' matches neither</span>';
-      const figs = (r.problems || []).filter((p) => !/^summary/.test(p)), probs = figs.length;
+      const cur = r.currency, figs = RV.refused(r), probs = figs.length;
+      const sub = (t) => (t ? '<span class="fl-sub">' + t + '</span>' : '');
+      const tq = RV.tenQ(r);
       return '<tr class="fl-rhead">' + co
-        + '<td class="fl-num">' + we(money(r.revenue, cur)) + '<span class="fl-sub">' + we(chg(r.revenue, r.revenuePrior)) + '</span></td>'
-        + '<td class="fl-num">' + we(eps(r.epsGaap, cur)) + '<span class="fl-sub">' + (r.epsGaapPrior != null ? 'a year ago ' + we(eps(r.epsGaapPrior, cur)) : '') + '</span></td>'
-        + '<td class="fl-num">' + (r.epsAdj == null ? '\u2014' : we(eps(r.epsAdj, cur)) + '<span class="fl-sub" title="' + we((r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')) + '">' + we(r.epsAdjLabel || 'adjusted') + '</span>') + '</td>'
-        + '<td class="fl-num">' + est + '</td>'
-        + '<td class="fl-out"' + (r.guideSentence ? ' title="' + we(r.guideSentence) + '"' : '') + '>' + (r.guideSentence ? we(r.guideSentence.length > 150 ? r.guideSentence.slice(0, 147) + '\u2026' : r.guideSentence) : '\u2014') + '</td>'
-        + '<td>' + (r.url ? '<a class="fl-link" href="' + we(r.url) + '" target="_blank" rel="noopener">' + we(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '<span class="fl-sub">' + we(r.periodLabel || '') + '</span></td></tr>'
-        + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (probs ? ' <span class="fl-amb" title="' + we(figs.join('; ')) + '">' + probs + ' figure' + (probs === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</td></tr>';
+        + '<td class="fl-num">' + we(RV.money(r.revenue, cur)) + sub(we(RV.chg(r.revenue, r.revenuePrior))) + '</td>'
+        + '<td class="fl-num">' + we(RV.eps(r.epsGaap, cur)) + sub(r.epsGaapPrior != null ? 'a year ago ' + we(RV.eps(r.epsGaapPrior, cur)) : '') + '</td>'
+        + '<td class="fl-num">' + (r.epsAdj == null ? '—' : we(RV.eps(r.epsAdj, cur)) + '<span class="fl-sub" title="' + we((r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' — leaves out ' + r.epsAdjExcludes : '')) + '">' + we(r.epsAdjLabel || 'adjusted') + '</span>') + '</td>'
+        + '<td class="fl-num">' + RV.estimate(r) + '</td>'
+        + '<td class="fl-out"' + (r.guideSentence ? ' title="' + we(r.guideSentence) + '"' : '') + '>' + (r.guideSentence ? we(r.guideSentence.length > 150 ? r.guideSentence.slice(0, 147) + '…' : r.guideSentence) : '—') + '</td>'
+        + '<td>' + (r.url ? '<a class="fl-link" href="' + we(r.url) + '" target="_blank" rel="noopener">' + we(r.exhibit || 'Release') + ' &#8599;</a>' : '') + sub(we(r.periodLabel || '')) + '</td></tr>'
+        + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (tq ? ' ' + tq : '')
+        + (probs ? ' <span class="rv-amb" title="' + we(figs.join('; ')) + '">' + probs + ' figure' + (probs === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</td></tr>';
     }
     // ONE HOLDER (2026-10-21): every 13D/13G it filed about the tracked
     // stocks, all days on file, and its 13F book when the name matches one.

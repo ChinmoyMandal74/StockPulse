@@ -312,6 +312,27 @@ const SCHEMA = [
    )`,
   'create index if not exists idx_earnings_releases_symbol on earnings_releases (symbol, filed)',
   'create index if not exists idx_earnings_releases_filed on earnings_releases (filed)',
+  // Each run of release-load.js, for the Earnings releases section of
+  // /news-runs. One row a run (a weekday morning); kept, never pruned.
+  `create table if not exists earnings_release_runs (
+     id          integer primary key autoincrement,
+     started_at  integer not null,
+     ended_at    integer,
+     model       text,
+     days        integer,
+     found       integer,
+     read_n      integer,
+     results     integer,
+     not_results integer,
+     refused     integer,
+     failed      integer,
+     checked     integer,
+     differs     integer,
+     spent       real,
+     stop        text,
+     error       text
+   )`,
+  'create index if not exists idx_earnings_release_runs_started on earnings_release_runs (started_at)',
   // Blog posts (2026-09-16). PUBLIC when published — the only table in here
   // whose rows a stranger can read — so the routes serve `status = 'published'`
   // only and the body is rendered to HTML server-side, escaped first.
@@ -1680,6 +1701,17 @@ const ADDED_COLUMNS = [
   // waited; every other kind is the server's own elapsed time. One rule, read
   // off the kind, rather than a flag that can disagree with it.
   'alter table activity add column ms integer',
+  // Earnings releases against the 10-Q (2026-10-22): once the quarter's 10-Q is
+  // in sec_facts, its revenue, net income and diluted EPS are set beside the
+  // release's and the comparison recorded. Added to the reading, never over it.
+  'alter table earnings_releases add column sec_form text',
+  'alter table earnings_releases add column sec_filed text',
+  'alter table earnings_releases add column sec_revenue real',
+  'alter table earnings_releases add column sec_net_income real',
+  'alter table earnings_releases add column sec_eps real',
+  'alter table earnings_releases add column sec_check text',
+  'alter table earnings_releases add column sec_differs text',
+  'alter table earnings_releases add column sec_checked_at integer',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -2850,13 +2882,55 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['revenue', 'revenue'], ['revenue_prior', 'revenuePrior'], ['op_income', 'opIncome'], ['op_income_prior', 'opIncomePrior'], ['net_income', 'netIncome'], ['net_income_prior', 'netIncomePrior'],
   ['eps_gaap', 'epsGaap'], ['eps_gaap_prior', 'epsGaapPrior'], ['eps_adj', 'epsAdj'], ['eps_adj_prior', 'epsAdjPrior'], ['eps_adj_label', 'epsAdjLabel'], ['eps_adj_excludes', 'epsAdjExcludes'],
   ['guide_kind', 'guideKind'], ['guide_period', 'guidePeriod'], ['guide_low', 'guideLow'], ['guide_high', 'guideHigh'], ['guide_mid', 'guideMid'], ['guide_pm', 'guidePm'], ['guide_unit', 'guideUnit'], ['guide_sentence', 'guideSentence'],
-  ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt']];
+  ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt'],
+  ['sec_form', 'secForm'], ['sec_filed', 'secFiled'], ['sec_revenue', 'secRevenue'], ['sec_net_income', 'secNetIncome'], ['sec_eps', 'secEps'], ['sec_check', 'secCheck'], ['sec_differs', 'secDiffers'], ['sec_checked_at', 'secCheckedAt']];
 function erOut(x) {
   const o = {};
   for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
   o.isResults = Number(o.isResults) === 1;
   try { o.problems = o.problems ? JSON.parse(o.problems) : []; } catch (e) { o.problems = []; }
+  try { o.secDiffers = o.secDiffers ? JSON.parse(o.secDiffers) : []; } catch (e) { o.secDiffers = []; }
   return o;
+}
+// Results releases not yet compared with their 10-Q, filed on or after a day:
+// a range seek on the filing-day index of a small table.
+async function readReleasesToCheck(sinceDay) {
+  await init();
+  const r = await db.execute({ sql: 'select * from earnings_releases where filed >= ? and is_results = 1 and sec_check is null', args: [String(sinceDay)] });
+  return r.rows.map(erOut);
+}
+// The 10-Q's figures and the comparison, set beside the reading (never over it).
+async function writeReleaseCheck(accn, c) {
+  await init();
+  await db.execute({
+    sql: `update earnings_releases set sec_form = ?, sec_filed = ?, sec_revenue = ?, sec_net_income = ?, sec_eps = ?, sec_check = ?, sec_differs = ?, sec_checked_at = ?
+          where accn = ?`,
+    args: [c.form || null, c.filed || null, c.revenue ?? null, c.netIncome ?? null, c.eps ?? null, c.result || null, JSON.stringify(c.differs || []), Date.now(), String(accn)],
+  });
+}
+// The days with a results release on file since a day, newest first: the
+// Results reported card's day picker.
+async function readEarningsReleaseDays(sinceDay) {
+  await init();
+  const r = await db.execute({ sql: 'select distinct filed from earnings_releases where filed >= ? and is_results = 1 order by filed desc', args: [String(sinceDay)] });
+  return r.rows.map((x) => String(x.filed));
+}
+// release-load.js's runs, for /news-runs.
+async function writeReleaseRun(r) {
+  await init();
+  await db.execute({
+    sql: `insert into earnings_release_runs (started_at, ended_at, model, days, found, read_n, results, not_results, refused, failed, checked, differs, spent, stop, error)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [Number(r.startedAt), r.endedAt == null ? null : Number(r.endedAt), r.model || null, r.days ?? null, r.found ?? null, r.read ?? null, r.results ?? null,
+      r.notResults ?? null, r.refused ?? null, r.failed ?? null, r.checked ?? null, r.differs ?? null, r.spent == null ? null : Number(r.spent), r.stop || null, r.error || null],
+  });
+}
+async function readReleaseRuns(sinceMs) {
+  await init();
+  const r = await db.execute({ sql: 'select * from earnings_release_runs where started_at >= ? order by started_at desc limit 500', args: [Number(sinceMs) || 0] });
+  const n = (v) => (v == null ? null : Number(v));
+  return r.rows.map((x) => ({ id: n(x.id), startedAt: n(x.started_at), endedAt: n(x.ended_at), model: x.model || null, days: n(x.days), found: n(x.found), read: n(x.read_n),
+    results: n(x.results), notResults: n(x.not_results), refused: n(x.refused), failed: n(x.failed), checked: n(x.checked), differs: n(x.differs), spent: n(x.spent), stop: x.stop || null, error: x.error || null }));
 }
 // opts.replace: the loader's --reread, for a filing whose earlier reading was
 // refused or judged not a results release by a reader since corrected. Never
@@ -7979,7 +8053,8 @@ module.exports = {
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
-  writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns, writeFigures, readNameOf,
+  writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
+  readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

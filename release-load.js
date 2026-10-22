@@ -78,6 +78,14 @@ async function ask(text) {
   }
   throw new Error('Anthropic kept answering 429');
 }
+// THE RUN, recorded for the Earnings releases section of /news-runs (a run
+// that writes, only; a dry run leaves no trace). Bookkeeping never fails the run.
+const RUN = { startedAt: Date.now(), model: MODEL, days: DAYS, stop: 'done' };
+async function recordRun() {
+  if (!COMMIT) return;
+  try { await store.writeReleaseRun(Object.assign(RUN, { endedAt: Date.now(), spent })); }
+  catch (e) { console.log('  (the run could not be recorded: ' + String(e.message).slice(0, 80) + ')'); }
+}
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
@@ -98,9 +106,10 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   console.log(`[${new Date().toISOString()}] earnings releases since ${since}: ${todo.length} to read (${known.size} read before); model ${MODEL}; `
     + `stop at $${MAX_USD.toFixed(2)} or ${MAX_MIN} min. ` + (COMMIT ? 'COMMIT' : 'DRY RUN: nothing will be written'));
   let read = 0, results = 0, notResults = 0, failed = 0, flagged = 0, written = 0;
+  RUN.found = todo.length;
   for (const e of todo) {
-    if (spent >= MAX_USD) { console.log('  stopping: the dollar limit'); break; }
-    if (Date.now() - t0 > MAX_MIN * 60000) { console.log('  stopping: the time limit'); break; }
+    if (spent >= MAX_USD) { console.log('  stopping: the dollar limit'); RUN.stop = 'budget'; break; }
+    if (Date.now() - t0 > MAX_MIN * 60000) { console.log('  stopping: the time limit'); RUN.stop = 'time'; break; }
     const meta = { accn: e.accn, symbol: e.symbol, filed: e.filed };
     try {
       const cik = ids[e.symbol];
@@ -137,10 +146,36 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       console.log(`  ${e.symbol} ${e.filed}: failed (${String(err.message).slice(0, 120)}); next run`);
     }
   }
+  Object.assign(RUN, { read, results, notResults, refused: flagged, failed });
+  // AGAINST THE 10-Q: every results reading of the last 120 days not yet
+  // compared, once its quarter is in sec_facts (the filings refresh puts it
+  // there within days of the 10-Q). One seek a company; no SEC fetch here.
+  let checked = 0, differ = 0;
+  if (COMMIT) {
+    try {
+      const open = await store.readReleasesToCheck(etDay(Date.now() - 120 * 86400000));
+      if (open.length) {
+        const ends = open.map((r) => r.periodEnd).filter(Boolean).sort();
+        const facts = await store.readSecFactsSince([...new Set(open.map((r) => r.symbol))], ends.length ? ends[0] : etDay(Date.now() - 200 * 86400000));
+        for (const r of open) {
+          const c = Rel.tenQCheck(r, facts.get(r.symbol) || []);
+          if (!c) continue;
+          await store.writeReleaseCheck(r.accn, c);
+          checked++;
+          if (c.result === 'differs') { differ++; console.log(`  10-Q ${r.symbol} ${r.periodEnd}: differs on ${c.differs.join(', ')}`); }
+        }
+      }
+      console.log(`  10-Q check: ${open.length} waiting, ${checked} compared, ${differ} differ`);
+    } catch (err) { console.log('  10-Q check failed: ' + String(err.message).slice(0, 120)); }
+  }
+  Object.assign(RUN, { checked, differs: differ });
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
+  await recordRun();
   process.exit(0);
-})().catch((e) => {
+})().catch(async (e) => {
   console.log(`  STOPPED: ${e instanceof Stop ? e.message : e.stack}; $${spent.toFixed(4)} spent`);
+  RUN.stop = 'error'; RUN.error = String(e.message || e).slice(0, 300);
+  await recordRun();
   process.exit(e instanceof Stop ? 3 : 1);
 });

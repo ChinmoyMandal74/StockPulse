@@ -55,6 +55,31 @@ The owner showed a newsletter's earnings round-up (revenue and EPS against estim
   - Revenue matches 24 of 29. The differences were SNX, since fixed, plus definitions: Paychex's total against service revenue, Jefferies' net revenues, Prudential's total revenues, and Applied Digital's continuing operations, which is the figure its release headlines.
 - **Against Twelve Data:** 75 of the 80 with a provider figure match (46 adjusted, 29 GAAP). The 5 that differ are definitional (Citi, Progressive, Prologis) or have no EPS in the release.
 
+### Round two (2026-10-22): the stock page, the card, the 10-Q check, the runs log
+The owner chose four of seven next steps and put the rest on the backlog (entry 48).
+
+- **One way of writing a release out:** `private/releaseview.js` (global `ReleaseView`) formats a release for both pages:
+  - money and per-share figures, and the change on a year ago;
+  - the estimate, with how far the matching figure is above or below it;
+  - the 10-Q line;
+  - the figures left out.
+
+  Each page styles the two classes it returns, `rv-sub` and `rv-amb`. The promo card has no DOM and formats for itself.
+- **The stock page:** a **Results releases** card follows Earnings history (`#rels`, `loadReleases()`, `/api/releases?symbol=`).
+  - It shows the latest four releases, each with revenue, both EPS figures (the adjusted one under its label), the estimate, the outlook sentence, the summary and the 10-Q line.
+  - It stays hidden for a company with none.
+- **The Results reported card** (`reported`, Market group, after Filed yesterday):
+  - **Content:** one day's results releases by companies on the screen, the largest first, with revenue and its change, EPS (adjusted where given, marked "adj.", else GAAP) and where it sits against the estimate. Nothing is coloured good or bad.
+  - **Controls:** `rptDay` (the newest day with releases, or one picked), `rptSp500`.
+  - **Rows by size:** portrait 10, square 8, story 17, each with an "and N more" line. Measured on 2026-10-21's 49 releases, all sizes, all cuts.
+  - **Data:** both hosts call `releasesDayPayload` (the studio through `/api/releases/day`, members only; the phone through `getReported`).
+- **Against the 10-Q:** each committed run of the loader compares every results reading of the last 120 days not yet compared (`readReleasesToCheck`) with the company's `sec_facts` quarter (`tenQCheck`).
+  - It stores the 10-Q's revenue, net income and diluted EPS and the result (`sec_check`: match, differs or none) beside the reading, never over it.
+  - The pages show a quiet "Matches its 10-Q filed …", or what the 10-Q has, in amber.
+  - First run: 31 compared, 4 differ. All 4 are definitions, not errors: Paychex, Jefferies, Applied Digital, Prudential.
+- **The runs log:** `earnings_release_runs`, one row per committed run, kept. `/news-runs` has an **Earnings releases** section like Article tone's: the last run, 7 and 30 days, the table. It warns after three days without a run, on a failure, at the cost cap, or when filings could not be read.
+- **The provider's estimate comes late.** Twelve Data's EPS history gains a quarter only when the company's profile is next pulled, often days after the report. On 2026-10-22 none of the 49 releases from the 21st had one (META's next report was estimated as the 28th). The card leaves the estimate column off when none of its rows has one and says why; the pages show a dash. Fetching `/earnings` at read time would close this; it is backlog 48(e), with its credit cost.
+
 ### Not covered
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.

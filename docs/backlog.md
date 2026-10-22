@@ -2342,6 +2342,53 @@ line, `docs/context/the-build-log.md` (which says no token is needed),
 Entry 44(c), the research files tracked in git, is the same question for a
 smaller set of files and would be settled by this.
 
+## 48. Earnings releases: what is left after the first round — 2026-10-22
+
+*Area: Data · Status: Open · Note: the owner chose the stock page, the Results reported card, the 10-Q check and the runs log (built 2026-10-22, docs/context/earnings-releases.md) and asked for the rest on the backlog, the 6-K filers included*
+
+Earnings releases (`releases.js`, `earnings_releases`) read each results
+8-K's press release into fixed fields. Four pieces were weighed and left:
+
+- **(a) A revenue estimate, so revenue can be set against one.** EPS has
+  the price provider's estimate; revenue has none. Twelve Data's revenue
+  estimates are Ultra-plan only (they 403 on the Pro key, see
+  `fundamentals-data.md`). Finnhub's earnings calendar lists a revenue
+  estimate and actual beside EPS; the free tier's coverage and accuracy are
+  untested. The step before paying for anything: read it for 20 companies
+  that reported this month and compare with the releases, as the release
+  reader itself was tested. An owner decision on cost.
+- **(b) Guidance against what happened.** Each release stores the
+  company's outlook as printed (`guide_kind`, `guide_low/high/mid`, the
+  sentence). When the next quarter's release arrives, the reader could say
+  plainly whether revenue came in above, within or below the company's own
+  range: a fact, not a forecast. Needs a quarter of stored guidance first,
+  so it becomes useful from January 2027. Only ranges and midpoints in
+  money compare; growth percentages and "other" outlooks are left out.
+- **(c) Same-evening results.** Most companies report after the 4 PM close,
+  and the release is read the next morning, when the daily SEC index lists
+  it. Polling the SEC's live list of new 8-Ks (the "current events" feed)
+  every half hour in the evening during earnings season would put a release
+  up the same night. Costs SEC requests from the laptop, which has had a
+  429 and a 403 before: paced, sequential, and only for item 2.02.
+- **(d) Foreign filers (Form 6-K).** Companies that file a 6-K instead of
+  an 8-K (TSM and the other foreign private issuers in the universe) are not read: a 6-K has no item 2.02 to find it by, and its
+  exhibits vary far more (a press release, a full interim report, slides).
+  It would need its own way of telling a results 6-K from the rest, likely
+  the model's own "is this a results release" answer over every 6-K, which
+  costs more for fewer companies. Count the 6-K filers in the universe
+  before deciding.
+- **(e) The estimate on the morning after a report.** Found building the
+  Results reported card: Twelve Data's EPS history (`earnings_history`,
+  where the estimate comes from) gains a quarter only when the company's
+  profile is next pulled, often days after the report, so on 2026-10-22 none
+  of the previous day's 49 releases had an estimate beside it. The reader
+  could fetch `/earnings` for each company it reads (20 credits each, up to
+  ~3,000 on a busy day, paced inside the 610-a-minute limit and clear of the
+  price windows) and write the quarter through the existing earnings-history
+  path. Note the profile's `nextEarningsDate` feeds the Signal's Earnings soon
+  rule and must not be touched by this; only the history rows would be.
+  An owner decision on credits.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

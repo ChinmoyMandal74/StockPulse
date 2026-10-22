@@ -103,6 +103,22 @@ check('scale: two stated scales: the one stated before the figure', row.revenue 
 check('scale: two stated, none before the figure: refused, not guessed', row.revenue === null && problems.some((p) => /more than one scale/.test(p)), problems);
 check('scale: a stated unit other than "units" is left alone', Rel.toRow(good, text + ' (in thousands)', meta).row.revenue === 64601e6);
 
+// ---- against the 10-Q ----
+const rel = { isResults: true, periodEnd: '2026-08-31', revenue: 21558406e3, netIncome: 416240e3, epsGaap: 5.18 };
+const facts = [{ periodType: 'Q', periodEnd: '2026-08-31', form: '10-Q', filed: '2026-10-08', revenue: 21558406000, netIncome: 416240000, epsDiluted: 5.18 },
+  { periodType: 'Q', periodEnd: '2026-05-31', form: '10-Q', filed: '2026-07-08', revenue: 1, netIncome: 1, epsDiluted: 1 }];
+let ck = Rel.tenQCheck(rel, facts);
+check('10-Q: all three match', ck && ck.result === 'match' && ck.differs.length === 0 && ck.form === '10-Q' && ck.filed === '2026-10-08', ck);
+ck = Rel.tenQCheck(Object.assign({}, rel, { revenue: 21558406 }), facts);
+check('10-Q: a scale slip shows as a revenue difference', ck.result === 'differs' && ck.differs.join() === 'revenue', ck);
+ck = Rel.tenQCheck(Object.assign({}, rel, { epsGaap: 5.2 }), facts);
+check('10-Q: EPS to the cent', ck.result === 'differs' && ck.differs.join() === 'diluted EPS');
+check('10-Q: within half a percent is a match', Rel.tenQCheck(Object.assign({}, rel, { revenue: 21558406e3 * 1.004 }), facts).result === 'match');
+check('10-Q: not on file yet is null', Rel.tenQCheck(Object.assign({}, rel, { periodEnd: '2026-11-30' }), facts) === null);
+check('10-Q: nothing both sides carry is "none"', Rel.tenQCheck({ isResults: true, periodEnd: '2026-08-31', revenue: null, netIncome: null, epsGaap: null }, facts).result === 'none');
+check('10-Q: a non-results reading is not checked', Rel.tenQCheck(Object.assign({}, rel, { isResults: false }), facts) === null);
+check('10-Q: the newest filing for the quarter wins', Rel.tenQCheck(rel, facts.concat([{ periodType: 'Q', periodEnd: '2026-08-31', form: '10-Q/A', filed: '2026-10-20', revenue: 1, netIncome: 1, epsDiluted: 1 }])).form === '10-Q/A');
+
 // ---- year on year ----
 check('yoy', Math.abs(Rel.yoy(64601, 51242) - 26.07) < 0.01);
 check('yoy: off a loss is no percent', Rel.yoy(5, -2) === null && Rel.yoy(null, 3) === null);

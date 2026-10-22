@@ -679,6 +679,26 @@
        kind of story, not good or bad news. */
     /* Article tone. Blue and orange, never green and red: those mean the
        price went up or down, and a tone is a reading of words, not a move. */
+    /* Results releases (2026-10-22): the company's results press releases as
+       read (earnings_releases). Growth is not a price move, so no green or red;
+       amber is the shared module's "notice this". */
+    #rels .rl-item { padding: 16px 0; border-top: 1px solid var(--hair); }
+    #rels .rl-item:first-of-type { border-top: 0; padding-top: 4px; }
+    #rels .rl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+    #rels .rl-head b { font-size: 15px; color: var(--text); font-weight: 600; }
+    #rels .rl-head a { color: var(--accent); text-decoration: none; font-size: 12.5px; }
+    #rels .rl-head a:hover { text-decoration: underline; }
+    #rels .rl-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+    #rels .rl-figs > div { min-width: 0; }
+    #rels .rl-k { display: block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    #rels .rl-v { display: block; margin-top: 4px; font: 600 18px var(--mono); color: var(--text); }
+    #rels .rv-sub { display: block; margin-top: 3px; font: 400 11.5px var(--sans); color: var(--faint); }
+    #rels .rv-amb { color: var(--amber); }
+    #rels .rv-ok { color: var(--faint); }
+    #rels .rl-out, #rels .rl-sum { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+    #rels .rl-out b { color: var(--text); font-weight: 600; }
+    #rels .rels-note { margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--faint); }
+    @media (max-width: 700px) { #rels .rl-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     #tone .tone-week { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 0 0 14px;
                        font-size: 13px; color: var(--muted); }
     #tone .tone-week b { font: 600 22px var(--mono); color: var(--text); letter-spacing: -0.02em; }
@@ -1409,6 +1429,7 @@
   <script src="/drillpop.js"></script>
   <script src="/newstype.js"></script>
   <script src="/glance.js"></script>
+  <script src="/releaseview.js"></script>
   <script src="/peertrend.js"></script>
   <script src="/perfchart.js"></script>
   <script src="/action.js"></script>
@@ -3329,6 +3350,42 @@
       } catch (err) { /* a decoration: the page stands without it */ }
     }
 
+    // RESULTS RELEASES (2026-10-22): the latest four, written out by the
+    // shared module the /filings page uses. A guest outside the preview is
+    // refused by the route, and a company with none on file keeps the card hidden.
+    async function loadReleases() {
+      const card = document.getElementById('rels');
+      if (!card || !window.ReleaseView) return;
+      try {
+        const res = await fetch(`/api/releases?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const list = ((await res.json()).releases || []).slice(0, 4);
+        if (!list.length) return;
+        const RV = window.ReleaseView, e = RV.esc;
+        const fig = (k, v, sub) => '<div><span class="rl-k">' + k + '</span><span class="rl-v">' + v + '</span>' + (sub || '') + '</div>';
+        const sub = (t, title) => (t ? '<span class="rv-sub"' + (title ? ' title="' + e(title) + '"' : '') + '>' + e(t) + '</span>' : '');
+        document.getElementById('relsBody').innerHTML = list.map((r) => {
+          const cur = r.currency, figs = RV.refused(r), tq = RV.tenQ(r);
+          const est = RV.estimate(r);
+          const cut = est.indexOf('<span');
+          return '<div class="rl-item">'
+            + '<div class="rl-head"><b>' + e(r.periodLabel || 'Quarter') + '</b><span>filed ' + e(RV.shortDay(r.filed)) + '</span>'
+            + (r.url ? '<a href="' + e(r.url) + '" target="_blank" rel="noopener">' + e(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '</div>'
+            + '<div class="rl-figs">'
+            + fig('Revenue', e(RV.money(r.revenue, cur)), sub(RV.chg(r.revenue, r.revenuePrior)))
+            + fig('EPS, as reported', e(RV.eps(r.epsGaap, cur)), sub(r.epsGaapPrior != null ? 'a year ago ' + RV.eps(r.epsGaapPrior, cur) : ''))
+            + fig('EPS, adjusted', r.epsAdj == null ? '\u2014' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? '' : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')))
+            + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut))
+            + '</div>'
+            + (r.guideSentence ? '<p class="rl-out"><b>Outlook.</b> ' + e(r.guideSentence) + '</p>' : '')
+            + '<p class="rl-sum">' + e(r.summary || '') + (tq ? ' ' + tq : '')
+            + (figs.length ? ' <span class="rv-amb" title="' + e(figs.join('; ')) + '">' + figs.length + ' figure' + (figs.length === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</p>'
+            + '</div>';
+        }).join('');
+        card.hidden = false;
+      } catch (err) { /* a decoration: the page stands without it */ }
+    }
+
     async function loadNews(force) {
       const box = document.getElementById('newsList');
       if (!box) return;
@@ -3904,6 +3961,18 @@
           ${aroundHtml(payload.earningsStudy)}
           <div id="earnBody"></div>
         </div></section>` : ''}
+
+        <!-- Filled by loadReleases(): each results press release as read, and
+             removed from view when the company has none on file. -->
+        <section class="bezel card" id="rels" data-jump="Results releases" data-icon="i-calendar" hidden><div class="core">
+          <div class="sec-h"><h2>Results releases</h2></div>
+          <div id="relsBody"></div>
+          <p class="rels-note">Each quarter's results press release (the 8-K's Exhibit 99.1), read by an AI model that copies the
+            figures out as printed; every figure is checked against the release's own text, and one that cannot be found there is left
+            out. "As reported" is the GAAP diluted figure. The adjusted one is the company's own, under its own name, and has no standard
+            definition. The estimate comes from the price data provider. Once the quarter's 10-Q is filed, the release is compared with it.
+            A record of what the company said, not a forecast.</p>
+        </div></section>
 
         ${peersCard(payload.peers, stock.symbol)}
 
@@ -5869,6 +5938,7 @@
       wireAround();
       loadNews();          // after the chart: a decoration must not make the data wait
       loadTone();
+      loadReleases();
       loadSec();           // and the filings after that, for the same reason
       loadInsider();
       loadShortInt();

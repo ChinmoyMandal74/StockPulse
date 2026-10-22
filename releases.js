@@ -228,4 +228,34 @@ function forReader(row, earn) {
   return r;
 }
 
-module.exports = { split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+// AGAINST THE 10-Q (2026-10-22). `facts`: the company's sec_facts rows (as
+// readSecFactsSince returns them). The quarter whose period end is the
+// release's, newest filing first: a 10-Q, or the 10-K's worked-out fourth
+// quarter. Revenue and net income within half a percent, diluted EPS to the
+// cent; only figures both sides carry are compared. null when the quarter is
+// not on file yet (checked again on the next run).
+//
+// A DIFFERENCE IS NOT AN ERROR BY ITSELF. On the first month, every revenue
+// difference but one was the release headlining another line than the filing
+// data does (Paychex's total against service revenue; Applied Digital's
+// continuing operations). The page says what the 10-Q has, in amber, and
+// leaves the reading as the release printed it.
+function tenQCheck(row, facts) {
+  if (!row || !row.isResults || !row.periodEnd) return null;
+  const q = (facts || []).filter((f) => f && f.periodType === 'Q' && f.periodEnd === row.periodEnd)
+    .sort((a, b) => (String(a.filed) < String(b.filed) ? 1 : -1))[0];
+  if (!q) return null;
+  const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  const pairs = [['revenue', row.revenue, n(q.revenue), 0.005], ['net income', row.netIncome, n(q.netIncome), 0.005], ['diluted EPS', row.epsGaap, n(q.epsDiluted), 0]];
+  const differs = [];
+  let compared = 0;
+  for (const [k, a, b, tol] of pairs) {
+    if (a == null || b == null) continue;
+    compared++;
+    if (Math.abs(a - b) > Math.max(Math.abs(b) * tol, tol ? 0 : 0.011)) differs.push(k);
+  }
+  return { form: q.form || null, filed: q.filed || null, revenue: n(q.revenue), netIncome: n(q.netIncome), eps: n(q.epsDiluted),
+    result: !compared ? 'none' : differs.length ? 'differs' : 'match', differs };
+}
+
+module.exports = { tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

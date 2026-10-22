@@ -12275,6 +12275,10 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   let fld = null;
   const fldNeed = Cards.filedNeed(post.tpl, post.opts || {});
   if (fldNeed) { try { fld = await filedDayPayload(fldNeed.date, await isGuest(req)); } catch { fld = null; } }
+  // The Results reported card, likewise.
+  let rptd = null;
+  const rptNeed = Cards.reportedNeed(post.tpl, post.opts || {});
+  if (rptNeed) { try { rptd = await releasesDayPayload(rptNeed.date); } catch { rptd = null; } }
 
   let smov = null;
   if (Cards.shortMovesNeed(post.tpl)) {
@@ -12299,6 +12303,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getEarnGrowth: () => egrow,
       getMargins: () => mgins,
       getFiled: () => fld,
+      getReported: () => rptd,
       // The At a glance card: the stock page's own cards, over the same rows.
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
@@ -15246,6 +15251,23 @@ app.get('/api/releases', requireAuth, route(async (req, res) => {
   if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   const [rows, earn] = await Promise.all([store.readEarningsReleases(symbol, 8), store.readEarnings(symbol).catch(() => [])]);
   res.json({ symbol, releases: rows.filter((r) => r.isResults).map((r) => Releases.forReader(r, earn)) });
+}));
+// ONE DAY'S RESULTS RELEASES for the Results reported card: the day asked for,
+// else the newest with one, and the days on file for the picker. The studio's
+// route and the phone's saved-post route both call this, so a post and the
+// studio cannot be handed different rows.
+async function releasesDayPayload(asked) {
+  const today = SecDaily.todayET();
+  const days = await store.readEarningsReleaseDays(SecDaily.addDays(today, -45)).catch(() => []);
+  const date = FILED_DATE_RE.test(String(asked || '')) && days.includes(asked) ? asked : days[0] || null;
+  if (!date) return { date: null, days, releases: [] };
+  const rel = (await store.readEarningsReleasesOn(date).catch(() => [])).filter((r) => r.isResults);
+  const earn = await Promise.all(rel.map((r) => store.readEarnings(r.symbol).catch(() => [])));
+  return { date, days, releases: rel.map((r, i) => Releases.forReader(r, earn[i])) };
+}
+app.get('/api/releases/day', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await releasesDayPayload(String(req.query.date || '')));
 }));
 app.get('/api/filings/day', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -18483,9 +18505,11 @@ app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
   const now = Date.now();
   // The article-tone job's runs too (2026-10-20): written by the loader on the
   // owner's laptop, 90 days of them, for the page's Article tone section.
-  const [runs, state, holdings, portfolios, toneRuns] = await Promise.all([
+  const [runs, state, holdings, portfolios, toneRuns, releaseRuns] = await Promise.all([
     store.readNewsRuns(now - days * 86400000), store.readNewsState(), store.newsHoldings(), readPortfolios(),
     store.readToneRuns(now - 90 * 86400000).catch(() => []),
+    // And the earnings-release reader's (2026-10-22), release-load.js on the same laptop.
+    store.readReleaseRuns(now - 90 * 86400000).catch(() => []),
   ]);
   const universe = await readUniverse();
   const fetched = { day: 0, week: 0, older: 0, never: 0 };
@@ -18499,7 +18523,7 @@ app.get('/api/news-runs', requireAdmin, route(async (req, res) => {
   }
   const emptyFeeds = universe.filter((s) => state[s] && !holdings.perSymbol[s]);
   res.json({
-    runs, now, toneRuns,
+    runs, now, toneRuns, releaseRuns,
     health: {
       off: NEWS_OFF, provider: NEWS_PROVIDER_NAME, perRefresh: NEWS_TOPUP_PER_REFRESH,
       ttlHours: NEWS_TTL_MS / 3600000, keepDays: News.KEEP_DAYS, maxPerSymbol: News.MAX_PER_SYMBOL,

@@ -206,6 +206,24 @@
         <div class="table-wrap" id="toneWrap"><div class="empty">Loading…</div></div>
       </div></div>
     </section>
+
+    <section class="tone-sec" id="relSec">
+      <div class="hist-bar"><h2>Earnings releases · SEC press releases</h2></div>
+      <p class="tone-lede">Each run of the earnings-release reader (release-load.js on the owner's machine, weekdays at
+        07:00): every results 8-K the morning's SEC read recorded is fetched, and a model copies the press release's
+        figures into the table; every figure is checked against the release text. Each run then compares earlier
+        releases with their 10-Q once it is filed. A run stops on its own at 40 minutes or $2 and leaves the rest
+        for the next. Every run is kept.</p>
+      <div id="relWarn" class="off" hidden></div>
+      <div class="tiles block">
+        <div class="bezel tile"><div class="core" id="rTLast"><span class="k">Last run</span><div class="sub">Loading…</div></div></div>
+        <div class="bezel tile"><div class="core" id="rTWeek"><span class="k">Last 7 days</span></div></div>
+        <div class="bezel tile"><div class="core" id="rTMonth"><span class="k">Last 30 days</span></div></div>
+      </div>
+      <div class="bezel"><div class="core" style="padding:0">
+        <div class="table-wrap" id="relWrap"><div class="empty">Loading…</div></div>
+      </div></div>
+    </section>
   </main>
 
   <dialog class="run" id="runDlg"><div class="bezel"><div class="core" id="runBody"></div></div></dialog>
@@ -458,6 +476,47 @@
         }).join('') + '</tbody></table>';
     }
 
+    // EARNINGS RELEASES (2026-10-22): the reader's runs, the same tiles and
+    // table as Article tone. A weekday without a run is the thing to notice.
+    function paintReleases(list) {
+      const now = Date.now();
+      const last = list[0];
+      const warn = [];
+      const sum = (rows, k) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+      if (!list.length) {
+        $('rTLast').innerHTML = '<span class="k">Last run</span><div class="sub">No runs recorded yet. The reader records each run from 2026-10-22 on.</div>';
+      } else {
+        $('rTLast').innerHTML = '<span class="k">Last run</span>' +
+          `<div class="big">${fmtNum(last.read)}<small> releases read</small></div>` +
+          `<div class="sub">${fmtWhen(last.startedAt)} (${ago(last.startedAt)}), ${mins(last)}, ${stopBadge(last.stop)}. ` +
+          `${fmtNum(last.results)} results, ${fmtNum(last.notResults)} not; ${fmtNum(last.checked)} compared with a 10-Q${last.differs ? `, <span class="bad">${fmtNum(last.differs)} differ</span>` : ''}; ${usd(last.spent)}.` +
+          (last.refused ? `<br><span class="bad">${fmtNum(last.refused)} with a figure left out</span>` : '') + '</div>';
+        // Weekdays only: three days covers a weekend.
+        if (now - last.startedAt > 3 * 86400000) warn.push(`No run for ${ago(last.startedAt).replace(' ago', '')}: the reader runs weekdays at 07:00 on the owner's machine, so check the TickrLab earnings releases task.`);
+        if (last.stop === 'error') warn.push('The last run failed' + (last.error ? ': ' + last.error : '.'));
+        if (last.stop === 'budget') warn.push('The last run reached its cost cap.');
+        if (last.failed) warn.push(`The last run could not read ${last.failed} filing${last.failed === 1 ? '' : 's'}; they are tried again on the next run.`);
+      }
+      $('relWarn').hidden = !warn.length;
+      $('relWarn').innerHTML = warn.map(we).join('<br>');
+      const tile = (rows, label) => { const read = sum(rows, 'read'), spent = sum(rows, 'spent');
+        return `<span class="k">${label}</span><div class="big">${usd(spent)}<small> over ${fmtNum(rows.length)} runs</small></div>` +
+          `<div class="sub">${fmtNum(read)} releases read, ${read ? '$' + (spent / read).toFixed(4) : '—'} a release, ${fmtNum(sum(rows, 'checked'))} compared with a 10-Q` +
+          (sum(rows, 'differs') ? `, <span class="bad">${fmtNum(sum(rows, 'differs'))} differ</span>` : '') + '.</div>'; };
+      $('rTWeek').innerHTML = tile(list.filter((r) => r.startedAt >= now - 7 * 86400000), 'Last 7 days');
+      $('rTMonth').innerHTML = tile(list.filter((r) => r.startedAt >= now - 30 * 86400000), 'Last 30 days');
+      if (!list.length) { $('relWrap').innerHTML = '<div class="empty">No earnings-release runs recorded yet.</div>'; return; }
+      $('relWrap').innerHTML = '<table><thead><tr><th>Started</th><th class="n">Took</th><th class="hide-sm">Model</th>' +
+        '<th class="n">Found</th><th class="n">Read</th><th class="n">Results</th><th class="n">Not</th><th class="n">Left out</th><th class="n">Failed</th>' +
+        '<th class="n">10-Q</th><th class="n">Spent</th><th>Stopped</th></tr></thead><tbody>' +
+        list.map((r) => `<tr><td class="mono">${fmtWhen(r.startedAt)}</td><td class="n">${mins(r)}</td>` +
+          `<td class="hide-sm">${we((r.model || '').replace(/^claude-/, ''))}</td>` +
+          `<td class="n">${fmtNum(r.found)}</td><td class="n">${fmtNum(r.read)}</td><td class="n">${fmtNum(r.results)}</td><td class="n">${fmtNum(r.notResults)}</td>` +
+          `<td class="n${r.refused ? ' bad' : ''}">${fmtNum(r.refused)}</td><td class="n${r.failed ? ' bad' : ''}">${fmtNum(r.failed)}</td>` +
+          `<td class="n">${fmtNum(r.checked)}${r.differs ? ` <span class="bad">(${r.differs} differ)</span>` : ''}</td><td class="n">${usd(r.spent)}</td>` +
+          `<td title="${we(r.error || '')}">${stopBadge(r.stop)}</td></tr>`).join('') + '</tbody></table>';
+    }
+
     async function load() {
       try {
         const d = await api('/api/news-runs');
@@ -467,6 +526,7 @@
         paintChart();
         paintHistory();
         paintTone(d.toneRuns || []);
+        paintReleases(d.releaseRuns || []);
       } catch (e) {
         $('histWrap').innerHTML = `<div class="error">Could not load the news log: ${we(e.message)}</div>`;
       }

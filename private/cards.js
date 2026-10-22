@@ -53,6 +53,8 @@
   let getMargins = () => null;
   // One day's 13D/13G and 8-K filings (the Filed yesterday card), or null while it loads.
   let getFiled = () => null;
+  // One day's results press releases (earnings_releases), or null while it loads.
+  let getReported = () => null;
   // One stock's At a glance cards (glance.js, built by the host from its rows), or null.
   let getGlance = () => null;
   // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
@@ -12216,6 +12218,89 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Results reported: one day's results press releases (2026-10-22) ----
+  //
+  // The owner, of a newsletter's earnings round-up: "Is there a way to get this
+  // data", then this card. Each company that filed a results press release
+  // that day (earnings_releases, read by releases.js), the largest first:
+  // revenue and its change on a year ago, EPS (the company's adjusted figure
+  // where it gives one, marked so, else as reported) and where it sits against
+  // the price provider's estimate.
+  //
+  // NOT COLOURED GOOD OR BAD. Above or below an estimate is not a price move,
+  // so it is written, not painted green or red; the note says what each figure
+  // is. The rows come from the host (getReported: the studio's /api/releases/day,
+  // the phone route's releasesDayPayload), the same function both.
+  // Measured with a long name on every row and the "and N more" line showing.
+  const RPT_ROWS = { portrait: 10, square: 8, story: 17 };
+  function reportedNeed(tpl, opts) {
+    if (tpl !== 'reported') return null;
+    const d = String((opts && opts.rptDay) || '');
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '' };
+  }
+  function tplReported() {
+    const d = getReported(reportedNeed('reported', O));
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!d) return shell('Results reported', 'Reading', 'the releases…');
+    if (!d.date) return shell('Results reported', 'No releases', 'on file yet', 'Results press releases are read each weekday morning from the SEC.');
+    const cut = O.rptSp500 || 'All';
+    const bySym = new Map(spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol)), cut).map((x) => [x.symbol, x]));
+    const capOf = (s) => Number((bySym.get(s) || {}).marketCap) || 0;
+    const rows = (d.releases || []).filter((r) => bySym.has(r.symbol)).sort((a, b) => capOf(b.symbol) - capOf(a.symbol));
+    const day = new Date(d.date + 'T12:00:00');
+    const weekday = day.toLocaleDateString('en-US', { weekday: 'long' });
+    const full = day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const kick = 'Results reported' + (cut !== 'All' && SP_CUT_LABEL[cut] ? ' · ' + SP_CUT_LABEL[cut] : '');
+    if (!rows.length) return shell(kick, 'Reported on ' + weekday, full, 'No company on this screen filed a results release that day.');
+    const pre = (c) => (!c || c === 'USD' ? '$' : c + ' ');
+    const money = (v, c) => { if (v == null) return '—'; const a = Math.abs(v); return (v < 0 ? '−' : '') + pre(c) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
+    const eps = (v, c) => (v == null ? '—' : (v < 0 ? '−' : '') + pre(c) + Math.abs(v).toFixed(2));
+    const chg = (a, b) => { if (a == null || b == null || !(b > 0)) return ''; const p = (a / b - 1) * 100; return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%'; };
+    const cap = RPT_ROWS[size.id] || RPT_ROWS.portrait;
+    const shown = rows.slice(0, cap);
+    // THE PROVIDER'S ESTIMATE ARRIVES LATER than the release: its EPS history
+    // gains a quarter when the company's profile is next pulled, often days on
+    // (found 2026-10-22: none of the morning's 49 had one). A column of dashes
+    // says nothing, so it is left off, and the note says why.
+    const withEst = shown.some((r) => r.provider && r.provider.estimate != null);
+    const body = shown.map((r) => {
+      const c = r.currency, pv = r.provider;
+      const adj = r.epsAdj != null;
+      const e = adj ? r.epsAdj : r.epsGaap;
+      const vs = pv && pv.estimate != null ? (pv.matches === 'adjusted' ? r.epsAdj : pv.matches === 'gaap' ? r.epsGaap : null) : null;
+      const dlt = vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100;
+      const vsTxt = pv && pv.estimate != null
+        ? (dlt == null ? 'est. ' + eps(pv.estimate, c) : (dlt === 0 ? 'in line with ' : eps(Math.abs(dlt), c) + (dlt > 0 ? ' above ' : ' below ')) + eps(pv.estimate, c))
+        : '—';
+      const row = bySym.get(r.symbol);
+      return '<div class="rp-row">'
+        + '<span class="rp-sym">' + esc(r.symbol) + '</span>'
+        + '<span class="rp-nm">' + esc(row ? nameOf(row) : r.symbol) + '</span>'
+        + '<span class="rp-rev">' + esc(money(r.revenue, c)) + '<i>' + esc(chg(r.revenue, r.revenuePrior)) + '</i></span>'
+        + '<span class="rp-eps">' + esc(eps(e, c)) + '<i>' + (e == null ? '' : adj ? 'adj.' : 'GAAP') + '</i></span>'
+        + '<span class="rp-vs">' + esc(vsTxt) + '</span></div>';
+    }).join('');
+    const more = rows.length > cap ? '<div class="fd-more">and ' + (rows.length - cap) + ' more</div>' : '';
+    const note = 'Results press releases filed with the SEC on ' + weekday + ', ' + full + ', by companies on this screen'
+      + (cut !== 'All' && SP_CUT_PROSE[cut] ? ' in ' + SP_CUT_PROSE[cut] : '') + ', the largest first. '
+      + 'Figures as printed in each release, read by an AI model and checked against its text. Revenue’s change is on the same quarter a year earlier. '
+      + 'EPS is the company’s own adjusted figure where it gives one (adj.), which has no standard definition, otherwise as reported (GAAP); '
+      + (withEst ? 'the estimate is the price data provider’s. ' : 'the price data provider’s estimates for these reports have not arrived yet. ')
+      + 'A record of what was reported, not a reading of the stock.';
+    return chromeTop()
+      + '<div class="s-body"><div class="fd-in">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">Reported on ' + esc(weekday) + '<br><span class="dim">' + esc(full) + '</span></h2>'
+      + '<div class="fd-chips"><span class="fd-chip"><b>' + rows.length + '</b> results release' + (rows.length === 1 ? '' : 's') + '</span></div>'
+      + '<div class="fd-blk' + (withEst ? '' : ' rp-noest') + '"><div class="rp-row rp-hd"><span>Company</span><span></span><span class="rp-rev">Revenue</span><span class="rp-eps">EPS</span><span class="rp-vs">Vs. estimate</span></div>'
+      + body + more + '</div>'
+      + '<p class="s-sub wide fd-note" style="--fs:16px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- At a glance: the stock page's topic cards as a post (2026-10-21) ----
   //
   // The owner: "Do we have a promo card for at a glance section on a
@@ -12943,6 +13028,7 @@
     insiders: tplInsiders,
     margins: () => marginsCard('margins'),
     filed: tplFiled,
+    reported: tplReported,
     glance: tplGlance,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
@@ -14827,6 +14913,22 @@
     .fd-dot.fd-on { background: var(--amber); }
     .fd-more { font: 500 16px var(--mono); color: var(--faint); padding-top: 8px; }
     .fd-note { margin-top: auto; padding-top: 18px; }
+    /* Results reported (2026-10-22): the Filed card's frame; written figures,
+       nothing painted good or bad. */
+    .rp-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 190px 150px 236px; gap: 14px; align-items: baseline;
+              padding: 11px 0; border-bottom: 1px solid var(--hair); font: 500 20px var(--sans); color: var(--text); }
+    .rp-row.rp-hd { font: 600 14px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding: 0 0 8px; border-bottom: 1px solid var(--hair-2); }
+    .rp-sym { font: 650 20px var(--mono); }
+    .rp-nm { font-size: 17px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rp-rev, .rp-eps { font: 600 20px var(--mono); text-align: right; white-space: nowrap; }
+    .rp-rev i, .rp-eps i { display: block; font: 500 14px var(--mono); font-style: normal; color: var(--faint); margin-top: 2px; }
+    .rp-vs { font-size: 16px; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rp-row.rp-hd .rp-rev, .rp-row.rp-hd .rp-eps { font: inherit; }
+    .rp-noest .rp-row { grid-template-columns: 96px minmax(0, 1fr) 210px 170px; }
+    .rp-noest .rp-vs { display: none; }
+    .sz-square .rp-noest .rp-row { grid-template-columns: 88px minmax(0, 1fr) 190px 150px; }
+    .sz-square .rp-row { padding: 7px 0; font-size: 18px; grid-template-columns: 88px minmax(0, 1fr) 170px 130px 210px; }
+    .sz-square .rp-sym, .sz-square .rp-rev, .sz-square .rp-eps { font-size: 18px; }
     .sz-square .fd-row { padding: 7px 0; font-size: 19px; }
     .sz-square .fd-sym { font-size: 19px; }
     .sz-square .fd-blk { margin-top: 16px; }
@@ -15679,6 +15781,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
+    reportedNeed,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     glanceTopics: () => GLC_TOPICS.map((t) => t.slice()), glanceDefault: () => GLC_DEFAULT.slice(),
     glanceMax: (sizeId) => GLC_MAX[sizeId] || GLC_MAX.portrait, glancePick,
@@ -15835,6 +15938,7 @@
       getEarnGrowth = c.getEarnGrowth || (() => null);
       getMargins = c.getMargins || (() => null);
       getFiled = c.getFiled || (() => null);
+      getReported = c.getReported || (() => null);
       getGlance = c.getGlance || (() => null);
       getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);
