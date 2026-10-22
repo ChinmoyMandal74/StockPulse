@@ -15075,7 +15075,12 @@
     .rs-bar .rs-no, .rs-leg i.rs-no { background: var(--hair-2); }
     .rs-leg { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font: 500 15px var(--mono); color: var(--muted); }
     .rs-leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-    .rs-tab { margin-top: 22px; }
+    /* The table takes the room the figures and the note leave (owner, 2026-10-22:
+       "There is lot of gap after the table"): rows share it, capped so a short
+       table does not turn into slabs. */
+    .rs-tab { margin-top: 22px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .rs-tab .rs-r:not(.rs-hd) { flex: 1 1 0; align-items: center; max-height: 96px; }
+    .rs-tab .fd-more { flex: none; }
     .rs-r { display: grid; grid-template-columns: minmax(0, 1fr) 150px 160px 130px 130px; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--hair); font: 600 19px var(--mono); color: var(--text); }
     .rs-r > span:not(.rs-sec) { text-align: right; white-space: nowrap; }
     .rs-r em { font-style: normal; font-weight: 500; font-size: 14px; color: var(--faint); }
