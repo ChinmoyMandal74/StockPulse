@@ -57,7 +57,7 @@ ok(S.runsOn(job('intraday'), 'Wed').length === 13 && S.runsOn(job('intraday'), '
 ok(S.runsOn(job('schedule'), 'Sun').length === 24, 'schedule report: 24 a day');
 ok(S.cronEastern('30 23 * * *', '2026-10-22T12:00:00Z') === 19 * 60 + 30, 'watchdog: 19:30 ET in October');
 ok(S.cronEastern('30 23 * * *', '2026-12-03T12:00:00Z') === 18 * 60 + 30, 'watchdog: 18:30 ET in December');
-ok(S.whenText(job('news')) === '09:00, 13:00, 17:00, every day', 'words', S.whenText(job('news')));
+ok(S.whenText(job('news')) === '05:00, 09:00, 13:00, 17:00, every day', 'words', S.whenText(job('news')));
 ok(S.isoMinutes('PT30M') === 30 && S.isoMinutes('PT6H') === 360 && S.isoMinutes('P1D') === 1440 && S.isoMinutes('') === 0, 'ISO durations');
 ok(JSON.stringify(S.maskDays(62)) === JSON.stringify(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) && S.maskDays(65).join() === 'Sun,Sat', 'day masks');
 
@@ -68,7 +68,7 @@ const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62)] },
   { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')] },
   { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)] },
-  { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
+  { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
   { name: 'TickrLab news tone', state: 'Ready', triggers: ['00:30', '06:30', '12:30', '18:30'].map((t) => tr('Daily', t)) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
 ] });

@@ -46,7 +46,7 @@ The owner: "I don't think there is any promotional visual on the various data po
 | N-PORT | 2026q2 set | quarterly | `fund-holders-nport.md` |
 | Fundamentals, day by day | 2026-08-30 | each Refresh all | `fundamentals-history.md` |
 | Days each Signal has held | 2026-09-17 | each Refresh all | `the-advice-column.md` |
-| Headlines | 2026-09-22 | news job 09:00, 13:00, 17:00 daily | `news.md`, `news-task.ps1` |
+| Headlines | 2026-09-22 | news job 05:00, 09:00, 13:00, 17:00 daily (05:00 added 2026-10-22) | `news.md`, `news-task.ps1` |
 | Index membership | 2026-10-03 (SPY) | nightly | `sec-edgar.md` |
 | Options open interest | 2026-10-09 close | nightly, 19:30 run | `options-open-interest.md` |
 | Company profile and ratios | latest only | 7-day rotation | `server.js` `FUND_ROTATION_DAYS` |

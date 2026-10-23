@@ -44,7 +44,7 @@ const JOBS = [
   },
   {
     id: 'news', name: 'Headlines', task: 'TickrLab news', host: 'laptop', script: 'news-ping.js', taskScript: 'news-task.ps1',
-    days: ALL_DAYS, times: ['09:00', '13:00', '17:00'], minutes: 6,
+    days: ALL_DAYS, times: ['05:00', '09:00', '13:00', '17:00'], minutes: 6,
     spends: { kind: 'free', text: 'Free (Google News search feeds, keyless)' },
     what: 'Tops up the headlines for the stocks whose news is oldest, batch by batch until nothing is stale.',
     log: '/news-runs',

@@ -1,14 +1,15 @@
 # Register (or remove) the Windows scheduled task that tops up the headlines
-# three times a day, every day.
+# four times a day, every day.
 #
 #   .\news-task.ps1            register, or update an existing one
 #   .\news-task.ps1 -Remove    take it away
 #   .\news-task.ps1 -WhatIf    print what it would register and stop
 #
-# THREE FIXED TIMES, EVERY DAY INCLUDING WEEKENDS: 09:00, 13:00, 17:00. Three
-# separate daily triggers rather than one repeating one, because the gaps are
-# uneven (4h, 4h, then 16h overnight) and a repetition interval can only be
-# one number.
+# FOUR FIXED TIMES, EVERY DAY INCLUDING WEEKENDS: 05:00, 09:00, 13:00, 17:00.
+# Separate daily triggers rather than one repeating one, because the gaps are
+# uneven and a repetition interval can only be one number. 05:00 was added
+# 2026-10-22 (owner): overnight headlines before the morning, and after the
+# 04:00 rotation (the first under the new times finished at 04:50).
 #
 # THE MORNING SLOT WAS 08:00 AND MOVED TO 09:00 (2026-09-30, owner), because
 # the nightly rotation then fired at 07:30 from this same laptop and took about
@@ -45,7 +46,7 @@ $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab news'
 $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'news-ping.js'
-$Times    = @('09:00', '13:00', '17:00')
+$Times    = @('05:00', '09:00', '13:00', '17:00')
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -83,7 +84,7 @@ if ($WhatIf) {
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
-  -Settings $settings -Description 'Asks tickrlab.com to top up the stored headlines. Three times a day, every day.' -Force | Out-Null
+  -Settings $settings -Description 'Asks tickrlab.com to top up the stored headlines. Four times a day, every day.' -Force | Out-Null
 
 Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, weekends included."
 Write-Output "Log: $(Join-Path $Root 'news-ping.log')"
