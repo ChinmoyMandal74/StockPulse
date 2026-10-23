@@ -688,7 +688,20 @@
     #rels .rl-head b { font-size: 15px; color: var(--text); font-weight: 600; }
     #rels .rl-head a { color: var(--accent); text-decoration: none; font-size: 12.5px; }
     #rels .rl-head a:hover { text-decoration: underline; }
-    #rels .rl-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+    /* A colour a part (2026-10-23, the owner: "made colorful"): it names the
+       figure, never good or bad; theme tokens, so Dark, Navy and Light follow. */
+    #rels .rl-figs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    #rels .rl-f { border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-top: 3px solid var(--c); border-radius: 12px; padding: 10px 12px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, transparent), color-mix(in srgb, var(--c) 3%, transparent)); }
+    #rels .rl-f .rl-k { color: var(--c); }
+    #rels .rl-guide { margin: 14px 0 0; padding: 11px 14px; border-left: 4px solid var(--c); border-radius: 8px; background: color-mix(in srgb, var(--c) 10%, transparent);
+      font-size: 13px; line-height: 1.55; color: var(--muted); }
+    #rels .rl-guide > b { color: var(--text); font-weight: 600; margin-right: 8px; }
+    #rels .rl-guide .gch { margin-right: 8px; vertical-align: 1px; }
+    #rels .rl-guide .rl-q { display: block; margin-top: 4px; font-style: italic; color: var(--faint); }
+    #rels .rl-guide .rl-read { display: block; margin-top: 5px; font: 600 12px var(--mono); color: var(--text); }
+    #rels .rl-sum { border-left: 3px solid var(--indigo); padding-left: 12px; }
+    @media (max-width: 1000px) { #rels .rl-figs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     #rels .rl-figs > div { min-width: 0; }
     #rels .rl-k { display: block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
     #rels .rl-v { display: block; margin-top: 4px; font: 600 18px var(--mono); color: var(--text); }
@@ -3382,7 +3395,8 @@
           }
         }
         const RV = window.ReleaseView, e = RV.esc;
-        const fig = (k, v, sub) => '<div><span class="rl-k">' + k + '</span><span class="rl-v">' + v + '</span>' + (sub || '') + '</div>';
+        const fig = (k, v, sub, c) => '<div class="rl-f" style="--c:var(' + c + ')"><span class="rl-k">' + k + '</span><span class="rl-v">' + v + '</span>' + (sub || '') + '</div>';
+        const sgn = (p) => (p == null || !isFinite(p) ? '' : (p > 0 ? '+' : p < 0 ? '\u2212' : '') + Math.abs(p).toFixed(1) + '%');
         const sub = (t, title) => (t ? '<span class="rv-sub"' + (title ? ' title="' + e(title) + '"' : '') + '>' + e(t) + '</span>' : '');
         document.getElementById('relsBody').innerHTML = list.map((r) => {
           const cur = r.currency, figs = RV.refused(r), tq = RV.tenQ(r);
@@ -3392,12 +3406,22 @@
             + '<div class="rl-head"><b>' + e(r.periodLabel || 'Quarter') + '</b><span>filed ' + e(RV.shortDay(r.filed)) + '</span>'
             + (r.url ? '<a href="' + e(r.url) + '" target="_blank" rel="noopener">' + e(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '</div>'
             + '<div class="rl-figs">'
-            + fig('Revenue', e(RV.money(r.revenue, cur)), sub(RV.chg(r.revenue, r.revenuePrior)))
-            + fig('EPS, as reported', e(RV.eps(r.epsGaap, cur)), sub(r.epsGaapPrior != null ? 'a year ago ' + RV.eps(r.epsGaapPrior, cur) : ''))
-            + fig('EPS, adjusted', r.epsAdj == null ? '\u2014' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? '' : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')))
-            + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut))
+            + fig('Revenue', e(RV.money(r.revenue, cur)), sub(RV.chg(r.revenue, r.revenuePrior)), '--azure')
+            + fig('Net income', e(RV.money(r.netIncome, cur)), sub(RV.chg(r.netIncome, r.netIncomePrior)), '--cyan')
+            + fig('EPS, as reported', e(RV.eps(r.epsGaap, cur)), sub(r.epsGaapPrior != null ? 'a year ago ' + RV.eps(r.epsGaapPrior, cur) : ''), '--accent-2')
+            + fig('EPS, adjusted', r.epsAdj == null ? '\u2014' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? sub('none given') : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')), '--sand')
+            + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut), '--slate')
             + '</div>'
-            + (r.guideSentence ? '<p class="rl-out"><b>Outlook.</b> ' + e(r.guideSentence) + '</p>' : '')
+            // The guidance: its label (the owner's colours), the company's words,
+            // its sentence, and the two readings where they can be measured.
+            + ((r.guideSentence || r.guideChange) ? (() => { const g = r.guideRead || {}, reads = [];
+                if (g.revVsQ != null && g.revQ) reads.push('Next quarter\u2019s revenue guide ' + sgn(g.revVsQ) + ' on this quarter');
+                if (g.epsVsFy != null && g.epsFy) reads.push((g.epsFy.basis === 'GAAP' ? 'GAAP' : 'Adjusted') + ' EPS guide ' + sgn(g.epsVsFy) + ' on the year before (' + RV.eps(g.epsFy.prior, cur) + ', ' + (g.epsFy.priorFrom === 'release' ? 'as printed' : 'from the 10-K') + ')');
+                const k = RV.changeKey(r.guideChange);
+                return '<div class="rl-guide" style="--c:' + (k ? 'var(--gch-' + k + ')' : 'var(--indigo)') + '"><b>Guidance</b>' + RV.changeTag(r.guideChange)
+                  + (r.guideChangeQuote ? '<span class="rl-q">\u201c' + e(r.guideChangeQuote) + '\u201d</span>' : '')
+                  + (r.guideSentence ? '<span class="rl-s">' + e(r.guideSentence) + '</span>' : '')
+                  + (reads.length ? '<span class="rl-read">' + e(reads.join(' \u00b7 ')) + '</span>' : '') + '</div>'; })() : '')
             + '<p class="rl-sum">' + e(r.summary || '') + (tq ? ' ' + tq : '')
             + (figs.length ? ' <span class="rv-amb" title="' + e(figs.join('; ')) + '">' + figs.length + ' figure' + (figs.length === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</p>'
             + RV.driversHtml(r)
