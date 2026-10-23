@@ -12813,6 +12813,12 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     const sym = String(srNeed.symbol || '').toUpperCase();
     try { srd = /^[A-Z0-9.-]{1,15}$/.test(sym) ? { symbol: sym, releases: (await store.readEarningsReleases(sym, 2)).filter((r) => r.isResults).map((r) => Releases.forReader(r, [])) } : { releases: [] }; } catch { srd = { releases: [] }; }
   }
+  // The At a glance card: its stock's newest release for Earnings and guidance.
+  let glRel = null;
+  if (post.tpl === 'glance') {
+    const gs = String((post.opts && post.opts.glcSym) || (stocks[0] && stocks[0].symbol) || '').toUpperCase();
+    try { const rr = /^[A-Z0-9.-]{1,15}$/.test(gs) ? (await store.readEarningsReleases(gs, 2)).filter((r) => r.isResults)[0] : null; if (rr) glRel = { symbol: gs, fields: globalThis.ReleaseView.fields(Releases.forReader(rr, [])) }; } catch { glRel = null; }
+  }
   // The Results reported card, likewise.
   let rptd = null;
   const rptNeed = Cards.reportedNeed(post.tpl, post.opts || {});
@@ -12845,7 +12851,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getReleaseColumn: () => rcol || { rows: {} },
       getRelease: () => srd || { releases: [] },
       // The At a glance card: the stock page's own cards, over the same rows.
-      getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
+      getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(glRel && glRel.symbol === s ? Object.assign({}, r, glRel.fields) : r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
       getDays: () => days,

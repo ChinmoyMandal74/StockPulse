@@ -3359,7 +3359,13 @@
     function getGlance(symbol) {
       const row = stocks.find((x) => x && x.symbol === symbol);
       if (!row || typeof Glance === 'undefined') return null;
-      try { return Glance.build(row, stocks); } catch (e) { return null; }
+      // Earnings and guidance (2026-10-23): the newest release's figures on the
+      // row, as /api/stock does for the stock page. getRelease fetches once and
+      // redraws when it lands; until then the card has the old wording.
+      const rd = getRelease({ symbol });
+      const rel = rd && rd.releases && rd.releases[0];
+      const built = rel && window.ReleaseView ? Object.assign({}, row, window.ReleaseView.fields(rel)) : row;
+      try { return Glance.build(built, stocks); } catch (e) { return null; }
     }
     function paintGlanceChips() {
       const max = Cards.glanceMax(size.id);
@@ -3427,8 +3433,8 @@
       srPending[k] = true;
       fetch('/api/releases?symbol=' + encodeURIComponent(k), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : { releases: [] }))
-        .then((d) => { srPending[k] = false; srCache[k] = d || { releases: [] }; if (tpl === 'stkresults') render(); })
-        .catch(() => { srPending[k] = false; srCache[k] = { releases: [] }; if (tpl === 'stkresults') render(); });
+        .then((d) => { srPending[k] = false; srCache[k] = d || { releases: [] }; if (tpl === 'stkresults' || tpl === 'glance') render(); })
+        .catch(() => { srPending[k] = false; srCache[k] = { releases: [] }; if (tpl === 'stkresults' || tpl === 'glance') render(); });
       return null;
     }
     function getReported(need) {
