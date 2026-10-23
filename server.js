@@ -368,6 +368,22 @@ app.use(route(async (req, res, next) => {
   res.redirect('/accept-terms');
 }));
 
+// THE CORPORATE SITE AT ITS OWN ADDRESS (2026-10-23, the owner: "when a user
+// is logged in, the corporate website home page link opens the screener").
+// `/` stays the screener for anyone signed in (where a daily user wants to
+// land); `/home` is the landing page for everyone, and the public pages'
+// Home links and the screener's menu point here. Signed in, its Sign in
+// button becomes a way back to the screener. Canonical is `/`, so search
+// engines see one page.
+app.get('/home', route(async (req, res) => {
+  const signedIn = await isSignedIn(req);
+  if (!signedIn && anonLogOk(req)) logAct(req, 'page', 'home');
+  let html = landingFigures(pageTemplate('landing.html').replace('%SUBSCRIBE%', () => subscribeBox('home')));
+  // Every Sign in on the page (the bar and the footer) becomes the way back.
+  if (signedIn) html = html.replace(/<a (class="b signin" )?href="\/login">Sign in<\/a>/g, (m, cls) => '<a ' + (cls || '') + 'href="/">Open the screener</a>');
+  res.type('html').send(html);
+}));
+
 // Log every public page load before static files are served.
 app.get(['/', '/index.html'], route(async (req, res, next) => {
   // The door: the screener is only served to signed-in users. A stranger gets
