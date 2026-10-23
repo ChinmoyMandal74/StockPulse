@@ -1758,6 +1758,9 @@ const ADDED_COLUMNS = [
   'alter table earnings_releases add column guide_change text',
   'alter table earnings_releases add column guide_change_quote text',
   'alter table earnings_releases add column eps_guide_prior real',
+  // What helped and what weighed on the quarter, as the company explains it
+  // (2026-10-23): JSON { helped, weighed }, each point with the phrase that backs it.
+  'alter table earnings_releases add column drivers text',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -2962,7 +2965,7 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['guide_kind', 'guideKind'], ['guide_period', 'guidePeriod'], ['guide_low', 'guideLow'], ['guide_high', 'guideHigh'], ['guide_mid', 'guideMid'], ['guide_pm', 'guidePm'], ['guide_unit', 'guideUnit'], ['guide_sentence', 'guideSentence'],
   ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt'],
   ['sec_form', 'secForm'], ['sec_filed', 'secFiled'], ['sec_revenue', 'secRevenue'], ['sec_net_income', 'secNetIncome'], ['sec_eps', 'secEps'], ['sec_check', 'secCheck'], ['sec_differs', 'secDiffers'], ['sec_checked_at', 'secCheckedAt'],
-  ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior']];
+  ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior'], ['drivers', 'drivers']];
 function erOut(x) {
   const o = {};
   for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
@@ -2970,6 +2973,7 @@ function erOut(x) {
   try { o.problems = o.problems ? JSON.parse(o.problems) : []; } catch (e) { o.problems = []; }
   try { o.secDiffers = o.secDiffers ? JSON.parse(o.secDiffers) : []; } catch (e) { o.secDiffers = []; }
   try { o.guides = o.guides ? JSON.parse(o.guides) : null; } catch (e) { o.guides = null; }
+  try { o.drivers = o.drivers ? JSON.parse(o.drivers) : null; } catch (e) { o.drivers = null; }
   return o;
 }
 // Every results release filed on or after a day: the screener column's build
@@ -3039,7 +3043,7 @@ async function readReleaseRuns(sinceMs) {
 async function writeEarningsRelease(r, opts) {
   await init();
   const v = Object.assign({}, r, { isResults: r.isResults ? 1 : 0, problems: JSON.stringify(r.problems || []), symbol: String(r.symbol).toUpperCase(),
-    guides: r.guides ? JSON.stringify(r.guides) : null, secDiffers: Array.isArray(r.secDiffers) ? JSON.stringify(r.secDiffers) : r.secDiffers });
+    guides: r.guides ? JSON.stringify(r.guides) : null, drivers: r.drivers ? JSON.stringify(r.drivers) : null, secDiffers: Array.isArray(r.secDiffers) ? JSON.stringify(r.secDiffers) : r.secDiffers });
   const res = await db.execute({
     sql: `insert or ${opts && opts.replace ? 'replace' : 'ignore'} into earnings_releases (${ER_COLS.map((c) => c[0]).join(', ')}) values (${ER_COLS.map(() => '?').join(', ')})`,
     args: ER_COLS.map(([, k]) => (v[k] === undefined ? null : v[k])),
@@ -3060,6 +3064,11 @@ async function writeReleaseGuidance(accn, g) {
   await init();
   await db.execute({ sql: 'update earnings_releases set guides = ?, guide_change = ?, guide_change_quote = ?, eps_guide_prior = ? where accn = ?',
     args: [g.guides ? JSON.stringify(g.guides) : null, g.guideChange || null, g.guideChangeQuote || null, g.epsGuidePrior == null ? null : Number(g.epsGuidePrior), String(accn)] });
+}
+// The drivers re-read (release-load.js --drivers): that one column, nothing else.
+async function writeReleaseDrivers(accn, drivers) {
+  await init();
+  await db.execute({ sql: 'update earnings_releases set drivers = ? where accn = ?', args: [JSON.stringify(drivers || { helped: [], weighed: [] }), String(accn)] });
 }
 async function readEarningsReleasesOn(day) {
   await init();
@@ -8218,7 +8227,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

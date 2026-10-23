@@ -73,6 +73,10 @@ async function mailList() {
 // ONLY the four guidance columns (writeReleaseGuidance). The reading itself,
 // its figures, summary and 10-Q check, is left exactly as stored.
 const GUIDANCE = flag('--guidance');
+// --drivers (with --commit): the same for what helped and what weighed
+// (2026-10-23): read again the stored results releases that lack them and
+// write ONLY that column (writeReleaseDrivers).
+const DRIVERS = flag('--drivers');
 // The previous full year's GAAP diluted EPS from the 10-K, for a release whose
 // full-year GAAP EPS guidance prints no prior figure (releases.js priorFyEps).
 // One per-symbol seek on sec_facts.
@@ -218,11 +222,44 @@ async function guidancePass() {
   if (COMMIT) { try { await writeColumn(); } catch (err) { console.log('  screener column failed: ' + String(err.message).slice(0, 120)); } }
   console.log(`  done: ${done} re-read, ${withItems} with guidance, ${changes} with a stated change, ${priors} prior-year EPS from the 10-K, ${failed} to retry; $${spent.toFixed(4)}; ${Math.round((Date.now() - t0) / 1000)}s`);
 }
+// THE DRIVERS PASS (--drivers): as the guidance pass, for the drivers column.
+async function driversPass() {
+  if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
+  if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
+  const since = etDay(Date.now() - DAYS * 86400000);
+  const rows = (await store.readEarningsReleasesSince(since)).filter((r) => r.isResults && r.drivers == null && r.url && (!ONLY || r.symbol === ONLY))
+    .sort((a, b) => (a.filed < b.filed ? 1 : -1));
+  console.log(`[${new Date().toISOString()}] drivers re-read since ${since}: ${rows.length} releases; ` + (COMMIT ? 'COMMIT (drivers column only)' : 'DRY RUN'));
+  let done = 0, withAny = 0, failed = 0, refused = 0;
+  for (const r of rows) {
+    if (spent >= MAX_USD) { console.log('  stopping: the dollar limit'); break; }
+    if (Date.now() - t0 > MAX_MIN * 60000) { console.log('  stopping: the time limit'); break; }
+    try {
+      const html = await sec(r.url);
+      if (!html) { console.log(`  ${r.symbol} ${r.filed}: the exhibit did not load; next run`); failed++; continue; }
+      const text = Rel.toText(html);
+      const got = await ask(text);
+      const { row, problems } = Rel.toRow(got.ans, text, { accn: r.accn, symbol: r.symbol, filed: r.filed, url: r.url });
+      const d = row.drivers || { helped: [], weighed: [] };
+      const dp = problems.filter((p) => /^(helped|weighed)/.test(p));
+      refused += dp.length;
+      console.log(`  ${r.symbol} ${r.filed}: ${d.helped.length} helped, ${d.weighed.length} weighed` + (dp.length ? ' | ' + dp.join('; ') : '') + ` | $${got.usd.toFixed(4)}`);
+      if (COMMIT) await store.writeReleaseDrivers(r.accn, d);
+      done++; if (d.helped.length || d.weighed.length) withAny++;
+    } catch (err) {
+      if (err instanceof Stop) throw err;
+      failed++;
+      console.log(`  ${r.symbol} ${r.filed}: failed (${String(err.message).slice(0, 120)}); next run`);
+    }
+  }
+  console.log(`  done: ${done} re-read, ${withAny} with reasons, ${refused} points refused by the checks, ${failed} to retry; $${spent.toFixed(4)}; ${Math.round((Date.now() - t0) / 1000)}s`);
+}
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
   if (COLUMN_ONLY) { await writeColumn(); await writeRecon(); process.exit(0); }
   if (GUIDANCE) { await guidancePass(); process.exit(0); }
+  if (DRIVERS) { await driversPass(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
   const since = etDay(Date.now() - DAYS * 86400000);

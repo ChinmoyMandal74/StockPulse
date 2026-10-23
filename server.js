@@ -748,7 +748,7 @@ function resultsPage(rels, names, today) {
         cell(htmlEsc(RV.money(r.netIncome, cur)), pctTxt(pct(r.netIncome, r.netIncomePrior))) +
         cell(htmlEsc(RV.eps(r.epsGaap, cur)), pctTxt(pct(r.epsGaap, r.epsGaapPrior))) +
         adj +
-        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' ' + RV.changeTag(r.guideChange, r.guideChangeQuote ? '“' + r.guideChangeQuote + '”' : '') : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
+        `<td class="er-sum">${htmlEsc(r.summary || '')}${RV.driversHtml(r)}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' ' + RV.changeTag(r.guideChange, r.guideChangeQuote ? '“' + r.guideChangeQuote + '”' : '') : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
         `<td>${/^https:\/\/www\.sec\.gov\//.test(r.url || '') ? `<a href="${htmlEsc(r.url)}" target="_blank" rel="noopener">The release</a>` : ''}</td>` +
         '</tr>';
     }).join('');
@@ -3525,6 +3525,7 @@ const MAIL_DARK_CSS = '<style>'
   // A company's quarter goes under its name, so a long name is not squeezed
   // into three lines beside it ("CACI International Inc. Class A").
   + '.em-who{display:block !important;width:100% !important}'
+  + '.em-col{display:block !important;width:100% !important;padding:0 0 10px !important}'
   + '.em-qtr{display:block !important;width:100% !important;text-align:left !important;white-space:normal !important;padding-top:3px !important}'
   + '.em-fig{display:inline-block !important;width:49% !important;box-sizing:border-box !important;margin:0 0 10px !important;vertical-align:top !important}'
   + '}'
@@ -3796,6 +3797,7 @@ function releaseDigestEmail(rels, names, opts) {
       + '</tr></table></td></tr>'
       // What the release says, then the guidance in the company's words.
       + (r.summary ? `<tr><td class="em-in"${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
+      + drv(r)
       + (r.guideSentence || r.guideChange ? `<tr><td class="em-in"${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
         + `<strong${st(`color:${MC.ink}`)}>Guidance</strong>${gch(r) || '&nbsp; '}${mailEsc(r.guideSentence || '')}${grev(r)}${geps(r)}</div></td></tr>` : '')
       + `<tr><td class="em-quiet em-in"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
@@ -3820,6 +3822,19 @@ function releaseDigestEmail(rels, names, opts) {
   const geps = (r) => { const g = Releases.guideReadings(r).epsFy; if (!g) return '';
     const p = (g.mid / g.prior - 1) * 100;
     return `<br><span class="em-quiet"${st(`font-size:12px;color:${MC.mute}`)}>${mailEsc(g.basis === 'GAAP' ? 'GAAP' : 'Adjusted')} EPS guidance for ${mailEsc(g.period || 'the year')}: ${mailEsc(RV.eps(g.mid, r.currency))} at the middle, ${sgn(p)} on ${mailEsc(RV.eps(g.prior, r.currency))} the year before (${g.priorFrom === 'release' ? 'as printed' : '10-K'})</span>`; };
+  // WHAT HELPED AND WHAT WEIGHED (2026-10-23): the company's own reasons, two
+  // columns, one above the other on a phone (.em-col). Nothing when the
+  // release gives none.
+  const drv = (r) => {
+    const d = r.drivers;
+    if (!d || (!(d.helped || []).length && !(d.weighed || []).length)) return '';
+    const col = (title, list) => `<td class="em-col" width="50%" valign="top"${st('padding:0 10px 0 0')}>`
+      + `<div class="em-quiet"${st(`font-size:10.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint};margin:0 0 4px`)}>${title}</div>`
+      + ((list || []).length ? list.map((x) => `<div${st(`font-size:13px;line-height:1.45;color:${MC.body};margin:0 0 4px;padding-left:12px;text-indent:-12px`)}>&bull;&nbsp;${mailEsc(x.text)}</div>`).join('')
+        : `<div class="em-quiet"${st(`font-size:12.5px;color:${MC.faint}`)}>None stated.</div>`) + '</td>';
+    return `<tr><td class="em-in"${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + col('What helped', d.helped) + col('What weighed', d.weighed) + '</tr></table></td></tr>';
+  };
   // Past RD_CARDS, one line each.
   const line = (r) => `<tr class="em-row"><td${st(`padding:7px 0;border-top:1px solid ${MC.line};font-family:${mono};font-size:13px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</td>`
     + `<td${st(`padding:7px 8px;border-top:1px solid ${MC.line};font-size:13px;color:${MC.body}`)}>${mailEsc(names[r.symbol] || '')}</td>`
@@ -3835,7 +3850,7 @@ function releaseDigestEmail(rels, names, opts) {
     + (revKnown.length ? ` Revenue was up on a year earlier at ${revUp.length} of ${revKnown.length}.` : '');
   // The reading's caveat goes in every copy; a list copy adds the reader's own
   // preferences and unsubscribe links under it, the owner's says why it came.
-  const caveat = 'Figures are copied from the release as printed and checked against its text; a dash is a figure the checks refused. Check the release before relying on a figure. Not investment advice.';
+  const caveat = 'Figures are copied from the release as printed and checked against its text; a dash is a figure the checks refused. What helped and what weighed are the reasons the company itself gives, each backed by its own words. Check the release before relying on a figure. Not investment advice.';
   const note = 'Sent after each scheduled earnings-results run that read new releases. ' + caveat;
   const o = opts || {};
   const html = emailShell({ heading, intro, body, note: o.note ? mailEsc(caveat) + '<br><br>' + o.note : note });

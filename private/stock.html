@@ -3400,6 +3400,7 @@
             + (r.guideSentence ? '<p class="rl-out"><b>Outlook.</b> ' + e(r.guideSentence) + '</p>' : '')
             + '<p class="rl-sum">' + e(r.summary || '') + (tq ? ' ' + tq : '')
             + (figs.length ? ' <span class="rv-amb" title="' + e(figs.join('; ')) + '">' + figs.length + ' figure' + (figs.length === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</p>'
+            + RV.driversHtml(r)
             + '</div>';
         }).join('');
         card.hidden = false;

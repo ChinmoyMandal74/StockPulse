@@ -265,6 +265,35 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('readings: a full-year revenue item is not set against a quarter', Rel.guideReadings({ revenue: 100, guides: [items[0]] }).revVsQ === null);
   check('readings: a loss year before gives no percent', Rel.guideReadings(Object.assign({}, row, { guides: [items[3]], epsGuidePrior: -1.2 })).epsVsFy === null);
   check('readings: an old row without items falls back to the headline quarter item', Math.abs(Rel.guideReadings({ revenue: 100, guideKind: 'revenue_range', guidePeriod: 'Fourth Quarter 2026', guideLow: 105, guideHigh: 115 }).revVsQ - 10) < 1e-9);
+  // What helped and what weighed (2026-10-23): shapes as returned for American Airlines.
+  {
+    const rel = 'Overall financial results were pressured by a significant increase in fuel costs. Total unit revenue increased 14.5% year over year, reflecting continued strength in demand for travel. '
+      + 'Results were driven by strong revenue performance across all geographies and cabins. Higher labor costs also weighed on margins. These forward-looking statements involve risks and uncertainties that could cause actual results to differ.';
+    const pr = [];
+    const d = Rel.driverLists({
+      helped: [
+        { text: 'Demand for travel lifting total unit revenue', evidence: 'reflecting continued strength in demand for travel' },
+        { text: 'Strong revenue growth across all geographies', evidence: 'driven by strong revenue performance across all geographies and cabins' },
+        { text: 'An invented reason', evidence: 'record cargo volumes in every region' },
+        { text: 'Unit revenue up', evidence: 'Total unit revenue increased 14.5% year over year' },
+        { text: 'More cabins', evidence: 'across all geographies and cabins' },
+        { text: 'A fifth point', evidence: 'Total unit revenue increased' },
+      ],
+      weighed: [
+        { text: 'A significant increase in fuel costs', evidence: 'pressured by a significant increase in fuel costs' },
+        { text: 'The usual legal risks', evidence: 'involve risks and uncertainties that could cause actual results to differ' },
+      ],
+    }, rel.replace(/\s+/g, ' '), pr);
+    check('drivers: a point backed by the release is kept', d.helped[0].text === 'Demand for travel lifting total unit revenue' && d.weighed[0].text === 'A significant increase in fuel costs');
+    check('drivers: words not in the release are refused and named', !d.helped.some((x) => /invented/.test(x.text)) && pr.some((p) => /An invented reason.*not in the release/.test(p)), pr);
+    check('drivers: the site’s banned words refuse the point ("Strong")', !d.helped.some((x) => /^Strong/.test(x.text)) && pr.some((p) => /does not use/.test(p)));
+    check('drivers: the legal boilerplate is refused', d.weighed.length === 1 && pr.some((p) => /boilerplate/.test(p)));
+    check('drivers: at most three a side', d.helped.length === 3, d.helped.length);
+    const none = Rel.driverLists({ helped: [], weighed: [] }, rel, []);
+    check('drivers: none given is two empty lists (stored, so a re-read knows)', Array.isArray(none.helped) && !none.helped.length && Array.isArray(none.weighed) && !none.weighed.length);
+    const html = RV.driversHtml({ drivers: d });
+    check('drivers: the page shows two columns, each point’s own words on hover', /What helped/.test(html) && /What weighed/.test(html) && /title="“reflecting continued strength in demand for travel”"/.test(html) && RV.driversHtml({ drivers: none }) === '' && RV.driversHtml({}) === '');
+  }
   // The label's colours: the email's hex and the app.css tokens agree, and the tag names its class.
   const css = require('fs').readFileSync(__dirname + '/public/app.css', 'utf8');
   const tok = {}; for (const m of css.matchAll(/--gch-(\w+):\s*(#[0-9a-f]{6})/gi)) tok[m[1]] = m[2].toLowerCase();

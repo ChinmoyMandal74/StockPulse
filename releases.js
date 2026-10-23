@@ -57,7 +57,7 @@ const FIG = (what) => ({ type: 'object', additionalProperties: false, required: 
   prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
   unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in, from the table heading or the sentence (e.g. "In millions").' } } });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'summary'],
+  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'drivers', 'summary'],
   properties: {
     is_results_release: { type: 'boolean', description: 'True if this document reports the company’s financial results for a completed quarter, whatever it is called (a press release, a shareholder letter, a quarterly "Update"). False for a preliminary estimate of results, a contract or deal announcement, or anything without the completed quarter’s figures.' },
     period_label: { type: 'string', description: 'The company’s own name for the quarter, e.g. "Third Quarter 2026".' },
@@ -103,11 +103,24 @@ const SCHEMA = { type: 'object', additionalProperties: false,
         direction: { type: 'string', enum: ['raised', 'reaffirmed', 'lowered', 'initiated', 'withdrawn', 'mixed', 'none'],
           description: 'Judge ONLY the revenue and earnings (EPS, net income) outlook; ignore expense, capital spending, tax and other guidance. raised: it raises at least one revenue or earnings figure and lowers none (reaffirming the rest is still raised). lowered: it lowers at least one and raises none. reaffirmed (or maintained, reiterated): it keeps them unchanged. mixed: it raises one revenue or earnings figure and lowers another. initiated: it gives a revenue or earnings outlook for a new period for the first time. withdrawn: it withdraws or suspends it. none: it says nothing about a change to its revenue or earnings outlook, or gives none.' },
         quote: { type: 'string', description: 'The words that say it, copied exactly from the release, under 200 characters. Empty for none.' } } },
+    // WHAT HELPED AND WHAT WEIGHED (2026-10-23): the company's own explanation
+    // of the quarter, never an opinion of ours, each point backed by a phrase
+    // copied from the release.
+    drivers: { type: 'object', additionalProperties: false, required: ['helped', 'weighed'],
+      description: 'Why the quarter came out as it did, AS THE COMPANY EXPLAINS IT in this release: what it says helped (drove growth, lifted margins) and what it says weighed (offset, pressured, hurt). Up to three each, the most material first. Only reasons the release states about this quarter; never the forward-looking-statements or risk-factors boilerplate, never your own view. Empty arrays if it gives none.',
+      properties: {
+        helped: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'evidence'], properties: {
+          text: { type: 'string', description: 'The point in plain words, under 110 characters, as the company presents it. Not the words buy, sell, hold, strong, weak, bullish or bearish.' },
+          evidence: { type: 'string', description: 'A phrase of 4 to 20 words copied EXACTLY from the release that states it.' } } } },
+        weighed: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'evidence'], properties: {
+          text: { type: 'string', description: 'The point in plain words, under 110 characters, as the company presents it. Not the words buy, sell, hold, strong, weak, bullish or bearish.' },
+          evidence: { type: 'string', description: 'A phrase of 4 to 20 words copied EXACTLY from the release that states it.' } } } } } },
     summary: { type: 'string', description: 'Two or three plain sentences of what the release reports. Facts only: no opinion, no recommendation, and none of the words buy, sell, hold, strong, weak, bullish, bearish.' },
   } };
 const SYSTEM = 'You read a company’s quarterly results press release and copy figures out of it into fixed fields. '
   + 'Copy each number EXACTLY as printed in the document; never compute, round, convert or derive one, and never turn a midpoint plus-or-minus into a range. '
   + 'If a figure or text is not in the document, give an empty string. Quarter figures only, never year-to-date or full-year (except in guidance, which may be for a year). '
+  + 'In drivers, give only the reasons the company itself states for this quarter, each with a phrase copied from the release. '
   + 'For the outlook, list every figure in guidance_items, and say in guidance_change only what the company itself states about raising, lowering, reaffirming, initiating or withdrawing it. '
   + 'Report what the document says; add nothing.';
 function request(text, model) {
@@ -236,6 +249,7 @@ function toRow(ans, text, meta) {
   // Every guidance item, each figure found in the text; and the stated change.
   const guides = isRes ? guideItems(A.guidance_items, keep) : [];
   const ch = isRes ? guideChange(A.guidance_change, norm, problems) : { change: null, quote: null };
+  const drivers = isRes ? driverLists(A.drivers, norm, problems) : null;
   const pe = blankStr(A.period_end);
   const row = {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
@@ -246,6 +260,7 @@ function toRow(ans, text, meta) {
     guideUnit: gKind ? gUnit : null, guideSentence: gKind ? blankStr(G.sentence) : null, summary,
     // [] for a results release with no guidance, so a guidance re-read knows it was read.
     guides: isRes ? guides : null, guideChange: ch.change, guideChangeQuote: ch.quote,
+    drivers,
   };
   return { row, problems };
 }
@@ -276,6 +291,29 @@ function guideItems(list, keep) {
     out.push(g);
   }
   return out;
+}
+// ---- WHAT HELPED AND WHAT WEIGHED (2026-10-23) -----------------------------
+// Each point kept only when its evidence is in the release word for word, is
+// not the legal boilerplate, and its text uses none of the site's banned
+// words. At most three a side. { helped: [{text, evidence}], weighed: [...] };
+// both empty when the release gives no reasons (stored, so a re-read knows).
+const BOILER = /forward-looking|risks and uncertainties|could cause actual|safe harbor|undue reliance|risk factors/i;
+function driverLists(d, norm, problems) {
+  const flat = flatQ(norm);
+  const side = (list, name) => {
+    const out = [];
+    for (const it of (Array.isArray(list) ? list : [])) {
+      if (out.length >= 3) break;
+      const text = blankStr(it && it.text), ev = blankStr(it && it.evidence);
+      if (!text || !ev) continue;
+      if (!flat.includes(flatQ(ev))) { problems.push(name + ' "' + text.slice(0, 50) + '": its words are not in the release'); continue; }
+      if (BOILER.test(ev) || BOILER.test(text)) { problems.push(name + ' "' + text.slice(0, 50) + '": boilerplate, left out'); continue; }
+      if (BANNED.test(text)) { problems.push(name + ' "' + text.slice(0, 50) + '": used a word the site does not use'); continue; }
+      out.push({ text: text.slice(0, 140), evidence: ev.slice(0, 240) });
+    }
+    return out;
+  };
+  return { helped: side(d && d.helped, 'helped'), weighed: side(d && d.weighed, 'weighed') };
 }
 // The middle of an item: its single figure, else the middle of its range.
 const guideMidOf = (g) => (!g ? null : g.mid != null ? g.mid : g.low != null && g.high != null ? (g.low + g.high) / 2 : null);
@@ -437,7 +475,7 @@ function columnRows(releases, earnBySymbol) {
     const f = forReader(latest[sym], (earnBySymbol && earnBySymbol[sym]) || []);
     // The guidance items themselves stay off the column (guideRead carries
     // what the columns show): the figure is fetched by every screener load.
-    for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt', 'guides', 'epsGuidePrior']) delete f[k];
+    for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt', 'guides', 'epsGuidePrior', 'drivers']) delete f[k];
     if (f.guideRead && f.guideRead.revQ) f.guideRead.revQ = Object.assign({}, f.guideRead.revQ, { sentence: undefined });
     out[sym] = f;
   }
@@ -498,4 +536,4 @@ function reconStatus(r) {
   return { status: !compared ? 'incomplete' : differs.length ? 'differs' : 'agrees', differs };
 }
 
-module.exports = { guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

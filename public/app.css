@@ -701,3 +701,11 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .gch { display: inline-block; padding: 1px 8px; border-radius: 999px; font: 600 10.5px/1.6 var(--sans); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; color: var(--gch-ink); background: var(--gch-reaffirmed); }
 .gch.gch-raised { background: var(--gch-raised); } .gch.gch-lowered { background: var(--gch-lowered); } .gch.gch-withdrawn { background: var(--gch-withdrawn); }
 .gch.gch-mixed { background: var(--gch-mixed); } .gch.gch-initiated { background: var(--gch-initiated); } .gch.gch-reaffirmed { background: var(--gch-reaffirmed); }
+
+/* ---- what helped and what weighed (ReleaseView.driversHtml) ------------ */
+.rv-drv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin-top: 10px; }
+.rv-drv-col > b { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.rv-drv-col ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 4px; }
+.rv-drv-col li { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.rv-drv-col p { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
+@media (max-width: 560px) { .rv-drv { grid-template-columns: 1fr; } }

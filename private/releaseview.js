@@ -121,5 +121,17 @@
     });
     return o;
   }
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag };
+  // WHAT HELPED AND WHAT WEIGHED, two columns of the company's own reasons
+  // (2026-10-23). One definition for the stock page and the results page;
+  // styled once in app.css (.rv-drv). The email lays them out for itself.
+  // Each point's backing phrase from the release is its hover.
+  function driversHtml(r) {
+    const d = r && r.drivers;
+    if (!d || (!(d.helped || []).length && !(d.weighed || []).length)) return '';
+    const col = (title, list) => '<div class="rv-drv-col"><b>' + title + '</b>' + ((list || []).length
+      ? '<ul>' + list.map((x) => '<li title="' + esc('\u201c' + x.evidence + '\u201d') + '">' + esc(x.text) + '</li>').join('') + '</ul>'
+      : '<p>None stated.</p>') + '</div>';
+    return '<div class="rv-drv">' + col('What helped', d.helped) + col('What weighed', d.weighed) + '</div>';
+  }
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, driversHtml };
 })(typeof window !== 'undefined' ? window : globalThis);
