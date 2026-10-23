@@ -9764,17 +9764,21 @@
     const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
     const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);
     const day = (iso) => { const t = new Date(String(iso || '')); return isNaN(t.getTime()) ? '' : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+    // A colour a tile (2026-10-23): the shared figure with its own --c.
+    const NEU = pal.ink('#94a3b8'), CNT = pal.ink('#c4b5fd');
+    const tf = (k, v, x, color, edge) => toneFig(k, v, x, color).replace('<div class="cr-fig">', () => '<div class="cr-fig" style="--c:' + edge + '">');
     const figs = W
-      ? toneFig('Average tone', toneNum(W.avg), 'last 7 days, ' + toneLabel(W.avg).toLowerCase(), colorOf(W.avg))
-        + toneFig('Articles read', String(W.count), 'about the company')
-        + toneFig('Positive', String(W.positive), Math.round(W.positive / W.count * 100) + '% of them', POS)
-        + toneFig('Negative', String(W.negative), Math.round(W.negative / W.count * 100) + '% of them', NEG)
-      : toneFig('Average tone', '—', 'none in the last 7 days') + toneFig('Articles read', '0', 'in the last 7 days') + toneFig('Positive', '—', '') + toneFig('Negative', '—', '');
+      ? tf('Average tone', toneNum(W.avg), 'last 7 days, ' + toneLabel(W.avg).toLowerCase(), colorOf(W.avg), colorOf(W.avg) || NEU)
+        + tf('Articles read', String(W.count), 'about the company', CNT, CNT)
+        + tf('Positive', String(W.positive), Math.round(W.positive / W.count * 100) + '% of them', POS, POS)
+        + tf('Negative', String(W.negative), Math.round(W.negative / W.count * 100) + '% of them', NEG, NEG)
+      : tf('Average tone', '—', 'none in the last 7 days', null, NEU) + tf('Articles read', '0', 'in the last 7 days', null, CNT) + tf('Positive', '—', '', null, POS) + tf('Negative', '—', '', null, NEG);
     const list = items.map((x) => {
       const c = colorOf(x.tone);
       const meta = [day(x.published_at), x.source, x.kindLabel].filter(Boolean).join(' · ');
-      return '<div class="tn-it">'
-        + '<div class="tn-h"><span class="tn-chip" style="' + (c ? 'color:' + c + ';border-color:' + c : '') + '">' + esc(toneLabel(x.tone) + ' ' + toneNum(x.tone)) + '</span>'
+      // Each article a panel in its reading's colour: edge, tint, a filled chip.
+      return '<div class="tn-it" style="--c:' + (c || NEU) + '">'
+        + '<div class="tn-h"><span class="tn-chip">' + esc(toneLabel(x.tone) + ' ' + toneNum(x.tone)) + '</span>'
         + '<span class="tn-hl">' + esc(x.headline) + '</span></div>'
         + (x.summary && !heads ? '<p class="tn-sum">' + esc(x.summary) + '</p>' : '')
         + '<div class="tn-meta">' + esc(meta) + '</div></div>';
@@ -9784,8 +9788,8 @@
       + '<span class="s-kick">' + esc((row.industry || row.sector || '') + ' · ' + sym + ' · article tone') + '</span>'
       + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
       + '<span class="dim">how the articles read</span></h2>'
-      + '<div class="cr-figs tn-figs">' + figs + '</div>'
-      + '<div class="tn-list' + (heads ? ' tn-heads' : '') + '">' + list + '</div>'
+      + '<div class="cr-figs tn-figs tn-col">' + figs + '</div>'
+      + '<div class="tn-list tn-col' + (heads ? ' tn-heads' : '') + '">' + list + '</div>'
       + '<p class="s-sub wide" style="--fs:16px">' + esc('The latest articles about ' + sym + (negShown ? ', the negative readings first' : '')
         + (heads ? ', each headline with its reading. ' : ', each with its reading and the model’s own two-sentence summary. ') + TONE_NOTE) + '</p>'
       + '</div></div>' + chromeFoot();
@@ -13920,6 +13924,13 @@
     .sz-square .mt-of { display: none; }
     /* Headlines only: tighter, so twice as many fit. */
     .tn-list.tn-heads { gap: 10px; }
+    .tn-figs.tn-col .cr-fig { border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-top: 4px solid var(--c); border-radius: 18px; padding: 14px 16px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--c) 16%, transparent), color-mix(in srgb, var(--c) 4%, transparent)); }
+    .tn-figs.tn-col .cr-fig .k { color: var(--c); }
+    .tn-list.tn-col .tn-it { border-top: 0; border-left: 5px solid var(--c); border-radius: 10px; padding: 14px 18px; background: color-mix(in srgb, var(--c) 10%, transparent); }
+    .tn-list.tn-col .tn-it:first-child { padding-top: 14px; }
+    .tn-list.tn-col .tn-chip { color: #ffffff; border-color: var(--c); background: var(--c); }
+    .tn-list.tn-col.tn-heads .tn-it { padding: 10px 16px; }
     .tn-heads .tn-it { padding-top: 10px; }
     .tn-heads .tn-hl { font-size: 23px; }
     .tn-heads .tn-meta { margin-top: 4px; }
