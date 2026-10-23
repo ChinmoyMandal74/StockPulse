@@ -1389,6 +1389,33 @@
         <select id="rstSp500"></select>
         <p class="hint">The season so far for one theme, then a row a company, as for an industry. A fund in the theme is left out.</p>
       </div>
+      <!-- Guidance summary (2026-10-23): the season's guidance, an index, a sector, an industry, a theme. -->
+      <div id="gsmBox">
+        <label>Index</label>
+        <select id="gsmSp500"></select>
+        <p class="hint">The season’s guidance: how many of the reported gave it, and how many say they raised, reaffirmed or lowered it, by sector, then who raised and who lowered, the largest first. Only what each release states in words.</p>
+      </div>
+      <div id="gssBox">
+        <label>Sector</label>
+        <select id="gssName"></select>
+        <label>Index</label>
+        <select id="gssSp500"></select>
+        <p class="hint">One sector’s guidance this season, then a row an industry, and who raised and who lowered.</p>
+      </div>
+      <div id="gsiBox">
+        <label>Industry</label>
+        <select id="gsiName"></select>
+        <label>Index</label>
+        <select id="gsiSp500"></select>
+        <p class="hint">One industry’s guidance this season, a row a company: what it says it did to its outlook, and its guidance against before where it can be measured.</p>
+      </div>
+      <div id="gstBox">
+        <label>Theme</label>
+        <select id="gstName"></select>
+        <label>Index</label>
+        <select id="gstSp500"></select>
+        <p class="hint">One theme’s guidance this season, a row a company, as for an industry.</p>
+      </div>
       <!-- Reel (2026-10-19, admin only): one stock as a 22-second video. -->
       <div id="rlBox">
         <label>Stock</label>
@@ -2442,6 +2469,10 @@
       { id: 'secressum', name: 'Sector results summary', note: 'One sector’s reporting season: how many have reported, above or below the EPS estimate, growth combined, by industry' },
       { id: 'indressum', name: 'Industry results summary', note: 'One industry’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
       { id: 'thmressum', name: 'Theme results summary', note: 'One theme’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
+      { id: 'gdsum', name: 'Guidance summary', note: 'The season’s guidance across an index: how many gave it, and how many say they raised, reaffirmed or lowered it, by sector, with who raised and who lowered' },
+      { id: 'secgdsum', name: 'Sector guidance summary', note: 'One sector’s guidance this season: how many gave it and what they say they did to it, by industry' },
+      { id: 'indgdsum', name: 'Industry guidance summary', note: 'One industry’s guidance this season, company by company: what each says it did to its outlook' },
+      { id: 'thmgdsum', name: 'Theme guidance summary', note: 'One theme’s guidance this season, company by company: what each says it did to its outlook' },
       { id: 'ressum', name: 'Results summary', note: 'The reporting season across an index: how many have reported, how many came in above or below the EPS estimate, growth combined, by sector' },
       { id: 'reported', name: 'Results reported', note: 'The results press releases filed on one day by companies on the screen: revenue and its change, EPS against the estimate, the largest first' },
       { id: 'filed', name: 'Filed yesterday', note: 'Every 5% holder filing (Schedule 13D or 13G) and every 8-K filed on one day about the companies on the screen: the newest day read, or one you pick' },
@@ -2576,6 +2607,7 @@
       ['filed', 'Filed yesterday'],
       ['reported', 'Results reported'],
       ['ressum', 'Results summary'],
+      ['gdsum', 'Guidance summary'],
       ['mkttone', 'Article tone'],
       // Called Corrections until 2026-10-19 (the owner): renamed to match the
       // screener's Drawdown column, whose four states it counts. The id stays.
@@ -2649,6 +2681,7 @@
       ['seclines', 'Lines — any measure'],
       ['secbars', 'Bars — any measure'],
       ['secressum', 'Results summary'],
+      ['secgdsum', 'Guidance summary'],
       ['sectone', 'Article tone'],
     ];
     // A THEME GROUP (2026-10-13, the owner: "do you think we can add a new
@@ -2670,6 +2703,7 @@
       ['thmlines', 'Lines — any measure'],
       ['thmbars', 'Bars — any measure'],
       ['thmressum', 'Results summary'],
+      ['thmgdsum', 'Guidance summary'],
       ['thmtone', 'Article tone'],
     ];
     const IND_VIEWS = [
@@ -2678,6 +2712,7 @@
       ['indlines', 'Lines — any measure'],
       ['indbars', 'Bars — any measure'],
       ['indressum', 'Results summary'],
+      ['indgdsum', 'Guidance summary'],
       ['indmargin', 'Margins'],
       ['optind', 'Options'],
       ['indcotone', 'Article tone'],
@@ -3468,7 +3503,7 @@
       'smovMetric', 'smovCount', 'smovFloor', 'smovSp500',
       'sbaPage', 'sbaDir', 'sbaRank', 'sbaCount', 'sbaFloor', 'sbaSp500',
       'eaWin', 'eaCount', 'eaEst', 'eaSp500',
-      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'rsmSp500', 'rssName', 'rssSp500', 'rsiName', 'rsiSp500', 'rstName', 'rstSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
+      'corSp500', 'ddSym', 'ddYears', 'ddMin', 'bndSym', 'bndWin', 'sclSym', 'sclMetric', 'sclWin', 'rlSym', 'fldDay', 'fldShow', 'fldSp500', 'rptDay', 'rptSp500', 'rsmSp500', 'rssName', 'rssSp500', 'rsiName', 'rsiSp500', 'rstName', 'rstSp500', 'gsmSp500', 'gssName', 'gssSp500', 'gsiName', 'gsiSp500', 'gstName', 'gstSp500', 'glnMetric', 'glnWin', 'glnPick', 'ilnMetric', 'ilnWin', 'ilnPick', 'tlnMetric', 'tlnWin', 'tlnPick', 'glnSp500', 'ilnSp500', 'tlnSp500', 'iflSym',
       'mgSp500', 'mgMetric',
       'smgName', 'smgSp500', 'smgMetric', 'imgName', 'imgSp500', 'imgMetric',
       'omkSp500', 'oscName', 'oscSp500', 'oinName', 'oinSp500',
@@ -4334,7 +4369,7 @@
       $('fldBox').style.display = tpl === 'filed' ? 'block' : 'none';
       $('rptBox').style.display = tpl === 'reported' ? 'block' : 'none';
       $('rsmBox').style.display = tpl === 'ressum' ? 'block' : 'none';
-      for (const [b, id] of [['rssBox', 'secressum'], ['rsiBox', 'indressum'], ['rstBox', 'thmressum']]) $(b).style.display = tpl === id ? 'block' : 'none';
+      for (const [b, id] of [['rssBox', 'secressum'], ['rsiBox', 'indressum'], ['rstBox', 'thmressum'], ['gsmBox', 'gdsum'], ['gssBox', 'secgdsum'], ['gsiBox', 'indgdsum'], ['gstBox', 'thmgdsum']]) $(b).style.display = tpl === id ? 'block' : 'none';
       $('glnBox').style.display = tpl === 'seclines' ? 'block' : 'none';
       $('ilnBox').style.display = tpl === 'indlines' ? 'block' : 'none';
       $('tlnBox').style.display = tpl === 'thmlines' ? 'block' : 'none';
@@ -4682,6 +4717,11 @@
     // Results summary: its own list; the S&P 500 by default, the card's own default.
     for (const [v, label] of Cards.spCuts()) $('rsmSp500').add(new Option(label, v, v === 'in', v === 'in'));
     $('rsmSp500').addEventListener('change', () => { if (tpl === 'ressum') render(); });
+    // The Guidance summaries: the index as the Results summaries open (the market on the S&P 500, a group on every stock).
+    for (const [v, label] of Cards.spCuts()) $('gsmSp500').add(new Option(label, v, v === 'in', v === 'in'));
+    for (const p of ['gss', 'gsi', 'gst']) for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'All', v === 'All'));
+    [['gsmSp500', 'gdsum'], ['gssName', 'secgdsum'], ['gssSp500', 'secgdsum'], ['gsiName', 'indgdsum'], ['gsiSp500', 'indgdsum'], ['gstName', 'thmgdsum'], ['gstSp500', 'thmgdsum']].forEach(([id, t]) =>
+      $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     // The three group summaries: every stock by default, a group picker each.
     for (const p of ['rss', 'rsi', 'rst']) for (const [v, label] of Cards.spCuts()) $(p + 'Sp500').add(new Option(label, v, v === 'All', v === 'All'));
     [['rssName', 'secressum'], ['rssSp500', 'secressum'], ['rsiName', 'indressum'], ['rsiSp500', 'indressum'], ['rstName', 'thmressum'], ['rstSp500', 'thmressum']].forEach(([id, t]) =>
@@ -5925,7 +5965,12 @@
           if (!$('rssName').dataset.set && [...$('rssName').options].some((o) => o.value === 'Technology')) { $('rssName').value = 'Technology'; $('rssName').dataset.set = '1'; }
           fill('rsiName', Cards.industries(stocks, 'All').map((n) => [n, n]));
           if (!$('rsiName').dataset.set && [...$('rsiName').options].some((o) => o.value === 'Semiconductors')) { $('rsiName').value = 'Semiconductors'; $('rsiName').dataset.set = '1'; }
-          fill('rstName', [['', 'The theme with the most reported']].concat(Cards.groupMonthThemes(stocks).map((n) => [n, n]))); }
+          fill('rstName', [['', 'The theme with the most reported']].concat(Cards.groupMonthThemes(stocks).map((n) => [n, n])));
+          fill('gssName', Cards.sectors(stocks).map((n) => [n, n]));
+          if (!$('gssName').dataset.set && [...$('gssName').options].some((o) => o.value === 'Technology')) { $('gssName').value = 'Technology'; $('gssName').dataset.set = '1'; }
+          fill('gsiName', Cards.industries(stocks, 'All').map((n) => [n, n]));
+          if (!$('gsiName').dataset.set && [...$('gsiName').options].some((o) => o.value === 'Semiconductors')) { $('gsiName').value = 'Semiconductors'; $('gsiName').dataset.set = '1'; }
+          fill('gstName', [['', 'The theme with the most reported']].concat(Cards.groupMonthThemes(stocks).map((n) => [n, n]))); }
         { const keep = $('mvgPeriod').value;
           $('mvgPeriod').innerHTML = Cards.moveGridPeriods().map(([v, lab]) => `<option value="${esc(v)}"${v === 'ytd' ? ' selected' : ''}>${esc(lab)}</option>`).join('');
           if ([...$('mvgPeriod').options].some((o) => o.value === keep)) $('mvgPeriod').value = keep; }

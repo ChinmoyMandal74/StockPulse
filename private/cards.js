@@ -12401,6 +12401,134 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Guidance summary: the season's guidance across an index (2026-10-23) ----
+  //
+  // The owner: "One thing we are not showing on this is the guidance fields,
+  // should we create a new page for guidance" ... "yes build all the options".
+  // Beside the Results summary, over the same scope (rsScope: the cut, the
+  // group, the season): how many of the reported gave guidance, and what the
+  // companies say they did to it (raised, reaffirmed, lowered...), from the
+  // release column (each company's newest release, guideChange read from its
+  // own words). The market's table is a row a sector, a sector's a row an
+  // industry, an industry's and a theme's a row a company.
+  //
+  // THE LABEL'S COLOURS (ReleaseView.CHANGE_HEX, the owner's exception to
+  // green-and-red-mean-price) as fills only: a bar, a tile's edge, a chip.
+  // The lists of who raised and who lowered run largest first by market value,
+  // never by how much: a record of what was said, not a ranking.
+  const GS_TPLS = { gdsum: 'market', secgdsum: 'sector', indgdsum: 'industry', thmgdsum: 'theme' };
+  const GS_KINDS = ['raised', 'reaffirmed', 'initiated', 'mixed', 'lowered', 'withdrawn'];
+  function tplGuidanceSummary(tpl) {
+    const dim = GS_TPLS[tpl] || 'market';
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const col = getReleaseColumn();
+    if (!col) return shell('Guidance summary', 'Reading', 'the releases…');
+    const PFX = { market: 'gsm', sector: 'gss', industry: 'gsi', theme: 'gst' }[dim];
+    const S = rsScope(dim, PFX, col, 'Guidance summary', shell);
+    if (S.early) return S.early;
+    const { cut, name, members, label, inSeason, newest, season } = S;
+    const RVG = typeof globalThis !== 'undefined' && globalThis.ReleaseView ? globalThis.ReleaseView : null;
+    const HEX = (RVG && RVG.CHANGE_HEX) || {};
+    const WORD = (RVG && RVG.CHANGE_WORD) || {};
+    const NONE = pal.ink('#94a3b8');
+    const gave = (r) => !!(r.guideSentence || r.guideChange || (r.guideRead && (r.guideRead.revQ || r.guideRead.epsFy)));
+    const sumG = (list) => {
+      const o = { n: list.length, gave: 0, unstated: 0 };
+      for (const k of GS_KINDS) o[k] = 0;
+      for (const x of list) {
+        if (!gave(x.r)) continue;
+        o.gave++;
+        const c = x.r.guideChange;
+        if (c && o[c] != null) o[c]++; else o.unstated++;
+      }
+      return o;
+    };
+    const all = sumG(inSeason);
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : null);
+    const [qy, qq] = season.split('-Q');
+    const qName = 'Q' + qq + ' ' + qy;
+    const asOf = new Date(newest + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    // Tiles: the count that gave guidance, then the three most said changes.
+    const tile = (k, v, sub, edge) => '<div class="rs-t gs-t" style="--c:' + edge + '"><span class="rs-k">' + esc(k) + '</span><b>' + esc(v) + '</b><span class="rs-s">' + esc(sub) + '</span></div>';
+    const ofGave = (n) => (all.gave ? pct(n, all.gave) + '% of those that gave guidance' : 'none gave guidance');
+    const tiles = '<div class="rs-tiles">'
+      + tile('Gave guidance', String(all.gave), all.n ? 'of ' + all.n + ' reported (' + pct(all.gave, all.n) + '%)' : 'none reported yet', pal.ink('#818cf8'))
+      + tile('Raised', String(all.raised), ofGave(all.raised), HEX.raised || NONE)
+      + tile('Reaffirmed', String(all.reaffirmed), ofGave(all.reaffirmed), HEX.reaffirmed || NONE)
+      + tile('Lowered', String(all.lowered + all.withdrawn), all.withdrawn ? ofGave(all.lowered + all.withdrawn) + ', ' + all.withdrawn + ' withdrawn' : ofGave(all.lowered), HEX.lowered || NONE)
+      + '</div>';
+    // The bar: every change stated, then guidance with no change stated.
+    const seg = (n, c, cls) => (n ? '<i class="' + (cls || '') + '" style="flex:' + n + (c ? ';background:' + c : '') + '"></i>' : '');
+    const bar = '<div class="rs-bar">' + GS_KINDS.map((k) => seg(all[k], HEX[k])).join('') + seg(all.unstated, null, 'rs-no') + '</div>'
+      + '<div class="rs-leg">' + GS_KINDS.filter((k) => all[k]).map((k) => '<span><i style="background:' + HEX[k] + '"></i>' + all[k] + ' ' + (WORD[k] || k).toLowerCase() + '</span>').join('')
+      + '<span><i class="rs-no"></i>' + all.unstated + ' no change stated</span></div>';
+    const chip = (k) => (k && HEX[k] ? '<span class="sr-pill gs-pill" style="background:' + HEX[k] + '">' + esc(WORD[k] || k) + '</span>' : '');
+    let table, lists = '';
+    if (dim === 'market' || dim === 'sector') {
+      const key = dim === 'market' ? 'sector' : 'industry';
+      const word = dim === 'market' ? ['Sector', 'sectors', 'sector'] : ['Industry', 'industries', 'industry'];
+      const grp = {};
+      for (const m of members) if (m[key]) { grp[m[key]] = grp[m[key]] || { size: 0, list: [] }; grp[m[key]].size++; }
+      for (const x of inSeason) if (x.m[key] && grp[x.m[key]]) grp[x.m[key]].list.push(x);
+      const gRows = Object.keys(grp).map((k) => ({ k, s: sumG(grp[k].list) })).filter((x) => x.s.n)
+        .sort((a, b) => b.s.gave - a.s.gave || b.s.n - a.s.n || (a.k < b.k ? -1 : 1));
+      const maxRows = { square: 7, portrait: 9, story: 12 }[size.id] || 9;
+      const num = (v, k) => (v ? '<b class="gs-n" style="--c:' + HEX[k] + '">' + v + '</b>' : '<span class="rs-dim">0</span>');
+      table = '<div class="rs-tab gs-tab"><div class="rs-r rs-hd"><span class="rs-sec">' + word[0] + '</span><span>Gave guidance</span><span>Raised</span><span>Reaffirmed</span><span>Lowered</span></div>'
+        + gRows.slice(0, maxRows).map((x) => '<div class="rs-r"><span class="rs-sec">' + esc(x.k) + '</span>'
+          + '<span>' + x.s.gave + '<em> of ' + x.s.n + '</em></span>'
+          + '<span>' + num(x.s.raised, 'raised') + '</span><span>' + num(x.s.reaffirmed, 'reaffirmed') + '</span><span>' + num(x.s.lowered + x.s.withdrawn, 'lowered') + '</span></div>').join('')
+        + (gRows.length > maxRows ? '<div class="fd-more">and ' + (gRows.length - maxRows) + ' more ' + (gRows.length - maxRows === 1 ? word[2] : word[1]) + '</div>' : '') + '</div>';
+      // Who raised and who lowered, the largest first.
+      const cap = (x) => Number(x.m.marketCap) || 0;
+      const who = (kinds) => inSeason.filter((x) => kinds.includes(x.r.guideChange)).sort((a, b) => cap(b) - cap(a));
+      const maxSyms = { square: 9, portrait: 12, story: 16 }[size.id] || 12;
+      const line = (title, k, list) => (list.length ? '<div class="gs-list">' + chip(k) + '<span>' + list.slice(0, maxSyms).map((x) => esc(x.m.symbol)).join(' · ')
+        + (list.length > maxSyms ? ' <em>and ' + (list.length - maxSyms) + ' more</em>' : '') + '</span></div>' : '');
+      lists = line('Raised', 'raised', who(['raised'])) + line('Lowered', 'lowered', who(['lowered', 'withdrawn']));
+    } else {
+      // A row a company: those reported this season first, the largest first.
+      const byM = new Map(inSeason.map((x) => [x.m.symbol, x]));
+      const ordered = members.slice().sort((a, b) => (byM.has(b.symbol) ? 1 : 0) - (byM.has(a.symbol) ? 1 : 0) || (Number(b.marketCap) || 0) - (Number(a.marketCap) || 0));
+      const maxRows = { square: 10, portrait: 12, story: 16 }[size.id] || 12;
+      const sg = (v) => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%');
+      const crow = (m) => {
+        const x = byM.get(m.symbol);
+        const head = '<span class="rs-sym">' + esc(m.symbol) + '</span><span class="rs-sec">' + esc(nameOf(m)) + '</span>';
+        if (!x) return '<div class="rs-r rs-co rs-not">' + head + '<span>not yet</span><span>—</span><span>—</span></div>';
+        const r = x.r, g = r.guideRead || {};
+        const state = r.guideChange ? chip(r.guideChange) : gave(r) ? '<span class="rs-dim">no change stated</span>' : '<span class="rs-dim">none given</span>';
+        return '<div class="rs-r rs-co">' + head
+          + '<span>' + esc(new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + '</span>'
+          + '<span>' + state + '</span>'
+          + '<span>' + esc(g.epsVsFy != null ? sg(g.epsVsFy) : g.revVsQ != null ? sg(g.revVsQ) : '—') + '</span></div>';
+      };
+      table = '<div class="rs-tab gs-tab"><div class="rs-r rs-co rs-hd"><span class="rs-sym rs-hdsym">Company</span><span></span><span>Reported</span><span>Guidance</span><span>Vs. prior</span></div>'
+        + ordered.slice(0, maxRows).map(crow).join('')
+        + (ordered.length > maxRows ? '<div class="fd-more">and ' + (ordered.length - maxRows) + ' more compan' + (ordered.length - maxRows === 1 ? 'y' : 'ies') + '</div>' : '') + '</div>';
+    }
+    const inCut = cut !== 'All' && SP_CUT_PROSE[cut] ? SP_CUT_PROSE[cut] : null;
+    const subject = dim === 'market' ? (inCut || 'every company tracked')
+      : (dim === 'sector' ? 'the ' + name + ' sector' : dim === 'industry' ? name : 'the ' + name + ' theme') + (inCut ? ' in ' + inCut : '');
+    const note = 'Guidance in the ' + qName + ' reporting season for ' + subject + ', as of ' + asOf + ', from each company’s results press release, read by an AI model. '
+      + 'Raised, reaffirmed, lowered and the rest are what the company itself states about its revenue or earnings outlook, taken only where the release says so in words; '
+      + 'guidance with no such statement counts as no change stated. '
+      + (dim === 'industry' || dim === 'theme' ? 'Vs. prior is full-year EPS guidance against the year before, else next quarter’s revenue guidance against this quarter. ' : 'Companies are listed largest first. ')
+      + 'A record of what was said, not a forecast and not a reading of any stock.';
+    return chromeTop()
+      + '<div class="s-body"><div class="rs-in">'
+      + '<span class="s-kick">' + esc('Guidance summary · ' + label) + '</span>'
+      + (dim === 'market'
+        ? '<h2 class="s-title">' + esc(qName) + ' guidance<br><span class="dim">' + esc(all.gave + ' of ' + all.n + ' gave guidance') + '</span></h2>'
+        : '<h2 class="s-title"><span class="mh-name' + (name.length > 30 ? ' mh-l2' : name.length > 18 ? ' mh-l1' : '') + '">' + esc(name) + '</span><span class="dim rs-dimt">' + esc(qName + ' guidance, ' + all.gave + ' of ' + all.n + ' gave it') + '</span></h2>')
+      + tiles + bar + table + lists
+      + '<p class="s-sub wide rs-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Results summary: a reporting season across an index (2026-10-22) ----
   //
   // The owner: "If I have a summarize the data at the entire s&p level on
@@ -12437,7 +12565,8 @@
   // sector's, a row an industry; an industry's and a theme's, a row a company
   // (reported first, the largest first, then those not yet reported).
   const RS_TPLS = { ressum: 'market', secressum: 'sector', indressum: 'industry', thmressum: 'theme' };
-  function resultsSummaryNeed(tpl) { return RS_TPLS[tpl] ? {} : null; }
+  // The Guidance summary cards (GS_TPLS, below) read the same release column.
+  function resultsSummaryNeed(tpl) { return RS_TPLS[tpl] || GS_TPLS[tpl] ? {} : null; }
   function rsQuarterOf(d) {
     const t = Date.parse(String(d) + 'T12:00:00Z'), y = Number(String(d).slice(0, 4));
     if (!isFinite(t) || !y) return null;
@@ -12458,20 +12587,31 @@
     const col = getReleaseColumn();
     if (!col) return shell('Results summary', 'Reading', 'the releases…');
     const PFX = { market: 'rsm', sector: 'rss', industry: 'rsi', theme: 'rst' }[dim];
+    const S = rsScope(dim, PFX, col, 'Results summary', shell);
+    if (S.early) return S.early;
+    const { cut, name, members, label, inSeason, newest, season } = S;
+    return rsDraw(dim, cut, name, members, label, inSeason, newest, season);
+  }
+  // THE SCOPE BOTH SEASON CARDS SHARE (2026-10-23, the Guidance summary): the
+  // index cut, the sector, industry or theme asked for (O[pfx + 'Name']), and
+  // the season, so the Results summary and the Guidance summary can never
+  // count a different set of companies or quarters. Returns { early } (a card
+  // to show instead) or the scope.
+  function rsScope(dim, PFX, col, title, shell) {
     const cut = O[PFX + 'Sp500'] || (dim === 'market' ? 'in' : 'All');
     const pool = spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol) && x.instrumentType !== 'ETF'), cut);
     const cutLabel = cut !== 'All' && SP_CUT_LABEL[cut] ? SP_CUT_LABEL[cut] : null;
     // The group asked for, else a sensible first one: Technology, Semiconductors, the first theme.
     const pick = (list, asked, pref) => (list.includes(asked) ? asked : list.includes(pref) ? pref : list[0] || null);
     let name = null, members = pool;
-    if (dim === 'sector') { name = pick([...new Set(pool.map((x) => x.sector).filter(Boolean))].sort(), O.rssName, 'Technology'); members = pool.filter((x) => x.sector === name); }
-    if (dim === 'industry') { name = pick([...new Set(pool.map((x) => x.industry).filter(Boolean))].sort(), O.rsiName, 'Semiconductors'); members = pool.filter((x) => x.industry === name); }
+    if (dim === 'sector') { name = pick([...new Set(pool.map((x) => x.sector).filter(Boolean))].sort(), O[PFX + 'Name'], 'Technology'); members = pool.filter((x) => x.sector === name); }
+    if (dim === 'industry') { name = pick([...new Set(pool.map((x) => x.industry).filter(Boolean))].sort(), O[PFX + 'Name'], 'Semiconductors'); members = pool.filter((x) => x.industry === name); }
     if (dim === 'theme') {
       // Unless one is asked for, the theme with the most companies reporting in
       // the last 75 days (the first theme alphabetically had none on the first
       // draw), the larger theme on a tie.
       const list = groupMonthThemes(pool);
-      let asked = list.includes(O.rstName) ? O.rstName : null;
+      let asked = list.includes(O[PFX + 'Name']) ? O[PFX + 'Name'] : null;
       if (!asked) {
         const cr = col.rows || {};
         const last = pool.reduce((a, x) => (cr[x.symbol] && cr[x.symbol].filed > a ? cr[x.symbol].filed : a), '');
@@ -12487,8 +12627,8 @@
     const inGroup = new Set(members.map((m) => m.symbol));
     const poolRows = pool.map((m) => ({ m, r: (col.rows || {})[m.symbol] })).filter((x) => x.r && x.r.periodEnd);
     const rows = poolRows.filter((x) => inGroup.has(x.m.symbol));
-    if (!poolRows.length) return shell('Results summary \u00b7 ' + label, 'No results', 'releases on file yet', 'Results releases are read each weekday morning from the SEC.');
-    if (!members.length) return shell('Results summary \u00b7 ' + label, name || 'Nothing chosen', 'no company on this screen', 'No company on this screen is in that group.');
+    if (!poolRows.length) return { early: shell(title + ' \u00b7 ' + label, 'No results', 'releases on file yet', 'Results releases are read each weekday morning from the SEC.') };
+    if (!members.length) return { early: shell(title + ' \u00b7 ' + label, name || 'Nothing chosen', 'no company on this screen', 'No company on this screen is in that group.') };
     // THE SEASON is the cut's, not the group's: the quarter most of the last
     // 75 days' releases across the whole cut fall in. A group of six left to
     // itself could settle on another quarter than the market's.
@@ -12498,6 +12638,10 @@
     for (const x of poolRows) if (x.r.filed >= recentFrom) { const q = rsQuarterOf(x.r.periodEnd); if (q) tally[q] = (tally[q] || 0) + 1; }
     const season = Object.keys(tally).sort((a, b) => tally[b] - tally[a] || (a < b ? 1 : -1))[0];
     const inSeason = rows.filter((x) => rsQuarterOf(x.r.periodEnd) === season);
+    return { cut, name, members, label, inSeason, newest, season };
+  }
+  // The Results summary drawn from its scope.
+  function rsDraw(dim, cut, name, members, label, inSeason, newest, season) {
     const outcome = (r) => {
       const pv = r.provider;
       if (!pv || pv.estimate == null) return 'none';
@@ -13336,6 +13480,10 @@
     secressum: () => tplResultsSummary('secressum'),
     indressum: () => tplResultsSummary('indressum'),
     thmressum: () => tplResultsSummary('thmressum'),
+    gdsum: () => tplGuidanceSummary('gdsum'),
+    secgdsum: () => tplGuidanceSummary('secgdsum'),
+    indgdsum: () => tplGuidanceSummary('indgdsum'),
+    thmgdsum: () => tplGuidanceSummary('thmgdsum'),
     glance: tplGlance,
     stkresults: tplStockResults,
     seclines: () => tplGroupLines('seclines'),
@@ -15228,6 +15376,15 @@
     .fd-dot.fd-on { background: var(--amber); }
     .fd-more { font: 500 16px var(--mono); color: var(--faint); padding-top: 8px; }
     .fd-note { margin-top: auto; padding-top: 18px; }
+    .rs-t.gs-t { border-top: 4px solid var(--c); background: linear-gradient(180deg, color-mix(in srgb, var(--c) 18%, transparent), color-mix(in srgb, var(--c) 4%, transparent)); }
+    .rs-t.gs-t .rs-k { color: var(--c); filter: brightness(1.6); }
+    .gs-tab .gs-n { display: inline-block; min-width: 34px; padding: 1px 10px; border-radius: 999px; background: var(--c); color: #ffffff; font-weight: 700; text-align: center; }
+    .gs-pill { margin-left: 0; font-size: 13px; padding: 2px 11px; vertical-align: 1px; }
+    .gs-list { display: flex; gap: 12px; align-items: baseline; margin-top: 14px; font: 600 17px var(--mono); color: var(--text); }
+    .gs-list > span:last-child { min-width: 0; line-height: 1.5; }
+    .gs-list em { font-style: normal; color: var(--faint); font-weight: 500; }
+    .sz-square .gs-list { font-size: 15px; margin-top: 10px; }
+    .sz-story .gs-list { font-size: 20px; margin-top: 18px; }
     .sr-in { height: 100%; display: flex; flex-direction: column; }
     .sr-mid { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-evenly; gap: 22px; padding: 18px 0 6px; min-height: 0; }
     .sr-mid > .sr-figs, .sr-mid > .sr-guide, .sr-mid > .sr-drv, .sr-mid > .sr-sum { margin-top: 0; }
