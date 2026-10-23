@@ -12385,7 +12385,10 @@
       // headline size and wrapped on a square.
       + '<span class="s-kick">Quarterly results · ' + esc(r.periodLabel || 'latest quarter') + (r.filed ? ' · reported ' + esc(new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : '') + '</span>'
       + '<h2 class="s-title">' + esc(n) + '<br><span class="dim">' + esc(sym) + '</span></h2>'
-      + figs + guide + drv + sum
+      // THE BLOCKS SHARE THE CARD'S HEIGHT (2026-10-23, the owner: "lot of
+      // empty space"): spaced evenly between the title and the note, rather
+      // than stacked at the top with a gap above the note.
+      + '<div class="sr-mid">' + figs + guide + drv + sum + '</div>'
       + '<p class="s-sub wide fd-note sr-note" style="--fs:15px">' + esc(note) + '</p>'
       + '</div></div>' + chromeFoot();
   }
@@ -15211,6 +15214,13 @@
     .fd-more { font: 500 16px var(--mono); color: var(--faint); padding-top: 8px; }
     .fd-note { margin-top: auto; padding-top: 18px; }
     .sr-in { height: 100%; display: flex; flex-direction: column; }
+    .sr-mid { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-evenly; gap: 22px; padding: 18px 0 6px; min-height: 0; }
+    .sr-mid > .sr-figs, .sr-mid > .sr-guide, .sr-mid > .sr-drv, .sr-mid > .sr-sum { margin-top: 0; }
+    .sz-portrait .sr-fig b { font-size: 40px; }
+    .sz-portrait .sr-fig i { font-size: 16px; }
+    .sz-portrait .sr-guide p { font-size: 21px; }
+    .sz-portrait .sr-drv li { font-size: 21px; }
+    .sz-portrait .sr-sum { font-size: 21px; }
     .sr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
     .sr-fig { border: 1px solid var(--hair-2); border-radius: 18px; padding: 16px 18px; min-width: 0; }
     .sr-fig span { display: block; font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
@@ -15242,7 +15252,7 @@
     .sz-story .sr-guide p { font-size: 25px; }
     .sz-story .sr-guide p.sr-read { font-size: 19px; }
     .sz-story .sr-sum { font-size: 24px; }
-    .sz-story .sr-guide, .sz-story .sr-drv, .sz-story .sr-sum { margin-top: 34px; }
+
     /* Results reported (2026-10-22): the Filed card's frame; written figures,
        nothing painted good or bad. */
     .rp-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 190px 150px 236px; gap: 14px; align-items: baseline;
