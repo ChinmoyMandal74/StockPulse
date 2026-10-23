@@ -119,3 +119,9 @@ Notes:
 
 ### Earnings results: `/results` (2026-10-22)
 A public page of the results releases read by AI in the last three weeks, server-rendered like the blog. Linked from the landing nav and footer, the blog footer and the sitemap. Only figures from the companies' own SEC filings: never the price provider's estimate, never the Signal. Detail in `earnings-releases.md`.
+
+### Earnings, read by AI: a landing section (2026-10-23)
+The owner: "All this work we did on earning is very powerful .. update the main corporate website .. put a screenshot of the email." A section `#earnings` after Article tone, linked from the top menu and the footer: what is read and how it is checked (the bullets restate `earnings-releases.md`), a dated figures strip (153 results releases since 2026-09-08, 71 with guidance, 38 with a stated change: the re-read of 2026-10-23), and links to `/results` and the beta.
+- **The picture** is the real results email (`public/img/landing/email-results.jpg`, 900x1866), built by the real route on an in-memory database from production's releases (CACI, GE, Meta) and cropped to the header, the summary and two cards, inside an inbox-style frame (sender, subject) that fades at its foot (820px).
+- **The caption says who gets it**: the digest goes to the Tickr Lab team only, and the same results are on the public page and in the screener. If members can ever subscribe, change the caption in the same commit.
+- Checked signed out at 1440px and 400px: no sideways scroll, the image drawn, the frame height, the heading clear of the fixed bar after the jump, the figures, the menu link (13 checks).

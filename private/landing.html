@@ -159,6 +159,21 @@
     .lp .art .s { color: var(--muted); font-size: 14px; line-height: 1.5; }
     .lp .art .m { font: 12px var(--mono); color: var(--faint); }
 
+    /* ---- earnings, read by AI (2026-10-23) ---- */
+    .lp .ermail { border-radius: 16px; border: 1px solid var(--hair-2); background: var(--surface); overflow: hidden; min-width: 0;
+      box-shadow: 0 40px 90px -40px color-mix(in srgb, var(--shade, var(--void)) 90%, transparent); }
+    .lp .ermail .bar { display: grid; gap: 3px; padding: 12px 16px; border-bottom: 1px solid var(--hair); font-size: 12.5px; }
+    .lp .ermail .bar b { font-weight: 600; color: var(--text); }
+    .lp .ermail .bar span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lp .ermail .img { max-height: 820px; overflow: hidden;
+      -webkit-mask-image: linear-gradient(to bottom, var(--text) 86%, transparent); mask-image: linear-gradient(to bottom, var(--text) 86%, transparent); }
+    .lp .ermail .img img { display: block; width: 100%; height: auto; }
+    .lp .erfacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .lp .erfacts div { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 12px 14px; }
+    .lp .erfacts b { display: block; font: 600 24px var(--mono); letter-spacing: -0.02em; }
+    .lp .erfacts span { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+    .lp .ercta { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+
     /* ---- screens ---- */
     .lp .screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 30px; }
     .lp .sgp { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 16px 18px; min-width: 0; }
@@ -246,7 +261,7 @@
   <div class="w">
     <a class="mark" href="/"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a>
     <span class="beta">BETA</span>
-    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/blog">Blog</a></nav>
+    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/blog">Blog</a></nav>
     <span class="sp"></span>
     <a class="b signin" href="/login">Sign in</a>
     <a class="b pri" href="/login?mode=register">Join the beta</a>
@@ -489,6 +504,41 @@
     </div>
   </section>
 
+  <!-- Earnings releases read by AI (2026-10-23, the owner: "All this work we
+       did on earning is very powerful .. update the main corporate website ..
+       put a screenshot of the email"). The digest goes to the Tickr Lab team
+       only, and the copy says so; the figures strip is dated. -->
+  <section id="earnings">
+    <div class="w tone">
+      <div>
+        <span class="eyebrow">Earnings, read by AI</span>
+        <h2 class="h2">Every results release, read the morning after it is filed.</h2>
+        <p class="lede">When a company files its quarterly results with the SEC, an AI model reads the press release and copies out the figures exactly as printed. Our own code then checks every one against the release's text. A figure it cannot find there is left blank, never guessed.</p>
+        <ul class="pts">
+          <li>Revenue, operating income, net income and GAAP EPS, each with the change on a year earlier</li>
+          <li>The company's own adjusted EPS, under its own name for it</li>
+          <li>Guidance in the company's words, with next quarter's revenue against this quarter and full-year EPS against last year</li>
+          <li>Whether the company raised, lowered or reaffirmed its outlook, shown only when it says so, with its words quoted</li>
+          <li>Checked again against the 10-Q once it is filed</li>
+          <li>In the screener, on every stock page and on the <a href="/results">public results page</a>. A description of what was reported. It never feeds the Signal</li>
+        </ul>
+        <div class="erfacts" aria-label="Since September 8, 2026">
+          <div><b>153</b><span>results releases read since September 8, 2026</span></div>
+          <div><b>71</b><span>gave guidance</span></div>
+          <div><b>38</b><span>said they raised, lowered or reaffirmed it</span></div>
+        </div>
+        <div class="ercta"><a class="b pri" href="/results">See the latest results</a><a class="b" href="/login?mode=register">Join the beta</a></div>
+      </div>
+      <div>
+        <div class="ermail">
+          <div class="bar"><b>Tickr Lab</b><span>[Tickr Lab] Earnings results: 49 companies, Oct 21, 2026</span></div>
+          <div class="img"><img src="/img/landing/email-results.jpg" width="900" height="1866" alt="The Tickr Lab results email: three companies reported, then a card for CACI and one for GE, each with revenue, net income, GAAP and adjusted EPS, the AI summary, and guidance marked Raised with the company's own words" loading="lazy" /></div>
+        </div>
+        <p class="note">The results digest, as it arrives after each reading (releases of October 20 and 21, 2026). It goes to the Tickr Lab team; the same results are on the public results page and in the screener.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="screens" class="tight">
     <div class="w">
       <span class="eyebrow">Ready-made screens</span>
@@ -659,7 +709,7 @@
   <div class="w">
     <div class="cols">
       <div><a class="mark" href="/" style="font-size:16px"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a><p style="margin-top:12px">tickrlab.com · in public beta</p></div>
-      <div><h4>Product</h4><a href="#tour">Screener</a><a href="#stockpage">Stock pages</a><a href="#themes">Themes</a><a href="#creators">Visuals</a><a href="#data">Data</a></div>
+      <div><h4>Product</h4><a href="#tour">Screener</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#creators">Visuals</a><a href="#data">Data</a></div>
       <div><h4>Try it</h4><a href="/login?mode=register">Join the beta</a><a href="/login?guest=1">Guest preview</a><a href="/login">Sign in</a><a href="/blog">Blog</a><a href="/results">Earnings results</a></div>
       <div><h4>About</h4><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
         <!-- rel="me" lets the two profiles verify each other. -->
