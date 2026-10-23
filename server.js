@@ -19726,8 +19726,12 @@ async function releaseDigestToList(req, res) {
   const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
   const key = 'results:' + etDay(now);
   const mark = await store.readResultsListMark();
-  const since = mark || now - 3 * 86400000;
-  const rels = (await store.readEarningsReleasesSince(etDay(now - 7 * 86400000))).filter((r) => r.isResults && Number(r.readAt) > since);
+  // With no mark yet (the first mailing), the last day's readings only, and
+  // only releases filed in the last four days: the first one, on 2026-10-23,
+  // took three days of readings and so carried the month's first fill, 146
+  // companies from a week of filings.
+  const since = Math.max(mark || 0, now - (mark ? 7 : 1) * 86400000);
+  const rels = (await store.readEarningsReleasesSince(etDay(now - 4 * 86400000))).filter((r) => r.isResults && Number(r.readAt) > since);
   if (!rels.length) return res.json({ list: true, companies: 0, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
   const newest = Math.max(...rels.map((r) => Number(r.readAt) || 0));
   const [subs, already, names, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), store.readNames().catch(() => ({})), postalAddress()]);
