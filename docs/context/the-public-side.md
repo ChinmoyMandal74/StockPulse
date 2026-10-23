@@ -116,3 +116,6 @@ Notes:
 - **Copy rules kept:** no Reel or video claims (videos are admin only); no buy/sell/hold wording; the compare column is general and dated.
 - **Upkeep:** update `LANDING_DEFAULTS` and the dated captions when the figures move a lot.
 
+
+### Earnings results: `/results` (2026-10-22)
+A public page of the results releases read by AI in the last three weeks, server-rendered like the blog. Linked from the landing nav and footer, the blog footer and the sitemap. Only figures from the companies' own SEC filings: never the price provider's estimate, never the Signal. Detail in `earnings-releases.md`.

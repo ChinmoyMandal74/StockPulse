@@ -691,6 +691,75 @@ app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'privacy.html'));
 });
 
+// PUBLIC (the owner, 2026-10-22: "talking about all the recent results that
+// we extracted from AI ... I want make it public"). Server-rendered for the
+// blog's reason. It shows only what was read from the companies' own SEC
+// filings (earnings_releases): never the price provider's estimate, never the
+// Signal. Built at most every ten minutes per instance: two small reads.
+const RESULTS_DAYS = 21;
+let resultsHeld = null;
+function resultsPage(rels, names, today) {
+  require('./private/releaseview.js');
+  const RV = globalThis.ReleaseView;
+  const pct = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
+  const pctTxt = (p) => (p == null ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '% y/y');
+  const rows = rels.filter((r) => r.isResults && r.symbol).sort((a, b) => (a.filed < b.filed ? 1 : a.filed > b.filed ? -1 : a.symbol < b.symbol ? -1 : 1));
+  const cos = new Set(rows.map((r) => r.symbol));
+  const revKnown = rows.filter((r) => pct(r.revenue, r.revenuePrior) != null), revUp = revKnown.filter((r) => r.revenue > r.revenuePrior);
+  const niKnown = rows.filter((r) => r.netIncome != null && r.netIncomePrior != null), niUp = niKnown.filter((r) => r.netIncome > r.netIncomePrior);
+  const guided = rows.filter((r) => r.guideSentence);
+  const fig = (b, s) => `<div class="er-fig bezel"><div class="core"><b>${b}</b><span>${s}</span></div></div>`;
+  const figs = rows.length ? '<div class="er-figs">' +
+    fig(cos.size, 'companies reported in the last three weeks') +
+    fig(`${revUp.length}<small> / ${revKnown.length}</small>`, 'with revenue higher than the same quarter a year earlier') +
+    fig(`${niUp.length}<small> / ${niKnown.length}</small>`, 'with net income higher than a year earlier') +
+    fig(guided.length, 'gave guidance in the release') + '</div>' : '';
+  const byDay = {};
+  for (const r of rows) (byDay[r.filed] ||= []).push(r);
+  const days = Object.keys(byDay).sort().reverse();
+  const cell = (main, sub) => `<td class="n">${main}${sub ? `<span class="er-sub">${htmlEsc(sub)}</span>` : ''}</td>`;
+  const dayHtml = days.map((d, i) => {
+    const list = byDay[d];
+    const long = new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const trs = list.map((r) => {
+      const cur = r.currency;
+      const adj = r.epsAdj != null ? cell(htmlEsc(RV.eps(r.epsAdj, cur)), [pctTxt(pct(r.epsAdj, r.epsAdjPrior)), r.epsAdjLabel].filter(Boolean).join(' · ')) : '<td class="n">—</td>';
+      return '<tr>' +
+        `<td><span class="er-sym">${htmlEsc(r.symbol)}</span><span class="er-co">${htmlEsc(names[r.symbol] || '')}</span></td>` +
+        `<td>${htmlEsc(r.periodLabel || '')}${r.periodEnd ? `<span class="er-sub">ended ${htmlEsc(RV.shortDay(r.periodEnd))}</span>` : ''}</td>` +
+        cell(htmlEsc(RV.money(r.revenue, cur)), pctTxt(pct(r.revenue, r.revenuePrior))) +
+        cell(htmlEsc(RV.money(r.netIncome, cur)), pctTxt(pct(r.netIncome, r.netIncomePrior))) +
+        cell(htmlEsc(RV.eps(r.epsGaap, cur)), pctTxt(pct(r.epsGaap, r.epsGaapPrior))) +
+        adj +
+        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
+        `<td>${/^https:\/\/www\.sec\.gov\//.test(r.url || '') ? `<a href="${htmlEsc(r.url)}" target="_blank" rel="noopener">The release</a>` : ''}</td>` +
+        '</tr>';
+    }).join('');
+    return `<details class="er-day"${i < 3 ? ' open' : ''}><summary><h2>${htmlEsc(long)}</h2><span class="er-n">${list.length} ${list.length === 1 ? 'company' : 'companies'}</span></summary>` +
+      '<div class="er-wrap"><table class="er-t"><thead><tr><th>Company</th><th>Quarter</th><th class="n">Revenue</th><th class="n">Net income</th><th class="n">EPS (GAAP)</th><th class="n">Adjusted EPS</th><th>What the release says</th><th></th></tr></thead>' +
+      `<tbody>${trs}</tbody></table></div></details>`;
+  }).join('\n');
+  const asof = 'Updated ' + new Date(today + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' · releases filed since ' + RV.shortDay(addDaysIso(today, -RESULTS_DAYS));
+  return pageTemplate('results.html')
+    .replace('%ASOF%', () => htmlEsc(asof))
+    .replace('%FIGS%', () => figs)
+    .replace('%DAYS%', () => dayHtml || '<div class="er-empty">No results releases in the last three weeks.</div>');
+}
+function addDaysIso(day, n) {
+  const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() + n);
+  return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+}
+app.get('/results', route(async (req, res) => {
+  if (anonLogOk(req)) logAct(req, 'page', 'results');
+  if (!resultsHeld || Date.now() - resultsHeld.at > 10 * 60 * 1000) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+    const [rels, names] = await Promise.all([store.readEarningsReleasesSince(addDaysIso(today, -RESULTS_DAYS)), store.readNames().catch(() => ({}))]);
+    resultsHeld = { at: Date.now(), html: resultsPage(rels, names || {}, today) };
+  }
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('html').send(resultsHeld.html);
+}));
+
 // The one page a member who has not agreed can reach. Signed-out visitors
 // have nothing to agree to here and go to sign in.
 app.get('/accept-terms', route(async (req, res) => {
@@ -1612,7 +1681,7 @@ app.get('/sitemap.xml', route(async (req, res) => {
   const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    [url(base + '/'), url(base + '/about'), url(base + '/blog'),
+    [url(base + '/'), url(base + '/about'), url(base + '/blog'), url(base + '/results'),
       url(base + '/privacy'), url(base + '/terms'),
       ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
     ].join('\n') + '\n</urlset>\n');

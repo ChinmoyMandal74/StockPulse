@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Earnings results — Tickr Lab</title>
+  <meta name="description" content="The quarterly results US companies reported in the last three weeks, read from each company's own press release filed with the SEC: revenue, net income, earnings per share and guidance." />
+  <meta property="og:title" content="Earnings results, read from the press releases" />
+  <meta property="og:description" content="Revenue, net income, EPS and guidance from each company's own results release, filed with the SEC." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    body { min-height: 100dvh; overflow-x: clip; }
+    .er-page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 28px 80px; }
+    .aura { background:
+      radial-gradient(48vw 42vw at 6% -10%, rgba(124, 156, 255, 0.12), transparent 62%),
+      radial-gradient(46vw 40vw at 98% 2%, rgba(52, 211, 153, 0.10), transparent 64%); }
+    .nav-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 16px 20px 0; pointer-events: none; }
+    .nav { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: min(1180px, 100%);
+      padding: 8px 10px 8px 18px; border-radius: 999px; background: rgba(9, 11, 15, 0.74);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px rgba(0, 0, 0, 0.9), var(--inset); }
+    .nav .mark { display: inline-flex; align-items: center; gap: 9px; margin-right: auto; text-decoration: none; color: var(--text); }
+    .nav .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center;
+      justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, rgba(52, 211, 153, 0.20), rgba(52, 211, 153, 0.04));
+      border: 1px solid rgba(52, 211, 153, 0.24); }
+    .nav .er-nl { color: var(--muted); text-decoration: none; font-size: 13px; padding: 0 10px; }
+    .nav .er-nl:hover { color: var(--text); }
+
+    .er-head { padding: 56px 0 8px; }
+    .er-head h1 { margin: 0; font-size: clamp(34px, 5.4vw, 56px); font-weight: 600; letter-spacing: -0.045em; line-height: 1; text-wrap: balance; }
+    .er-lede { margin: 18px 0 0; max-width: 70ch; font-size: 15px; line-height: 1.7; color: var(--muted); }
+    .er-asof { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+
+    .er-figs { margin-top: 30px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .er-fig .core { padding: 18px 20px; }
+    .er-fig b { display: block; font-size: 30px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .er-fig small { font-size: 16px; font-weight: 500; color: var(--faint); }
+    .er-fig span { display: block; margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+    @media (max-width: 760px) { .er-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+    .er-day { margin-top: 34px; }
+    .er-day > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; padding: 6px 0 12px; border-bottom: 1px solid var(--hair); }
+    .er-day > summary::-webkit-details-marker { display: none; }
+    .er-day > summary::before { content: '+'; font-family: var(--mono); color: var(--faint); width: 12px; }
+    .er-day[open] > summary::before { content: '\2212'; }
+    .er-day h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+    .er-day .er-n { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+    .er-wrap { overflow-x: auto; margin-top: 4px; }
+    table.er-t { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+    .er-t th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); padding: 10px 12px 8px; white-space: nowrap; }
+    .er-t th.n, .er-t td.n { text-align: right; }
+    .er-t td { padding: 12px; border-top: 1px solid var(--hair); vertical-align: top; }
+    .er-t td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .er-t td.n .er-sub { max-width: 20ch; margin-left: auto; }
+    .er-t .er-sym { font-family: var(--mono); font-weight: 600; color: var(--text); }
+    .er-t .er-co { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; max-width: 26ch; }
+    .er-t .er-sub { display: block; color: var(--faint); font-size: 11.5px; margin-top: 3px; white-space: normal; }
+    .er-t .er-sum { color: var(--muted); line-height: 1.55; max-width: 60ch; }
+    .er-t .er-guide { display: block; margin-top: 6px; color: var(--faint); font-size: 12px; }
+    .er-t a { color: var(--accent, var(--green)); text-decoration: none; font-size: 12px; white-space: nowrap; }
+    .er-t a:hover { text-decoration: underline; }
+
+    .er-note { margin-top: 44px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+    .er-note .core { padding: 20px 22px; }
+    .er-note h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text); }
+    .er-note p { margin: 0 0 8px; }
+    .er-cta { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .er-empty { padding: 40px 4px; color: var(--faint); font-size: 14px; }
+    footer { margin-top: 56px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 24px;
+             display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
+    footer .ftag { color: var(--green); letter-spacing: .1em; text-transform: uppercase; font-size: 10.5px; margin-right: auto; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); text-decoration: underline; }
+    @media (max-width: 640px) { .er-page { padding: 0 16px 60px; } .er-head { padding: 36px 0 4px; } .nav .er-nl { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+  </svg>
+
+  <div class="nav-wrap">
+    <nav class="nav">
+      <a class="mark" href="/">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark">Tickr Lab</span>
+      </a>
+      <a class="er-nl" href="/">Home</a>
+      <a class="er-nl" href="/blog">Blog</a>
+      <a class="btn" href="/login">Sign in</a>
+      <a class="btn btn-primary" href="/login?mode=register">Join the beta</a>
+    </nav>
+  </div>
+
+  <main class="er-page">
+    <header class="er-head">
+      <h1>Earnings results, read from the press releases</h1>
+      <p class="er-lede">Every quarterly results release a company we track has filed with the SEC in the last three weeks.
+        Revenue, net income, earnings per share and guidance come straight from the company's own press release (Exhibit 99.1 to its 8-K),
+        with the change on the same quarter a year earlier. Each release is linked, so every figure can be checked at the source.</p>
+      <div class="er-asof">%ASOF%</div>
+    </header>
+
+    %FIGS%
+
+    %DAYS%
+
+    <section class="er-note bezel"><div class="core">
+      <h3>How these figures are read</h3>
+      <p>An AI model (Claude Haiku) reads each release and copies the figures as printed. Our own code then checks every figure
+        against the release text and refuses any it cannot find there, or any whose size does not fit the company. A refused figure is shown as a dash rather than guessed.</p>
+      <p>The adjusted EPS is the company's own non-GAAP figure, under the company's own name for it. Guidance is shown in the words the company used.
+        Companies define revenue and adjusted earnings differently, so compare a company with its own past rather than with another company.</p>
+      <p>Machine reading can still be wrong. Check the release before relying on a figure. Nothing here is investment advice, and nothing here says whether to trade any stock.</p>
+    </div></section>
+
+    <div class="er-cta">
+      <a class="btn btn-primary" href="/login?mode=register">Join the beta</a>
+      <a class="btn" href="/login?guest=1">Try the screener</a>
+      <a class="btn" href="/">What is Tickr Lab?</a>
+    </div>
+
+    <footer>
+      <span class="ftag">From data to decisions</span>
+      <a href="/">Home</a>
+      <a href="/blog">Blog</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/login">Sign in</a>
+      <a href="https://instagram.com/tickr_lab" target="_blank" rel="me noopener">@tickr_lab</a>
+    </footer>
+  </main>
+</body>
+</html>

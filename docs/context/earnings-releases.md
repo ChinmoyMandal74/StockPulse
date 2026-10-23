@@ -191,3 +191,14 @@ The owner: "Build me a recon page only for s&p 500 only for these important that
 - **Foreign filers** (6-K instead of 8-K): TSM and the other ADRs.
 - **Releases whose numbers are only in a slide deck** (EX-99.2) or in images: they come back with dashes.
 - **The 10-Q cross-check is not run automatically yet.** The prototype ran it by hand. A later pass could compare each stored row with `sec_facts` once the 10-Q arrives.
+
+### The public page: `/results` (2026-10-22)
+The owner: "Can you create a page linking the site page .. talking about all the recent results that we extracted from AI … I want make it public."
+- **Public, no sign-in**, server-rendered like the blog (`private/results.html`, filled by `resultsPage` in `server.js`), so it reads without JavaScript and can be indexed. In the sitemap; linked from the landing page's nav and footer and from the blog's footer.
+- **Content:** every results release filed in the last 21 days (`RESULTS_DAYS`), a day at a time with the newest three days open.
+  - Each row: company, quarter, revenue, net income, GAAP EPS and the company's adjusted EPS under its own label, each with the change on a year earlier. Then the two-sentence summary, the guidance sentence, and a link to the release on sec.gov.
+  - Four figures at the top: companies reported, revenue up on a year earlier (of those with both quarters), net income up, guidance given.
+  - A note on how the figures are read (every figure found in the text, refused figures shown as dashes, adjusted EPS is the company's own definition, check the release, not advice).
+- **Deliberately left off:** the price provider's estimate (Twelve Data's data, not ours to publish), the Signal, and any beat/miss wording.
+- **Cost:** two small reads (`readEarningsReleasesSince`, `readNames`), held for ten minutes per instance; `Cache-Control: public, max-age=300`.
+- Tested on an in-memory database seeded with a read-only copy of production's 143 releases: 13 checks, at 1440px and 400px (no sideways scroll, rows drawn, no placeholder left, no Signal words or estimates, no page errors, sitemap and landing link present). The first look caught the figure cards' padding on the bezel's outer element, which clipped their text.
