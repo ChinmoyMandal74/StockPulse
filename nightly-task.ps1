@@ -95,3 +95,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
   -Settings $settings -Description 'Drives the nightly fundamentals rotation on tickrlab.com. The server refuses a second run if one is already in flight.' -Force | Out-Null
 
 Write-Output "Registered '$TaskName' -- weekdays $morning and $evening ET (10 firings a week)."
+
+# Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
+try { & $node (Join-Path $Root 'schedule-report.js') } catch { Write-Output "Schedule report not sent: $($_.Exception.Message)" }

@@ -312,6 +312,15 @@ const SCHEMA = [
    )`,
   'create index if not exists idx_earnings_releases_symbol on earnings_releases (symbol, filed)',
   'create index if not exists idx_earnings_releases_filed on earnings_releases (filed)',
+  // The laptop's scheduled tasks as schedule-report.js sent them, for
+  // /schedule. One row an hour and one per task registration; kept, never
+  // pruned, so a change to the schedule has a date.
+  `create table if not exists schedule_reports (
+     id    integer primary key autoincrement,
+     at    integer not null,
+     host  text,
+     body  text not null
+   )`,
   // Each run of release-load.js, for the Earnings releases section of
   // /news-runs. One row a run (a weekday morning); kept, never pruned.
   `create table if not exists earnings_release_runs (
@@ -2961,6 +2970,20 @@ async function writeReleaseRun(r) {
     args: [Number(r.startedAt), r.endedAt == null ? null : Number(r.endedAt), r.model || null, r.days ?? null, r.found ?? null, r.read ?? null, r.results ?? null,
       r.notResults ?? null, r.refused ?? null, r.failed ?? null, r.checked ?? null, r.differs ?? null, r.spent == null ? null : Number(r.spent), r.stop || null, r.error || null],
   });
+}
+// /schedule: the laptop's task list (schedule-report.js). The newest is a
+// seek on the primary key.
+async function writeScheduleReport(r) {
+  await init();
+  await db.execute({ sql: 'insert into schedule_reports (at, host, body) values (?, ?, ?)', args: [Number(r.at) || Date.now(), r.host ? String(r.host).slice(0, 80) : null, JSON.stringify(r.tasks || [])] });
+}
+async function readScheduleReport() {
+  await init();
+  const r = await db.execute('select at, host, body from schedule_reports order by id desc limit 1');
+  if (!r.rows.length) return null;
+  let tasks = [];
+  try { tasks = JSON.parse(r.rows[0].body); } catch (e) { tasks = []; }
+  return { at: Number(r.rows[0].at), host: r.rows[0].host || null, tasks };
 }
 async function readReleaseRuns(sinceMs) {
   await init();
@@ -8138,7 +8161,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

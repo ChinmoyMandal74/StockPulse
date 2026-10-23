@@ -67,6 +67,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `backfill-*.js`, `onboard.js`, `purge-orphans.js`, `*-load.js` | Local maintenance scripts — dry run by default, `--commit` to write |
+| `schedule.js`, `schedule-report.js`, `private/schedule.html` | **Every scheduled job** at `/schedule` (admin): the declared schedule and the Twelve Data windows (`busyAt`), the laptop's hourly report of what Task Scheduler really holds (`schedule_reports`), and the page that sets them side by side; `schedule-test.js` |
 | `nightly-ping.js`, `intraday-ping.js`, `news-ping.js` + `*-task.ps1` | The schedulers: Windows Task Scheduler on the owner's laptop, calling the deployed app over HTTP |
 | `docs/research.md`, `research.js`, `private/research.html` | **Every backtest, written up for members** at `/research`: the file is the data (idea, what was done, outcome, what follows), the parser, the page. Every backtest run gets an entry; `research-test.js` checks them |
 | `docs/backlog.md` | Work identified and deliberately not done. Each entry carries a filing line (`*Area: … · Status: …*`) that the admin page `/backlog` reads; keep it when adding one |
@@ -133,7 +134,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - **Backtests:** one row builder (`techrow.js`); filter filings on `filed`, never `periodEnd`; the `bt*` helpers are shared by `/backtest` and `/adjustedbacktest`; `/backtest` has a two-month hard cap; maximum hold is one to two months (owner). If a result improves after the universe shrinks, suspect the universe.
 - **SEC:** this address has already had a 429 then a 403. Declared `SEC_UA`, sequential fetches, a 429 is a wait, not a retry.
 - **Promo cards:** a new control joins `CONTROL_IDS` and its template's hardcoded listener list in `promo.html`, under `POST_OPT_MAX`. A card needing data beyond the snapshot needs a `ctx` channel asked by both hosts (studio and `/api/m/post`).
-- **Scheduled tasks:** the `.ps1` script and the live `TickrLab *` task must match; `.ps1` files are ASCII only. The ping scripts are HTTP calls and must never become `node server.js`.
+- **Scheduled tasks:** the `.ps1` script, its entry in `schedule.js` and the live `TickrLab *` task must match (`schedule-test.js`; `/schedule` shows the laptop's real tasks and flags any difference); `.ps1` files are ASCII only. The ping scripts are HTTP calls and must never become `node server.js`.
 - **Mail:** every send goes through `sendMail`/`sendMailResult` with a `kind`. No email in the alerts feature. Bulk and transactional mail never share a send path.
 - **User-facing copy restates facts from code** (`/help`, `/terms`, `/privacy`, landing, `/architecture`). A claim leaves with the feature, in the same commit.
 
@@ -176,6 +177,6 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts` · `race-chart` (admin-only video) · `reel` (one stock as an Instagram Reel, admin-only video) · `filed-yesterday-card` (one day's 13D/13G and 8-K filings, Market) · `group-lines` (Sector, Industry and Theme lines, the Lines card a line a group) · `glance-card` (the stock page's At a glance cards as a post)
 
-**Admin pages and the public side** — `the-admin-console` · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
+**Admin pages and the public side** — `the-admin-console` · `scheduled-jobs` (`/schedule`) · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
 
 Also in `docs/`: `backlog.md`, `momentum-scoring.md`, `momentum-delta.md`.

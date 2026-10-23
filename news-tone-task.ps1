@@ -81,3 +81,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
 
 Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, at most `$$MaxUsd or $MaxMin minutes a run."
 Write-Output "Log: $(Join-Path $Root 'news-tone.log')"
+
+# Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
+try { & $node (Join-Path $Root 'schedule-report.js') } catch { Write-Output "Schedule report not sent: $($_.Exception.Message)" }

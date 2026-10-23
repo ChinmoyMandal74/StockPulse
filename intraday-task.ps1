@@ -70,3 +70,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
 Write-Output "Registered '$TaskName' -- weekdays $start, every 30 min for 6 hours (last 15:45 ET)."
 Write-Output "Log: $(Join-Path $Root 'intraday-ping.log')"
 Write-Output "Run it once now with:  node intraday-ping.js --dry"
+
+# Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
+try { & $node (Join-Path $Root 'schedule-report.js') } catch { Write-Output "Schedule report not sent: $($_.Exception.Message)" }

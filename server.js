@@ -58,6 +58,7 @@ const Paper = require('./paper.js');
 const EarnDate = require('./earndate.js');
 // Earnings releases read by an AI model (release-load.js writes, these routes read).
 const Releases = require('./releases.js');
+const Schedule = require('./schedule.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -8137,16 +8138,44 @@ async function runPriceSlice() {
 // A pull Twelve Data answers with the old quarter is "not updated at the
 // provider": re-pulling again soon will not help (Costco, four weeks).
 const RECON_BATCH = 6;
-function creditWindowBusy(now) {
-  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now || new Date());
-  const get = (t) => (p.find((x) => x.type === t) || {}).value;
-  if (['Sat', 'Sun'].includes(get('weekday'))) return null;
-  const m = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
-  if ((m >= 3 * 60 + 55 && m <= 4 * 60 + 50) || (m >= 15 * 60 + 55 && m <= 16 * 60 + 50)) return 'the nightly refresh window';
-  const mm = m % 60;
-  if (m >= 9 * 60 + 10 && m <= 16 * 60 + 20 && ((mm >= 13 && mm <= 20) || (mm >= 43 && mm <= 50))) return 'an intraday price slot';
-  return null;
-}
+// One definition of the windows, in schedule.js, drawn on /schedule too.
+function creditWindowBusy(now) { return Schedule.busyAt(now); }
+// ---- /schedule: every scheduled job (schedule.js) beside what the laptop's
+// Task Scheduler really holds (schedule-report.js, hourly). Admin only.
+app.post('/api/schedule/report', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  const b = req.body || {};
+  const str = (v, n) => (v == null ? null : String(v).slice(0, n));
+  const tasks = (Array.isArray(b.tasks) ? b.tasks : []).slice(0, 50)
+    .filter((t) => t && /^TickrLab /.test(String(t.name || '')))
+    .map((t) => ({
+      name: str(t.name, 80), state: str(t.state, 20), action: str(t.action, 400),
+      triggers: (Array.isArray(t.triggers) ? t.triggers : []).slice(0, 12).map((g) => ({
+        kind: str(g && g.kind, 20), start: str(g && g.start, 40), days: g && g.days != null ? Number(g.days) || 0 : null,
+        interval: str(g && g.interval, 20), duration: str(g && g.duration, 20), enabled: !(g && g.enabled === false),
+      })),
+      lastRun: str(t.lastRun, 40), lastResult: t.lastResult == null ? null : Number(t.lastResult), nextRun: str(t.nextRun, 40),
+      missed: t.missed == null ? null : Number(t.missed),
+    }));
+  await store.writeScheduleReport({ at: Date.now(), host: str(b.host, 80), tasks });
+  res.json({ ok: true, tasks: tasks.length });
+}));
+app.get('/api/schedule', requireAdmin, route(async (req, res) => {
+  const report = await store.readScheduleReport().catch(() => null);
+  const now = new Date();
+  const jobs = Schedule.JOBS.map((j) => ({
+    id: j.id, name: j.name, task: j.task, host: j.host, script: j.script, taskScript: j.taskScript || null, minutes: j.minutes,
+    spends: j.spends, what: j.what, log: j.log, when: Schedule.whenText(j, now),
+    runs: Object.fromEntries(Schedule.ALL_DAYS.map((d) => [d, Schedule.runsOn(j, d, now)])),
+  }));
+  res.json({ now: Schedule.eastern(now), at: now.getTime(), jobs, reserved: Schedule.RESERVED, slot: Schedule.SLOT, busy: Schedule.busyAt(now), report, drift: Schedule.drift(report) });
+}));
+app.get('/schedule', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'schedule');
+  res.sendFile(path.join(__dirname, 'private', 'schedule.html'));
+}));
+
 // The behind companies of the newest season, from the stored recon.
 async function reconBehind() {
   const seasons = await store.readReconSeasons();

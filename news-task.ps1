@@ -88,3 +88,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
 Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, weekends included."
 Write-Output "Log: $(Join-Path $Root 'news-ping.log')"
 Write-Output "Run it once now with:  node news-ping.js --dry"
+
+# Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
+try { & $node (Join-Path $Root 'schedule-report.js') } catch { Write-Output "Schedule report not sent: $($_.Exception.Message)" }
