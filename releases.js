@@ -123,8 +123,11 @@ const SYSTEM = 'You read a company’s quarterly results press release and copy 
   + 'In drivers, give only the reasons the company itself states for this quarter, each with a phrase copied from the release. '
   + 'For the outlook, list every figure in guidance_items, and say in guidance_change only what the company itself states about raising, lowering, reaffirming, initiating or withdrawing it. '
   + 'Report what the document says; add nothing.';
+// 6000, not 3000 (the history backfill, 2026-10-23): a hundred releases with
+// long outlooks (Intuit, J&J, Cigna, Danaher) stopped at the limit and were
+// left unread. Paid only when used: at most about $0.0015 more a release.
 function request(text, model) {
-  return { model: model || MODEL, max_tokens: 3000, system: SYSTEM,
+  return { model: model || MODEL, max_tokens: 6000, system: SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content: '<release>\n' + String(text).slice(0, MAX_CHARS) + '\n</release>' }] };
 }
