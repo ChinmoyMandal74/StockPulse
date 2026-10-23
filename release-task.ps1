@@ -40,8 +40,16 @@ $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
 # --use-system-ca as every local job here; the report goes to a log beside it.
-$cmdArgs = "/c `"`"$node`" --use-system-ca release-load.js --commit --mail --days 5 --max-usd $MaxUsd --max-minutes $MaxMin >> release.log 2>&1`""
-$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# release.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" --use-system-ca release-load.js --commit --mail --days 5 --max-usd $MaxUsd --max-minutes $MaxMin >> release.log 2>&1"
+$runCmd = Join-Path $Root 'release.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }
 
 $settings = New-ScheduledTaskSettingsSet `
@@ -53,7 +61,7 @@ $settings = New-ScheduledTaskSettingsSet `
 
 if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
-  Write-Output "  run   : cmd.exe $cmdArgs"
+  Write-Output "  run   : $cmdLine (hidden, through run-hidden.vbs)"
   Write-Output "  in    : $Root"
   Write-Output "  when  : weekdays at $($Times -join ', '), stopping each run at `$$MaxUsd or $MaxMin minutes"
   exit 0

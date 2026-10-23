@@ -30,7 +30,16 @@ if (-not (Test-Path $Script)) { throw "schedule-report.js is not beside this scr
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
-$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"`"$node`" schedule-report.js >> schedule-report.log 2>&1`"" -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# schedule-report.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" schedule-report.js >> schedule-report.log 2>&1"
+$runCmd = Join-Path $Root 'schedule-report.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 # Every hour for 23 hours from 00:05: 24 runs a day, the last at 23:05.
 $trigger = New-ScheduledTaskTrigger -Daily -At $Start
 $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $Start -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Hours 23)).Repetition

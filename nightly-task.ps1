@@ -65,7 +65,16 @@ $morning = '04:00'
 $evening = '16:00'
 $days    = @('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
 
-$action = New-ScheduledTaskAction -Execute $node -Argument 'nightly-ping.js' -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# nightly.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" nightly-ping.js"
+$runCmd = Join-Path $Root 'nightly.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 # Two separate weekly triggers rather than a repetition: a repetition would
 # keep firing every 12 hours across the weekend, and the two times are not a
 # regular interval from each other in any case.

@@ -54,8 +54,16 @@ if (-not $node) { throw 'node is not on PATH for this shell.' }
 
 # The script writes its own report to stdout; cmd redirects it to a log beside it.
 $shadowArg = if ($Shadow) { " --shadow $Shadow --shadow-max-usd 1" } else { '' }
-$cmdArgs = "/c `"`"$node`" news-tone-load.js --commit --max-usd $MaxUsd --max-minutes $MaxMin$shadowArg >> news-tone.log 2>&1`""
-$action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# news-tone.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" news-tone-load.js --commit --max-usd $MaxUsd --max-minutes $MaxMin$shadowArg >> news-tone.log 2>&1"
+$runCmd = Join-Path $Root 'news-tone.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
 
 # Six hours of articles take minutes; the limit stops a run that has hung, and
@@ -69,7 +77,7 @@ $settings = New-ScheduledTaskSettingsSet `
 
 if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
-  Write-Output "  run   : cmd.exe $cmdArgs"
+  Write-Output "  run   : $cmdLine (hidden, through run-hidden.vbs)"
   Write-Output "  in    : $Root"
   Write-Output "  daily : $($Times -join ', '), stopping each run at `$$MaxUsd or $MaxMin minutes"
   Write-Output "  shadow: $(if ($Shadow) { $Shadow + ', local file only, at most $1 a run' } else { 'none' })"

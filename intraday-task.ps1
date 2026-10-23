@@ -43,7 +43,16 @@ $start    = '09:45'
 $every    = (New-TimeSpan -Minutes 30)
 $forHours = (New-TimeSpan -Hours 6)
 
-$action = New-ScheduledTaskAction -Execute $node -Argument 'intraday-ping.js' -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# intraday.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" intraday-ping.js"
+$runCmd = Join-Path $Root 'intraday.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At $start
 $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $start -RepetitionInterval $every -RepetitionDuration $forHours).Repetition
 

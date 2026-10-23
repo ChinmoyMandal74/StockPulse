@@ -58,7 +58,16 @@ if (-not (Test-Path $Script)) { throw "news-ping.js is not beside this script ($
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
-$action = New-ScheduledTaskAction -Execute $node -Argument 'news-ping.js' -WorkingDirectory $Root
+# NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
+# running" - every task opened a blank console). The command goes in
+# news.run.cmd beside this script (it holds this machine's node path,
+# so it is not in git), and run-hidden.vbs starts it hidden through
+# wscript.exe, which has no window, and hands its exit code back to Task
+# Scheduler. What ran and how it ended: /schedule, and the task's log.
+$cmdLine = "`"$node`" news-ping.js"
+$runCmd = Join-Path $Root 'news.run.cmd'
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
 
 # A lap of the universe is about thirty batches, a few seconds each, so a slot
