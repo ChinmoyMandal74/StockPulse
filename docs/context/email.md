@@ -61,3 +61,5 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - **The provider id is what made the second half possible**, exactly as the column was built for — except that the **API key is send-only**, so `GET /emails/<id>` answers `401 restricted_api_key` and the delivery status is dashboard-only. Worth knowing before reaching for the API: the id is for a human to paste, not for this app to resolve.
 - Two real defects surfaced and were **deferred by the owner** (Gmail delivers; a tenant's quarantine policy is not fixable from here) — the unset postal address and `MAIL_FROM` being `no-reply@`. Both are in [docs/backlog.md](docs/backlog.md) entry 10 with what each would take.
 
+
+- **`release-digest`** (2026-10-22): the earnings results email after each scheduled release run with new results, to `REPORT_TO`. See `earnings-releases.md`.

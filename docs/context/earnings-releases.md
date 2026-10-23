@@ -204,3 +204,16 @@ The owner: "Can you create a page linking the site page .. talking about all the
 - **Cost:** two small reads (`readEarningsReleasesSince`, `readNames`), held for ten minutes per instance; `Cache-Control: public, max-age=300`.
 - Tested on an in-memory database seeded with a read-only copy of production's 143 releases: 13 checks, at 1440px and 400px (no sideways scroll, rows drawn, no placeholder left, no Signal words or estimates, no page errors, sitemap and landing link present). The first look caught the figure cards' padding on the bezel's outer element, which clipped their text.
 - **Linked from the screener** (2026-10-22): the More menu (the top-right "More actions" button), under SEC filings, as "Earnings results". Shown to everyone signed in, guests included, since the page is public. Checked drawn in the open menu as guest and as admin.
+
+### The results email (2026-10-22)
+The owner: "Can you send me an email after every earning results refresh … I want to see the AI generated summary in a nice email format .. use your imagination to make it look professional."
+- **When:** after each scheduled run (`release-task.ps1` passes `--mail`) that wrote at least one new results release. A run with nothing new sends nothing; `--reread` and `--force` never mail.
+- **How:** the loader posts the run's new filing numbers to `POST /api/cron/release-digest` (with `CRON_SECRET`). The app reads them (`readEarningsReleasesByAccn`, a primary-key seek), builds the message (`releaseDigestEmail` in server.js) and sends it to the operator address (`REPORT_TO`) through `sendMail`, kind `release-digest`, so it is in the mail log at `/emails`. The laptop needs no mail settings.
+- **The message**, on `emailShell` (house header, footer, dark mode):
+  - four figures across the top (reported, revenue up on a year ago, net income up, gave guidance);
+  - a card a company: symbol and name, the quarter, revenue, net income, GAAP EPS and adjusted EPS (under the company's label) each with the change on a year ago, the AI's summary, the guidance sentence in a shaded panel, links to the release on sec.gov and the stock page;
+  - a button to `/results`, and a note on how the figures are read (not advice).
+  - A plain-text half with the same content.
+- **Gmail clips past about 102 KB.** The first build was 149 KB on a 49-company day; the inline font lists were half of it. Now the cards inherit the body's font, and the email carries 15 full cards, one line each for the next 45, and "And N more on the results page" beyond. Measured: 81 KB for 49 companies, 83 KB for 143.
+- **Dark mode:** the house dark rules recolour cells, paragraphs and spans, not `div`s, so the first render had near-black figures on the dark card. `MAIL_DARK_RULES` gained `.em-card div`, `.em-ink` (the figures), `.em-panel` (shaded panels) and `.em-box`/`.em-row` (borders).
+- **Tested** through the real route on an in-memory database seeded with production's releases, Resend answered in-process: 15 checks (secret refused, nothing named refused, non-results send nothing, recipient and subject, the META card's figures, summary and guidance, the text half, a busy day, the size at 49 and 143 companies, no buy/sell/beat/miss or Signal words, the mail log row), rendered light, dark and at 390px.

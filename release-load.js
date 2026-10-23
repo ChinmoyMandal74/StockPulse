@@ -6,6 +6,7 @@
 //   node --use-system-ca release-load.js --commit        write
 //   node --use-system-ca release-load.js --days 31       further back (the first fill)
 //   node --use-system-ca release-load.js --symbol META   one company
+//   ... --commit --mail     and email the owner the new results (the scheduled runs)
 //
 // LOCAL, like the tone loader (news-tone-load.js): it spends Anthropic credit,
 // about $0.002 a release (measured on 20, 2026-10-22), and a busy earnings day
@@ -42,6 +43,25 @@ const FORCE = flag('--force') && !!ONLY;
 // --column-only: rebuild the screener's column (the stored figure) and stop;
 // no SEC fetch, no model call. Every committed run rebuilds it at its end too.
 const COLUMN_ONLY = flag('--column-only');
+// --mail (with --commit; the scheduled task passes it): when the run wrote new
+// results releases, ask the deployed app to email the owner a digest of them
+// (POST /api/cron/release-digest, kind 'release-digest'). The app holds the
+// mail settings and every send goes through its one send path and mail log.
+// A run that wrote nothing new sends nothing; a re-read (--reread, --force)
+// never mails. Bookkeeping: a failure here never fails the run.
+const MAIL = flag('--mail') && COMMIT && !REREAD && !FORCE;
+const mailed = [];
+async function mailDigest() {
+  if (!MAIL || !mailed.length) return;
+  const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
+  if (!secret) { console.log('  email: CRON_SECRET is not set, not sent'); return; }
+  try {
+    const r = await fetch(base + '/api/cron/release-digest', { method: 'POST', signal: AbortSignal.timeout(120000),
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + secret }, body: JSON.stringify({ accns: mailed }) });
+    const d = await r.json().catch(() => ({}));
+    console.log('  email: ' + (r.ok && d.sent ? 'sent, ' + d.companies + ' companies' : 'not sent (' + (d.error || r.status) + ')'));
+  } catch (e) { console.log('  email: not sent (' + String(e.message).slice(0, 80) + ')'); }
+}
 // The window the column covers: a quarter and a month, so a company that
 // reported early last season still shows until it reports again.
 const COLUMN_DAYS = 130;
@@ -178,7 +198,11 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       console.log(`  ${e.symbol} ${e.filed}: ` + (row.isResults
         ? `${row.periodLabel || ''} revenue ${b(row.revenue)} GAAP EPS ${row.epsGaap == null ? '—' : row.epsGaap}` + (row.epsAdj != null ? ` adj ${row.epsAdj}` : '') + (row.guideKind ? ` guidance ${row.guideKind}` : '')
         : 'not a results release') + (problems.length ? ' | ' + problems.join('; ') : '') + (cost.usd != null ? ` | $${cost.usd.toFixed(4)}` : ''));
-      if (COMMIT) written += await store.writeEarningsRelease(out, { replace: redo.has(e.accn) });
+      if (COMMIT) {
+        const n = await store.writeEarningsRelease(out, { replace: redo.has(e.accn) });
+        written += n;
+        if (n && row.isResults) mailed.push(e.accn);
+      }
     } catch (err) {
       if (err instanceof Stop) throw err;
       failed++;
@@ -213,6 +237,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   await recordRun();
+  await mailDigest();
   process.exit(0);
 })().catch(async (e) => {
   console.log(`  STOPPED: ${e instanceof Stop ? e.message : e.stack}; $${spent.toFixed(4)} spent`);

@@ -3004,6 +3004,14 @@ async function writeEarningsRelease(r, opts) {
   });
   return res.rowsAffected || 0;
 }
+// Given filings by number (the primary key): the results email's rows.
+async function readEarningsReleasesByAccn(accns) {
+  await init();
+  const list = [...new Set((accns || []).map(String))].slice(0, 300);
+  if (!list.length) return [];
+  const r = await db.execute({ sql: 'select * from earnings_releases where accn in (' + list.map(() => '?').join(', ') + ')', args: list });
+  return r.rows.map(erOut);
+}
 async function readEarningsReleasesOn(day) {
   await init();
   const r = await db.execute({ sql: 'select * from earnings_releases where filed = ?', args: [String(day)] });
@@ -8161,7 +8169,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

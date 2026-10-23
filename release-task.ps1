@@ -40,7 +40,7 @@ $node = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $node) { throw 'node is not on PATH for this shell.' }
 
 # --use-system-ca as every local job here; the report goes to a log beside it.
-$cmdArgs = "/c `"`"$node`" --use-system-ca release-load.js --commit --days 5 --max-usd $MaxUsd --max-minutes $MaxMin >> release.log 2>&1`""
+$cmdArgs = "/c `"`"$node`" --use-system-ca release-load.js --commit --mail --days 5 --max-usd $MaxUsd --max-minutes $MaxMin >> release.log 2>&1`""
 $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $Root
 $triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }
 

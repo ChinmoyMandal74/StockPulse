@@ -3321,6 +3321,11 @@ const MAIL_DARK_RULES = (D) => [
   [['.em-card pre'], `background:${D.pre};border-color:${D.line}`],
   [['.em-card code'], `background:${D.code};color:${D.ink}`],
   [['.em-card hr'], `border-top-color:${D.line}`],
+  // The results email's shaded panels (the figures across the top, guidance).
+  [['.em-card .em-panel'], `background:${D.pre};border-color:${D.line}`],
+  [['.em-card div'], `color:${D.body}`],
+  [['.em-card .em-ink'], `color:${D.ink}`],
+  [['.em-card .em-box', '.em-card .em-row td'], `border-color:${D.line}`],
   // Scoped under .em-card deliberately: a bare .em-quiet is one class against
   // .em-card p's class-plus-element and loses, so the kicker and the captions
   // came back at body colour and the hierarchy flattened.
@@ -3538,6 +3543,97 @@ function textShell({ heading, intro, lines = [], note = '' }) {
   // handle would be a dead string; most clients linkify an https:// one.
   out.push(`Instagram: ${BRAND_IG_URL}`);
   return out.join('\n');
+}
+
+// ---- the earnings results email (the owner, 2026-10-22: "send me an email
+// after every earning results refresh ... the AI generated summary in a nice
+// email format ... make it look professional"). One card a company: the
+// figures as read from its press release, each with the change on a year ago,
+// the AI's summary, the guidance in the company's words, and the release.
+// Built on emailShell, so it carries the house header, footer and dark mode.
+// GMAIL CLIPS A MESSAGE PAST ~102 KB, so after RD_CARDS full cards the rest
+// are one line each; the test measures the size of a busy day.
+const RD_CARDS = 15, RD_LINES = 45;
+function releaseDigestEmail(rels, names) {
+  require('./private/releaseview.js');
+  const RV = globalThis.ReleaseView;
+  const rows = rels.filter((r) => r && r.isResults).sort((a, b) => (a.symbol < b.symbol ? -1 : 1));
+  const pct = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
+  const chg = (p) => (p == null ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '% y/y');
+  const revKnown = rows.filter((r) => pct(r.revenue, r.revenuePrior) != null), revUp = revKnown.filter((r) => r.revenue > r.revenuePrior);
+  const niKnown = rows.filter((r) => r.netIncome != null && r.netIncomePrior != null), niUp = niKnown.filter((r) => r.netIncome > r.netIncomePrior);
+  const guided = rows.filter((r) => r.guideSentence);
+  const days = [...new Set(rows.map((r) => r.filed))].sort();
+  const dayText = days.length === 1 ? RV.shortDay(days[0]) : RV.shortDay(days[0]) + ' to ' + RV.shortDay(days[days.length - 1]);
+  const n = rows.length, cos = n === 1 ? 'company' : 'companies';
+  const site = APP_URL || '';
+  // The body cell sets the sans face and everything inherits it; only the
+  // figures name a face, a short one. The inline font lists were half the bytes.
+  const mono = "Menlo,Consolas,monospace";
+  const label = (t) => `<div class="em-quiet"${st(`font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint};margin:0 0 3px`)}>${mailEsc(t)}</div>`;
+
+  // The four figures across the top.
+  const stat = (big, small, cap) => `<td class="em-panel" width="25%" valign="top"${st(`padding:12px 12px;background:${MC.panel};border:1px solid ${MC.line};border-radius:10px`)}>`
+    + `<div class="em-ink"${st(`font-size:22px;font-weight:700;letter-spacing:-0.5px;color:${MC.ink}`)}>${big}<span${st(`font-size:13px;font-weight:500;color:${MC.faint}`)}>${small}</span></div>`
+    + `<div${st(`font-size:11.5px;line-height:1.4;color:${MC.mute};margin-top:4px`)}>${mailEsc(cap)}</div></td>`;
+  const gap = `<td width="8"${st('font-size:0;line-height:0')}>&nbsp;</td>`;
+  const stats = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('margin:22px 0 6px;border-collapse:separate')}><tr>`
+    + stat(String(n), '', 'reported') + gap
+    + stat(String(revUp.length), revKnown.length ? ' / ' + revKnown.length : '', 'revenue up on a year ago') + gap
+    + stat(String(niUp.length), niKnown.length ? ' / ' + niKnown.length : '', 'net income up on a year ago') + gap
+    + stat(String(guided.length), '', 'gave guidance') + '</tr></table>';
+
+  // One figure in a card: label, value, the change under it.
+  const fig = (name, value, sub) => `<td width="25%" valign="top"${st('padding:0 8px 0 0')}>${label(name)}`
+    + `<div class="em-ink"${st(`font-family:${mono};font-size:15px;font-weight:600;color:${MC.ink}`)}>${mailEsc(value)}</div>`
+    + (sub ? `<div class="em-quiet"${st(`font-size:11.5px;line-height:1.35;color:${MC.faint};margin-top:2px`)}>${mailEsc(sub)}</div>` : '') + '</td>';
+  const card = (r) => {
+    const cur = r.currency;
+    const rel = /^https:\/\/www\.sec\.gov\//.test(r.url || '') ? r.url : null;
+    const links = [rel ? `<a href="${mailEsc(rel)}"${st(`color:${MC.mute};text-decoration:underline`)}>The release on sec.gov</a>` : '',
+      site ? `<a href="${site}/stock/${encodeURIComponent(r.symbol)}"${st(`color:${MC.mute};text-decoration:underline`)}>Stock page</a>` : ''].filter(Boolean).join(' &nbsp;&middot;&nbsp; ');
+    return `<table class="em-box" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st(`margin:14px 0 0;border:1px solid ${MC.line};border-radius:12px;border-collapse:separate`)}>`
+      // Who and which quarter.
+      + `<tr><td${st('padding:14px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + `<td valign="baseline"><span${st(`font-family:${mono};font-size:15px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</span>`
+      + `<span${st(`font-size:14px;color:${MC.body}`)}>&nbsp;&nbsp;${mailEsc(names[r.symbol] || '')}</span></td>`
+      + `<td align="right" valign="baseline" class="em-quiet"${st(`font-size:12px;color:${MC.faint};white-space:nowrap`)}>${mailEsc(r.periodLabel || '')}</td>`
+      + '</tr></table></td></tr>'
+      // The figures.
+      + `<tr><td${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + fig('Revenue', RV.money(r.revenue, cur), chg(pct(r.revenue, r.revenuePrior)))
+      + fig('Net income', RV.money(r.netIncome, cur), chg(pct(r.netIncome, r.netIncomePrior)))
+      + fig('EPS (GAAP)', RV.eps(r.epsGaap, cur), chg(pct(r.epsGaap, r.epsGaapPrior)))
+      + fig('Adjusted EPS', RV.eps(r.epsAdj, cur), r.epsAdj != null ? [chg(pct(r.epsAdj, r.epsAdjPrior)), r.epsAdjLabel].filter(Boolean).join(' · ') : '')
+      + '</tr></table></td></tr>'
+      // What the release says, then the guidance in the company's words.
+      + (r.summary ? `<tr><td${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
+      + (r.guideSentence ? `<tr><td${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
+        + `<strong${st(`color:${MC.ink}`)}>Guidance</strong>&nbsp; ${mailEsc(r.guideSentence)}</div></td></tr>` : '')
+      + `<tr><td class="em-quiet"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
+      + '</table>';
+  };
+  // Past RD_CARDS, one line each.
+  const line = (r) => `<tr class="em-row"><td${st(`padding:7px 0;border-top:1px solid ${MC.line};font-family:${mono};font-size:13px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</td>`
+    + `<td${st(`padding:7px 8px;border-top:1px solid ${MC.line};font-size:13px;color:${MC.body}`)}>${mailEsc(names[r.symbol] || '')}</td>`
+    + `<td align="right"${st(`padding:7px 0;border-top:1px solid ${MC.line};font-family:${mono};font-size:13px;color:${MC.ink};white-space:nowrap`)}>${mailEsc(RV.money(r.revenue, r.currency))} &middot; ${mailEsc(RV.eps(r.epsGaap, r.currency))}</td></tr>`;
+  const full = rows.slice(0, RD_CARDS), rest = rows.slice(RD_CARDS, RD_CARDS + RD_LINES), beyond = rows.length - full.length - rest.length;
+  const body = stats + full.map(card).join('')
+    + (rest.length ? `<p${st(`margin:22px 0 4px;font-size:13px;color:${MC.mute}`)}>${rest.length} more (revenue &middot; GAAP EPS):</p>`
+      + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rest.map(line).join('')}</table>` : '')
+    + (beyond > 0 ? `<p${st(`margin:12px 0 0;font-size:13px;color:${MC.mute}`)}>And ${beyond} more on the results page.</p>` : '')
+    + (site ? mailButton(site + '/results', 'See every result on Tickr Lab') : '');
+  const heading = `${n} ${cos} reported`;
+  const intro = `Results filed with the SEC on ${dayText}, read by AI from each company's own press release.`
+    + (revKnown.length ? ` Revenue was up on a year earlier at ${revUp.length} of ${revKnown.length}.` : '');
+  const note = 'Sent after each scheduled earnings-results run that read new releases. Figures are copied from the release as printed and checked against its text; a dash is a figure the checks refused. Check the release before relying on a figure. Not investment advice.';
+  const html = emailShell({ heading, intro, body, note });
+  const text = textShell({ heading, intro, note, lines: rows.flatMap((r) => [
+    `${r.symbol}  ${names[r.symbol] || ''}  (${r.periodLabel || ''})`,
+    `  Revenue ${RV.money(r.revenue, r.currency)} ${chg(pct(r.revenue, r.revenuePrior))} | Net income ${RV.money(r.netIncome, r.currency)} ${chg(pct(r.netIncome, r.netIncomePrior))} | EPS ${RV.eps(r.epsGaap, r.currency)}` + (r.epsAdj != null ? ` | Adj. EPS ${RV.eps(r.epsAdj, r.currency)}` : ''),
+    ...(r.summary ? ['  ' + r.summary] : []), ...(r.guideSentence ? ['  Guidance: ' + r.guideSentence] : []), ...(r.url ? ['  ' + r.url] : []), '']).concat(site ? ['Every result: ' + site + '/results'] : []) });
+  const subject = `[Tickr Lab] Earnings results: ${n} ${cos}, ${dayText}`;
+  return { subject, html, text, companies: n };
 }
 
 // `headers` carries List-Unsubscribe for list mail. It is NOT decoration: Gmail
@@ -19388,6 +19484,24 @@ app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
 // scheduler not firing at all, and a watchdog on the same scheduler would
 // miss the same night. Mails only when something is wrong; ?dry=1 reports the
 // verdict without mailing.
+// The earnings results email: release-load.js --mail calls this after a run
+// that wrote new results releases, with their filing numbers. Sent to the
+// operator address (REPORT_TO) through the one send path. A run with no new
+// results never calls it.
+app.post('/api/cron/release-digest', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const accns = (Array.isArray(req.body && req.body.accns) ? req.body.accns : []).map(String).filter((a) => /^[0-9-]{10,30}$/.test(a)).slice(0, 300);
+  if (!accns.length) return res.status(400).json({ error: 'No filings named.' });
+  const [rels, names] = await Promise.all([store.readEarningsReleasesByAccn(accns), store.readNames().catch(() => ({}))]);
+  const d = releaseDigestEmail(rels, names || {});
+  if (!d.companies) return res.json({ sent: false, companies: 0 });
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sent = await sendMail({ kind: 'release-digest', to, subject: d.subject, text: d.text, html: d.html });
+  res.json({ sent: !!sent, companies: d.companies });
+}));
+
 app.get('/api/cron/watchdog', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   const now = Date.now();
