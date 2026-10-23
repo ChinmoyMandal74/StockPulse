@@ -939,7 +939,9 @@
     };
   }
 
-  global.Reel = { W, H, DURATION, SCENES, paint, countUp,
+  // The drawing helpers, for the Tour (tour.js, 2026-10-23): one copy of each.
+  const kit = { clamp, prog, easeOut, easeInOut, font, fitFont, wrap, rrect, glyph, groundOf, countUp };
+  global.Reel = { W, H, DURATION, SCENES, paint, countUp, kit, endCard,
     SHAPES, TRANS_MS, END_MS, composeImage, slidesDuration, paintSlides, customInk, mime, run,
     loadMusic, musicPicker, TRACKS, renderTrack,
     cardParts, cardSchedule, cardSlide };

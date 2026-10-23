@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tour video — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* THE TOUR VIDEO (2026-10-23, admin only). Everything here is tr-
+       prefixed: an unscoped class has captured later markup nine times. */
+    body { min-height: 100dvh; margin: 0; background: var(--void); color: var(--text); font-family: Geist, system-ui, sans-serif; }
+    .tr-page { max-width: 1320px; margin: 0 auto; padding: 28px 28px 80px; }
+    .tr-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    .tr-top h1 { margin: 0; font-size: 28px; letter-spacing: -0.03em; }
+    .tr-top a { color: var(--muted); font-size: 14px; text-decoration: none; }
+    .tr-top a:hover { color: var(--text); }
+    .tr-panel { background: var(--surface); border: 1px solid var(--hair); border-radius: 18px; padding: 20px 22px; }
+    .tr-panel + .tr-panel { margin-top: 16px; }
+    .tr-h { margin: 0 0 12px; font: 600 12px/1 "Geist Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .tr-hint { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+    .tr-stage { border-radius: 14px; overflow: hidden; background: var(--shade); border: 1px solid var(--hair); }
+    .tr-stage canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+    .tr-scrub { width: 100%; margin-top: 12px; accent-color: var(--accent); }
+    .tr-time { display: flex; justify-content: space-between; font: 500 12px "Geist Mono", monospace; color: var(--faint); }
+    .tr-go { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .tr-msg { margin: 10px 0 0; font-size: 13px; color: var(--muted); min-height: 1.4em; }
+    .tr-msg.tr-warn { color: var(--amber); }
+    .tr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+    @media (max-width: 980px) { .tr-grid { grid-template-columns: minmax(0, 1fr); } }
+    .tr-grid .tr-panel + .tr-panel { margin-top: 0; }
+    .tr-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+    .tr-field input, .tr-field select { background: var(--void); color: var(--text); border: 1px solid var(--hair-2); border-radius: 8px; padding: 8px 10px; font: 500 14px Geist, sans-serif; }
+    .tr-sws { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tr-sw { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px;
+             border: 1px solid var(--hair-2); background: transparent; color: var(--text); font: 500 13px Geist, sans-serif; cursor: pointer; }
+    .tr-sw.tr-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .tr-dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hair-2); }
+    .tr-music select { background: var(--void); color: var(--text); border: 1px solid var(--hair-2); border-radius: 8px; padding: 8px 10px; font: 500 14px Geist, sans-serif; }
+    .tr-yt { width: 100%; box-sizing: border-box; min-height: 210px; resize: vertical; background: var(--void); color: var(--text);
+             border: 1px solid var(--hair-2); border-radius: 10px; padding: 10px 12px; font: 500 13px/1.5 "Geist Mono", monospace; }
+    .tr-ytt { width: 100%; box-sizing: border-box; background: var(--void); color: var(--text); border: 1px solid var(--hair-2); border-radius: 10px; padding: 9px 12px; font: 600 14px Geist, sans-serif; margin-bottom: 8px; }
+    .tr-denied { padding: 60px 20px; text-align: center; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="tr-page">
+    <div class="tr-top">
+      <h1>Tour video</h1>
+      <span style="color:var(--faint);font-size:14px">Tickr Lab in one minute, 16:9 for YouTube</span>
+      <a href="/promo">&larr; Promo studio</a>
+    </div>
+    <div id="trApp" hidden>
+      <section class="tr-panel">
+        <div class="tr-stage"><canvas id="trCv" width="1920" height="1080"></canvas></div>
+        <input class="tr-scrub" type="range" id="trScrub" min="0" max="60000" value="0" />
+        <div class="tr-time"><span id="trAt">0.0 s</span><span id="trLen">60 s</span></div>
+        <div class="tr-go">
+          <button class="btn" id="trPlay" type="button" disabled>Play</button>
+          <button class="btn" id="trRec" type="button" disabled>Record video</button>
+        </div>
+        <p class="tr-msg" id="trMsg">Reading today's figures…</p>
+        <p class="tr-hint">Recording runs in real time, a minute, and saves an MP4 (in Chrome) at 1920 by 1080, the
+          size YouTube plays in HD. Keep this tab in front while it records. Every number in the video is read from the
+          site now: record it again another day and the figures move with the screener.</p>
+      </section>
+
+      <div class="tr-grid">
+        <section class="tr-panel">
+          <h2 class="tr-h">1 · The stock in the middle</h2>
+          <label class="tr-field">Featured stock (its page and its Signal)
+            <input id="trSym" list="trSyms" maxlength="12" autocomplete="off" spellcheck="false" />
+          </label>
+          <datalist id="trSyms"></datalist>
+          <h2 class="tr-h" style="margin-top:18px">Colour</h2>
+          <div class="tr-sws" id="trGround"></div>
+          <p class="tr-hint">The promo cards' own grounds. The screener's table, the Signal mix and the newest results
+            releases are the same whichever stock is featured.</p>
+        </section>
+        <section class="tr-panel">
+          <h2 class="tr-h">2 · Music (optional)</h2>
+          <div id="trMusic" class="tr-music"></div>
+          <p class="tr-hint">One of the tracks made here (free to use), or your own file, which stays in this browser;
+            for your own, use music you may use on YouTube. Or leave it silent and add a track in YouTube Studio's
+            audio library after uploading.</p>
+        </section>
+        <section class="tr-panel">
+          <h2 class="tr-h">3 · For the upload</h2>
+          <input class="tr-ytt" id="trTitle" aria-label="Video title" />
+          <textarea class="tr-yt" id="trDesc" aria-label="Video description" spellcheck="false"></textarea>
+          <div class="tr-go" style="margin-top:8px"><button class="btn" id="trCopy" type="button">Copy description</button><span class="tr-msg" id="trCopied" style="margin:0"></span></div>
+          <p class="tr-hint">The chapter times are the video's own scenes; YouTube turns them into chapters.</p>
+        </section>
+      </div>
+    </div>
+    <div class="tr-denied" id="trDenied" hidden>This tool is for the admin.</div>
+  </div>
+
+  <script src="/filters.js"></script>
+  <script src="/action.js"></script>
+  <script src="/cards.js"></script>
+  <script src="/releaseview.js"></script>
+  <script src="/reel.js"></script>
+  <script src="/tour.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const cv = $('trCv'), g = cv.getContext('2d');
+    const state = { ground: 'dark', sym: null, data: null, perStock: {}, M: null, busy: false };
+    const GROUNDS = [['dark', 'Dark'], ['navy', 'Navy'], ['sky', 'Sky'], ['light', 'Light']];
+    const msg = (t, warn) => { $('trMsg').textContent = t; $('trMsg').className = 'tr-msg' + (warn ? ' tr-warn' : ''); };
+    const music = Reel.musicPicker($('trMusic'));
+    const getJson = async (url) => { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(url.split('?')[0] + ' answered ' + r.status); return r.json(); };
+
+    // The featured stock's own data: a year of closes and its At a glance cards.
+    async function stockData(sym) {
+      if (state.perStock[sym]) return state.perStock[sym];
+      const [h, s] = await Promise.all([
+        getJson('/api/history?days=260&symbol=' + encodeURIComponent(sym)).catch(() => ({ closes: [] })),
+        getJson('/api/stock?symbol=' + encodeURIComponent(sym)).catch(() => ({})),
+      ]);
+      return (state.perStock[sym] = { closes: h.closes || [], glance: (s.glance && s.glance.cards) || [] });
+    }
+    function rebuild() {
+      const D = state.data; if (!D) return;
+      const P = state.perStock[state.sym] || { closes: [], glance: [] };
+      state.M = Tour.model({
+        stocks: D.stocks, about: D.about, column: D.column, date: D.date, sym: state.sym,
+        closes: P.closes, glance: P.glance,
+        ink: Cards.reelInk(state.ground), ladder: Cards.reelLadder(state.ground),
+        canon: ActionRules.canon, fields: ReleaseView.fields, changeHex: ReleaseView.CHANGE_HEX, changeKey: ReleaseView.changeKey,
+      });
+      draw(Number($('trScrub').value));
+    }
+    function draw(t) {
+      if (!state.M) return;
+      Tour.paint(g, state.M, t);
+      $('trAt').textContent = (t / 1000).toFixed(1) + ' s';
+    }
+    function paintGrounds() {
+      $('trGround').innerHTML = GROUNDS.map(([id, nm]) => '<button type="button" class="tr-sw' + (id === state.ground ? ' tr-on' : '') + '" data-g="' + id + '">'
+        + '<span class="tr-dot" style="background:' + Cards.reelInk(id).ground + '"></span>' + nm + '</button>').join('');
+    }
+    function paintUpload() {
+      $('trTitle').value = 'Tickr Lab in one minute: a stock screener that shows its working';
+      $('trDesc').value = [
+        'Every US-listed stock on the screen, measured the same way after every close: returns, trend, fundamentals, filings, and a mechanical Signal that names the rule that fired.',
+        '',
+        Tour.CHAPTERS.join('\n'),
+        '',
+        'tickrlab.com',
+        '',
+        'Figures as of the close of ' + (state.M && state.M.date ? state.M.date : 'the day recorded') + '. Mechanical readings, not investment advice. The Signal is a reading of strength, not an instruction to trade.',
+      ].join('\n');
+    }
+
+    async function run(record) {
+      if (state.busy || !state.M) return;
+      state.busy = true; $('trPlay').disabled = $('trRec').disabled = true;
+      msg(record ? 'Recording, a minute: keep this tab in front…' : 'Playing…');
+      try {
+        const out = await Reel.run(cv, Tour.DURATION, (t) => { Tour.paint(g, state.M, t); $('trScrub').value = String(Math.min(t, Tour.DURATION)); $('trAt').textContent = (Math.min(t, Tour.DURATION) / 1000).toFixed(1) + ' s'; }, record, music.get());
+        if (out) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(out.blob); a.download = 'tickrlab-tour.' + out.ext;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+          msg('Saved tickrlab-tour.' + out.ext + ' (' + (out.blob.size / 1e6).toFixed(1) + ' MB).' + (out.ext !== 'mp4' ? ' This browser made WebM; YouTube takes it too.' : ''));
+        } else msg('Played. Record when it looks right.');
+      } catch (e) { msg(e.message || String(e), true); }
+      state.busy = false; $('trPlay').disabled = $('trRec').disabled = false;
+    }
+
+    (async () => {
+      // As /reelmaker: a failed /api/me is the static preview, shown as admin.
+      const me = await getJson('/api/me').catch(() => ({ admin: true }));
+      if (!me || !me.admin) { $('trDenied').hidden = false; return; }
+      $('trApp').hidden = false;
+      try {
+        const [st, about, col] = await Promise.all([getJson('/api/stocks'), getJson('/api/about-stats').catch(() => ({})), getJson('/api/releases/column').catch(() => ({ rows: {} }))]);
+        const stocks = (st.stocks || []).filter((r) => r && r.symbol);
+        const date = stocks.reduce((m, r) => (r.latestDate && r.latestDate > m ? r.latestDate : m), '') || null;
+        state.data = { stocks, about, column: col.rows || {}, date };
+        const byCap = stocks.filter((r) => r.instrumentType !== 'ETF' && Number(r.marketCap) > 0).sort((a, b) => b.marketCap - a.marketCap);
+        $('trSyms').innerHTML = byCap.slice(0, 400).map((r) => '<option value="' + r.symbol + '">' + ReleaseView.esc(r.shortName || r.name || '') + '</option>').join('');
+        state.sym = (byCap[0] && byCap[0].symbol) || null;
+        $('trSym').value = state.sym || '';
+        if (state.sym) await stockData(state.sym);
+        rebuild(); paintUpload();
+        $('trPlay').disabled = $('trRec').disabled = false;
+        msg('Ready. Scrub through it, Play, then Record.');
+        if (!Reel.mime()) msg('Ready to play, but this browser cannot record video. Use Chrome to record.', true);
+      } catch (e) { msg('Could not read the figures: ' + (e.message || e), true); }
+    })();
+
+    paintGrounds();
+    $('trGround').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (!b || state.busy) return; state.ground = b.dataset.g; paintGrounds(); rebuild(); });
+    $('trSym').addEventListener('change', async () => {
+      const s = $('trSym').value.trim().toUpperCase();
+      if (!state.data || !state.data.stocks.some((r) => r.symbol === s)) { msg(s ? s + ' is not on the screen.' : 'Type a symbol.', true); return; }
+      state.sym = s; msg('Reading ' + s + '…'); await stockData(s); rebuild(); paintUpload(); msg('Ready. ' + s + ' is featured.');
+      $('trScrub').value = '27500'; draw(27500);
+    });
+    $('trScrub').addEventListener('input', () => { if (!state.busy) draw(Number($('trScrub').value)); });
+    $('trPlay').addEventListener('click', () => run(false));
+    $('trRec').addEventListener('click', () => run(true));
+    $('trCopy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('trTitle').value + '\n\n' + $('trDesc').value); $('trCopied').textContent = 'Copied.'; }
+      catch (e) { $('trDesc').select(); $('trCopied').textContent = 'Selected: press Ctrl+C.'; }
+    });
+    // Fonts load late: redraw once they have, or the first frame uses a fallback.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw(Number($('trScrub').value)));
+  </script>
+</body>
+</html>

@@ -16390,6 +16390,8 @@
     themeClass: (tpl, opts) => themeOf(tpl, opts).cls,
     // The video painter's colours for a card ground (dark, light, sky, navy).
     reelInk: (ground) => reelInk(themeOf('reel', { cardTheme: ground })),
+    // The six Signal words, strongest first, in that ground's colours (the Tour).
+    reelLadder: (ground) => { const pal = themeOf('reel', { cardTheme: ground }); return ActionRules.ACTIONS.slice().reverse().map((w) => ({ word: w, color: pal.tints[w] || pal.flat })); },
     sectorEtfs: () => SECTOR_ETF.map((s) => s.slice()),
     // The S&P 500 cut as [value, label] pairs, for the studio's pickers.
     spCuts: () => SP_CUTS.map((c) => c.slice()),

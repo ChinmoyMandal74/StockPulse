@@ -829,7 +829,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -2001,6 +2001,14 @@ app.get('/reelmaker', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'reelmaker');
   res.sendFile(path.join(__dirname, 'private', 'reelmaker.html'));
+}));
+
+// The tour video (2026-10-23): Tickr Lab in one minute, 16:9 for YouTube,
+// painted in the browser from the site's own figures (tour.js). The owner's.
+app.get('/tour', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'tour');
+  res.sendFile(path.join(__dirname, 'private', 'tour.html'));
 }));
 
 app.get('/backlog', route(async (req, res) => {

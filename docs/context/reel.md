@@ -103,3 +103,20 @@ The owner: "I have to provide the music?" Offered generated loops or a bundled l
 - Synthesised and simple by design: background for an explainer, not a produced song.
 
 Tested in headless Chrome. Each track renders with no NaN and no clipping, at the lengths above. A `/reelmaker` video with Pulse picked from the list carries AAC audio at a steady level, fading at the end. The studio's two pickers list six choices each, and the Reel still records. A WAV of each track was rendered for the owner to listen to.
+
+## The Tour video (`/tour`, 2026-10-23, admin only)
+The owner: "Can you help me create a longer promo video that might go up to a minute that you can post on YouTube", then chose **Tour of Tickr Lab** and **Regular video 16:9**.
+
+- **What it is:** Tickr Lab in one minute at 1920x1080, seven scenes (`SCENES` in `private/tour.js`):
+  - **Open** (0–6s): "Every stock on the screen. / Measured the same way. / After every close." typed, then the stock and column counts.
+  - **Screener** (6–16s): the eight largest companies as table rows with today, 1 month, 1 year, vs 200-day, forward P/E and the Signal, figures counting up.
+  - **Signal** (16–26s): the six words with how many stocks read each, and the featured stock's word and the rule that fired, typed.
+  - **One stock** (26–37s): its year of closes drawing, price and today, and four At a glance cards. The Owners card is left out: its sentence says "institutions hold", and a marketing video carries no "hold".
+  - **Results, read by AI** (37–47s): four of the newest results releases among the largest companies, those stating a guidance change first, with revenue, EPS, both on a year ago, and the change label in the site's colours.
+  - **The filings** (47–54s): six sources (8-K, insiders, 13F, N-PORT, FINRA short interest, OCC options).
+  - **End** (54–60s): the Reel's end card.
+- **Every figure is the site's, the day it is recorded:** `/api/stocks`, `/api/about-stats` (stock and column counts), `/api/releases/column`, and for the featured stock `/api/history` and `/api/stock` (its At a glance cards). Nothing is written into the video by hand; re-recording moves the numbers with the screener.
+- **Built as the Reel is:** `Tour.model(data)` does all the wording and formatting; `Tour.paint(g, M, t)` is a pure function of the time. The ground, glyph, end card, recorder and music picker are reel.js's, now exported as `Reel.kit` and `Reel.endCard`; the Signal colours come from `Cards.reelLadder(ground)`, beside `Cards.reelInk`.
+- **The page** (`private/tour.html`, route `/tour`, gated in `GATED_PAGES`, linked from `/admin` and the promo studio): the featured stock (default the largest), the four card grounds, music, Play and Record, and a title and description for the upload with chapter times. YouTube shows chapters only when the first is at 0:00 and each runs ten seconds or more, so `Tour.CHAPTERS` folds the short scenes into a neighbour (0:00, 0:16, 0:26, 0:37, 0:47).
+- **The file:** Chrome records a fragmented MP4. Its header carries no duration, and Chrome's own player reports about 4.5 seconds for it; the fragments hold the whole minute (the last starts at 58.8 s). YouTube reads the fragments. About 43 MB at 10 Mbit/s.
+- **Tested** (scratchpad `tour-test.js`, 15 checks, real server on an in-memory copy of production's snapshot and release column, NVIDIA's bars from the analysis copy): anonymous and the raw `.html` turned away; the model's table, Signal counts (summing to the stocks scored), counts, featured stock, releases; the upload text; no trading words anywhere; no script errors; all 1,800 frames paint; and Record downloads a 1920x1080 MP4 whose last fragment starts after 57 s. Frames from every scene were looked at on dark and navy.
