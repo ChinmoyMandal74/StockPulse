@@ -255,14 +255,40 @@
         arrow: net == null ? null : net > 0 ? 'up' : net < 0 ? 'down' : 'flat', text: join(bits) });
     }
 
-    // Earnings
+    // Earnings and guidance (2026-10-23, the owner: "At a glance needs to show
+    // the result release section, call it earning and guidance"). With the
+    // newest results release (the er- fields /api/stock adds from
+    // ReleaseView.fields): when it reported, revenue and EPS on a year ago, the
+    // guidance change the company states, in its words, and the guide's
+    // reading; the next date only when it falls after that report (the
+    // provider's estimate can be a date already past). Without one, as before:
+    // the next date and the last surprise. The arrow is the stated change:
+    // raised up, lowered or withdrawn down, reaffirmed level.
     {
       const sur = num(s.lastSurprise);
       const bits = [];
-      if (s.nextEarningsDate) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
-      if (sur != null) bits.push('Last report ' + (sur > 0 ? 'beat' : sur < 0 ? 'missed' : 'met') + ' the estimate' + (sur ? ' by ' + pct(sur) : '') + '.');
-      add({ id: 'earn', title: 'Earnings', jump: 'earn', tone: 'neutral',
-        arrow: sur == null ? null : sur > 0 ? 'up' : sur < 0 ? 'down' : 'flat', text: join(bits) });
+      const rel = s.erFiled ? s : null;
+      if (rel) {
+        const ch = [];
+        if (num(rel.erRevYoY) != null) ch.push('revenue ' + move(num(rel.erRevYoY)));
+        const ey = num(rel.erEpsYoY) != null ? num(rel.erEpsYoY) : num(rel.erEpsAdjYoY);
+        if (ey != null) ch.push((num(rel.erEpsYoY) != null ? 'EPS ' : 'adjusted EPS ') + move(ey));
+        bits.push('Reported ' + (rel.erPeriodLabel ? rel.erPeriodLabel + ' ' : '') + 'on ' + shortDay(rel.erFiled) + (ch.length ? ': ' + ch.join(', ') + ' on a year ago.' : '.'));
+        if (rel.erGuideChange) {
+          const q = String(rel.erGuideChangeQuote || '');
+          bits.push('Guidance ' + rel.erGuideChange.toLowerCase() + (q ? ': “' + (q.length > 110 ? q.slice(0, 107).replace(/\s+\S*$/, '') + '…' : q) + '”' : '') + '.');
+        } else if (rel.erGuide) bits.push('Guidance given, no change stated.');
+        if (num(rel.erEpsGuideVsFy) != null) bits.push('Full-year EPS guide ' + move(num(rel.erEpsGuideVsFy)) + ' on the year before.');
+        else if (num(rel.erGuideVsQ) != null) bits.push('Next quarter’s revenue guide ' + move(num(rel.erGuideVsQ)) + ' on this quarter.');
+        if (s.nextEarningsDate && s.nextEarningsDate > rel.erFiled) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
+      } else {
+        if (s.nextEarningsDate) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
+        if (sur != null) bits.push('Last report ' + (sur > 0 ? 'beat' : sur < 0 ? 'missed' : 'met') + ' the estimate' + (sur ? ' by ' + pct(sur) : '') + '.');
+      }
+      const gc = rel && rel.erGuideChange ? String(rel.erGuideChange).toLowerCase() : null;
+      const arrow = gc ? (gc === 'raised' ? 'up' : gc === 'lowered' || gc === 'withdrawn' ? 'down' : gc === 'reaffirmed' ? 'flat' : null)
+        : rel ? null : sur == null ? null : sur > 0 ? 'up' : sur < 0 ? 'down' : 'flat';
+      add({ id: 'earn', title: 'Earnings and guidance', jump: rel ? 'rels' : 'earn', tone: 'neutral', arrow, text: join(bits) });
     }
 
     // The Signal, as it stands, with the rule that fired. Shown, not judged.
@@ -304,7 +330,10 @@
         return sp != null ? k(pct(sp), 'of the float short') : null; }
       case 'owners': { const i = n('institutionPct');
         return i != null ? k(pct(i), 'held by institutions') : null; }
-      case 'earn': { if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
+      case 'earn': {
+        // With a release: the stated change, else the day it reported.
+        if (s.erFiled) return s.erGuideChange ? k(String(s.erGuideChange), 'guidance, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
+        if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
         const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
       default: return null;
     }

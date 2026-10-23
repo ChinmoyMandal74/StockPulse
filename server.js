@@ -11116,6 +11116,15 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     stampSpMember([stock]).catch(() => {}),
     stampFlows([stock]).catch(() => {}),
   ]);
+  // THE NEWEST RESULTS RELEASE for the At a glance card "Earnings and
+  // guidance" (2026-10-23, the owner): its figures (ReleaseView.fields, the
+  // er- fields the screener reads) on a copy of the row for Glance.build only;
+  // the stock row itself is not touched. One indexed read; never fails the page.
+  let glanceRow = stock;
+  try {
+    const rel = (await store.readEarningsReleases(stock.symbol, 2)).filter((r) => r.isResults)[0];
+    if (rel) glanceRow = Object.assign({}, stock, globalThis.ReleaseView.fields(Releases.forReader(rel, [])));
+  } catch (e) { glanceRow = stock; }
 
   res.json({
     stock,
@@ -11171,7 +11180,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     peers: guest ? null : peersFor(stock, stocks, peerLinks),
     // At a glance (2026-10-15): the topic cards, compared against the whole
     // snapshot. Never fails the page; a null simply draws no section.
-    glance: (() => { try { return Glance.build(stock, stocks); } catch (e) { return null; } })(),
+    glance: (() => { try { return Glance.build(glanceRow, stocks); } catch (e) { return null; } })(),
     updatedAt: snap.updatedAt || null,
   });
 }));
