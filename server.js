@@ -3649,7 +3649,11 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     // intro rather than invented, and hidden in the body itself.
     `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(intro)}</div>` +
     `<table class="em-bg" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
-    `class="em-wrap" style="background:${MC.panel};padding:28px 12px">` +
+    // NO SIDE MARGIN, inline (2026-10-23, the owner: "Can't we get rid of this
+    // border from all emails"). The 12px only showed where the screen is
+    // narrower than the 600px card, a phone, and the Gmail app ignored the
+    // phone rule that removed it (.em-wrap), so it is gone for every client.
+    `class="em-wrap" style="background:${MC.panel};padding:28px 0">` +
     `<tr><td align="center">` +
     `<table class="em-card" role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
     `style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${MC.line};border-radius:14px;overflow:hidden">` +
