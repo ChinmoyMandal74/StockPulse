@@ -200,5 +200,6 @@ The owner: "Can you create a page linking the site page .. talking about all the
   - Four figures at the top: companies reported, revenue up on a year earlier (of those with both quarters), net income up, guidance given.
   - A note on how the figures are read (every figure found in the text, refused figures shown as dashes, adjusted EPS is the company's own definition, check the release, not advice).
 - **Deliberately left off:** the price provider's estimate (Twelve Data's data, not ours to publish), the Signal, and any beat/miss wording.
+- **Navy, fixed** (`data-theme="navy"`, no theme.js), like the landing page; it was first copied from the blog and came out on the dark theme.
 - **Cost:** two small reads (`readEarningsReleasesSince`, `readNames`), held for ten minutes per instance; `Cache-Control: public, max-age=300`.
 - Tested on an in-memory database seeded with a read-only copy of production's 143 releases: 13 checks, at 1440px and 400px (no sideways scroll, rows drawn, no placeholder left, no Signal words or estimates, no page errors, sitemap and landing link present). The first look caught the figure cards' padding on the bezel's outer element, which clipped their text.
