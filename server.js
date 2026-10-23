@@ -93,7 +93,7 @@ const NewsTone = require('./newstone.js');
 // where secfacts.js and insider.js are pulled in.
 const EarnStudy = require('./earnstudy.js');
 const {
-  readPortfolios, writePortfolios,
+  readPortfolios: readPortfoliosAll, writePortfolios,
   readNames, writeNames,
   readProfiles, writeProfiles, expireProfiles,
   readSnapshot, writeSnapshot,
@@ -122,6 +122,14 @@ let snapCache = { at: 0, snap: null };
 async function snapshotCached() {
   if (snapCache.snap && Date.now() - snapCache.at < SNAP_TTL_MS) return snapCache.snap;
   const snap = await readSnapshot();
+  // Theme memberships as they stand now, not as the last refresh stored them:
+  // a theme switched off (or deleted) leaves the cards and pages that read this
+  // at once rather than at the next refresh. Bookkeeping: never fails the read.
+  try {
+    const pf = await readPortfolios();
+    for (const r of (snap && snap.stocks) || []) if (r && r.symbol) r.portfolios = membershipOf(r.symbol, pf);
+    if (snap) snap.portfolios = Object.keys(pf);
+  } catch (err) { console.warn('snapshot memberships:', err.message); }
   snapCache = { at: Date.now(), snap };
   return snap;
 }
@@ -7675,14 +7683,34 @@ app.put('/api/shortname', requireAdmin, route(async (req, res) => {
 }));
 
 app.get('/api/portfolios', requireMember, route(async (req, res) => {
-  res.json(await portfolioAnswer());
+  res.json(await portfolioAnswer(req));
 }));
 
 // Every portfolio edit answers with both, so a page can reconcile its rows
 // (the universe) and its badges (the portfolios) from one response.
-async function portfolioAnswer(extra = {}) {
-  const [portfolios, universe] = await Promise.all([readPortfolios(), readUniverse()]);
-  return { portfolios, universe, ...extra };
+// INVESTMENT THEMES SWITCHED OFF (2026-10-23). readPortfolios is the themes
+// that are on, and every reader in this file goes through it: the screener
+// (badges, tabs, counts), group pages, cards, backtests, the landing count.
+// readPortfoliosAll is the stored list, for the edits above and below
+// (read-modify-write: reading the filtered list there would delete a theme
+// that is off on the next write), the themes manager and the stored group
+// builds. Nothing is deleted: switching back on restores everything.
+async function readPortfolios() {
+  const [all, off] = await Promise.all([readPortfoliosAll(), store.readDisabledThemes().catch(() => [])]);
+  if (!off.length) return all;
+  const out = {};
+  for (const [k, v] of Object.entries(all)) if (!off.includes(k)) out[k] = v;
+  return out;
+}
+
+async function portfolioAnswer(req, extra = {}) {
+  // The themes manager (/themes) asks with ?all=1 and, as an admin, is answered
+  // with every theme and the list switched off; everyone else, and the screener
+  // after an edit, gets the themes that are on.
+  const full = !!req && String((req.query && req.query.all) || '') === '1' && (await isAdmin(req));
+  const [portfolios, universe, disabled] = await Promise.all([full ? readPortfoliosAll() : readPortfolios(), readUniverse(),
+    full ? store.readDisabledThemes().catch(() => []) : null]);
+  return { portfolios, universe, ...(full ? { disabled } : {}), ...extra };
 }
 
 // Cache the company name once (1 credit) so refreshes stay history-only.
@@ -7843,7 +7871,7 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
   let createdPortfolio = null;
   let target = pname;
   if (pname) {
-    const p = await readPortfolios();
+    const p = await readPortfoliosAll();
     // Case-INSENSITIVE, matching POST /api/portfolios: typing "semis" when
     // "Semis" exists must land in the existing list, not make a second one.
     const existing = Object.keys(p).find((n) => n.toLowerCase() === pname.toLowerCase());
@@ -7900,7 +7928,7 @@ app.post('/api/universe/bulk', requireAdmin, route(async (req, res) => {
   logAct(req, 'portfolio', (`bulk-add:+${added.length}` + (pname ? '>' + pname : '')).slice(0, 80));
   // `createdPortfolio` and `target` so the caller can say what actually
   // happened -- "added to Semis" reads differently from "created Semis".
-  res.json(await portfolioAnswer({ added, already, invalid, unavailable,
+  res.json(await portfolioAnswer(req, { added, already, invalid, unavailable,
     portfolio: target || null, createdPortfolio }));
 }));
 
@@ -7931,7 +7959,7 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
   }
 
   if (pname) {
-    const p = await readPortfolios();
+    const p = await readPortfoliosAll();
     if (!(pname in p)) return res.status(404).json({ error: 'Theme not found.' });
     if (p[pname].includes(symbol)) return res.status(409).json({ error: `${symbol} is already in "${pname}".` });
     p[pname].push(symbol);
@@ -7942,7 +7970,7 @@ app.post('/api/universe', requireAdmin, route(async (req, res) => {
   await store.addToUniverse(symbol);
   const name = await nameForNewTicker(symbol, checkedName);
   logAct(req, 'portfolio', ('add:' + symbol + (pname ? '>' + pname : '')).slice(0, 80));
-  res.json(await portfolioAnswer({ name, added: !already }));
+  res.json(await portfolioAnswer(req, { name, added: !already }));
 }));
 
 // Create an empty portfolio.
@@ -7950,14 +7978,14 @@ app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Theme name is required.' });
   if (name.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
-  const p = await readPortfolios();
+  const p = await readPortfoliosAll();
   if (Object.keys(p).some((n) => n.toLowerCase() === name.toLowerCase())) {
     return res.status(409).json({ error: `Theme "${name}" already exists.` });
   }
   p[name] = [];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'create:' + name.slice(0, 40));
-  res.json(await portfolioAnswer());
+  res.json(await portfolioAnswer(req));
 }));
 
 // The order themes are shown in, everywhere. `position` has always been an
@@ -7970,7 +7998,7 @@ app.post('/api/portfolios', requireAdmin, route(async (req, res) => {
 app.put('/api/portfolios/order', requireAdmin, route(async (req, res) => {
   const asked = Array.isArray(req.body?.names) ? req.body.names.map((x) => String(x)) : null;
   if (!asked) return res.status(400).json({ error: 'Send { names: [...] }.' });
-  const current = await readPortfolios();
+  const current = await readPortfoliosAll();
   const known = new Set(Object.keys(current));
   const out = {};
   for (const n of asked) if (known.has(n) && !(n in out)) out[n] = current[n];
@@ -7978,7 +8006,7 @@ app.put('/api/portfolios/order', requireAdmin, route(async (req, res) => {
   for (const n of missing) out[n] = current[n];
   await writePortfolios(out);
   logAct(req, 'portfolio', 'reorder:' + Object.keys(out).length);
-  res.json({ ...(await portfolioAnswer()), reordered: Object.keys(out).length, appended: missing.length });
+  res.json({ ...(await portfolioAnswer(req)), reordered: Object.keys(out).length, appended: missing.length });
 }));
 
 // Rename a portfolio (preserves order + membership).
@@ -7987,7 +8015,7 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const newName = String(req.body?.newName || '').trim();
   if (!newName) return res.status(400).json({ error: 'New name is required.' });
   if (newName.length > 40) return res.status(400).json({ error: 'Name too long (max 40 chars).' });
-  const p = await readPortfolios();
+  const p = await readPortfoliosAll();
   if (!(oldName in p)) return res.status(404).json({ error: 'Theme not found.' });
   if (
     newName.toLowerCase() !== oldName.toLowerCase() &&
@@ -7999,7 +8027,9 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   for (const [k, v] of Object.entries(p)) rebuilt[k === oldName ? newName : k] = v;
   await writePortfolios(rebuilt);
   logAct(req, 'portfolio', 'rename:' + oldName.slice(0, 30) + '>' + newName.slice(0, 30));
-  res.json(await portfolioAnswer());
+  // A theme that was off stays off under its new name.
+  try { const off = await store.readDisabledThemes(); if (off.includes(oldName)) await store.writeDisabledThemes(off.map((n) => (n === oldName ? newName : n))); } catch (err) { console.warn('theme switch rename:', err.message); }
+  res.json(await portfolioAnswer(req));
 }));
 
 // Delete a portfolio. Its stocks stay in the screener: the universe is its own
@@ -8007,12 +8037,30 @@ app.put('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
 // memberships are replaced. Nothing is purged.
 app.delete('/api/portfolios/:name', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
-  const p = await readPortfolios();
+  const p = await readPortfoliosAll();
   if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   delete p[name];
   await writePortfolios(p);
   logAct(req, 'portfolio', 'delete:' + name.slice(0, 40));
-  res.json(await portfolioAnswer({ purged: [] }));
+  try { const off = await store.readDisabledThemes(); if (off.includes(name)) await store.writeDisabledThemes(off.filter((n) => n !== name)); } catch (err) { console.warn('theme switch delete:', err.message); }
+  res.json(await portfolioAnswer(req, { purged: [] }));
+}));
+
+// Switch a theme off or on for the whole site (admin). Off: it leaves every
+// page, card, filter and count for everyone; its tickers stay tracked and
+// its membership and history are kept. Answers as the themes manager reads.
+app.put('/api/portfolios/:name/enabled', requireAdmin, route(async (req, res) => {
+  const name = decodeURIComponent(req.params.name);
+  if (typeof (req.body && req.body.enabled) !== 'boolean') return res.status(400).json({ error: 'Send { enabled: true | false }.' });
+  const p = await readPortfoliosAll();
+  if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
+  const off = await store.readDisabledThemes();
+  const next = req.body.enabled ? off.filter((n) => n !== name) : off.concat(off.includes(name) ? [] : [name]);
+  await store.writeDisabledThemes(next.filter((n) => n in p));
+  dropSnapshotCache();
+  logAct(req, 'portfolio', (req.body.enabled ? 'enable:' : 'disable:') + name.slice(0, 40));
+  req.query.all = '1';
+  res.json(await portfolioAnswer(req));
 }));
 
 // Add a ticker to a portfolio (and so to the screener, if it is new).
@@ -8021,7 +8069,7 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
   const symbol = String(req.body?.symbol || '').trim().toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'Symbol is required.' });
   if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Invalid symbol format.' });
-  const p = await readPortfolios();
+  const p = await readPortfoliosAll();
   if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   if (p[name].includes(symbol)) {
     return res.status(409).json({ error: `${symbol} is already in "${name}".` });
@@ -8030,7 +8078,7 @@ app.post('/api/portfolios/:name/tickers', requireAdmin, route(async (req, res) =
   await writePortfolios(p);
   const name_ = await nameForNewTicker(symbol);
   logAct(req, 'portfolio', 'add:' + symbol + '>' + name.slice(0, 40));
-  res.json(await portfolioAnswer({ name: name_ }));
+  res.json(await portfolioAnswer(req, { name: name_ }));
 }));
 
 // Take a ticker out of one portfolio. It stays in the screener.
@@ -8072,7 +8120,7 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
   const [names, fund, portfolios] = await Promise.all([
     store.readNamesFull().catch(() => ({})),
     store.fundamentalsDaysFor(found).catch(() => new Map()),
-    readPortfolios().catch(() => ({})),
+    readPortfoliosAll().catch(() => ({})),
   ]);
   const themesOf = (sym) => Object.keys(portfolios).filter((n) => (portfolios[n] || []).includes(sym));
   const rows = found.map((sym) => {
@@ -8132,7 +8180,7 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
   logAct(req, 'portfolio', 'bulk-remove:' + removed.length + ':' + removed.slice(0, 12).join(','));
   const rowsGone = purged.reduce((a, p) => a + (p.total || 0), 0);   // 0: nothing is deleted now
   console.log(`bulk remove: ${removed.length} symbols out of the screener, their history kept`);
-  res.json(await portfolioAnswer({
+  res.json(await portfolioAnswer(req, {
     purged, removed, failed, unknown, invalid, fundDays: fundTotal, rowsGone,
     // What this request did not reach. The page sends it straight back; the
     // operation is idempotent, so a repeat costs nothing but is never needed.
@@ -8143,12 +8191,12 @@ app.post('/api/universe/bulk-delete', requireAdmin, route(async (req, res) => {
 app.delete('/api/portfolios/:name/tickers/:symbol', requireAdmin, route(async (req, res) => {
   const name = decodeURIComponent(req.params.name);
   const symbol = String(req.params.symbol || '').trim().toUpperCase();
-  const p = await readPortfolios();
+  const p = await readPortfoliosAll();
   if (!(name in p)) return res.status(404).json({ error: 'Theme not found.' });
   p[name] = p[name].filter((s) => s !== symbol);
   await writePortfolios(p);
   logAct(req, 'portfolio', 'remove:' + symbol + '<' + name.slice(0, 40));
-  res.json(await portfolioAnswer({ purged: [] }));
+  res.json(await portfolioAnswer(req, { purged: [] }));
 }));
 
 // Remove a stock from the screener: out of the universe, every portfolio and
@@ -8168,7 +8216,7 @@ app.delete('/api/tickers/:symbol', requireAdmin, route(async (req, res) => {
   await store.removeFromUniverse(symbol);
   logAct(req, 'portfolio', 'remove:' + symbol);
   try { await store.retireSymbol(symbol); } catch (err) { console.warn(`retire ${symbol}:`, err.message); }
-  res.json(await portfolioAnswer({ purged: [], kept: true }));
+  res.json(await portfolioAnswer(req, { purged: [], kept: true }));
 }));
 
 // Expire the per-symbol profile cache (sector / fundamentals) so the
@@ -16750,7 +16798,7 @@ async function groupMonthsBuild() {
   const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
   const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
   if (!latest) return { built: false, reason: 'no prices on file' };
-  const [, pf, bench] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfolios(), benchMonthEnds().catch(() => [])]);
+  const [, pf, bench] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfoliosAll(), benchMonthEnds().catch(() => [])]);
   const { bounds } = GroupMonths.plan(latest, GroupMonths.YEARS);
   const symbols = rows.filter((x) => x.instrumentType !== 'ETF').map((x) => String(x.symbol).toUpperCase());
   const closesBySym = new Map(symbols.map((s) => [s, new Array(bounds.length).fill(null)]));
@@ -16802,7 +16850,7 @@ async function groupDaysBuild() {
   const benchBars = await benchDayBars();
   const P = GroupDays.plan(benchBars.map((b) => String(b.datetime).slice(0, 10)));
   if (!P.days.length || !P.base) return { built: false, reason: 'no index sessions on file' };
-  const [, pf] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfolios()]);
+  const [, pf] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfoliosAll()]);
   const symbols = rows.filter((x) => x.instrumentType !== 'ETF').map((x) => String(x.symbol).toUpperCase());
   const t0 = Date.now();
   const barsBySym = await store.readBarsWindow(symbols, P.base, P.latest);

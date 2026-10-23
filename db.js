@@ -2841,6 +2841,27 @@ async function writeSecSetsSeen(seen) {
   });
 }
 
+// INVESTMENT THEMES SWITCHED OFF (2026-10-23, the owner: "disable a theme
+// site wide by admin"). One app_meta row, a JSON array of theme names. Not a
+// column on themes: writePortfolios deletes and re-inserts every theme row,
+// which would lose it. The theme, its tickers and its history are untouched.
+async function readDisabledThemes() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'themes_disabled'");
+  if (!r.rows.length) return [];
+  try { const v = JSON.parse(String(r.rows[0].value || '[]')); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+}
+async function writeDisabledThemes(names) {
+  await init();
+  const list = [...new Set((names || []).map((n) => String(n).trim()).filter(Boolean))].slice(0, 200);
+  await db.execute({
+    sql: "insert into app_meta (key, value) values ('themes_disabled', ?) "
+       + 'on conflict(key) do update set value = excluded.value',
+    args: [JSON.stringify(list)],
+  });
+  return list;
+}
+
 async function readHiddenColumns() {
   await init();
   const r = await db.execute("select value from app_meta where key = 'hidden_columns'");
@@ -8342,6 +8363,7 @@ module.exports = {
   writePostalAddress,
   readSecSetsSeen,
   writeSecSetsSeen,
+  readDisabledThemes, writeDisabledThemes,
   readHiddenColumns,
   readPeerLinks,
   writePeerLinks,
