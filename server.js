@@ -3729,11 +3729,22 @@ function textShell({ heading, intro, lines = [], note = '' }) {
 // Built on emailShell, so it carries the house header, footer and dark mode.
 // GMAIL CLIPS A MESSAGE PAST ~102 KB, so after RD_CARDS full cards the rest
 // are one line each; the test measures the size of a busy day.
+// Market caps for the results email's order, from the cached snapshot.
+async function digestCaps() {
+  try { const snap = await snapshotCached(); return Object.fromEntries(((snap && snap.stocks) || []).map((x) => [x.symbol, x.marketCap])); }
+  catch { return {}; }
+}
 const RD_CARDS = 15, RD_LINES = 45;
 function releaseDigestEmail(rels, names, opts) {
   require('./private/releaseview.js');
   const RV = globalThis.ReleaseView;
-  const rows = rels.filter((r) => r && r.isResults).sort((a, b) => (a.symbol < b.symbol ? -1 : 1));
+  // LARGEST FIRST by market value (2026-10-23, the owner: "sort the email by
+  // market cap"), the one money figure reliably in dollars; a company with
+  // none goes last, then by symbol. `opts.caps`: symbol to market cap.
+  const caps = (opts && opts.caps) || {};
+  const capOf = (r) => { const v = Number(caps[r.symbol]); return Number.isFinite(v) && v > 0 ? v : null; };
+  const rows = rels.filter((r) => r && r.isResults).sort((a, b) => { const x = capOf(a), y = capOf(b);
+    if (x != null && y != null && x !== y) return y - x; if (x != null && y == null) return -1; if (x == null && y != null) return 1; return a.symbol < b.symbol ? -1 : 1; });
   const pct = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
   const chg = (p) => (p == null ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '% y/y');
   const revKnown = rows.filter((r) => pct(r.revenue, r.revenuePrior) != null), revUp = revKnown.filter((r) => r.revenue > r.revenuePrior);
@@ -19698,7 +19709,7 @@ app.post('/api/cron/release-digest', route(async (req, res) => {
   const accns = (Array.isArray(req.body && req.body.accns) ? req.body.accns : []).map(String).filter((a) => /^[0-9-]{10,30}$/.test(a)).slice(0, 300);
   if (!accns.length) return res.status(400).json({ error: 'No filings named.' });
   const [rels, names] = await Promise.all([store.readEarningsReleasesByAccn(accns), store.readNames().catch(() => ({}))]);
-  const d = releaseDigestEmail(rels, names || {});
+  const d = releaseDigestEmail(rels, names || {}, { caps: await digestCaps() });
   if (!d.companies) return res.json({ sent: false, companies: 0 });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
@@ -19734,7 +19745,7 @@ async function releaseDigestToList(req, res) {
   const rels = (await store.readEarningsReleasesSince(etDay(now - 4 * 86400000))).filter((r) => r.isResults && Number(r.readAt) > since);
   if (!rels.length) return res.json({ list: true, companies: 0, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
   const newest = Math.max(...rels.map((r) => Number(r.readAt) || 0));
-  const [subs, already, names, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), store.readNames().catch(() => ({})), postalAddress()]);
+  const [subs, already, names, postal, caps] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), store.readNames().catch(() => ({})), postalAddress(), digestCaps()]);
   const due = subs.filter((s) => !already.has(s.email));
   const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
   const batch = due.slice(0, MAIL_LIST_BATCH).filter((s) => claimed.has(s.email));
@@ -19742,7 +19753,7 @@ async function releaseDigestToList(req, res) {
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
     first = false;
-    const d = releaseDigestEmail(rels, names || {}, { note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
+    const d = releaseDigestEmail(rels, names || {}, { caps, note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
     companies = d.companies;
     const out = await sendMailResult({ kind: 'release-list', to: sub.email, subject: d.subject, html: d.html, text: d.text,
       bulk: true, replyTo: process.env.MAIL_REPLY_TO || undefined, headers: listHeaders(base, sub, topic) });
