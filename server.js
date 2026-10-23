@@ -3735,7 +3735,7 @@ async function digestCaps() {
   try { const snap = await snapshotCached(); return Object.fromEntries(((snap && snap.stocks) || []).map((x) => [x.symbol, x.marketCap])); }
   catch { return {}; }
 }
-const RD_CARDS = 15, RD_LINES = 45;
+const RD_CARDS = 12, RD_LINES = 45;   // 12 since what helped and what weighed were added (2026-10-23): 15 cards came to 103 KB
 function releaseDigestEmail(rels, names, opts) {
   require('./private/releaseview.js');
   const RV = globalThis.ReleaseView;
@@ -3830,7 +3830,9 @@ function releaseDigestEmail(rels, names, opts) {
     if (!d || (!(d.helped || []).length && !(d.weighed || []).length)) return '';
     const col = (title, list) => `<td class="em-col" width="50%" valign="top"${st('padding:0 10px 0 0')}>`
       + `<div class="em-quiet"${st(`font-size:10.5px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint};margin:0 0 4px`)}>${title}</div>`
-      + ((list || []).length ? list.map((x) => `<div${st(`font-size:13px;line-height:1.45;color:${MC.body};margin:0 0 4px;padding-left:12px;text-indent:-12px`)}>&bull;&nbsp;${mailEsc(x.text)}</div>`).join('')
+      // One styled block a column, the points split by line breaks: a style
+      // on every point cost ~15 KB on a busy day, past Gmail's clipping size.
+      + ((list || []).length ? `<div${st(`font-size:13px;line-height:1.5;color:${MC.body}`)}>` + list.map((x) => `&bull;&nbsp;${mailEsc(x.text)}`).join('<br>') + '</div>'
         : `<div class="em-quiet"${st(`font-size:12.5px;color:${MC.faint}`)}>None stated.</div>`) + '</td>';
     return `<tr><td class="em-in"${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
       + col('What helped', d.helped) + col('What weighed', d.weighed) + '</tr></table></td></tr>';
