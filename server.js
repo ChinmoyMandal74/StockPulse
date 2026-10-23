@@ -1328,7 +1328,8 @@ const subscribeBox = (source) =>
   + '<button type="submit">Subscribe</button>'
   + '</form>'
   + '<p class="fine">You will get one email asking you to confirm. Every message after that has a '
-  + 'one-click unsubscribe, and it works without signing in.</p>'
+  + 'one-click unsubscribe, and it works without signing in. For the other mailings, such as '
+  + 'Earnings results each weekday morning, see your <a href="/email-preferences">email preferences</a>.</p>'
   + '</section>';
 
 const subBase = (req) => APP_URL || `https://${req.headers.host}`;
@@ -1451,7 +1452,7 @@ app.get('/posts', route(async (req, res) => {
 // A tiny page shared by confirm and unsubscribe. Server-rendered like the rest
 // of the blog, in the site's own voice, because landing on a bare line of text
 // after clicking a link in an email reads as a broken site.
-function subPage({ title, heading, body, base }) {
+function subPage({ title, heading, body, base, prefs }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">`
     + `<meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<meta name="robots" content="noindex">`
@@ -1471,7 +1472,7 @@ function subPage({ title, heading, body, base }) {
     + `color:var(--text);background:var(--surface-2);border:1px solid color-mix(in srgb,var(--muted) 80%,transparent)}`
     + `.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}`
     + `</style></head><body><div class="wrap"><h1>${htmlEsc(heading)}</h1>${body}`
-    + `<div class="row"><a class="b" href="${base}/blog">Read the blog</a>`
+    + `<div class="row">${prefs === false ? '' : `<a class="b" href="${htmlEsc(prefs || base + '/email-preferences')}">Email preferences</a>`}<a class="b" href="${base}/blog">Read the blog</a>`
     + `<a class="b" href="${base}/home">Home</a></div></div></body></html>`;
 }
 
@@ -1516,7 +1517,7 @@ async function beginSubscription({ email, topics, source, ip, base }) {
     text: textShell({
       heading: 'One click to confirm',
       intro: `Confirm that you want ${what} from ${BRAND}.`,
-      lines: [link, '', 'The link expires in a week.'],
+      lines: [link, '', 'The link expires in a week.', '', 'Change your mailings any time: ' + base + '/email-preferences'],
       note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
     }),
     html: emailShell({
@@ -1525,7 +1526,8 @@ async function beginSubscription({ email, topics, source, ip, base }) {
       body: mailButton(link, 'Confirm subscription')
         + `<p style="margin:0;font-size:13.5px;color:${MC.mute}">The link expires in a week. `
         + 'If the button does not work, paste this into your browser:<br>'
-        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`,
+        + `<span style="word-break:break-all;color:${MC.faint}">${mailEsc(link)}</span></p>`
+        + `<p style="margin:14px 0 0;font-size:13.5px;color:${MC.mute}">You can change your mailings any time on your <a href="${base}/email-preferences" style="color:${MC.mute}">email preferences</a> page.</p>`,
       // THE WHOLE POINT OF CONFIRMING: anyone can type anyone's address into a
       // form, so this message has to be harmless to receive by mistake.
       note: 'If you did not ask for this, ignore it — nothing is sent until the link is clicked.',
@@ -1636,7 +1638,7 @@ app.get('/subscribe/confirm', route(async (req, res) => {
         + 'will arrive.</p>' }));
   }
   logAct(req, 'account', 'subscribed');
-  res.type('html').send(subPage({ base, title: 'Subscribed', heading: 'You are on the list',
+  res.type('html').send(subPage({ base, prefs: done.unsubToken ? prefsUrl(base, done.unsubToken) : undefined, title: 'Subscribed', heading: 'You are on the list',
     body: `<p>${htmlEsc(done.email)} will get ${htmlEsc(done.topics.map(subTopicName).join(', ').toLowerCase())}. `
       + 'Every message carries an unsubscribe link, and it works without signing in.</p>' }));
 }));
@@ -1663,7 +1665,7 @@ app.get('/unsubscribe', route(async (req, res) => {
       body: `<p>Nothing more will be sent to ${htmlEsc(sub.email)}.</p>` }));
   }
   const one = topic && SUB_TOPIC_IDS.has(topic) && sub.topics.length > 1;
-  res.type('html').send(subPage({ base, title: 'Unsubscribe', heading: 'Unsubscribe?',
+  res.type('html').send(subPage({ base, prefs: prefsUrl(base, token), title: 'Unsubscribe', heading: 'Unsubscribe?',
     body: `<p>This will stop ${one ? htmlEsc(subTopicName(topic).toLowerCase()) : 'all email'} to `
       + `<strong style="color:var(--text)">${htmlEsc(sub.email)}</strong>.</p>`
       + `<form method="post" action="/unsubscribe" style="margin:0">`
@@ -1687,7 +1689,7 @@ async function doUnsubscribe(req, res, wantsJson) {
   }
   logAct(req, 'account', 'unsubscribed');
   const left = done.topics.length;
-  res.type('html').send(subPage({ base, title: 'Unsubscribed', heading: 'Done — you are unsubscribed',
+  res.type('html').send(subPage({ base, prefs: prefsUrl(base, token), title: 'Unsubscribed', heading: 'Done — you are unsubscribed',
     body: `<p>${htmlEsc(done.email)} ${left ? 'will still get ' + htmlEsc(done.topics.map(subTopicName).join(', ').toLowerCase())
       : 'will not be emailed again'}. No hard feelings, and you can always come back from the blog.</p>` }));
 }
@@ -1735,7 +1737,7 @@ const prefsIp = (req) => String(req.ip || req.headers['x-forwarded-for'] || '').
 app.get('/email-preferences', route(async (req, res) => {
   const base = subBase(req);
   const t = String(req.query.t || '');
-  const page = (body, code) => res.status(code || 200).type('html').send(subPage({ base, title: 'Email preferences', heading: 'Email preferences', body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
+  const page = (body, code) => res.status(code || 200).type('html').send(subPage({ base, prefs: false, title: 'Email preferences', heading: 'Email preferences', body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
   if (t) {
     const sub = await store.subscriberByToken(t);
     if (!sub) return page('<p>We cannot find that subscription. The link may be from a very old email. You can sign up again below.</p>'
@@ -1770,7 +1772,7 @@ app.post('/email-preferences', express.urlencoded({ extended: false }), route(as
   const b = req.body || {};
   const want = [...new Set(topicList(b.topics))];
   const names = (l) => l.map(subTopicName).join(', ').toLowerCase();
-  const page = (heading, body, code) => res.status(code || 200).type('html').send(subPage({ base, title: heading, heading, body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
+  const page = (heading, body, code) => res.status(code || 200).type('html').send(subPage({ base, prefs: false, title: heading, heading, body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
   const confirmSent = '<p>We have sent a link to confirm. Nothing new is sent until it is clicked, and it expires in a week.</p>';
   const t = String(b.t || '');
   if (t) {
