@@ -43,6 +43,31 @@ const FORCE = flag('--force') && !!ONLY;
 // --column-only: rebuild the screener's column (the stored figure) and stop;
 // no SEC fetch, no model call. Every committed run rebuilds it at its end too.
 const COLUMN_ONLY = flag('--column-only');
+// THE EARNINGS RESULTS MAILING (2026-10-23): after the MORNING run only (the
+// owner: once each weekday morning), ask the app to send everyone on the
+// `results` list everything read since the last mailing, a batch a call,
+// looping while any are left. Whether this run read anything new does not
+// matter: the evening run's finds go out now. Never fails the run.
+async function mailList() {
+  if (!MAIL) return;
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(new Date())) % 24;
+  if (hour >= 12) return;
+  const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
+  if (!secret) return;
+  let sent = 0, failed = 0, total = 0, companies = 0;
+  try {
+    for (let i = 0; i < 60; i++) {
+      const r = await fetch(base + '/api/cron/release-digest', { method: 'POST', signal: AbortSignal.timeout(120000),
+        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + secret }, body: JSON.stringify({ list: true }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { console.log('  mailing: stopped (' + (d.error || r.status) + ')'); break; }
+      sent += d.sent || 0; failed += d.failed || 0; total = d.total || total; companies = d.companies || companies;
+      if (!d.remaining) break;
+      if (!d.sent && !d.deferred) { console.log('  mailing: no progress, stopping'); break; }
+    }
+    console.log('  mailing: ' + (companies ? sent + ' of ' + total + ' subscribers sent ' + companies + ' companies' + (failed ? ', ' + failed + ' failed' : '') : 'nothing read since the last one'));
+  } catch (e) { console.log('  mailing: not sent (' + String(e.message).slice(0, 80) + ')'); }
+}
 // --guidance (with --commit): read again the stored results releases in the
 // window whose guidance items were never read (before 2026-10-23), and write
 // ONLY the four guidance columns (writeReleaseGuidance). The reading itself,
@@ -292,6 +317,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   await recordRun();
   await mailDigest();
+  await mailList();
   process.exit(0);
 })().catch(async (e) => {
   console.log(`  STOPPED: ${e instanceof Stop ? e.message : e.stack}; $${spent.toFixed(4)} spent`);

@@ -2599,7 +2599,11 @@ async function startSubscribe({ email, topics, source, ip }) {
   const want = JSON.stringify(Array.isArray(topics) ? topics : []);
   const existing = await readSubscriber(e);
 
-  if (existing && existing.status === 'active') return { token: null, already: true };
+  // ALREADY HAS EVERYTHING ASKED FOR: nothing to confirm, and the same silence.
+  // Asking for a topic they do not have yet (Earnings results, 2026-10-23) is a
+  // new consent, so it waits in `pending` for the link like any other request;
+  // the row stays active for what it already has.
+  if (existing && existing.status === 'active' && JSON.parse(want).every((t) => existing.topics.includes(t))) return { token: null, already: true };
   const r = await db.execute({
     sql: 'select confirm_sent_at from subscribers where email = ?', args: [e],
   });
@@ -2704,6 +2708,30 @@ async function activeSubscribers(topic) {
   return r.rows.map(subRow).filter((s) => s && (!topic || s.topics.includes(topic)));
 }
 
+// THE PREFERENCES PAGE, for a reader who came from one of our emails (the
+// token proves the address receives our mail): set an ACTIVE subscriber's
+// topics outright. None left is unsubscribing, as in unsubscribe(). A row
+// that is not active is never switched on here: that goes through
+// confirmation (beginSubscription).
+async function setSubscriberTopics(unsubToken, topics) {
+  const row = await subscriberByToken(unsubToken);
+  if (!row || row.status !== 'active') return null;
+  const want = [...new Set((topics || []).map(String))];
+  if (!want.length) return unsubscribe(unsubToken, '');
+  await db.execute({ sql: 'update subscribers set topics = ? where email = ?', args: [JSON.stringify(want), row.email] });
+  return { ...row, topics: want };
+}
+// The Earnings results mailing's mark: the newest reading already mailed to
+// the list, so the next morning's email carries everything read since.
+async function readResultsListMark() {
+  await init();
+  const r = await db.execute({ sql: "select value from app_meta where key = 'results_list_mark'" });
+  return r.rows.length ? Number(r.rows[0].value) || 0 : 0;
+}
+async function writeResultsListMark(ms) {
+  await init();
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('results_list_mark', ?)", args: [String(Number(ms) || 0)] });
+}
 async function listSubscribers() {
   await init();
   const r = await db.execute('select * from subscribers order by created_at desc');
@@ -8287,7 +8315,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark,
   listSubscribers,
   deleteSubscriber,
   readSentFor,

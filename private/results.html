@@ -72,6 +72,13 @@
     .er-note h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text); }
     .er-note p { margin: 0 0 8px; }
     .er-cta { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .er-subbox { margin-top: 26px; padding: 22px 24px; border: 1px solid var(--hair-2); border-radius: 16px; background: var(--surface); }
+    .er-subbox h2 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+    .er-subbox p { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; max-width: 70ch; }
+    .er-subbox form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .er-subbox input[type=email] { flex: 1 1 240px; min-width: 0; padding: 10px 13px; border-radius: 10px; font: inherit; font-size: 14px; color: var(--text); background: var(--surface-2); border: 1px solid color-mix(in srgb, var(--muted) 70%, transparent); }
+    .er-subbox input[type=email]:focus { outline: none; border-color: var(--accent); }
+    .er-subbox .fine { font-size: 12px; color: var(--faint); }
     .er-empty { padding: 40px 4px; color: var(--faint); font-size: 14px; }
     footer { margin-top: 56px; border-top: 1px solid var(--hair); padding-top: 24px;
              display: flex; flex-wrap: wrap; gap: 16px; font-size: 12.5px; color: var(--faint); }
@@ -122,6 +129,8 @@
         Companies define revenue and adjusted earnings differently, so compare a company with its own past rather than with another company.</p>
       <p>Machine reading can still be wrong. Check the release before relying on a figure. Nothing here is investment advice, and nothing here says whether to trade any stock.</p>
     </div></section>
+
+    %SUBSCRIBE%
 
     <div class="er-cta">
       <a class="btn btn-primary" href="/login?mode=register">Join the beta</a>

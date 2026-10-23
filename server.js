@@ -744,7 +744,13 @@ function resultsPage(rels, names, today) {
   return pageTemplate('results.html')
     .replace('%ASOF%', () => htmlEsc(asof))
     .replace('%FIGS%', () => figs)
-    .replace('%DAYS%', () => dayHtml || '<div class="er-empty">No results releases in the last three weeks.</div>');
+    .replace('%DAYS%', () => dayHtml || '<div class="er-empty">No results releases in the last three weeks.</div>')
+    // The Earnings results mailing's door on its own page (2026-10-23).
+    .replace('%SUBSCRIBE%', () => '<section class="er-subbox"><h2>Get these by email, each weekday morning</h2>'
+      + '<p>Every results release filed since the last email, with the AI summary and the guidance, in one email before the market opens. None on a day with no results.</p>'
+      + '<form method="post" action="/email-preferences"><input type="hidden" name="mode" value="new"><input type="hidden" name="topics" value="results">'
+      + '<input type="email" name="email" required autocomplete="email" placeholder="you@example.com" aria-label="Your email address"><button class="btn btn-primary" type="submit">Subscribe</button></form>'
+      + '<p class="fine">One email to confirm the address first. Every email after that has a one-click unsubscribe and a link to your <a href="/email-preferences">email preferences</a>. Not investment advice.</p></section>');
 }
 function addDaysIso(day, n) {
   const t = new Date(day + 'T12:00:00'); t.setDate(t.getDate() + n);
@@ -1247,17 +1253,23 @@ app.get('/blog/img/:id', route(async (req, res, next) => {
 // re-keyed: the id is what a stored consent points at.
 const SUB_TOPICS = [
   { id: 'posts', name: 'New posts', note: 'An email when something new goes up on the blog. A few a month at most.' },
+  // 2026-10-23, the owner: "make this earning results email into an automated
+  // email provided people opt for it". Anyone may ask; each weekday morning.
+  { id: 'results', name: 'Earnings results', note: 'Each weekday morning: the quarterly results US companies filed since the last one, read from each press release by AI. None on a day with no results.' },
 ];
 const SUB_TOPIC_IDS = new Set(SUB_TOPICS.map((t) => t.id));
 const subTopicName = (id) => (SUB_TOPICS.find((t) => t.id === id) || {}).name || id;
 
 // Kept only where it is asked for, so a tick nobody offered cannot arrive by
-// hand-rolled POST. An empty list falls back to every topic, which is what the
-// blog's own box means when it offers no choice.
+// hand-rolled POST. An empty list falls back to NEW POSTS, which is what the
+// blog's own box and the sign-up tick mean when they offer no choice. (It fell
+// back to every topic while there was one; with a second, a blog sign-up would
+// have been signed up for Earnings results too.) A form posts one value as a
+// string and several as an array.
+const topicList = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]).map(String).filter((t) => SUB_TOPIC_IDS.has(t));
 const cleanTopics = (v) => {
-  const want = Array.isArray(v) ? v.map(String) : [];
-  const keep = [...new Set(want.filter((t) => SUB_TOPIC_IDS.has(t)))];
-  return keep.length ? keep : SUB_TOPICS.map((t) => t.id);
+  const keep = [...new Set(topicList(v))];
+  return keep.length ? keep : ['posts'];
 };
 
 // CAN-SPAM wants a real postal address in commercial bulk mail. Unset, the list
@@ -1306,6 +1318,8 @@ const subscribeBox = (source) =>
 const subBase = (req) => APP_URL || `https://${req.headers.host}`;
 const unsubUrl = (base, token, topic) =>
   `${base}/unsubscribe?t=${encodeURIComponent(token)}` + (topic ? `&topic=${encodeURIComponent(topic)}` : '');
+// The preferences page for this reader, no sign-in: their own token.
+const prefsUrl = (base, token) => `${base}/email-preferences?t=${encodeURIComponent(token)}`;
 
 // Every list message carries this, in the footer line the shell already keeps
 // for "why did I get this" — which is the honest place for it, because that is
@@ -1313,11 +1327,13 @@ const unsubUrl = (base, token, topic) =>
 const listNote = (base, sub, topic, postal) => {
   const link = unsubUrl(base, sub.unsubToken, topic);
   return `You are getting this because ${mailEsc(sub.email)} asked for ${mailEsc(subTopicName(topic))} from ${BRAND}. `
-    + `<a href="${link}" style="color:${MC.mute}">Unsubscribe</a>.`
+    + `<a href="${prefsUrl(base, sub.unsubToken)}" style="color:${MC.mute}">Email preferences</a> · `
+    + `<a href="${link}" style="color:${MC.mute}">Unsubscribe from ${mailEsc(subTopicName(topic).toLowerCase())}</a>.`
     + (postal ? `<br>${mailEsc(postal)}` : '');
 };
 const listNoteText = (base, sub, topic, postal) =>
   `You are getting this because ${sub.email} asked for ${subTopicName(topic)} from ${BRAND}.\n`
+  + `Email preferences: ${prefsUrl(base, sub.unsubToken)}\n`
   + `Unsubscribe: ${unsubUrl(base, sub.unsubToken, topic)}`
   + (postal ? `\n${postal}` : '');
 
@@ -1664,6 +1680,114 @@ async function doUnsubscribe(req, res, wantsJson) {
 app.post('/unsubscribe', express.urlencoded({ extended: false }), route((req, res) =>
   doUnsubscribe(req, res, false)));
 app.post('/api/unsubscribe', route((req, res) => doUnsubscribe(req, res, true)));
+
+// ---- email preferences (2026-10-23, the owner: "there should be an email
+// preference screen with options to select different mailings") -------------
+// ONE PAGE, THREE WAYS IN, and one rule about consent: ADDING a mailing needs
+// proof that the address is the reader's, REMOVING one never does.
+//  - From the link in any list email (?t=, the reader's own unsubscribe
+//    token): the token proves the address receives our mail, so an active
+//    subscriber's ticks are saved outright. A row that is not active (it
+//    unsubscribed, or never confirmed) is never switched on here: ticking
+//    sends a confirmation, as subscribing does.
+//  - Signed in, no token: the account's address. Registration does not verify
+//    an address, so an addition always goes through a confirmation email;
+//    taking one away applies at once.
+//  - Neither: an address and the ticks, answered like every subscribe form
+//    (the same words whatever is on file: no address checker).
+// Server-rendered, no script, like the rest of the list's pages.
+const prefsStyle = '<style>.prefs .tp{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--hair)}'
+  + '.prefs .tp input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--accent)}'
+  + '.prefs .tp b{display:block;color:var(--text);font-size:15px}.prefs .tp small{display:block;color:var(--muted);font-size:13.5px;line-height:1.5;margin-top:2px}'
+  + '.prefs .who{color:var(--text)}.prefs .fine{font-size:13px}.prefs .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}</style>';
+const topicBoxes = (checked) => SUB_TOPICS.map((t) => `<label class="tp"><input type="checkbox" name="topics" value="${htmlEsc(t.id)}"${checked.includes(t.id) ? ' checked' : ''}>`
+  + `<span><b>${htmlEsc(t.name)}</b><small>${htmlEsc(t.note)}</small></span></label>`).join('');
+async function prefsAccount(req) {
+  try {
+    if (!(await isSignedIn(req)) || (await isGuest(req))) return null;
+    const who = await currentUser(req);
+    return who && who.email && isEmail(String(who.email)) ? String(who.email).trim().toLowerCase() : null;
+  } catch { return null; }
+}
+const prefsIp = (req) => String(req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+
+app.get('/email-preferences', route(async (req, res) => {
+  const base = subBase(req);
+  const t = String(req.query.t || '');
+  const page = (body, code) => res.status(code || 200).type('html').send(subPage({ base, title: 'Email preferences', heading: 'Email preferences', body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
+  if (t) {
+    const sub = await store.subscriberByToken(t);
+    if (!sub) return page('<p>We cannot find that subscription. The link may be from a very old email. You can sign up again below.</p>'
+      + `<p><a class="b" href="${base}/email-preferences">Choose mailings</a></p>`, 404);
+    const active = sub.status === 'active';
+    return page(`<p>For <b class="who">${htmlEsc(sub.email)}</b>.`
+      + (active ? ' Untick a mailing to stop it; tick one to add it.</p>' : ' Nothing is being sent to this address. Tick a mailing to start again, and we will send a link to confirm.</p>')
+      + `<form method="post" action="/email-preferences"><input type="hidden" name="t" value="${htmlEsc(t)}">${topicBoxes(active ? sub.topics : [])}`
+      + '<div class="acts"><button class="b p" type="submit">Save</button></div></form>'
+      + (active ? `<form method="post" action="/unsubscribe" style="margin:14px 0 0"><input type="hidden" name="t" value="${htmlEsc(t)}"><button class="b" type="submit">Unsubscribe from everything</button></form>` : ''));
+  }
+  const acct = await prefsAccount(req);
+  if (acct) {
+    const row = await store.readSubscriber(acct).catch(() => null);
+    const have = row && row.status === 'active' ? row.topics : [];
+    return page(`<p>For <b class="who">${htmlEsc(acct)}</b>, your account’s address. Untick a mailing to stop it. Adding one sends a link to that address to confirm.</p>`
+      + `<form method="post" action="/email-preferences"><input type="hidden" name="mode" value="account">${topicBoxes(have)}`
+      + '<div class="acts"><button class="b p" type="submit">Save</button></div></form>');
+  }
+  page('<p>Choose what you would like by email. We send one email to confirm the address; every email after that has a link to change these, and it works without signing in.</p>'
+    + '<form method="post" action="/email-preferences"><input type="hidden" name="mode" value="new">'
+    + '<label style="display:block;color:var(--muted);font-size:13.5px;margin-top:8px">Your email address<input class="f" type="email" name="email" required autocomplete="email" placeholder="you@example.com"></label>'
+    // ?topic= ticks the mailing the reader clicked through for ("Get it by email").
+    + topicBoxes(topicList(req.query.topic)) + '<div class="acts"><button class="b p" type="submit">Subscribe</button></div></form>'
+    + '<p class="fine" style="margin-top:14px">No sharing your address with anyone. Not investment advice.</p>');
+}));
+
+app.post('/email-preferences', express.urlencoded({ extended: false }), route(async (req, res) => {
+  const base = subBase(req);
+  const b = req.body || {};
+  const want = [...new Set(topicList(b.topics))];
+  const names = (l) => l.map(subTopicName).join(', ').toLowerCase();
+  const page = (heading, body, code) => res.status(code || 200).type('html').send(subPage({ base, title: heading, heading, body: prefsStyle + '<div class="prefs">' + body + '</div>' }));
+  const confirmSent = '<p>We have sent a link to confirm. Nothing new is sent until it is clicked, and it expires in a week.</p>';
+  const t = String(b.t || '');
+  if (t) {
+    const sub = await store.subscriberByToken(t);
+    if (!sub) return page('Link not recognised', '<p>We cannot find that subscription. Nothing will be sent to it.</p>', 404);
+    const back = `<p><a class="b" href="${prefsUrl(base, t)}">Back to preferences</a></p>`;
+    if (sub.status === 'active') {
+      const done = await store.setSubscriberTopics(t, want);
+      logAct(req, 'account', 'email prefs: ' + (want.join(',') || 'none'));
+      return page('Saved', done && done.topics.length
+        ? `<p>${htmlEsc(sub.email)} will get ${htmlEsc(names(done.topics))}.</p>` + back
+        : `<p>${htmlEsc(sub.email)} will not be emailed again.</p>`);
+    }
+    if (!want.length) return page('Nothing changed', '<p>Nothing is being sent to this address.</p>');
+    await beginSubscription({ email: sub.email, topics: want, source: 'preferences', ip: prefsIp(req), base });
+    return page('Check your email', confirmSent);
+  }
+  if (b.mode === 'account') {
+    const acct = await prefsAccount(req);
+    if (!acct) return res.redirect('/email-preferences');
+    const row = await store.readSubscriber(acct).catch(() => null);
+    const have = row && row.status === 'active' ? row.topics : [];
+    const keep = have.filter((x) => want.includes(x)), add = want.filter((x) => !have.includes(x));
+    if (row && row.status === 'active' && keep.length !== have.length) await store.setSubscriberTopics(row.unsubToken, keep);
+    if (add.length) await beginSubscription({ email: acct, topics: [...keep, ...add], source: 'preferences', ip: prefsIp(req), base });
+    logAct(req, 'account', 'email prefs (account): ' + (want.join(',') || 'none'));
+    return page(add.length ? 'Check your email' : 'Saved',
+      (keep.length ? `<p>You will get ${htmlEsc(names(keep))}.</p>` : add.length ? '' : '<p>You will not be emailed.</p>')
+      + (add.length ? `<p>To add ${htmlEsc(names(add))}: ${confirmSent.replace(/^<p>|<\/p>$/g, '')}</p>` : '')
+      + `<p><a class="b" href="${base}/email-preferences">Back to preferences</a></p>`);
+  }
+  // A new address: the subscribe form's rules and its one answer.
+  const email = String(b.email || '').trim().toLowerCase();
+  if (!want.length) return page('Choose a mailing', '<p>Tick at least one mailing, then subscribe.</p>'
+    + `<p><a class="b" href="${base}/email-preferences">Back</a></p>`, 400);
+  const r = await beginSubscription({ email, topics: want, source: 'preferences', ip: prefsIp(req), base });
+  if (r.bad) return page('Check the address', '<p>That does not look like an email address. Go back and try again.</p>', 400);
+  page('Check your email', '<p>There is a link on its way to confirm the address. It expires in a week, and nothing is sent until you click it.</p>');
+}));
+
 
 // Public pages want to be findable, which is most of the point of a blog.
 app.get('/robots.txt', route(async (req, res) => {
@@ -3573,7 +3697,7 @@ function textShell({ heading, intro, lines = [], note = '' }) {
 // GMAIL CLIPS A MESSAGE PAST ~102 KB, so after RD_CARDS full cards the rest
 // are one line each; the test measures the size of a busy day.
 const RD_CARDS = 15, RD_LINES = 45;
-function releaseDigestEmail(rels, names) {
+function releaseDigestEmail(rels, names, opts) {
   require('./private/releaseview.js');
   const RV = globalThis.ReleaseView;
   const rows = rels.filter((r) => r && r.isResults).sort((a, b) => (a.symbol < b.symbol ? -1 : 1));
@@ -3665,9 +3789,13 @@ function releaseDigestEmail(rels, names) {
   const heading = `${n} ${cos} reported`;
   const intro = `Results filed with the SEC on ${dayText}, read by AI from each company's own press release.`
     + (revKnown.length ? ` Revenue was up on a year earlier at ${revUp.length} of ${revKnown.length}.` : '');
-  const note = 'Sent after each scheduled earnings-results run that read new releases. Figures are copied from the release as printed and checked against its text; a dash is a figure the checks refused. Check the release before relying on a figure. Not investment advice.';
-  const html = emailShell({ heading, intro, body, note });
-  const text = textShell({ heading, intro, note, lines: rows.flatMap((r) => [
+  // The reading's caveat goes in every copy; a list copy adds the reader's own
+  // preferences and unsubscribe links under it, the owner's says why it came.
+  const caveat = 'Figures are copied from the release as printed and checked against its text; a dash is a figure the checks refused. Check the release before relying on a figure. Not investment advice.';
+  const note = 'Sent after each scheduled earnings-results run that read new releases. ' + caveat;
+  const o = opts || {};
+  const html = emailShell({ heading, intro, body, note: o.note ? mailEsc(caveat) + '<br><br>' + o.note : note });
+  const text = textShell({ heading, intro, note: o.noteText ? caveat + '\n\n' + o.noteText : note, lines: rows.flatMap((r) => [
     `${r.symbol}  ${names[r.symbol] || ''}  (${r.periodLabel || ''})`,
     `  Revenue ${RV.money(r.revenue, r.currency)} ${chg(pct(r.revenue, r.revenuePrior))} | Net income ${RV.money(r.netIncome, r.currency)} ${chg(pct(r.netIncome, r.netIncomePrior))} | EPS ${RV.eps(r.epsGaap, r.currency)}` + (r.epsAdj != null ? ` | Adj. EPS ${RV.eps(r.epsAdj, r.currency)}` : ''),
     ...(r.summary ? ['  ' + r.summary] : []), ...(r.guideSentence ? ['  Guidance: ' + r.guideSentence] : []), ...(r.url ? ['  ' + r.url] : []), '']).concat(site ? ['Every result: ' + site + '/results'] : []) });
@@ -11286,7 +11414,8 @@ app.get('/api/admin/subscribers', requireAdmin, route(async (req, res) => {
   res.json({
     subscribers: all,
     topics: SUB_TOPICS,
-    stats: { active: count('active'), pending: count('pending'), unsubscribed: count('unsubscribed'), total: all.length },
+    stats: { active: count('active'), pending: count('pending'), unsubscribed: count('unsubscribed'), total: all.length,
+      byTopic: Object.fromEntries(SUB_TOPICS.map((t) => [t.id, all.filter((x) => x.status === 'active' && x.topics.includes(t.id)).length])) },
     // Surfaced rather than enforced: the list works without it, and a
     // fabricated postal address would be worse than an absent one.
     postalAddress: (await postalAddress()) || null,
@@ -19532,6 +19661,7 @@ app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
 app.post('/api/cron/release-digest', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  if (req.body && req.body.list === true) return releaseDigestToList(req, res);
   const accns = (Array.isArray(req.body && req.body.accns) ? req.body.accns : []).map(String).filter((a) => /^[0-9-]{10,30}$/.test(a)).slice(0, 300);
   if (!accns.length) return res.status(400).json({ error: 'No filings named.' });
   const [rels, names] = await Promise.all([store.readEarningsReleasesByAccn(accns), store.readNames().catch(() => ({}))]);
@@ -19542,6 +19672,53 @@ app.post('/api/cron/release-digest', route(async (req, res) => {
   const sent = await sendMail({ kind: 'release-digest', to, subject: d.subject, text: d.text, html: d.html });
   res.json({ sent: !!sent, companies: d.companies });
 }));
+
+// THE EARNINGS RESULTS MAILING (2026-10-23): everyone on the `results` topic,
+// once each weekday morning. release-load.js calls this after its morning run
+// ({ list: true }) and loops while `remaining` is above zero: one batch of
+// MAIL_LIST_BATCH a call, as the post broadcast does.
+//  - WHAT GOES IN: every results release READ since the last mailing (the
+//    mark in app_meta), so what the 18:15 run found the evening before goes
+//    out the next morning. Filed in the last week only. None read, no email.
+//  - THE LEDGER is post_sends under 'results:<the Eastern day>', claimed before
+//    each send: a retried or doubled call never mails anyone twice that day.
+//  - THE MARK moves to the newest reading included once nobody is left, so the
+//    next morning starts after it.
+//  - Built per reader: their own preferences and unsubscribe links, and the
+//    list headers (one-click unsubscribe from this mailing).
+async function releaseDigestToList(req, res) {
+  const topic = 'results';
+  const base = subBase(req);
+  const now = Date.now();
+  const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
+  const key = 'results:' + etDay(now);
+  const mark = await store.readResultsListMark();
+  const since = mark || now - 3 * 86400000;
+  const rels = (await store.readEarningsReleasesSince(etDay(now - 7 * 86400000))).filter((r) => r.isResults && Number(r.readAt) > since);
+  if (!rels.length) return res.json({ list: true, companies: 0, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
+  const newest = Math.max(...rels.map((r) => Number(r.readAt) || 0));
+  const [subs, already, names, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), store.readNames().catch(() => ({})), postalAddress()]);
+  const due = subs.filter((s) => !already.has(s.email));
+  const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
+  const batch = due.slice(0, MAIL_LIST_BATCH).filter((s) => claimed.has(s.email));
+  let sent = 0, failed = 0, deferred = 0, first = true, companies = 0;
+  for (const sub of batch) {
+    if (!first) await pause(MAIL_RATE_MS);
+    first = false;
+    const d = releaseDigestEmail(rels, names || {}, { note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
+    companies = d.companies;
+    const out = await sendMailResult({ kind: 'release-list', to: sub.email, subject: d.subject, html: d.html, text: d.text,
+      bulk: true, replyTo: process.env.MAIL_REPLY_TO || undefined, headers: listHeaders(base, sub, topic) });
+    if (out.retryable) { await store.releaseSend(key, sub.email); deferred++; continue; }
+    await store.noteSendResult(key, sub.email, out.ok, out.id);
+    if (out.ok) sent++; else failed++;
+  }
+  const done = await store.readSentFor(key);
+  const remaining = subs.filter((s) => !done.has(s.email)).length;
+  if (!remaining) await store.writeResultsListMark(newest);
+  logAct(req, 'post', `list:${key} ${sent}/${batch.length} left ${remaining}`.slice(0, 80));
+  res.json({ list: true, companies: companies || new Set(rels.map((r) => r.symbol)).size, sent, failed, deferred, remaining, total: subs.length });
+}
 
 app.get('/api/cron/watchdog', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
