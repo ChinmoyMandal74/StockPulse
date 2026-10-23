@@ -2579,6 +2579,10 @@ function subRow(x) {
     confirmedAt: x.confirmed_at == null ? null : Number(x.confirmed_at),
     unsubscribedAt: x.unsubscribed_at == null ? null : Number(x.unsubscribed_at),
     source: x.source == null ? null : String(x.source),
+    // Topics asked for and not yet confirmed: a new row's own topics while it
+    // is pending, or the request waiting beside an active row.
+    pendingTopics: (() => { if (String(x.status) === 'pending') return Array.isArray(topics) ? topics : [];
+      try { const p = x.pending ? JSON.parse(x.pending) : null; return p && Array.isArray(p.topics) ? p.topics : []; } catch { return []; } })(),
   };
 }
 

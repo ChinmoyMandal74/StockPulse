@@ -1472,7 +1472,7 @@ function subPage({ title, heading, body, base }) {
     + `.f:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}`
     + `</style></head><body><div class="wrap"><h1>${htmlEsc(heading)}</h1>${body}`
     + `<div class="row"><a class="b" href="${base}/blog">Read the blog</a>`
-    + `<a class="b" href="${base}/">Home</a></div></div></body></html>`;
+    + `<a class="b" href="${base}/home">Home</a></div></div></body></html>`;
 }
 
 // ONE DEFINITION OF WHAT SUBSCRIBING MEANS, because there are two doors into
@@ -1715,9 +1715,14 @@ app.post('/api/unsubscribe', route((req, res) => doUnsubscribe(req, res, true)))
 const prefsStyle = '<style>.prefs .tp{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--hair)}'
   + '.prefs .tp input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--accent)}'
   + '.prefs .tp b{display:block;color:var(--text);font-size:15px}.prefs .tp small{display:block;color:var(--muted);font-size:13.5px;line-height:1.5;margin-top:2px}'
-  + '.prefs .who{color:var(--text)}.prefs .fine{font-size:13px}.prefs .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}</style>';
-const topicBoxes = (checked) => SUB_TOPICS.map((t) => `<label class="tp"><input type="checkbox" name="topics" value="${htmlEsc(t.id)}"${checked.includes(t.id) ? ' checked' : ''}>`
-  + `<span><b>${htmlEsc(t.name)}</b><small>${htmlEsc(t.note)}</small></span></label>`).join('');
+  + '.prefs .who{color:var(--text)}.prefs .wait{font-style:normal;font-weight:500;font-size:11.5px;color:var(--amber);margin-left:6px}.prefs .waitp{color:var(--amber)}.prefs .fine{font-size:13px}.prefs .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}</style>';
+const topicBoxes = (checked, waiting) => SUB_TOPICS.map((t) => `<label class="tp"><input type="checkbox" name="topics" value="${htmlEsc(t.id)}"${checked.includes(t.id) ? ' checked' : ''}>`
+  + `<span><b>${htmlEsc(t.name)}${(waiting || []).includes(t.id) && !checked.includes(t.id) ? ' <em class="wait">waiting for you to confirm</em>' : ''}</b><small>${htmlEsc(t.note)}</small></span></label>`).join('');
+// What is asked for and not confirmed yet, said where the reader will look.
+const waitingNote = (email, row) => {
+  const w = row ? (row.pendingTopics || []).filter((x) => !(row.status === 'active' && row.topics.includes(x))) : [];
+  return w.length ? `<p class="waitp">${htmlEsc(w.map(subTopicName).join(', '))}: waiting for you to confirm. We sent a link to <b class="who">${htmlEsc(email)}</b>; it lasts a week. Tick it and save to have a fresh one sent.</p>` : '';
+};
 async function prefsAccount(req) {
   try {
     if (!(await isSignedIn(req)) || (await isGuest(req))) return null;
@@ -1738,7 +1743,8 @@ app.get('/email-preferences', route(async (req, res) => {
     const active = sub.status === 'active';
     return page(`<p>For <b class="who">${htmlEsc(sub.email)}</b>.`
       + (active ? ' Untick a mailing to stop it; tick one to add it.</p>' : ' Nothing is being sent to this address. Tick a mailing to start again, and we will send a link to confirm.</p>')
-      + `<form method="post" action="/email-preferences"><input type="hidden" name="t" value="${htmlEsc(t)}">${topicBoxes(active ? sub.topics : [])}`
+      + waitingNote(sub.email, sub)
+      + `<form method="post" action="/email-preferences"><input type="hidden" name="t" value="${htmlEsc(t)}">${topicBoxes(active ? sub.topics : [], sub.pendingTopics)}`
       + '<div class="acts"><button class="b p" type="submit">Save</button></div></form>'
       + (active ? `<form method="post" action="/unsubscribe" style="margin:14px 0 0"><input type="hidden" name="t" value="${htmlEsc(t)}"><button class="b" type="submit">Unsubscribe from everything</button></form>` : ''));
   }
@@ -1747,7 +1753,8 @@ app.get('/email-preferences', route(async (req, res) => {
     const row = await store.readSubscriber(acct).catch(() => null);
     const have = row && row.status === 'active' ? row.topics : [];
     return page(`<p>For <b class="who">${htmlEsc(acct)}</b>, your account’s address. Untick a mailing to stop it. Adding one sends a link to that address to confirm.</p>`
-      + `<form method="post" action="/email-preferences"><input type="hidden" name="mode" value="account">${topicBoxes(have)}`
+      + waitingNote(acct, row)
+      + `<form method="post" action="/email-preferences"><input type="hidden" name="mode" value="account">${topicBoxes(have, row ? row.pendingTopics : [])}`
       + '<div class="acts"><button class="b p" type="submit">Save</button></div></form>');
   }
   page('<p>Choose what you would like by email. We send one email to confirm the address; every email after that has a link to change these, and it works without signing in.</p>'
