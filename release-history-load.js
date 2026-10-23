@@ -10,6 +10,8 @@
 //   ... --symbols NVDA,GE      those companies only
 //   ... --since 2017-01-01     the first filing date read (the default)
 //   ... --list-only            count the filings, call no model (SEC fetches only)
+//   ... --force --symbols NVDA read those companies' filings again, replacing
+//                              the stored readings (after a reader fix)
 //
 // WHY NOT sec_events: it keeps about 400 days a company. The list comes from
 // the SEC submissions feed itself: filings.recent plus the older pages it
@@ -48,6 +50,7 @@ const LIST_ONLY = flag('--list-only');
 const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since') : '2017-01-01';
 const SYMBOLS = (opt('--symbols', '') || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
 const LIMIT = Math.max(0, Number(opt('--limit', 0)) || 0);
+const FORCE = flag('--force') && SYMBOLS.length > 0;
 const CONC = Math.max(1, Math.min(8, Number(opt('--conc', 4)) || 4));
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 600)) || 600;
@@ -178,7 +181,7 @@ async function readOne(sym, e, meta, text, facts) {
         + (c ? ` 10-Q ${c.result}${c.differs.length ? ' (' + c.differs.join(', ') + ')' : ''}` : '')
       : 'not a results release') + (problems.length ? ' | ' + problems.join('; ') : '') + ` | $${got.usd.toFixed(4)}`);
     if (COMMIT) {
-      tally.written += await store.writeEarningsRelease(out);
+      tally.written += await store.writeEarningsRelease(out, { replace: FORCE });
       if (c) { await store.writeReleaseCheck(out.accn, c); tally.checked++; if (c.result === 'differs') tally.differ++; }
     }
   } catch (err) {
@@ -211,7 +214,7 @@ async function readOne(sym, e, meta, text, facts) {
     tally.listed += list.length;
     const known = list.length ? await store.readEarningsReleaseAccns(list.map((x) => x.accn)) : new Set();
     tally.known += known.size;
-    const todo = list.filter((x) => !known.has(x.accn));
+    const todo = FORCE ? list : list.filter((x) => !known.has(x.accn));
     console.log(`  ${sym}: ${list.length} results 8-Ks since ${SINCE}, ${todo.length} to read`);
     if (LIST_ONLY || !todo.length) continue;
     const allFacts = (await store.readSecFactsSince([sym], (Number(SINCE.slice(0, 4)) - 2) + '-01-01').catch(() => new Map())).get(sym) || [];
@@ -232,7 +235,7 @@ async function readOne(sym, e, meta, text, facts) {
           const row = Object.assign({}, meta, { isResults: false, url: base, exhibit: null, problems: ['the filing has no EX-99 exhibit'], model: null, inTok: null, outTok: null, usd: null, readAt: Date.now() });
           console.log(`  ${sym} ${e.filed}: no EX-99 exhibit`);
           tally.notResults++;
-          if (COMMIT) tally.written += await store.writeEarningsRelease(row);
+          if (COMMIT) tally.written += await store.writeEarningsRelease(row, { replace: FORCE });
           continue;
         }
         meta.url = base + ex.file; meta.exhibit = ex.type;

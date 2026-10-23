@@ -237,6 +237,18 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('guidance: billions scaled', items[2].low === 73e9 && items[2].high === 76e9);
   check('guidance: a figure not in the text is dropped and named, and an item left with none is dropped', items.length === 4 && probs.some((p) => /eps_gaap low/.test(p)), [items.length, probs]);
   check('guidance: an unknown metric is dropped', !items.some((g) => g.metric === 'nonsense'));
+  // NVIDIA's guide as the model returned it on the history backfill (2026-10-23).
+  {
+    const nt = 'Revenue is expected to be $108.0 billion, plus or minus 2%. GAAP gross margins are expected to be 74.0%, plus or minus 50 basis points.';
+    const nn = nt.replace(/s+/g, ' '), np = [];
+    const nk = (label, p) => { const s = Rel.blankStr(p); if (s == null) return null; if (!Rel.inText(nn, s)) { np.push(label); return null; } return s; };
+    const gi = Rel.guideItems([
+      { metric: 'revenue', period_label: 'Q3 FY2027', period_type: 'quarter', low_printed: '', high_printed: '', mid_printed: '108.0 billion, plus or minus 2%', unit: 'billions', prior_year_printed: '', sentence: 'x' },
+      { metric: 'other', period_label: 'Q3 FY2027', period_type: 'quarter', low_printed: '', high_printed: '', mid_printed: '74.0%, plus or minus 50 basis points', unit: 'percent', prior_year_printed: '', sentence: 'x' },
+    ], nk);
+    check('guidance: a trailing plus-or-minus is cut off and the figure kept', gi.length === 2 && gi[0].mid === 108e9 && gi[1].mid === 74 && !np.length, [gi, np]);
+    check('guidance: two figures in one string are still refused', Rel.bareFigure('74.9% GAAP and 75.0% non-GAAP') === '74.9% GAAP and 75.0% non-GAAP');
+  }
   check('guidance: middle of a range', Rel.guideMidOf(items[2]) === 74.5e9 && Rel.guideMidOf({ mid: 3 }) === 3 && Rel.guideMidOf({ low: 1 }) === null);
 
   const cp = [];

@@ -94,7 +94,7 @@ const SCHEMA = { type: 'object', additionalProperties: false,
         period_type: { type: 'string', enum: ['quarter', 'full_year', 'other'] },
         low_printed: { type: 'string', description: 'The low end as printed, or empty.' },
         high_printed: { type: 'string', description: 'The high end as printed, or empty.' },
-        mid_printed: { type: 'string', description: 'A single figure as printed (no range given), or empty.' },
+        mid_printed: { type: 'string', description: 'A single figure as printed (no range given), or empty. The figure alone, with its scale word: "108.0 billion", never "108.0 billion, plus or minus 2%" (the plus-or-minus stays in the sentence).' },
         unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions', 'percent', 'per_share', 'none'] },
         prior_year_printed: { type: 'string', description: 'Only for a full-year item: the PREVIOUS full year’s actual figure of the same measure, if the release prints it beside the outlook (e.g. "compared with $5.10 in 2025"), as printed. Empty otherwise.' },
         sentence: { type: 'string', description: 'The sentence or table line it comes from, word for word, under 240 characters.' } } } },
@@ -270,13 +270,24 @@ function toRow(ans, text, meta) {
 // per share and percent as printed), and the previous full year's figure when
 // printed beside it. A figure not in the text is dropped and named.
 const GUIDE_METRICS = ['revenue', 'eps_gaap', 'eps_adjusted', 'other'];
+// THE FIGURE WITHOUT ITS PLUS-OR-MINUS (the history backfill, 2026-10-23):
+// NVIDIA's quarterly guide came back as "108.0 billion, plus or minus 2%" and
+// the whole-number check refused it, losing the item. A trailing plus-or-minus
+// clause is cut off; the figure before it is checked as usual, and the
+// sentence keeps the clause. Anything else is passed through unchanged.
+function bareFigure(p) {
+  const s = blankStr(p);
+  if (s == null) return p;
+  const m = s.match(/^(.*?\d(?:\s*(?:thousand|million|billion|trillion|bn|mm|k|m|b)\b\.?)?%?)\s*,?\s*(?:plus or minus|plus\/minus|\+\/-|\+\/−|±)\s*.+$/i);
+  return m ? m[1].trim() : s;
+}
 function guideItems(list, keep) {
   const out = [];
   for (const it of (Array.isArray(list) ? list : []).slice(0, 8)) {
     if (!it || !GUIDE_METRICS.includes(it.metric)) continue;
     const unit = blankStr(it.unit);
     const fig = (label, p) => {
-      const s = keep('guidance ' + it.metric + ' ' + label, p);
+      const s = keep('guidance ' + it.metric + ' ' + label, bareFigure(p));
       const n = num(s);
       if (n == null) return null;
       if (it.metric !== 'revenue' || unit === 'percent') return n;
@@ -536,4 +547,4 @@ function reconStatus(r) {
   return { status: !compared ? 'incomplete' : differs.length ? 'differs' : 'agrees', differs };
 }
 
-module.exports = { driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
