@@ -12342,12 +12342,16 @@
     const pct = (p) => (p == null || !isFinite(p) ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%');
     const yoy = (a, b) => (a == null || b == null || !(b > 0) ? '' : pct((a / b - 1) * 100) + ' y/y');
     const c = r.currency;
-    const fig = (label, v, sub) => '<div class="sr-fig"><span>' + esc(label) + '</span><b>' + esc(v) + '</b><i>' + esc(sub || ' ') + '</i></div>';
+    // A colour a figure: revenue blue, net income cyan, GAAP EPS violet,
+    // adjusted EPS gold. What helped is sky, what weighed orange, the summary
+    // indigo; the guidance box takes its label's colour.
+    const SRC = { rev: pal.ink('#60a5fa'), ni: pal.ink('#22d3ee'), eps: pal.ink('#c4b5fd'), adj: pal.ink('#d6c58b'), up: pal.ink('#7dd3fc'), down: pal.ink('#fb923c'), sum: pal.ink('#818cf8') };
+    const fig = (label, v, sub, col) => '<div class="sr-fig" style="--c:' + col + '"><span>' + esc(label) + '</span><b>' + esc(v) + '</b><i>' + esc(sub || ' ') + '</i></div>';
     const figs = '<div class="sr-figs">'
-      + fig('Revenue', money(r.revenue, c), yoy(r.revenue, r.revenuePrior))
-      + fig('Net income', money(r.netIncome, c), yoy(r.netIncome, r.netIncomePrior))
-      + fig('EPS, GAAP', eps(r.epsGaap, c), yoy(r.epsGaap, r.epsGaapPrior))
-      + fig('EPS, adjusted', eps(r.epsAdj, c), r.epsAdj != null ? yoy(r.epsAdj, r.epsAdjPrior) : 'none given')
+      + fig('Revenue', money(r.revenue, c), yoy(r.revenue, r.revenuePrior), SRC.rev)
+      + fig('Net income', money(r.netIncome, c), yoy(r.netIncome, r.netIncomePrior), SRC.ni)
+      + fig('EPS, GAAP', eps(r.epsGaap, c), yoy(r.epsGaap, r.epsGaapPrior), SRC.eps)
+      + fig('EPS, adjusted', eps(r.epsAdj, c), r.epsAdj != null ? yoy(r.epsAdj, r.epsAdjPrior) : 'none given', SRC.adj)
       + '</div>';
     // The guidance: the company's word for what it did, coloured as the owner
     // asked (ReleaseView.CHANGE_HEX), its sentence cut to the size, and the
@@ -12361,20 +12365,20 @@
     const reads = [];
     if (gr.revVsQ != null && gr.revQ) reads.push('Next quarter’s revenue guide ' + pct(gr.revVsQ) + ' on this quarter');
     if (gr.epsVsFy != null && gr.epsFy) reads.push((gr.epsFy.basis === 'GAAP' ? 'GAAP' : 'Adjusted') + ' EPS guide ' + pct(gr.epsVsFy) + ' on last year');
-    const guide = (sent || word) ? '<div class="sr-guide"><h4>Guidance' + (word ? '<span class="sr-pill" style="background:' + esc(hex || '#475569') + '">' + esc(word) + '</span>' : '') + '</h4>'
+    const guide = (sent || word) ? '<div class="sr-guide" style="--c:' + (hex || SRC.sum) + '"><h4>Guidance' + (word ? '<span class="sr-pill" style="background:' + esc(hex || '#475569') + '">' + esc(word) + '</span>' : '') + '</h4>'
       + (sent ? '<p>' + esc(sent) + '</p>' : '')
       + (reads.length ? '<p class="sr-read">' + esc(reads.join(' · ')) + '</p>' : '') + '</div>' : '';
     // What helped and what weighed, the company's own reasons.
     const k = SR_DRV[size.id] || 3;
     const dv = r.drivers || {};
-    const side = (title, list) => '<div><h4>' + esc(title) + '</h4>' + ((list || []).length
+    const side = (title, list, col) => '<div class="sr-side" style="--c:' + col + '"><h4>' + esc(title) + '</h4>' + ((list || []).length
       ? '<ul>' + list.slice(0, k).map((x) => '<li>' + esc(x.text) + '</li>').join('') + '</ul>'
       : '<p class="sr-none">None stated.</p>') + '</div>';
     const drv = ((dv.helped || []).length || (dv.weighed || []).length)
-      ? '<div class="sr-drv">' + side('What helped', dv.helped) + side('What weighed', dv.weighed) + '</div>' : '';
+      ? '<div class="sr-drv">' + side('What helped', dv.helped, SRC.up) + side('What weighed', dv.weighed, SRC.down) + '</div>' : '';
     // The AI summary where there is room: a portrait and a story (a portrait
     // otherwise left a third of the card empty under the reasons).
-    const sum = size.id !== 'square' && r.summary ? '<p class="sr-sum">' + esc(r.summary) + '</p>' : '';
+    const sum = size.id !== 'square' && r.summary ? '<p class="sr-sum" style="--c:' + SRC.sum + '">' + esc(r.summary) + '</p>' : '';
     const filed = r.filed ? new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
     const note = 'From ' + n + '’s results press release filed with the SEC' + (filed ? ' on ' + filed : '') + ', read by an AI model and checked against its text. '
       + 'Changes are on the same quarter a year earlier. Adjusted EPS is the company’s own figure, with no standard definition. '
@@ -15222,20 +15226,24 @@
     .sz-portrait .sr-drv li { font-size: 21px; }
     .sz-portrait .sr-sum { font-size: 21px; }
     .sr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
-    .sr-fig { border: 1px solid var(--hair-2); border-radius: 18px; padding: 16px 18px; min-width: 0; }
-    .sr-fig span { display: block; font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .sr-fig { border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-top: 4px solid var(--c); border-radius: 18px; padding: 16px 18px; min-width: 0;
+              background: linear-gradient(180deg, color-mix(in srgb, var(--c) 16%, transparent), color-mix(in srgb, var(--c) 4%, transparent)); }
+    .sr-fig span { display: block; font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--c); }
     .sr-fig b { display: block; margin-top: 10px; font: 700 34px var(--mono); letter-spacing: -0.02em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sr-fig i { display: block; margin-top: 6px; font: 500 15px var(--mono); font-style: normal; color: var(--muted); }
-    .sr-guide { margin-top: 24px; padding: 16px 20px; border-left: 4px solid var(--hair-2); border-radius: 6px; }
+    .sr-guide { margin-top: 24px; padding: 16px 20px; border-left: 5px solid var(--c); border-radius: 8px; background: color-mix(in srgb, var(--c) 12%, transparent); }
     .sr-guide h4, .sr-drv h4 { margin: 0; font: 600 14px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
     .sr-pill { display: inline-block; margin-left: 12px; padding: 3px 13px; border-radius: 999px; font: 700 14px var(--sans); letter-spacing: 0.06em; color: #ffffff; vertical-align: 1px; }
     .sr-guide p { margin: 10px 0 0; font-size: 19px; line-height: 1.45; color: var(--muted); }
     .sr-guide p.sr-read { font: 600 16px var(--mono); color: var(--text); }
     .sr-drv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; margin-top: 24px; }
+    .sr-side { border-left: 4px solid var(--c); padding: 4px 0 4px 18px; }
+    .sr-side h4 { color: var(--c) !important; }
+    .sr-side li::marker { color: var(--c); }
     .sr-drv ul { margin: 10px 0 0; padding-left: 22px; }
     .sr-drv li { font-size: 19px; line-height: 1.4; color: var(--text); margin: 0 0 9px; }
     .sr-drv .sr-none { margin: 10px 0 0; font-size: 17px; color: var(--faint); }
-    .sr-sum { margin: 24px 0 0; font-size: 20px; line-height: 1.55; color: var(--muted); }
+    .sr-sum { margin: 24px 0 0; font-size: 20px; line-height: 1.55; color: var(--muted); border-left: 4px solid var(--c); padding-left: 18px; }
     .sz-square .sr-figs { margin-top: 20px; gap: 10px; }
     .sz-square .sr-fig { padding: 12px 14px; }
     .sz-square .sr-fig b { font-size: 28px; }
