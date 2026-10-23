@@ -57,7 +57,7 @@ const FIG = (what) => ({ type: 'object', additionalProperties: false, required: 
   prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
   unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in, from the table heading or the sentence (e.g. "In millions").' } } });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'summary'],
+  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'summary'],
   properties: {
     is_results_release: { type: 'boolean', description: 'True if this document reports the company’s financial results for a completed quarter, whatever it is called (a press release, a shareholder letter, a quarterly "Update"). False for a preliminary estimate of results, a contract or deal announcement, or anything without the completed quarter’s figures.' },
     period_label: { type: 'string', description: 'The company’s own name for the quarter, e.g. "Third Quarter 2026".' },
@@ -85,11 +85,30 @@ const SCHEMA = { type: 'object', additionalProperties: false,
         plus_minus_printed: { type: 'string', description: 'The plus-or-minus figure as printed (revenue_midpoint).' },
         unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions', 'percent', 'per_share', 'none'], description: 'The scale of low/high/mid; plus_minus may be in its own scale, given in its sentence.' },
         sentence: { type: 'string', description: 'The outlook sentence copied word for word, under 300 characters.' } } },
+    // EVERY GUIDANCE FIGURE, not one (2026-10-23, the owner: a revenue and an
+    // EPS column, and the change). `guidance` above stays the headline item.
+    guidance_items: { type: 'array', description: 'Every outlook figure the release gives for a coming quarter or year, one item each: revenue and EPS especially, GAAP and adjusted separately. Empty array if none. Copy as printed; never work out a range from a midpoint.',
+      items: { type: 'object', additionalProperties: false, required: ['metric', 'period_label', 'period_type', 'low_printed', 'high_printed', 'mid_printed', 'unit', 'prior_year_printed', 'sentence'], properties: {
+        metric: { type: 'string', enum: ['revenue', 'eps_gaap', 'eps_adjusted', 'other'], description: 'revenue: total revenue or net sales. eps_gaap: GAAP diluted EPS. eps_adjusted: an adjusted or non-GAAP EPS. other: anything else (margins, other lines, cash flow).' },
+        period_label: { type: 'string', description: 'The period as the company names it, e.g. "fourth quarter 2026", "fiscal 2027", "full year 2026".' },
+        period_type: { type: 'string', enum: ['quarter', 'full_year', 'other'] },
+        low_printed: { type: 'string', description: 'The low end as printed, or empty.' },
+        high_printed: { type: 'string', description: 'The high end as printed, or empty.' },
+        mid_printed: { type: 'string', description: 'A single figure as printed (no range given), or empty.' },
+        unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions', 'percent', 'per_share', 'none'] },
+        prior_year_printed: { type: 'string', description: 'Only for a full-year item: the PREVIOUS full year’s actual figure of the same measure, if the release prints it beside the outlook (e.g. "compared with $5.10 in 2025"), as printed. Empty otherwise.' },
+        sentence: { type: 'string', description: 'The sentence or table line it comes from, word for word, under 240 characters.' } } } },
+    guidance_change: { type: 'object', additionalProperties: false, required: ['direction', 'quote'], description: 'Whether the company says it changed its outlook. Only what the release itself states.',
+      properties: {
+        direction: { type: 'string', enum: ['raised', 'reaffirmed', 'lowered', 'initiated', 'withdrawn', 'mixed', 'none'],
+          description: 'Judge ONLY the revenue and earnings (EPS, net income) outlook; ignore expense, capital spending, tax and other guidance. raised: it raises at least one revenue or earnings figure and lowers none (reaffirming the rest is still raised). lowered: it lowers at least one and raises none. reaffirmed (or maintained, reiterated): it keeps them unchanged. mixed: it raises one revenue or earnings figure and lowers another. initiated: it gives a revenue or earnings outlook for a new period for the first time. withdrawn: it withdraws or suspends it. none: it says nothing about a change to its revenue or earnings outlook, or gives none.' },
+        quote: { type: 'string', description: 'The words that say it, copied exactly from the release, under 200 characters. Empty for none.' } } },
     summary: { type: 'string', description: 'Two or three plain sentences of what the release reports. Facts only: no opinion, no recommendation, and none of the words buy, sell, hold, strong, weak, bullish, bearish.' },
   } };
 const SYSTEM = 'You read a company’s quarterly results press release and copy figures out of it into fixed fields. '
   + 'Copy each number EXACTLY as printed in the document; never compute, round, convert or derive one, and never turn a midpoint plus-or-minus into a range. '
   + 'If a figure or text is not in the document, give an empty string. Quarter figures only, never year-to-date or full-year (except in guidance, which may be for a year). '
+  + 'For the outlook, list every figure in guidance_items, and say in guidance_change only what the company itself states about raising, lowering, reaffirming, initiating or withdrawing it. '
   + 'Report what the document says; add nothing.';
 function request(text, model) {
   return { model: model || MODEL, max_tokens: 3000, system: SYSTEM,
@@ -214,6 +233,9 @@ function toRow(ans, text, meta) {
     if (revenue > 0 && !near(revenue, q, 0.1, 10)) { problems.push('revenue ' + revenue + ' does not fit twelve months’ revenue (scale doubtful)'); revenueG = null; }
     if (revenuePrior > 0 && !near(revenuePrior, q, 0.1, 10)) { problems.push('revenue a year earlier ' + revenuePrior + ' does not fit twelve months’ revenue (scale doubtful)'); revenuePriorG = null; }
   }
+  // Every guidance item, each figure found in the text; and the stated change.
+  const guides = isRes ? guideItems(A.guidance_items, keep) : [];
+  const ch = isRes ? guideChange(A.guidance_change, norm, problems) : { change: null, quote: null };
   const pe = blankStr(A.period_end);
   const row = {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
@@ -222,8 +244,115 @@ function toRow(ans, text, meta) {
     epsAdjLabel: epsAdj != null ? blankStr(J.label) : null, epsAdjExcludes: epsAdj != null ? blankStr(J.excludes) : null,
     guideKind: gKind, guidePeriod: gKind ? blankStr(G.period_label) : null, guideLow, guideHigh, guideMid, guidePm,
     guideUnit: gKind ? gUnit : null, guideSentence: gKind ? blankStr(G.sentence) : null, summary,
+    // [] for a results release with no guidance, so a guidance re-read knows it was read.
+    guides: isRes ? guides : null, guideChange: ch.change, guideChangeQuote: ch.quote,
   };
   return { row, problems };
+}
+
+// ---- GUIDANCE ITEMS AND THE STATED CHANGE (2026-10-23) ---------------------
+// Each item: metric, period, its figures as numbers (revenue scaled to units,
+// per share and percent as printed), and the previous full year's figure when
+// printed beside it. A figure not in the text is dropped and named.
+const GUIDE_METRICS = ['revenue', 'eps_gaap', 'eps_adjusted', 'other'];
+function guideItems(list, keep) {
+  const out = [];
+  for (const it of (Array.isArray(list) ? list : []).slice(0, 8)) {
+    if (!it || !GUIDE_METRICS.includes(it.metric)) continue;
+    const unit = blankStr(it.unit);
+    const fig = (label, p) => {
+      const s = keep('guidance ' + it.metric + ' ' + label, p);
+      const n = num(s);
+      if (n == null) return null;
+      if (it.metric !== 'revenue' || unit === 'percent') return n;
+      const k = (split(s) || {}).mult || SCALE[unit];
+      return k ? n * k : null;
+    };
+    const g = { metric: it.metric, periodLabel: blankStr(it.period_label), periodType: ['quarter', 'full_year'].includes(it.period_type) ? it.period_type : 'other',
+      low: fig('low', it.low_printed), high: fig('high', it.high_printed), mid: fig('figure', it.mid_printed), unit: unit || null,
+      prior: it.period_type === 'full_year' ? fig('prior year', it.prior_year_printed) : null, sentence: blankStr(it.sentence) };
+    if (g.low == null && g.high == null && g.mid == null) continue;
+    if (g.sentence && g.sentence.length > 240) g.sentence = g.sentence.slice(0, 240);
+    out.push(g);
+  }
+  return out;
+}
+// The middle of an item: its single figure, else the middle of its range.
+const guideMidOf = (g) => (!g ? null : g.mid != null ? g.mid : g.low != null && g.high != null ? (g.low + g.high) / 2 : null);
+// THE STATED CHANGE: kept only when its quote is in the release, word for
+// word, and carries a word that says that change. The model's own view of the
+// outlook is never asked for or taken: this is what the company says.
+const CHANGE_WORDS = {
+  raised: /\b(rais|increas|lift|boost|upgrad|higher)/i,
+  lowered: /\b(lower|reduc|cut|decreas|trim|downgrad)/i,
+  reaffirmed: /\b(reaffirm|affirm|maintain|reiterat|confirm|unchanged)/i,
+  // Not "expect" or "provide": every outlook sentence says those (Crown, 2026-10-19).
+  initiated: /\b(initiat|introduc|establish|initial|first)/i,
+  withdrawn: /\b(withdr|suspend|no longer)/i,
+};
+const flatQ = (t) => String(t).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+function guideChange(c, norm, problems) {
+  const d = c && c.direction;
+  if (!d || d === 'none') return { change: null, quote: null };
+  const quote = blankStr(c.quote);
+  if (!quote || !flatQ(norm).includes(flatQ(quote))) { problems.push('guidance change "' + d + '": its words are not in the release'); return { change: null, quote: null }; }
+  const ok = d === 'mixed' ? CHANGE_WORDS.raised.test(quote) && CHANGE_WORDS.lowered.test(quote) : !!(CHANGE_WORDS[d] && CHANGE_WORDS[d].test(quote));
+  if (!ok) { problems.push('guidance change "' + d + '": the quote does not say so'); return { change: null, quote: null }; }
+  // About revenue or earnings, not costs: Meta's "raising our expense outlook"
+  // (2026-10-21) is not a change to what it expects to earn.
+  if (/\b(expense|cost|capex|capital expenditure|tax rate|spending)/i.test(quote) && !/\b(revenue|sales|eps|earnings|income|per share|profit|outlook for the (year|quarter)|guidance)\b/i.test(quote.replace(/expense outlook/ig, ''))) {
+    problems.push('guidance change "' + d + '": the quote is about costs, not revenue or earnings'); return { change: null, quote: null };
+  }
+  return { change: d, quote: quote.slice(0, 200) };
+}
+// THE YEAR A FULL-YEAR ITEM IS FOR, from its label ("fiscal 2027", "FY27",
+// "full year 2026"); null when it names none.
+function guideYear(label) {
+  const t = String(label || '');
+  const m = t.match(/\b(20\d\d)\b/) || t.match(/\bFY\s?'?(\d\d)\b/i);
+  if (!m) return null;
+  return m[1].length === 2 ? 2000 + Number(m[1]) : Number(m[1]);
+}
+// THE PREVIOUS FULL YEAR'S GAAP DILUTED EPS for a full-year GAAP item, from
+// the 10-K: the annual figure whose year ends in the year before the one
+// guided ("fiscal 2027" against the fiscal year ending in 2026, whatever its
+// month). `facts`: the company's sec_facts rows. null when not on file.
+function priorFyEps(item, facts) {
+  const y = guideYear(item && item.periodLabel);
+  if (!y) return null;
+  const f = (facts || []).filter((x) => x && x.periodType === 'FY' && x.form === '10-K' && x.epsDiluted != null && Number(String(x.periodEnd).slice(0, 4)) === y - 1)
+    .sort((a, b) => (String(a.filed) < String(b.filed) ? 1 : -1))[0];
+  return f ? Number(f.epsDiluted) : null;
+}
+// THE THREE GUIDANCE READINGS for a reader (ReleaseView, the email):
+//  revVsQ: the coming quarter's revenue guidance (middle) against this quarter's revenue, %;
+//  epsVsFy: full-year EPS guidance (middle) against the previous full year's EPS
+//    on the SAME basis, %: the figure the release prints beside it, else, for
+//    GAAP guidance only, the 10-K's (row.epsGuidePrior, set by the loader).
+//    Adjusted guidance with no printed prior stays blank: no filing carries an
+//    adjusted EPS to set it against. Adjusted is preferred when both work;
+//  change: the stated change and its words.
+// Rows read before guidance items existed fall back to the headline item.
+function guideReadings(row) {
+  const gs = Array.isArray(row.guides) ? row.guides : [];
+  const revQ = gs.find((g) => g.metric === 'revenue' && g.periodType === 'quarter' && g.unit !== 'percent') || null;
+  let revMid = guideMidOf(revQ);
+  const qLabel = (t) => /quarter|\bq[1-4]\b/i.test(t || '') && !/full|year|annual/i.test(t || '');
+  if (revMid == null && !gs.length && /^revenue_(range|midpoint)$/.test(row.guideKind || '') && qLabel(row.guidePeriod)) {
+    revMid = row.guideKind === 'revenue_range' && row.guideLow != null && row.guideHigh != null ? (row.guideLow + row.guideHigh) / 2 : row.guideKind === 'revenue_midpoint' ? row.guideMid : null;
+  }
+  const revVsQ = revMid != null && row.revenue > 0 ? (revMid / row.revenue - 1) * 100 : null;
+  const fy = gs.filter((g) => (g.metric === 'eps_adjusted' || g.metric === 'eps_gaap') && g.periodType === 'full_year');
+  let epsVsFy = null, epsFy = null;
+  for (const g of [...fy.filter((x) => x.metric === 'eps_adjusted'), ...fy.filter((x) => x.metric === 'eps_gaap')]) {
+    const mid = guideMidOf(g);
+    const prior = g.prior != null ? g.prior : g.metric === 'eps_gaap' ? row.epsGuidePrior : null;
+    if (mid == null || prior == null || !(prior > 0)) continue;
+    epsVsFy = (mid / prior - 1) * 100;
+    epsFy = { basis: g.metric === 'eps_gaap' ? 'GAAP' : 'adjusted', mid, low: g.low, high: g.high, prior, priorFrom: g.prior != null ? 'release' : '10-K', period: g.periodLabel };
+    break;
+  }
+  return { revVsQ, revQ, epsVsFy, epsFy, change: row.guideChange || null, changeQuote: row.guideChangeQuote || null };
 }
 
 // The quarter's change on a year earlier, in percent; null when either side is
@@ -255,6 +384,8 @@ function forReader(row, earn) {
   for (const k of ['inTok', 'outTok', 'usd', 'model', 'readAt']) delete r[k];
   r.revenueYoY = yoy(row.revenue, row.revenuePrior);
   r.provider = againstProvider(row, earn);
+  // The three guidance readings, worked out here once for every page.
+  r.guideRead = guideReadings(row);
   return r;
 }
 
@@ -304,7 +435,10 @@ function columnRows(releases, earnBySymbol) {
   const out = {};
   for (const sym of Object.keys(latest)) {
     const f = forReader(latest[sym], (earnBySymbol && earnBySymbol[sym]) || []);
-    for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt']) delete f[k];
+    // The guidance items themselves stay off the column (guideRead carries
+    // what the columns show): the figure is fetched by every screener load.
+    for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt', 'guides', 'epsGuidePrior']) delete f[k];
+    if (f.guideRead && f.guideRead.revQ) f.guideRead.revQ = Object.assign({}, f.guideRead.revQ, { sentence: undefined });
     out[sym] = f;
   }
   return out;
@@ -364,4 +498,4 @@ function reconStatus(r) {
   return { status: !compared ? 'incomplete' : differs.length ? 'differs' : 'agrees', differs };
 }
 
-module.exports = { seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

@@ -43,6 +43,24 @@ const FORCE = flag('--force') && !!ONLY;
 // --column-only: rebuild the screener's column (the stored figure) and stop;
 // no SEC fetch, no model call. Every committed run rebuilds it at its end too.
 const COLUMN_ONLY = flag('--column-only');
+// --guidance (with --commit): read again the stored results releases in the
+// window whose guidance items were never read (before 2026-10-23), and write
+// ONLY the four guidance columns (writeReleaseGuidance). The reading itself,
+// its figures, summary and 10-Q check, is left exactly as stored.
+const GUIDANCE = flag('--guidance');
+// The previous full year's GAAP diluted EPS from the 10-K, for a release whose
+// full-year GAAP EPS guidance prints no prior figure (releases.js priorFyEps).
+// One per-symbol seek on sec_facts.
+async function epsGuidePrior(row) {
+  const it = (row.guides || []).find((g) => g.metric === 'eps_gaap' && g.periodType === 'full_year' && g.prior == null);
+  if (!it) return null;
+  const y = Rel.guideYear(it.periodLabel);
+  if (!y) return null;
+  try {
+    const facts = (await store.readSecFactsSince([row.symbol], (y - 2) + '-01-01')).get(row.symbol) || [];
+    return Rel.priorFyEps(it, facts);
+  } catch (e) { return null; }
+}
 // --mail (with --commit; the scheduled task passes it): when the run wrote new
 // results releases, ask the deployed app to email the owner a digest of them
 // (POST /api/cron/release-digest, kind 'release-digest'). The app holds the
@@ -141,10 +159,45 @@ async function recordRun() {
   try { await store.writeReleaseRun(Object.assign(RUN, { endedAt: Date.now(), spent })); }
   catch (e) { console.log('  (the run could not be recorded: ' + String(e.message).slice(0, 80) + ')'); }
 }
+// THE GUIDANCE PASS (--guidance). Same fetch and model call as a reading;
+// only the guidance is kept. Stops at --max-usd and --max-minutes like a run.
+async function guidancePass() {
+  if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
+  if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
+  const since = etDay(Date.now() - DAYS * 86400000);
+  const rows = (await store.readEarningsReleasesSince(since)).filter((r) => r.isResults && r.guides == null && r.url && (!ONLY || r.symbol === ONLY))
+    .sort((a, b) => (a.filed < b.filed ? 1 : -1));
+  console.log(`[${new Date().toISOString()}] guidance re-read since ${since}: ${rows.length} releases; ` + (COMMIT ? 'COMMIT (guidance columns only)' : 'DRY RUN'));
+  let done = 0, withItems = 0, changes = 0, priors = 0, failed = 0;
+  for (const r of rows) {
+    if (spent >= MAX_USD) { console.log('  stopping: the dollar limit'); break; }
+    if (Date.now() - t0 > MAX_MIN * 60000) { console.log('  stopping: the time limit'); break; }
+    try {
+      const html = await sec(r.url);
+      if (!html) { console.log(`  ${r.symbol} ${r.filed}: the exhibit did not load; next run`); failed++; continue; }
+      const text = Rel.toText(html);
+      const got = await ask(text);
+      const { row, problems } = Rel.toRow(got.ans, text, { accn: r.accn, symbol: r.symbol, filed: r.filed, url: r.url });
+      const g = { guides: row.isResults ? row.guides || [] : [], guideChange: row.guideChange, guideChangeQuote: row.guideChangeQuote };
+      g.epsGuidePrior = await epsGuidePrior(Object.assign({ symbol: r.symbol }, g));
+      const gp = problems.filter((p) => /^guidance/.test(p));
+      console.log(`  ${r.symbol} ${r.filed}: ${g.guides.length} item(s)` + (g.guideChange ? `, ${g.guideChange}` : '') + (g.epsGuidePrior != null ? `, prior FY EPS ${g.epsGuidePrior} (10-K)` : '') + (gp.length ? ' | ' + gp.join('; ') : '') + ` | $${got.usd.toFixed(4)}`);
+      if (COMMIT) await store.writeReleaseGuidance(r.accn, g);
+      done++; if (g.guides.length) withItems++; if (g.guideChange) changes++; if (g.epsGuidePrior != null) priors++;
+    } catch (err) {
+      if (err instanceof Stop) throw err;
+      failed++;
+      console.log(`  ${r.symbol} ${r.filed}: failed (${String(err.message).slice(0, 120)}); next run`);
+    }
+  }
+  if (COMMIT) { try { await writeColumn(); } catch (err) { console.log('  screener column failed: ' + String(err.message).slice(0, 120)); } }
+  console.log(`  done: ${done} re-read, ${withItems} with guidance, ${changes} with a stated change, ${priors} prior-year EPS from the 10-K, ${failed} to retry; $${spent.toFixed(4)}; ${Math.round((Date.now() - t0) / 1000)}s`);
+}
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
   if (COLUMN_ONLY) { await writeColumn(); await writeRecon(); process.exit(0); }
+  if (GUIDANCE) { await guidancePass(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
   const since = etDay(Date.now() - DAYS * 86400000);
@@ -193,6 +246,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       if (row.isResults) results++; else notResults++;
       if (problems.length) flagged++;
       delete row.ref;
+      if (row.isResults) row.epsGuidePrior = await epsGuidePrior(row);
       const out = Object.assign(row, { problems, model: ex ? MODEL : null, inTok: cost.inTok, outTok: cost.outTok, usd: cost.usd, readAt: Date.now() });
       const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
       console.log(`  ${e.symbol} ${e.filed}: ` + (row.isResults

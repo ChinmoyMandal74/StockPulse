@@ -139,7 +139,8 @@ check('fields: changes on a year ago', Math.abs(fl.erRevYoY - 25) < 1e-9 && fl.e
 check('fields: no change off a loss', fl.erOpYoY === null);
 check('fields: against the estimate, on the figure the provider matched', fl.erVsEst === 0.1 && fl.erVsEstBasis === 'adjusted' && fl.erEst === 1.4);
 check('fields: a quarter’s outlook against the quarter', Math.abs(fl.erGuideVsQ - 10) < 1e-9);
-check('fields: a full-year outlook is not set against a quarter', RV.fields(Object.assign({}, col.AAA, { guidePeriod: 'Full year 2026' })).erGuideVsQ === null);
+{ const fyRow = Object.assign({}, col.AAA, { guidePeriod: 'Full year 2026' }); fyRow.guideRead = Rel.guideReadings(fyRow);
+  check('fields: a full-year outlook is not set against a quarter', RV.fields(fyRow).erGuideVsQ === null); }
 check('fields: the 10-Q word and note', fl.erTenQ === 'Differs' && /has revenue \$99/.test(fl.erTenQNote));
 check('fields: waiting before a 10-Q', RV.fields(Object.assign({}, col.AAA, { secCheck: null })).erTenQ === 'Waiting');
 check('fields: no release, every field null', RV.FIELD_KEYS.every((k) => RV.fields(null)[k] === null));
@@ -211,6 +212,62 @@ const req = Rel.request('x'.repeat(Rel.MAX_CHARS + 10));
 check('request: structured output, the model, capped text', req.output_config.format.type === 'json_schema' && req.model === 'claude-haiku-5-5' && req.messages[0].content.length < Rel.MAX_CHARS + 40);
 const unions = JSON.stringify(Rel.SCHEMA).match(/"type":\[/g) || [];
 check('request: no nullable unions (the compiler refuses many)', unions.length === 0, unions.length);
+check('request: no maxItems (the structured-output API refuses it on arrays)', !/maxItems/.test(JSON.stringify(Rel.SCHEMA)));
+
+// ---- guidance items, the stated change, the readings (2026-10-23) ----
+// Shapes as the model returned them for CACI, Meta and Crown on 2026-10-23.
+{
+  const text = 'Raising fiscal year 2027 guidance for Revenue, Adjusted net income, and Adjusted EPS; reaffirming guidance for other financial metrics. '
+    + 'Revenue $10,700 million to $10,900 million. Adjusted diluted EPS $33.18 to $34.08, compared with $30.12 in fiscal 2026. '
+    + 'Fourth quarter revenue is expected to be in the range of $73-76 billion. We are raising our expense outlook. '
+    + 'We expect full year adjusted diluted earnings per share to be in the range of $8.35 to $8.45. GAAP diluted EPS of $5.60 to $5.85.';
+  const norm = text.replace(/\s+/g, ' ');
+  const probs = [];
+  const keep = (label, p) => { const s = Rel.blankStr(p); if (s == null) return null; if (!Rel.inText(norm, s)) { probs.push(label); return null; } return s; };
+  const items = Rel.guideItems([
+    { metric: 'revenue', period_label: 'fiscal year 2027', period_type: 'full_year', low_printed: '10,700', high_printed: '10,900', mid_printed: '', unit: 'millions', prior_year_printed: '', sentence: 'Revenue $10,700 million to $10,900 million' },
+    { metric: 'eps_adjusted', period_label: 'fiscal year 2027', period_type: 'full_year', low_printed: '33.18', high_printed: '34.08', mid_printed: '', unit: 'per_share', prior_year_printed: '30.12', sentence: 'x' },
+    { metric: 'revenue', period_label: 'fourth quarter 2026', period_type: 'quarter', low_printed: '73', high_printed: '76', mid_printed: '', unit: 'billions', prior_year_printed: '', sentence: 'x' },
+    { metric: 'eps_gaap', period_label: 'full year 2026', period_type: 'full_year', low_printed: '5.60', high_printed: '5.85', mid_printed: '', unit: 'per_share', prior_year_printed: '', sentence: 'x' },
+    { metric: 'eps_gaap', period_label: 'full year 2026', period_type: 'full_year', low_printed: '9.99', high_printed: '', mid_printed: '', unit: 'per_share', prior_year_printed: '', sentence: 'x' },
+    { metric: 'nonsense', period_label: '', period_type: 'quarter', low_printed: '1', high_printed: '', mid_printed: '', unit: 'none', prior_year_printed: '', sentence: '' },
+  ], keep);
+  check('guidance: revenue scaled to units', items[0].low === 10700e6 && items[0].high === 10900e6);
+  check('guidance: per share as printed, prior year kept when printed', items[1].low === 33.18 && items[1].prior === 30.12);
+  check('guidance: billions scaled', items[2].low === 73e9 && items[2].high === 76e9);
+  check('guidance: a figure not in the text is dropped and named, and an item left with none is dropped', items.length === 4 && probs.some((p) => /eps_gaap low/.test(p)), [items.length, probs]);
+  check('guidance: an unknown metric is dropped', !items.some((g) => g.metric === 'nonsense'));
+  check('guidance: middle of a range', Rel.guideMidOf(items[2]) === 74.5e9 && Rel.guideMidOf({ mid: 3 }) === 3 && Rel.guideMidOf({ low: 1 }) === null);
+
+  const cp = [];
+  const ch = (direction, quote) => Rel.guideChange({ direction, quote }, norm, cp);
+  check('change: raised, its words in the text', ch('raised', 'Raising fiscal year 2027 guidance for Revenue, Adjusted net income, and Adjusted EPS').change === 'raised');
+  check('change: words not in the release are refused', ch('raised', 'We raised everything').change === null && /not in the release/.test(cp[cp.length - 1]));
+  check('change: a quote that does not say the direction is refused', ch('lowered', 'Raising fiscal year 2027 guidance').change === null);
+  check('change: mixed needs both a raise and a lower', ch('mixed', 'Raising fiscal year 2027 guidance for Revenue, Adjusted net income, and Adjusted EPS; reaffirming guidance').change === null);
+  check('change: about costs, not revenue or earnings, is refused (Meta)', ch('raised', 'We are raising our expense outlook').change === null && /costs/.test(cp[cp.length - 1]));
+  check('change: "we expect" is not "initiated" (Crown)', ch('initiated', 'We expect full year adjusted diluted earnings per share to be in the range of $8.35 to $8.45').change === null);
+  check('change: none is no change', ch('none', '').change === null);
+
+  check('year: from the label', Rel.guideYear('fiscal year 2027') === 2027 && Rel.guideYear("FY27") === 2027 && Rel.guideYear('full year 2026') === 2026 && Rel.guideYear('next year') === null);
+  const facts = [{ periodType: 'FY', form: '10-K', periodEnd: '2025-12-31', epsDiluted: 0.47, filed: '2026-02-20' }, { periodType: 'FY', form: '10-K', periodEnd: '2024-12-31', epsDiluted: 6.47, filed: '2026-02-20' },
+    { periodType: 'FY', form: 'DEF 14A', periodEnd: '2025-12-31', epsDiluted: null, filed: '2026-04-20' }, { periodType: 'Q', form: '10-Q', periodEnd: '2025-12-31', epsDiluted: 0.1, filed: '2026-02-20' }];
+  check('prior FY EPS: the 10-K year before the one guided (GPC)', Rel.priorFyEps({ periodLabel: 'full year 2026' }, facts) === 0.47 && Rel.priorFyEps({ periodLabel: 'full year 2025' }, facts) === 6.47 && Rel.priorFyEps({ periodLabel: 'full year 2028' }, facts) === null);
+
+  const row = { revenue: 64601e6, guides: items, guideChange: 'raised', guideChangeQuote: 'q', epsGuidePrior: 0.47 };
+  const g = Rel.guideReadings(row);
+  check('readings: next quarter revenue against this quarter', Math.abs(g.revVsQ - (74.5e9 / 64601e6 - 1) * 100) < 1e-9);
+  check('readings: adjusted FY EPS against the prior year the release prints, preferred over GAAP', Math.abs(g.epsVsFy - (33.63 / 30.12 - 1) * 100) < 1e-9 && g.epsFy.basis === 'adjusted' && g.epsFy.priorFrom === 'release');
+  const g2 = Rel.guideReadings(Object.assign({}, row, { guides: items.filter((x) => x.metric !== 'eps_adjusted') }));
+  check('readings: GAAP FY EPS against the 10-K when no prior is printed', Math.abs(g2.epsVsFy - (5.725 / 0.47 - 1) * 100) < 1e-9 && g2.epsFy.priorFrom === '10-K');
+  const g3 = Rel.guideReadings(Object.assign({}, row, { guides: [Object.assign({}, items[1], { prior: null })] }));
+  check('readings: adjusted guidance with no printed prior stays blank (no filed adjusted EPS)', g3.epsVsFy === null);
+  check('readings: a full-year revenue item is not set against a quarter', Rel.guideReadings({ revenue: 100, guides: [items[0]] }).revVsQ === null);
+  check('readings: a loss year before gives no percent', Rel.guideReadings(Object.assign({}, row, { guides: [items[3]], epsGuidePrior: -1.2 })).epsVsFy === null);
+  check('readings: an old row without items falls back to the headline quarter item', Math.abs(Rel.guideReadings({ revenue: 100, guideKind: 'revenue_range', guidePeriod: 'Fourth Quarter 2026', guideLow: 105, guideHigh: 115 }).revVsQ - 10) < 1e-9);
+  const fl2 = RV.fields(Object.assign({}, col.AAA, { guideRead: g }));
+  check('fields: the three guidance columns and their notes', fl2.erGuideChange === 'Raised' && fl2.erGuideChangeQuote === 'q' && fl2.erEpsGuideVsFy === g.epsVsFy && /Adjusted EPS guidance for fiscal year 2027: \$33\.18 to \$34\.08, against \$30\.12/.test(fl2.erEpsGuideNote) && /Revenue guidance for fourth quarter 2026/.test(fl2.erGuideVsQNote), fl2);
+}
 
 console.log(`${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -64,7 +64,7 @@
   // change off a loss or a zero is no percentage, as everywhere.
   const yoy = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
   const FIELD_KEYS = ['erFiled', 'erPeriodEnd', 'erPeriodLabel', 'erCurrency', 'erUrl', 'erRevenue', 'erRevYoY', 'erOpIncome', 'erOpYoY', 'erNetIncome', 'erNiYoY',
-    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erGuideVsQ', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
+    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erGuideVsQ', 'erGuideVsQNote', 'erEpsGuideVsFy', 'erEpsGuideNote', 'erGuideChange', 'erGuideChangeQuote', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
   const TENQ_WORD = { match: 'Matches', differs: 'Differs', none: 'Not comparable' };
   function tenQText(r) {
     if (!r || !r.secCheck) return 'The quarter’s 10-Q is not filed yet, or not read yet.';
@@ -76,6 +76,9 @@
     if (d.includes('diluted EPS')) said.push('diluted EPS ' + eps(r.secEps, r.currency));
     return 'The ' + (r.secForm || '10-Q') + (r.secFiled ? ' filed ' + shortDay(r.secFiled) : '') + ' has ' + said.join(', ') + '; the release’s line can be a different one.';
   }
+  const CHANGE_WORD = { raised: 'Raised', lowered: 'Lowered', reaffirmed: 'Reaffirmed', initiated: 'Initiated', withdrawn: 'Withdrawn', mixed: 'Mixed' };
+  // A guidance item's figures in words: a range, or its single figure.
+  const guideRange = (g, cur, f) => (g.low != null && g.high != null ? f(g.low, cur) + ' to ' + f(g.high, cur) : f(g.mid != null ? g.mid : g.low != null ? g.low : g.high, cur));
   function fields(r) {
     const o = {};
     for (const k of FIELD_KEYS) o[k] = null;
@@ -88,6 +91,10 @@
     // only: a full-year outlook against one quarter read +297% for Medpace
     // on the first draw. A period naming both ("Third Quarter and Full Year")
     // is left out too.
+    // THE GUIDANCE READINGS are worked out once, on the server (releases.js
+    // guideReadings, handed over as r.guideRead by forReader); this only lays
+    // them out. A row without them falls back to the headline item below.
+    const gr = r.guideRead || null;
     const quarterly = /quarter|\bq[1-4]\b/i.test(r.guidePeriod || '') && !/full|year|annual/i.test(r.guidePeriod || '');
     const mid = !quarterly ? null : r.guideKind === 'revenue_range' && r.guideLow != null && r.guideHigh != null ? (r.guideLow + r.guideHigh) / 2
       : r.guideKind === 'revenue_midpoint' ? r.guideMid : null;
@@ -97,7 +104,13 @@
       erNetIncome: r.netIncome, erNiYoY: yoy(r.netIncome, r.netIncomePrior), erEps: r.epsGaap, erEpsYoY: yoy(r.epsGaap, r.epsGaapPrior),
       erEpsAdj: r.epsAdj, erEpsAdjYoY: yoy(r.epsAdj, r.epsAdjPrior), erEpsAdjLabel: r.epsAdj != null ? r.epsAdjLabel || null : null, erEpsAdjExcludes: r.epsAdj != null ? r.epsAdjExcludes || null : null,
       erEst: pv && pv.estimate != null ? pv.estimate : null, erVsEst: vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100, erVsEstBasis: basis,
-      erGuideVsQ: mid != null && r.revenue > 0 ? (mid / r.revenue - 1) * 100 : null, erGuide: r.guideSentence || null,
+      erGuideVsQ: gr ? gr.revVsQ : mid != null && r.revenue > 0 ? (mid / r.revenue - 1) * 100 : null,
+      erGuideVsQNote: gr && gr.revVsQ != null && gr.revQ ? 'Revenue guidance for ' + (gr.revQ.periodLabel || 'the coming quarter') + ': ' + guideRange(gr.revQ, r.currency, money) + ', against ' + money(r.revenue, r.currency) + ' this quarter.' : null,
+      erEpsGuideVsFy: gr ? gr.epsVsFy : null,
+      erEpsGuideNote: gr && gr.epsFy ? (gr.epsFy.basis === 'GAAP' ? 'GAAP' : 'Adjusted') + ' EPS guidance for ' + (gr.epsFy.period || 'the year') + ': ' + guideRange(gr.epsFy, r.currency, eps)
+        + ', against ' + eps(gr.epsFy.prior, r.currency) + ' the year before (' + (gr.epsFy.priorFrom === 'release' ? 'as the release prints it' : 'from the 10-K') + ').' : null,
+      erGuideChange: gr && gr.change ? CHANGE_WORD[gr.change] || null : null, erGuideChangeQuote: gr && gr.change ? gr.changeQuote || null : null,
+      erGuide: r.guideSentence || null,
       erTenQ: r.secCheck ? TENQ_WORD[r.secCheck] || null : 'Waiting', erTenQNote: tenQText(r), erSummary: r.summary || null,
     });
     return o;

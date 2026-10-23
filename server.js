@@ -732,7 +732,7 @@ function resultsPage(rels, names, today) {
         cell(htmlEsc(RV.money(r.netIncome, cur)), pctTxt(pct(r.netIncome, r.netIncomePrior))) +
         cell(htmlEsc(RV.eps(r.epsGaap, cur)), pctTxt(pct(r.epsGaap, r.epsGaapPrior))) +
         adj +
-        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
+        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' <b class="er-ch">' + htmlEsc(r.guideChange) + '</b>' : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
         `<td>${/^https:\/\/www\.sec\.gov\//.test(r.url || '') ? `<a href="${htmlEsc(r.url)}" target="_blank" rel="noopener">The release</a>` : ''}</td>` +
         '</tr>';
     }).join('');
@@ -3609,10 +3609,17 @@ function releaseDigestEmail(rels, names) {
       // What the release says, then the guidance in the company's words.
       + (r.summary ? `<tr><td${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
       + (r.guideSentence ? `<tr><td${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
-        + `<strong${st(`color:${MC.ink}`)}>Guidance</strong>&nbsp; ${mailEsc(r.guideSentence)}</div></td></tr>` : '')
+        + `<strong${st(`color:${MC.ink}`)}>Guidance${gch(r)}</strong>&nbsp; ${mailEsc(r.guideSentence)}${geps(r)}</div></td></tr>` : '')
       + `<tr><td class="em-quiet"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
       + '</table>';
   };
+  // The stated change (only when the release says it in words) and the
+  // full-year EPS guidance against the year before (releases.js guideReadings).
+  const CHANGE = { raised: 'raised', lowered: 'lowered', reaffirmed: 'reaffirmed', initiated: 'initiated', withdrawn: 'withdrawn', mixed: 'mixed' };
+  const gch = (r) => (r.guideChange && CHANGE[r.guideChange] ? ' ' + CHANGE[r.guideChange] : '');
+  const geps = (r) => { const g = Releases.guideReadings(r).epsFy; if (!g) return '';
+    const p = (g.mid / g.prior - 1) * 100;
+    return `<br><span class="em-quiet"${st(`font-size:12px;color:${MC.mute}`)}>${mailEsc(g.basis === 'GAAP' ? 'GAAP' : 'Adjusted')} EPS guidance ${mailEsc(RV.eps(g.mid, r.currency))} at the middle, ${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1)}% on ${mailEsc(RV.eps(g.prior, r.currency))} the year before (${g.priorFrom === 'release' ? 'as printed' : '10-K'})</span>`; };
   // Past RD_CARDS, one line each.
   const line = (r) => `<tr class="em-row"><td${st(`padding:7px 0;border-top:1px solid ${MC.line};font-family:${mono};font-size:13px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</td>`
     + `<td${st(`padding:7px 8px;border-top:1px solid ${MC.line};font-size:13px;color:${MC.body}`)}>${mailEsc(names[r.symbol] || '')}</td>`
@@ -11779,6 +11786,8 @@ app.delete('/api/admin/posts/image/:id', requireAdmin, route(async (req, res) =>
 // and level and Risk, Fundamentals into six groups, so 48 fields have new keys.
 const FIELD_KEY_MOVED = {
   'act|Advice': 'act|Signal', 'rel|Chip selloff': 'react|Chip selloff',
+  // Renamed 2026-10-23: the column is revenue guidance (an EPS one sits beside it).
+  'aier|Guide vs quarter': 'aier|Rev guide vs Q',
   'short|Bad day': 'risk|Bad day',
   'rel|Drawdown': 'risk|Drawdown',
   'rel|Corrections 5Y': 'risk|Corrections 5Y',
