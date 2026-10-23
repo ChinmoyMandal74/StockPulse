@@ -2093,6 +2093,11 @@
           readings a month, one month always looks special by chance. The
           square card holds the newest eight years.</p>
       </div>
+      <div id="srBox">
+        <label>Stock</label>
+        <select id="srsSym"></select>
+        <p class="hint">The company’s newest results press release, as read for the screener: revenue, net income and EPS against a year earlier, the guidance and what the company says it did to it, and what it says helped and weighed on the quarter. A story adds the AI summary.</p>
+      </div>
       <div id="dbdBox">
         <label>Stock</label>
         <select id="dbdSym"></select>
@@ -2379,6 +2384,7 @@
   <!-- RowCard.bands, for the Bollinger bands card: the same arithmetic as the stock chart. -->
   <script src="/rowcard.js"></script>
   <script src="/glance.js"></script>
+  <script src="/releaseview.js"></script>
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script src="/reel.js"></script>
@@ -2465,6 +2471,7 @@
       { id: 'days', name: 'Day by day', note: 'One company over the last eight weeks, a row a week — each cell that session’s return' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'glance', name: 'At a glance', note: 'One company topic by topic, as the top of its stock page sums it up' },
+      { id: 'stkresults', name: 'Quarterly results', note: 'One company’s newest results release: the figures, the guidance and what the company says helped and weighed' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
@@ -2533,6 +2540,7 @@
       ['months', 'Month by month', 'monSym'],
       ['days', 'Day by day', 'dbdSym'],
       ['glance', 'At a glance', 'glcSym'],
+      ['stkresults', 'Quarterly results', 'srsSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
       ['stkchart', 'Chart — any measure', 'sclSym'],
@@ -3374,6 +3382,20 @@
     // One day's results releases, fetched once a day asked; the day picker is
     // filled from the days on file the first answer carries.
     const rptCache = {}, rptPending = {};
+    // The Quarterly results card: one company's releases, as its stock page reads them.
+    const srCache = {}, srPending = {};
+    function getRelease(need) {
+      const k = need && need.symbol;
+      if (!k) return null;
+      if (srCache[k]) return srCache[k];
+      if (srPending[k]) return null;
+      srPending[k] = true;
+      fetch('/api/releases?symbol=' + encodeURIComponent(k), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { releases: [] }))
+        .then((d) => { srPending[k] = false; srCache[k] = d || { releases: [] }; if (tpl === 'stkresults') render(); })
+        .catch(() => { srPending[k] = false; srCache[k] = { releases: [] }; if (tpl === 'stkresults') render(); });
+      return null;
+    }
     function getReported(need) {
       const k = need.date || 'latest';
       if (rptCache[k]) return rptCache[k];
@@ -3469,7 +3491,7 @@
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
-      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick',
+      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick', 'srsSym',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
@@ -3493,7 +3515,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4367,6 +4389,7 @@
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('glcBox').style.display = tpl === 'glance' ? 'block' : 'none';
+      $('srBox').style.display = tpl === 'stkresults' ? 'block' : 'none';
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -4696,6 +4719,7 @@
     // Month by month: its own listener list, and its view picker filled from
     // the module so it cannot offer a value the card does not know.
     $('glcSym').addEventListener('change', () => { if (tpl === 'glance') render(); });
+    $('srsSym').addEventListener('change', () => { if (tpl === 'stkresults') render(); });
     $('glcDefault').addEventListener('click', () => { $('glcPick').value = Cards.glanceDefault().join('|'); if (tpl === 'glance') render(); });
     ['monSym', 'monView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
@@ -5644,6 +5668,8 @@
           if ([...$('monSym').options].some((o) => o.value === keep)) $('monSym').value = keep; }
         { const keep = $('dbdSym').value; $('dbdSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('dbdSym').options].some((o) => o.value === keep)) $('dbdSym').value = keep; }
+        { const keep = $('srsSym').value; $('srsSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('srsSym').options].some((o) => o.value === keep)) $('srsSym').value = keep; }
         { const keep = $('glcSym').value; $('glcSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('glcSym').options].some((o) => o.value === keep)) $('glcSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;

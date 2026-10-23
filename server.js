@@ -67,6 +67,9 @@ require('./private/rowcard.js');
 const RowCard = globalThis.RowCard;
 // The promo cards, so a saved post can be built here and a phone handed
 // finished markup rather than the whole snapshot.
+// ReleaseView before the cards: the Quarterly results card colours its
+// guidance label from ReleaseView.CHANGE_HEX (globalThis.ReleaseView).
+require('./private/releaseview.js');
 require('./private/cards.js');
 // The peer-trend model and drawing, shared with the stock page and the studio.
 require('./private/peertrend.js');
@@ -12792,6 +12795,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // The Results summary card: the screener's stored release column.
   let rcol = null;
   if (Cards.resultsSummaryNeed(post.tpl, post.opts || {})) { try { rcol = await store.readFigure('releaseColumn'); } catch { rcol = null; } }
+  // The Quarterly results card: that company's newest releases, as /api/releases reads them.
+  let srd = null;
+  const srNeed = Cards.stockResultsNeed(post.tpl, post.opts || {});
+  if (srNeed) {
+    const sym = String(srNeed.symbol || '').toUpperCase();
+    try { srd = /^[A-Z0-9.-]{1,15}$/.test(sym) ? { symbol: sym, releases: (await store.readEarningsReleases(sym, 2)).filter((r) => r.isResults).map((r) => Releases.forReader(r, [])) } : { releases: [] }; } catch { srd = { releases: [] }; }
+  }
   // The Results reported card, likewise.
   let rptd = null;
   const rptNeed = Cards.reportedNeed(post.tpl, post.opts || {});
@@ -12822,6 +12832,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getFiled: () => fld,
       getReported: () => rptd,
       getReleaseColumn: () => rcol || { rows: {} },
+      getRelease: () => srd || { releases: [] },
       // The At a glance card: the stock page's own cards, over the same rows.
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,

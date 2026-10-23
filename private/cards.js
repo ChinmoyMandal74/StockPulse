@@ -57,6 +57,7 @@
   let getReported = () => null;
   // The screener's release column (each company's newest results release), or null while it loads.
   let getReleaseColumn = () => null;
+  let getRelease = () => null;
   // One stock's At a glance cards (glance.js, built by the host from its rows), or null.
   let getGlance = () => null;
   // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
@@ -12303,6 +12304,92 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Quarterly results, one company (2026-10-23) --------------------------
+  //
+  // The owner: "create a promo on individual stock with all this results
+  // data". The company's newest results press release as read for the
+  // screener: the four figures with the change on a year ago, the guidance
+  // with the change the company states (the coloured label, the owner's
+  // exception to green-and-red-mean-price) and its readings, what helped and
+  // what weighed as the company explains them, and on a story the AI summary.
+  // From the host (getRelease: the studio's /api/releases, the phone route's
+  // own read of the same rows through Releases.forReader). A record of what
+  // was reported: nothing here rates the stock, and changes on a year ago are
+  // written, not painted, since they are not price moves.
+  function stockResultsNeed(tpl, opts) {
+    return tpl === 'stkresults' ? { symbol: (opts && opts.srsSym) || null } : null;
+  }
+  const SR_DRV = { square: 2, portrait: 3, story: 3 };
+  const SR_GUIDE = { square: 150, portrait: 230, story: 320 };
+  function tplStockResults() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const sym = O.srsSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell('Quarterly results', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const n = nameOf(row);
+    const need = stockResultsNeed('stkresults', O);
+    need.symbol = sym;
+    const d = getRelease(need);
+    if (!d) return shell('Quarterly results', n, 'reading the release…');
+    const r = ((d && d.releases) || [])[0];
+    if (!r) return shell('Quarterly results', n, 'no release on file', 'Results press releases are read from the SEC each weekday morning; there is none on file for ' + sym + ' from the last few months.');
+    const pre = (c) => (!c || c === 'USD' ? '$' : c + ' ');
+    const money = (v, c) => { if (v == null) return '—'; const a = Math.abs(v); return (v < 0 ? '−' : '') + pre(c) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
+    const eps = (v, c) => (v == null ? '—' : (v < 0 ? '−' : '') + pre(c) + Math.abs(v).toFixed(2));
+    const pct = (p) => (p == null || !isFinite(p) ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%');
+    const yoy = (a, b) => (a == null || b == null || !(b > 0) ? '' : pct((a / b - 1) * 100) + ' y/y');
+    const c = r.currency;
+    const fig = (label, v, sub) => '<div class="sr-fig"><span>' + esc(label) + '</span><b>' + esc(v) + '</b><i>' + esc(sub || ' ') + '</i></div>';
+    const figs = '<div class="sr-figs">'
+      + fig('Revenue', money(r.revenue, c), yoy(r.revenue, r.revenuePrior))
+      + fig('Net income', money(r.netIncome, c), yoy(r.netIncome, r.netIncomePrior))
+      + fig('EPS, GAAP', eps(r.epsGaap, c), yoy(r.epsGaap, r.epsGaapPrior))
+      + fig('EPS, adjusted', eps(r.epsAdj, c), r.epsAdj != null ? yoy(r.epsAdj, r.epsAdjPrior) : 'none given')
+      + '</div>';
+    // The guidance: the company's word for what it did, coloured as the owner
+    // asked (ReleaseView.CHANGE_HEX), its sentence cut to the size, and the
+    // two readings worked out on the server (guideRead).
+    const RVG = typeof globalThis !== 'undefined' && globalThis.ReleaseView ? globalThis.ReleaseView : null;
+    const word = RVG && r.guideChange ? RVG.CHANGE_WORD[r.guideChange] : null;
+    const hex = RVG && r.guideChange ? RVG.CHANGE_HEX[r.guideChange] : null;
+    const gr = r.guideRead || {};
+    const cut = SR_GUIDE[size.id] || SR_GUIDE.portrait;
+    const sent = r.guideSentence ? (r.guideSentence.length > cut ? r.guideSentence.slice(0, cut - 1).replace(/\s+\S*$/, '') + '…' : r.guideSentence) : '';
+    const reads = [];
+    if (gr.revVsQ != null && gr.revQ) reads.push('Next quarter’s revenue guide ' + pct(gr.revVsQ) + ' on this quarter');
+    if (gr.epsVsFy != null && gr.epsFy) reads.push((gr.epsFy.basis === 'GAAP' ? 'GAAP' : 'Adjusted') + ' EPS guide ' + pct(gr.epsVsFy) + ' on last year');
+    const guide = (sent || word) ? '<div class="sr-guide"><h4>Guidance' + (word ? '<span class="sr-pill" style="background:' + esc(hex || '#475569') + '">' + esc(word) + '</span>' : '') + '</h4>'
+      + (sent ? '<p>' + esc(sent) + '</p>' : '')
+      + (reads.length ? '<p class="sr-read">' + esc(reads.join(' · ')) + '</p>' : '') + '</div>' : '';
+    // What helped and what weighed, the company's own reasons.
+    const k = SR_DRV[size.id] || 3;
+    const dv = r.drivers || {};
+    const side = (title, list) => '<div><h4>' + esc(title) + '</h4>' + ((list || []).length
+      ? '<ul>' + list.slice(0, k).map((x) => '<li>' + esc(x.text) + '</li>').join('') + '</ul>'
+      : '<p class="sr-none">None stated.</p>') + '</div>';
+    const drv = ((dv.helped || []).length || (dv.weighed || []).length)
+      ? '<div class="sr-drv">' + side('What helped', dv.helped) + side('What weighed', dv.weighed) + '</div>' : '';
+    // The AI summary where there is room: a portrait and a story (a portrait
+    // otherwise left a third of the card empty under the reasons).
+    const sum = size.id !== 'square' && r.summary ? '<p class="sr-sum">' + esc(r.summary) + '</p>' : '';
+    const filed = r.filed ? new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+    const note = 'From ' + n + '’s results press release filed with the SEC' + (filed ? ' on ' + filed : '') + ', read by an AI model and checked against its text. '
+      + 'Changes are on the same quarter a year earlier. Adjusted EPS is the company’s own figure, with no standard definition. '
+      + 'What helped and what weighed are the reasons the company gives. A record of what was reported, not a reading of the stock.';
+    return chromeTop()
+      + '<div class="s-body"><div class="sr-in">'
+      // The date rides in the kicker: as the title's second line it was set at
+      // headline size and wrapped on a square.
+      + '<span class="s-kick">Quarterly results · ' + esc(r.periodLabel || 'latest quarter') + (r.filed ? ' · reported ' + esc(new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : '') + '</span>'
+      + '<h2 class="s-title">' + esc(n) + '<br><span class="dim">' + esc(sym) + '</span></h2>'
+      + figs + guide + drv + sum
+      + '<p class="s-sub wide fd-note sr-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Results summary: a reporting season across an index (2026-10-22) ----
   //
   // The owner: "If I have a summarize the data at the entire s&p level on
@@ -13239,6 +13326,7 @@
     indressum: () => tplResultsSummary('indressum'),
     thmressum: () => tplResultsSummary('thmressum'),
     glance: tplGlance,
+    stkresults: tplStockResults,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
     thmlines: () => tplGroupLines('thmlines'),
@@ -15122,6 +15210,39 @@
     .fd-dot.fd-on { background: var(--amber); }
     .fd-more { font: 500 16px var(--mono); color: var(--faint); padding-top: 8px; }
     .fd-note { margin-top: auto; padding-top: 18px; }
+    .sr-in { height: 100%; display: flex; flex-direction: column; }
+    .sr-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
+    .sr-fig { border: 1px solid var(--hair-2); border-radius: 18px; padding: 16px 18px; min-width: 0; }
+    .sr-fig span { display: block; font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .sr-fig b { display: block; margin-top: 10px; font: 700 34px var(--mono); letter-spacing: -0.02em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sr-fig i { display: block; margin-top: 6px; font: 500 15px var(--mono); font-style: normal; color: var(--muted); }
+    .sr-guide { margin-top: 24px; padding: 16px 20px; border-left: 4px solid var(--hair-2); border-radius: 6px; }
+    .sr-guide h4, .sr-drv h4 { margin: 0; font: 600 14px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .sr-pill { display: inline-block; margin-left: 12px; padding: 3px 13px; border-radius: 999px; font: 700 14px var(--sans); letter-spacing: 0.06em; color: #ffffff; vertical-align: 1px; }
+    .sr-guide p { margin: 10px 0 0; font-size: 19px; line-height: 1.45; color: var(--muted); }
+    .sr-guide p.sr-read { font: 600 16px var(--mono); color: var(--text); }
+    .sr-drv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; margin-top: 24px; }
+    .sr-drv ul { margin: 10px 0 0; padding-left: 22px; }
+    .sr-drv li { font-size: 19px; line-height: 1.4; color: var(--text); margin: 0 0 9px; }
+    .sr-drv .sr-none { margin: 10px 0 0; font-size: 17px; color: var(--faint); }
+    .sr-sum { margin: 24px 0 0; font-size: 20px; line-height: 1.55; color: var(--muted); }
+    .sz-square .sr-figs { margin-top: 20px; gap: 10px; }
+    .sz-square .sr-fig { padding: 12px 14px; }
+    .sz-square .sr-fig b { font-size: 28px; }
+    .sz-square .sr-guide { margin-top: 16px; padding: 10px 16px; }
+    .sz-square .sr-guide p { font-size: 17px; }
+    .sz-square .sr-drv { margin-top: 16px; gap: 20px; }
+    .sz-square .sr-drv li { font-size: 17px; margin-bottom: 6px; }
+    .sz-story .sr-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+    .sz-story .sr-guide p { font-size: 22px; }
+    .sz-story .sr-drv { grid-template-columns: 1fr; gap: 22px; }
+    .sz-story .sr-drv li { font-size: 25px; margin-bottom: 12px; }
+    .sz-story .sr-fig b { font-size: 52px; }
+    .sz-story .sr-fig i { font-size: 18px; }
+    .sz-story .sr-guide p { font-size: 25px; }
+    .sz-story .sr-guide p.sr-read { font-size: 19px; }
+    .sz-story .sr-sum { font-size: 24px; }
+    .sz-story .sr-guide, .sz-story .sr-drv, .sz-story .sr-sum { margin-top: 34px; }
     /* Results reported (2026-10-22): the Filed card's frame; written figures,
        nothing painted good or bad. */
     .rp-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 190px 150px 236px; gap: 14px; align-items: baseline;
@@ -16033,7 +16154,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
-    reportedNeed, resultsSummaryNeed,
+    reportedNeed, resultsSummaryNeed, stockResultsNeed,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     glanceTopics: () => GLC_TOPICS.map((t) => t.slice()), glanceDefault: () => GLC_DEFAULT.slice(),
     glanceMax: (sizeId) => GLC_MAX[sizeId] || GLC_MAX.portrait, glancePick,
@@ -16192,6 +16313,7 @@
       getFiled = c.getFiled || (() => null);
       getReported = c.getReported || (() => null);
       getReleaseColumn = c.getReleaseColumn || (() => null);
+      getRelease = c.getRelease || (() => null);
       getGlance = c.getGlance || (() => null);
       getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);
