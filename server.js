@@ -3324,7 +3324,7 @@ const MAIL_DARK_RULES = (D) => [
   // The results email's shaded panels (the figures across the top, guidance).
   [['.em-card .em-panel'], `background:${D.pre};border-color:${D.line}`],
   [['.em-card div'], `color:${D.body}`],
-  [['.em-card .em-ink'], `color:${D.ink}`],
+  [['.em-card .em-ink'], `color:${D.ink};border-color:${D.ink}`],
   [['.em-card .em-box', '.em-card .em-row td'], `border-color:${D.line}`],
   // Scoped under .em-card deliberately: a bare .em-quiet is one class against
   // .em-card p's class-plus-element and loses, so the kicker and the captions
@@ -3562,7 +3562,8 @@ function releaseDigestEmail(rels, names) {
   const chg = (p) => (p == null ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '% y/y');
   const revKnown = rows.filter((r) => pct(r.revenue, r.revenuePrior) != null), revUp = revKnown.filter((r) => r.revenue > r.revenuePrior);
   const niKnown = rows.filter((r) => r.netIncome != null && r.netIncomePrior != null), niUp = niKnown.filter((r) => r.netIncome > r.netIncomePrior);
-  const guided = rows.filter((r) => r.guideSentence);
+  const guided = rows.filter((r) => r.guideSentence || (r.guides && r.guides.length));
+  const raisedN = rows.filter((r) => r.guideChange === 'raised').length, loweredN = rows.filter((r) => r.guideChange === 'lowered').length;
   const days = [...new Set(rows.map((r) => r.filed))].sort();
   const dayText = days.length === 1 ? RV.shortDay(days[0]) : RV.shortDay(days[0]) + ' to ' + RV.shortDay(days[days.length - 1]);
   const n = rows.length, cos = n === 1 ? 'company' : 'companies';
@@ -3581,7 +3582,7 @@ function releaseDigestEmail(rels, names) {
     + stat(String(n), '', 'reported') + gap
     + stat(String(revUp.length), revKnown.length ? ' / ' + revKnown.length : '', 'revenue up on a year ago') + gap
     + stat(String(niUp.length), niKnown.length ? ' / ' + niKnown.length : '', 'net income up on a year ago') + gap
-    + stat(String(guided.length), '', 'gave guidance') + '</tr></table>';
+    + stat(String(guided.length), '', 'gave guidance' + (raisedN || loweredN ? ': ' + raisedN + ' raised, ' + loweredN + ' lowered' : '')) + '</tr></table>';
 
   // One figure in a card: label, value, the change under it.
   const fig = (name, value, sub) => `<td width="25%" valign="top"${st('padding:0 8px 0 0')}>${label(name)}`
@@ -3608,18 +3609,28 @@ function releaseDigestEmail(rels, names) {
       + '</tr></table></td></tr>'
       // What the release says, then the guidance in the company's words.
       + (r.summary ? `<tr><td${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
-      + (r.guideSentence ? `<tr><td${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
-        + `<strong${st(`color:${MC.ink}`)}>Guidance${gch(r)}</strong>&nbsp; ${mailEsc(r.guideSentence)}${geps(r)}</div></td></tr>` : '')
+      + (r.guideSentence || r.guideChange ? `<tr><td${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
+        + `<strong${st(`color:${MC.ink}`)}>Guidance</strong>${gch(r) || '&nbsp; '}${mailEsc(r.guideSentence || '')}${grev(r)}${geps(r)}</div></td></tr>` : '')
       + `<tr><td class="em-quiet"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
       + '</table>';
   };
   // The stated change (only when the release says it in words) and the
   // full-year EPS guidance against the year before (releases.js guideReadings).
   const CHANGE = { raised: 'raised', lowered: 'lowered', reaffirmed: 'reaffirmed', initiated: 'initiated', withdrawn: 'withdrawn', mixed: 'mixed' };
-  const gch = (r) => (r.guideChange && CHANGE[r.guideChange] ? ' ' + CHANGE[r.guideChange] : '');
+  // The company's word for what it did, as a small outlined label, with its
+  // quote under it; then the two readings, a quiet line each.
+  const gch = (r) => (r.guideChange && CHANGE[r.guideChange]
+    ? `&nbsp;<span class="em-ink"${st(`display:inline-block;padding:1px 8px;border:1px solid ${MC.ink};border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${MC.ink}`)}>${mailEsc(CHANGE[r.guideChange])}</span>`
+      + (r.guideChangeQuote ? `<br><span class="em-quiet"${st(`font-size:12px;font-style:italic;color:${MC.mute}`)}>“${mailEsc(r.guideChangeQuote)}”</span><br>` : '<br>')
+    : '');
+  const sgn = (p) => (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%';
+  const grev = (r) => { const g = Releases.guideReadings(r); if (g.revVsQ == null || !g.revQ) return '';
+    const q = g.revQ, f = (v) => RV.money(v, r.currency);
+    const range = q.low != null && q.high != null ? f(q.low) + ' to ' + f(q.high) : f(q.mid != null ? q.mid : q.low);
+    return `<br><span class="em-quiet"${st(`font-size:12px;color:${MC.mute}`)}>Revenue guidance for ${mailEsc(q.periodLabel || 'next quarter')}: ${mailEsc(range)}, ${sgn(g.revVsQ)} on this quarter</span>`; };
   const geps = (r) => { const g = Releases.guideReadings(r).epsFy; if (!g) return '';
     const p = (g.mid / g.prior - 1) * 100;
-    return `<br><span class="em-quiet"${st(`font-size:12px;color:${MC.mute}`)}>${mailEsc(g.basis === 'GAAP' ? 'GAAP' : 'Adjusted')} EPS guidance ${mailEsc(RV.eps(g.mid, r.currency))} at the middle, ${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1)}% on ${mailEsc(RV.eps(g.prior, r.currency))} the year before (${g.priorFrom === 'release' ? 'as printed' : '10-K'})</span>`; };
+    return `<br><span class="em-quiet"${st(`font-size:12px;color:${MC.mute}`)}>${mailEsc(g.basis === 'GAAP' ? 'GAAP' : 'Adjusted')} EPS guidance for ${mailEsc(g.period || 'the year')}: ${mailEsc(RV.eps(g.mid, r.currency))} at the middle, ${sgn(p)} on ${mailEsc(RV.eps(g.prior, r.currency))} the year before (${g.priorFrom === 'release' ? 'as printed' : '10-K'})</span>`; };
   // Past RD_CARDS, one line each.
   const line = (r) => `<tr class="em-row"><td${st(`padding:7px 0;border-top:1px solid ${MC.line};font-family:${mono};font-size:13px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</td>`
     + `<td${st(`padding:7px 8px;border-top:1px solid ${MC.line};font-size:13px;color:${MC.body}`)}>${mailEsc(names[r.symbol] || '')}</td>`
