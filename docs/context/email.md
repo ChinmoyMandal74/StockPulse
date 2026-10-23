@@ -63,3 +63,6 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 
 
 - **`release-digest`** (2026-10-22): the earnings results email after each scheduled release run with new results, to `REPORT_TO`. See `earnings-releases.md`.
+
+### On a phone (2026-10-23)
+The owner, reading the results email in the Gmail app: "a very thick border that is taking up space". The grey surround (12px), the card's padding (28px) and each inner card's (16px) stacked to about 56px a side on a 390px screen. `MAIL_DARK_CSS` now ends with a phone block (`max-width:520px`): the surround and the card's side borders go (`.em-wrap`, `.em-card`), shell cells pad 16px (`.em-x`), inner cards 12px (`.em-in`), and four-across rows go two a row (`.em-stat`, `.em-fig`, `.em-gap` hidden). Every email built on `emailShell` gets the shell part. A client that strips `<style>` keeps the desktop layout, as before. The big figures no longer break from their "/ 47" (`white-space:nowrap`).

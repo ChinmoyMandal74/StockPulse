@@ -3358,6 +3358,19 @@ const MAIL_DARK_CSS = '<style>'
   + '@media (prefers-color-scheme:dark){' + mailDarkCss(MAIL_DARK, '') + '}'
   + mailDarkCss(MAIL_DARK, '[data-ogsc]')
   + mailDarkCss(MAIL_DARK, '[data-ogsb]')
+  // ON A PHONE (2026-10-23, the owner: "a very thick border that is taking
+  // up space"): the grey surround, the card's 28px and each inner card's
+  // 16px stacked to ~56px a side on a 390px screen. Edge to edge, 16px
+  // inside, and four-across rows (the results email's figures) two a row.
+  + '@media only screen and (max-width:520px){'
+  + '.em-wrap{padding:0 !important}'
+  + '.em-card{border-radius:0 !important;border-left:0 !important;border-right:0 !important}'
+  + '.em-x{padding-left:16px !important;padding-right:16px !important}'
+  + '.em-in{padding-left:12px !important;padding-right:12px !important}'
+  + '.em-stat{display:inline-block !important;width:48% !important;box-sizing:border-box !important;margin:0 0 8px !important;vertical-align:top !important}'
+  + '.em-gap{display:none !important}'
+  + '.em-fig{display:inline-block !important;width:49% !important;box-sizing:border-box !important;margin:0 0 10px !important;vertical-align:top !important}'
+  + '}'
   + '</style>';
 
 // A pill button that survives Outlook, which ignores border-radius on <a>.
@@ -3479,7 +3492,7 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     // intro rather than invented, and hidden in the body itself.
     `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${mailEsc(intro)}</div>` +
     `<table class="em-bg" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" ` +
-    `style="background:${MC.panel};padding:28px 12px">` +
+    `class="em-wrap" style="background:${MC.panel};padding:28px 12px">` +
     `<tr><td align="center">` +
     `<table class="em-card" role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" ` +
     `style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${MC.line};border-radius:14px;overflow:hidden">` +
@@ -3496,7 +3509,7 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     // layout does not jump while it loads, and the cell painted the header
     // colour so a transparent or blocked image is invisible rather than a pale
     // rectangle — which also survives Gmail's dark-mode repainting.
-    `<tr><td class="em-head" style="background:${MC.head};padding:18px 28px">` +
+    `<tr><td class="em-head em-x" style="background:${MC.head};padding:18px 28px">` +
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
     (site
       ? `<td style="padding-right:10px;line-height:0;background:${MC.head}">` +
@@ -3510,16 +3523,16 @@ function emailShell({ heading, intro, body = '', note = '' }) {
     '</td></tr></table></td></tr>' +
 
     // content
-    `<tr><td style="padding:30px 28px 8px">` +
+    `<tr><td class="em-x" style="padding:30px 28px 8px">` +
     `<h1 style="margin:0 0 12px;font-family:${sans};font-size:21px;line-height:1.3;` +
     `font-weight:700;letter-spacing:-0.4px;color:${MC.ink}">${mailEsc(heading)}</h1>` +
     `<p style="margin:0;font-family:${sans};font-size:15px;line-height:1.62;color:${MC.body}">${mailEsc(intro)}</p>` +
     `</td></tr>` +
-    `<tr><td style="padding:0 28px 26px;font-family:${sans};font-size:15px;line-height:1.62;color:${MC.body}">` +
+    `<tr><td class="em-x" style="padding:0 28px 26px;font-family:${sans};font-size:15px;line-height:1.62;color:${MC.body}">` +
     `${body}</td></tr>` +
 
     // footer
-    `<tr><td class="em-foot" style="padding:18px 28px 22px;border-top:1px solid ${MC.line};background:#fbfcfd">` +
+    `<tr><td class="em-foot em-x" style="padding:18px 28px 22px;border-top:1px solid ${MC.line};background:#fbfcfd">` +
     (note ? `<p style="margin:0 0 10px;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.mute}">${note}</p>` : '') +
     `<p style="margin:0;font-family:${sans};font-size:12.5px;line-height:1.6;color:${MC.faint}">` +
     `<strong style="color:${MC.mute}">${BRAND}</strong> — ${BRAND_TAG}` +
@@ -3576,10 +3589,10 @@ function releaseDigestEmail(rels, names) {
   const label = (t) => `<div class="em-quiet"${st(`font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint};margin:0 0 3px`)}>${mailEsc(t)}</div>`;
 
   // The four figures across the top.
-  const stat = (big, small, cap) => `<td class="em-panel" width="25%" valign="top"${st(`padding:12px 12px;background:${MC.panel};border:1px solid ${MC.line};border-radius:10px`)}>`
-    + `<div class="em-ink"${st(`font-size:22px;font-weight:700;letter-spacing:-0.5px;color:${MC.ink}`)}>${big}<span${st(`font-size:13px;font-weight:500;color:${MC.faint}`)}>${small}</span></div>`
+  const stat = (big, small, cap) => `<td class="em-panel em-stat" width="25%" valign="top"${st(`padding:12px 12px;background:${MC.panel};border:1px solid ${MC.line};border-radius:10px`)}>`
+    + `<div class="em-ink"${st(`font-size:22px;font-weight:700;letter-spacing:-0.5px;white-space:nowrap;color:${MC.ink}`)}>${big}<span${st(`font-size:13px;font-weight:500;color:${MC.faint}`)}>${small}</span></div>`
     + `<div${st(`font-size:11.5px;line-height:1.4;color:${MC.mute};margin-top:4px`)}>${mailEsc(cap)}</div></td>`;
-  const gap = `<td width="8"${st('font-size:0;line-height:0')}>&nbsp;</td>`;
+  const gap = `<td class="em-gap" width="8"${st('font-size:0;line-height:0')}>&nbsp;</td>`;
   const stats = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('margin:22px 0 6px;border-collapse:separate')}><tr>`
     + stat(String(n), '', 'reported') + gap
     + stat(String(revUp.length), revKnown.length ? ' / ' + revKnown.length : '', 'revenue up on a year ago') + gap
@@ -3587,7 +3600,7 @@ function releaseDigestEmail(rels, names) {
     + stat(String(guided.length), '', 'gave guidance' + (raisedN || loweredN ? ': ' + raisedN + ' raised, ' + loweredN + ' lowered' : '')) + '</tr></table>';
 
   // One figure in a card: label, value, the change under it.
-  const fig = (name, value, sub) => `<td width="25%" valign="top"${st('padding:0 8px 0 0')}>${label(name)}`
+  const fig = (name, value, sub) => `<td class="em-fig" width="25%" valign="top"${st('padding:0 8px 0 0')}>${label(name)}`
     + `<div class="em-ink"${st(`font-family:${mono};font-size:15px;font-weight:600;color:${MC.ink}`)}>${mailEsc(value)}</div>`
     + (sub ? `<div class="em-quiet"${st(`font-size:11.5px;line-height:1.35;color:${MC.faint};margin-top:2px`)}>${mailEsc(sub)}</div>` : '') + '</td>';
   const card = (r) => {
@@ -3597,23 +3610,23 @@ function releaseDigestEmail(rels, names) {
       site ? `<a href="${site}/stock/${encodeURIComponent(r.symbol)}"${st(`color:${MC.mute};text-decoration:underline`)}>Stock page</a>` : ''].filter(Boolean).join(' &nbsp;&middot;&nbsp; ');
     return `<table class="em-box" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st(`margin:14px 0 0;border:1px solid ${MC.line};border-radius:12px;border-collapse:separate`)}>`
       // Who and which quarter.
-      + `<tr><td${st('padding:14px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + `<tr><td class="em-in"${st('padding:14px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
       + `<td valign="baseline"><span${st(`font-family:${mono};font-size:15px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</span>`
       + `<span${st(`font-size:14px;color:${MC.body}`)}>&nbsp;&nbsp;${mailEsc(names[r.symbol] || '')}</span></td>`
       + `<td align="right" valign="baseline" class="em-quiet"${st(`font-size:12px;color:${MC.faint};white-space:nowrap`)}>${mailEsc(r.periodLabel || '')}</td>`
       + '</tr></table></td></tr>'
       // The figures.
-      + `<tr><td${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+      + `<tr><td class="em-in"${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
       + fig('Revenue', RV.money(r.revenue, cur), chg(pct(r.revenue, r.revenuePrior)))
       + fig('Net income', RV.money(r.netIncome, cur), chg(pct(r.netIncome, r.netIncomePrior)))
       + fig('EPS (GAAP)', RV.eps(r.epsGaap, cur), chg(pct(r.epsGaap, r.epsGaapPrior)))
       + fig('Adjusted EPS', RV.eps(r.epsAdj, cur), r.epsAdj != null ? [chg(pct(r.epsAdj, r.epsAdjPrior)), r.epsAdjLabel].filter(Boolean).join(' · ') : '')
       + '</tr></table></td></tr>'
       // What the release says, then the guidance in the company's words.
-      + (r.summary ? `<tr><td${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
-      + (r.guideSentence || r.guideChange ? `<tr><td${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
+      + (r.summary ? `<tr><td class="em-in"${st(`padding:12px 16px 0;font-size:14px;line-height:1.6;color:${MC.body}`)}>${mailEsc(r.summary)}</td></tr>` : '')
+      + (r.guideSentence || r.guideChange ? `<tr><td class="em-in"${st('padding:10px 16px 0')}><div class="em-panel"${st(`padding:9px 12px;background:${MC.panel};border-left:3px solid ${MC.head};border-radius:4px;font-size:13px;line-height:1.55;color:${MC.body}`)}>`
         + `<strong${st(`color:${MC.ink}`)}>Guidance</strong>${gch(r) || '&nbsp; '}${mailEsc(r.guideSentence || '')}${grev(r)}${geps(r)}</div></td></tr>` : '')
-      + `<tr><td class="em-quiet"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
+      + `<tr><td class="em-quiet em-in"${st(`padding:10px 16px 14px;font-size:12px;color:${MC.faint}`)}>${links}</td></tr>`
       + '</table>';
   };
   // The stated change (only when the release says it in words) and the
