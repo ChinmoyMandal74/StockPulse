@@ -1452,9 +1452,13 @@ app.get('/posts', route(async (req, res) => {
 // A tiny page shared by confirm and unsubscribe. Server-rendered like the rest
 // of the blog, in the site's own voice, because landing on a bare line of text
 // after clicking a link in an email reads as a broken site.
+// Navy, like the landing and results pages (2026-10-23, the owner: "make the
+// email preference page navy theme instead of dark"): the app.css tokens'
+// navy set, fixed here as those pages fix it.
 function subPage({ title, heading, body, base, prefs }) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8">`
+  return `<!doctype html><html lang="en" data-theme="navy"><head><meta charset="utf-8">`
     + `<meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<meta name="theme-color" content="#071120">`
     + `<meta name="robots" content="noindex">`
     + `<title>${htmlEsc(title)} · ${BRAND}</title>`
     + `<link rel="stylesheet" href="/app.css"><link rel="icon" href="/favicon.svg">`
