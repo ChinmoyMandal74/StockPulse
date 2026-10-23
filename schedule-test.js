@@ -67,7 +67,7 @@ const tr = (kind, time, days, interval, duration) => ({ kind, start: '2026-10-01
 const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62)] },
   { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')] },
-  { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '07:00', 62)] },
+  { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)] },
   { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
   { name: 'TickrLab news tone', state: 'Ready', triggers: ['00:30', '06:30', '12:30', '18:30'].map((t) => tr('Daily', t)) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
@@ -77,7 +77,7 @@ ok(Object.values(d.jobs).every((v) => v.status === 'ok' || v.status === 'remote'
 ok(d.jobs.watchdog.status === 'remote', 'the Vercel cron is not looked for on the laptop');
 let r = good(); r.tasks[2].triggers = [tr('Weekly', '09:30', 62), tr('Weekly', '18:00', 62)];
 d = S.drift(r);
-ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyLive.join() === 'weekdays 09:30,weekdays 18:00' && d.jobs.releases.onlyDeclared.join() === 'weekdays 07:00', 'a moved time reads as the runs on each side', d.jobs.releases);
+ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyLive.join() === 'weekdays 09:30,weekdays 18:00' && d.jobs.releases.onlyDeclared.join() === 'weekdays 09:15,weekdays 18:15', 'a moved time reads as the runs on each side', d.jobs.releases);
 r = good(); r.tasks[0].triggers[1] = tr('Weekly', '16:00', 30);   // Mon-Thu
 d = S.drift(r);
 ok(d.jobs.nightly.status === 'differs' && d.jobs.nightly.onlyDeclared.join() === 'Fri 16:00', 'a dropped day is named', d.jobs.nightly);

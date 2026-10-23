@@ -33,7 +33,7 @@ The owner showed a newsletter's earnings round-up (revenue and EPS against estim
 
 ### Running it
 - **The loader:** `node --use-system-ca release-load.js` is a dry run (it still calls the model); `--commit` writes. Options: `--days N` (default 4, at most 45), `--symbol S`, `--max-usd` (default 2), `--max-minutes` (default 40). Newest first.
-- **The schedule:** `release-task.ps1` registers **TickrLab earnings releases**, weekdays at 07:00 local, `--days 5`, at most $2 or 40 minutes, logging to `release.log`. That is after the 04:00 nightly, whose `sec daily` phase records the previous business day's 8-Ks; a Friday's are read on Monday.
+- **The schedule:** `release-task.ps1` registers **TickrLab earnings releases**, weekdays at 09:15 and 18:15 local (07:00 until the owner moved it on 2026-10-22), `--days 5`, at most $2 or 40 minutes, logging to `release.log`. That is after the 04:00 nightly, whose `sec daily` phase records the previous business day's 8-Ks; a Friday's are read on Monday.
 - **SEC:** two fetches a filing (the index headers, then the exhibit), sequential, declared user agent (the server's own `REPORT_TO`/`MAIL_FROM` address), 400ms apart. A 429 or 403 stops the run.
 - **Correcting readings:**
   - `--reread` replaces only the readings that were refused or judged not results.
