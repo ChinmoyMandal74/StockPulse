@@ -77,6 +77,12 @@
     return 'The ' + (r.secForm || '10-Q') + (r.secFiled ? ' filed ' + shortDay(r.secFiled) : '') + ' has ' + said.join(', ') + '; the release’s line can be a different one.';
   }
   const CHANGE_WORD = { raised: 'Raised', lowered: 'Lowered', reaffirmed: 'Reaffirmed', initiated: 'Initiated', withdrawn: 'Withdrawn', mixed: 'Mixed' };
+  // THE LABEL'S COLOURS (the owner, 2026-10-23: raised dark green). Pages use
+  // the app.css tokens through the classes; mail cannot, so it takes these.
+  const CHANGE_HEX = { raised: '#15803d', lowered: '#b91c1c', withdrawn: '#b91c1c', mixed: '#c2410c', initiated: '#1d4ed8', reaffirmed: '#475569' };
+  // A word (Raised) or a key (raised) to the key.
+  const changeKey = (c) => { const k = String(c || '').toLowerCase(); return CHANGE_WORD[k] ? k : null; };
+  const changeTag = (c, title) => { const k = changeKey(c); return k ? '<span class="gch gch-' + k + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + CHANGE_WORD[k] + '</span>' : ''; };
   // A guidance item's figures in words: a range, or its single figure.
   const guideRange = (g, cur, f) => (g.low != null && g.high != null ? f(g.low, cur) + ' to ' + f(g.high, cur) : f(g.mid != null ? g.mid : g.low != null ? g.low : g.high, cur));
   function fields(r) {
@@ -115,5 +121,5 @@
     });
     return o;
   }
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText };
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag };
 })(typeof window !== 'undefined' ? window : globalThis);

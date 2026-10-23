@@ -4409,7 +4409,7 @@
             (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur)),
         signedPctCell(s.erGuideVsQ, 'grp-aier', s.erGuideVsQNote || ''),
         signedPctCell(s.erEpsGuideVsFy, 'grp-aier', s.erEpsGuideNote || ''),
-        s.erGuideChange ? td(we(s.erGuideChange), '“' + (s.erGuideChangeQuote || '') + '”', 'left') : `<td class="left grp-aier na">—</td>`,
+        s.erGuideChange ? td(RV.changeTag(s.erGuideChange), '“' + (s.erGuideChangeQuote || '') + '”', 'left') : `<td class="left grp-aier na">—</td>`,
         txt(s.erGuide),
         s.erTenQ ? td(we(s.erTenQ), s.erTenQNote || '', 'left' + (s.erTenQ === 'Differs' ? ' er-amb' : '')) : `<td class="left grp-aier na">\u2014</td>`,
         txt(s.erSummary),

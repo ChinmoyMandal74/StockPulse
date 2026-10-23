@@ -732,7 +732,7 @@ function resultsPage(rels, names, today) {
         cell(htmlEsc(RV.money(r.netIncome, cur)), pctTxt(pct(r.netIncome, r.netIncomePrior))) +
         cell(htmlEsc(RV.eps(r.epsGaap, cur)), pctTxt(pct(r.epsGaap, r.epsGaapPrior))) +
         adj +
-        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' <b class="er-ch">' + htmlEsc(r.guideChange) + '</b>' : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
+        `<td class="er-sum">${htmlEsc(r.summary || '')}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' ' + RV.changeTag(r.guideChange, r.guideChangeQuote ? '“' + r.guideChangeQuote + '”' : '') : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
         `<td>${/^https:\/\/www\.sec\.gov\//.test(r.url || '') ? `<a href="${htmlEsc(r.url)}" target="_blank" rel="noopener">The release</a>` : ''}</td>` +
         '</tr>';
     }).join('');
@@ -3325,6 +3325,8 @@ const MAIL_DARK_RULES = (D) => [
   [['.em-card .em-panel'], `background:${D.pre};border-color:${D.line}`],
   [['.em-card div'], `color:${D.body}`],
   [['.em-card .em-ink'], `color:${D.ink};border-color:${D.ink}`],
+  // The guidance change label keeps its white ink on its own fill.
+  [['.em-card .em-pill'], 'color:#ffffff'],
   [['.em-card .em-box', '.em-card .em-row td'], `border-color:${D.line}`],
   // Scoped under .em-card deliberately: a bare .em-quiet is one class against
   // .em-card p's class-plus-element and loses, so the kicker and the captions
@@ -3620,7 +3622,9 @@ function releaseDigestEmail(rels, names) {
   // The company's word for what it did, as a small outlined label, with its
   // quote under it; then the two readings, a quiet line each.
   const gch = (r) => (r.guideChange && CHANGE[r.guideChange]
-    ? `&nbsp;<span class="em-ink"${st(`display:inline-block;padding:1px 8px;border:1px solid ${MC.ink};border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${MC.ink}`)}>${mailEsc(CHANGE[r.guideChange])}</span>`
+    // Filled in the label's colour (ReleaseView.CHANGE_HEX, the app.css tokens'
+    // values): raised dark green, as the owner asked on 2026-10-23.
+    ? `&nbsp;<span class="em-pill"${st(`display:inline-block;padding:1px 8px;border-radius:999px;background:${RV.CHANGE_HEX[r.guideChange] || '#475569'};font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff`)}>${mailEsc(CHANGE[r.guideChange])}</span>`
       + (r.guideChangeQuote ? `<br><span class="em-quiet"${st(`font-size:12px;font-style:italic;color:${MC.mute}`)}>“${mailEsc(r.guideChangeQuote)}”</span><br>` : '<br>')
     : '');
   const sgn = (p) => (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%';

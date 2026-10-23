@@ -265,6 +265,11 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('readings: a full-year revenue item is not set against a quarter', Rel.guideReadings({ revenue: 100, guides: [items[0]] }).revVsQ === null);
   check('readings: a loss year before gives no percent', Rel.guideReadings(Object.assign({}, row, { guides: [items[3]], epsGuidePrior: -1.2 })).epsVsFy === null);
   check('readings: an old row without items falls back to the headline quarter item', Math.abs(Rel.guideReadings({ revenue: 100, guideKind: 'revenue_range', guidePeriod: 'Fourth Quarter 2026', guideLow: 105, guideHigh: 115 }).revVsQ - 10) < 1e-9);
+  // The label's colours: the email's hex and the app.css tokens agree, and the tag names its class.
+  const css = require('fs').readFileSync(__dirname + '/public/app.css', 'utf8');
+  const tok = {}; for (const m of css.matchAll(/--gch-(\w+):\s*(#[0-9a-f]{6})/gi)) tok[m[1]] = m[2].toLowerCase();
+  check('label colours: every change has a token, and the email’s hex is the token’s', Object.keys(RV.CHANGE_WORD).every((k) => tok[k] && tok[k] === RV.CHANGE_HEX[k].toLowerCase()) && tok.raised === '#15803d', tok);
+  check('label: the tag carries its class and word, from a word or a key', RV.changeTag('Raised') === '<span class="gch gch-raised">Raised</span>' && RV.changeTag('lowered').includes('gch-lowered') && RV.changeTag('nonsense') === '' && RV.changeTag('Raised', 'a "q"').includes('title="a &quot;q&quot;"'));
   const fl2 = RV.fields(Object.assign({}, col.AAA, { guideRead: g }));
   check('fields: the three guidance columns and their notes', fl2.erGuideChange === 'Raised' && fl2.erGuideChangeQuote === 'q' && fl2.erEpsGuideVsFy === g.epsVsFy && /Adjusted EPS guidance for fiscal year 2027: \$33\.18 to \$34\.08, against \$30\.12/.test(fl2.erEpsGuideNote) && /Revenue guidance for fourth quarter 2026/.test(fl2.erGuideVsQNote), fl2);
 }

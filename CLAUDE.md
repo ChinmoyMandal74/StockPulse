@@ -151,7 +151,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 - No build step: vanilla JS, plain CSS. The design system is `public/app.css`; each page keeps only its own layout in one inline `<style>` block. Dark and light themes through the tokens: never write a colour into a stylesheet, use a token or a color-mix() of one (see `themes`); a page joins the light theme only when converted and marked `data-themeable`. No emoji, icon fonts or company logos.
 - One implementation per concept, in a shared module loaded by page, server and phone. Never a second copy in a page.
 - Scope every new CSS selector; unscoped classes (`.warn`, `.card`, `.sub`) have captured later markup nine times.
-- Green and red mean price up and down only. Amber means "notice this, it is stale or wrong". Other series use accent, blue or orange.
+- Green and red mean price up and down only, with one exception by the owner (2026-10-23): the guidance change label, Raised dark green and Lowered/Withdrawn dark red (tokens `--gch-*` in app.css, `ReleaseView.changeTag`). Amber means "notice this, it is stale or wrong". Other series use accent, blue or orange.
 - On the screener the page never scrolls; anything that appears above the table calls `paintWindow(true)`. Labels over a stretched SVG are HTML overlays, never SVG text.
 - Admin-only UI uses class `admin-only`, toggled by `applyAdminUI()`. The page-level escaper in `index.html` is `we()`.
 - No new dependencies for small jobs.

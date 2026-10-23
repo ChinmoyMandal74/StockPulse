@@ -512,7 +512,8 @@
     // Was 'Guide vs quarter' until 2026-10-23 (server.js FIELD_KEY_MOVED reads the old key as this).
     ['aier',  'Rev guide vs Q', (s) => V.smag(s.erGuideVsQ)],
     ['aier',  'EPS guide vs FY', (s) => V.smag(s.erEpsGuideVsFy)],
-    ['aier',  'Guidance change', (s) => V.text(s.erGuideChange)],
+    // Coloured as the owner asked (2026-10-23): Raised up, Lowered and Withdrawn down, Mixed amber.
+    ['aier',  'Guidance change', (s) => (s.erGuideChange ? { t: s.erGuideChange, c: /^Raised$/.test(s.erGuideChange) ? 'pos' : /^(Lowered|Withdrawn)$/.test(s.erGuideChange) ? 'neg' : /^Mixed$/.test(s.erGuideChange) ? 'warn' : '' } : null)],
     ['aier',  'Outlook',        (s) => V.text(s.erGuide)],
     ['aier',  '10-Q',           (s) => (s.erTenQ ? { t: s.erTenQ, c: s.erTenQ === 'Differs' ? 'warn' : '' } : null)],
     ['aier',  'Summary',        (s) => V.text(s.erSummary)],
