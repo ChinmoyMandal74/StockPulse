@@ -3369,6 +3369,10 @@ const MAIL_DARK_CSS = '<style>'
   + '.em-in{padding-left:12px !important;padding-right:12px !important}'
   + '.em-stat{display:inline-block !important;width:48% !important;box-sizing:border-box !important;margin:0 0 8px !important;vertical-align:top !important}'
   + '.em-gap{display:none !important}'
+  // A company's quarter goes under its name, so a long name is not squeezed
+  // into three lines beside it ("CACI International Inc. Class A").
+  + '.em-who{display:block !important;width:100% !important}'
+  + '.em-qtr{display:block !important;width:100% !important;text-align:left !important;white-space:normal !important;padding-top:3px !important}'
   + '.em-fig{display:inline-block !important;width:49% !important;box-sizing:border-box !important;margin:0 0 10px !important;vertical-align:top !important}'
   + '}'
   + '</style>';
@@ -3611,9 +3615,9 @@ function releaseDigestEmail(rels, names) {
     return `<table class="em-box" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st(`margin:14px 0 0;border:1px solid ${MC.line};border-radius:12px;border-collapse:separate`)}>`
       // Who and which quarter.
       + `<tr><td class="em-in"${st('padding:14px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
-      + `<td valign="baseline"><span${st(`font-family:${mono};font-size:15px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</span>`
+      + `<td class="em-who" valign="baseline"><span${st(`font-family:${mono};font-size:15px;font-weight:700;color:${MC.ink}`)}>${mailEsc(r.symbol)}</span>`
       + `<span${st(`font-size:14px;color:${MC.body}`)}>&nbsp;&nbsp;${mailEsc(names[r.symbol] || '')}</span></td>`
-      + `<td align="right" valign="baseline" class="em-quiet"${st(`font-size:12px;color:${MC.faint};white-space:nowrap`)}>${mailEsc(r.periodLabel || '')}</td>`
+      + `<td align="right" valign="baseline" class="em-quiet em-qtr"${st(`font-size:12px;color:${MC.faint};white-space:nowrap`)}>${mailEsc(r.periodLabel || '')}</td>`
       + '</tr></table></td></tr>'
       // The figures.
       + `<tr><td class="em-in"${st('padding:12px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
