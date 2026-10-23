@@ -45,7 +45,7 @@ const JOBS = [
   {
     id: 'news', name: 'Headlines', task: 'TickrLab news', host: 'laptop', script: 'news-ping.js', taskScript: 'news-task.ps1',
     days: ALL_DAYS, times: ['09:00', '13:00', '17:00'], minutes: 6,
-    spends: { kind: 'free', text: 'Free (Yahoo Finance feeds)' },
+    spends: { kind: 'free', text: 'Free (Google News search feeds, keyless)' },
     what: 'Tops up the headlines for the stocks whose news is oldest, batch by batch until nothing is stale.',
     log: '/news-runs',
   },
@@ -53,7 +53,7 @@ const JOBS = [
     id: 'tone', name: 'Article tone', task: 'TickrLab news tone', host: 'laptop', script: 'news-tone-load.js', taskScript: 'news-tone-task.ps1',
     days: ALL_DAYS, times: ['00:30', '06:30', '12:30', '18:30'], minutes: 15,
     spends: { kind: 'anthropic', text: 'Claude Haiku, capped at $3 a run' },
-    what: 'Reads each new article for the S&P 500 and the semiconductor stocks and stores its kind, tone and a two-sentence summary.',
+    what: 'Reads each new article in the Yahoo Finance feed of the S&P 500 and the semiconductor stocks and stores its kind, tone and a two-sentence summary.',
     log: '/news-runs',
   },
   {
