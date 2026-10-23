@@ -26,14 +26,14 @@ const JOBS = [
     days: WEEKDAYS, times: ['04:00', '16:00'], minutes: 55,
     spends: { kind: 'twelve', text: 'About 14,000 credits a run: ~171 profiles at 80, seven a minute, plus prices and up to five split calls' },
     what: 'The profile rotation, then the filings phases: SEC rotation, the SEC daily index (yesterday\'s 8-Ks and 13D/13G), short interest, index holdings, insider filings, splits and options open interest.',
-    log: '/refresh-runs',
+    log: '/refreshes',
   },
   {
     id: 'intraday', name: 'Intraday prices', task: 'TickrLab intraday prices', host: 'laptop', script: 'intraday-ping.js', taskScript: 'intraday-task.ps1',
     days: WEEKDAYS, repeat: { start: '09:45', every: 30, last: '15:45' }, minutes: 3,
     spends: { kind: 'twelve', text: 'About 1 credit a stock (~1,300 a run), thirteen runs a day' },
     what: 'Live prices for the whole universe through the session. No 16:00 run: the evening nightly records the settled close.',
-    log: '/refresh-runs',
+    log: '/refreshes',
   },
   {
     id: 'releases', name: 'Earnings releases', task: 'TickrLab earnings releases', host: 'laptop', script: 'release-load.js', taskScript: 'release-task.ps1',
@@ -68,7 +68,7 @@ const JOBS = [
     days: ALL_DAYS,
     spends: { kind: 'free', text: 'Free' },
     what: 'Runs on Vercel, not the laptop, so a laptop that slept is still noticed: mails the owner when the nightly did not run.',
-    log: '/refresh-runs',
+    log: '/refreshes',
   },
 ];
 

@@ -39,6 +39,12 @@ for (const j of S.JOBS.filter((x) => x.taskScript)) {
   ok(!/[^\x00-\x7F]/.test(src), j.taskScript + ' is ASCII');
 }
 
+// Every job's log link is a page the server serves (it once said /refresh-runs).
+{
+  const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  for (const j of S.JOBS) ok(srv.includes("app.get('" + j.log + "'"), j.id + ': its log link ' + j.log + ' is a page');
+}
+
 // ---- 2. The Twelve Data windows (the recon refresh asks busyAt) ------------
 const at = (iso) => S.busyAt(new Date(iso));
 ok(/nightly/.test(at('2026-10-22T08:00:00Z')), '04:00 ET Thu: nightly window');

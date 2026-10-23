@@ -2019,6 +2019,8 @@ app.get('/export', route(async (req, res) => {
 }));
 
 // Admin only: every refresh run, manual or scheduled, with its rounds.
+// The scheduled jobs page linked here by the wrong name for a day (2026-10-23).
+app.get('/refresh-runs', (req, res) => res.redirect(301, '/refreshes'));
 app.get('/refreshes', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'refreshes');
