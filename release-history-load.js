@@ -14,6 +14,8 @@
 //                              outlook but have no stated change, writing ONLY the
 //                              guidance columns, then work out Initiated from the
 //                              history for every company (2026-10-24)
+//   ... --initiated            the Initiated rule over every company, no model:
+//                              stored "initiated" kept or cleared, blanks filled
 //   ... --force --symbols NVDA read those companies' filings again, replacing
 //                              the stored readings (after a reader fix)
 //
@@ -56,6 +58,9 @@ const SYMBOLS = (opt('--symbols', '') || '').toUpperCase().split(',').map((s) =>
 const LIMIT = Math.max(0, Number(opt('--limit', 0)) || 0);
 const FORCE = flag('--force') && SYMBOLS.length > 0;
 const RECHANGE = flag('--rechange');
+// --initiated: the history rule over every company, nothing read again
+// (no model, no SEC): stored "initiated" checked, blanks filled.
+const INITIATED = flag('--initiated');
 const CONC = Math.max(1, Math.min(8, Number(opt('--conc', 4)) || 4));
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 600)) || 600;
@@ -163,7 +168,7 @@ function refAt(facts, filed) {
 const inflight = new Set();
 async function slot() { while (inflight.size >= CONC) await Promise.race(inflight); }
 let stopErr = null;
-const tally = { rechanged: 0, kinds: {}, initiated: 0, companies: 0, listed: 0, known: 0, read: 0, results: 0, notResults: 0, flagged: 0, failed: 0, written: 0, checked: 0, differ: 0, noRef: 0 };
+const tally = { iniKept: 0, iniCleared: 0, rechanged: 0, kinds: {}, initiated: 0, companies: 0, listed: 0, known: 0, read: 0, results: 0, notResults: 0, flagged: 0, failed: 0, written: 0, checked: 0, differ: 0, noRef: 0 };
 const logLine = (s) => console.log(s);
 const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
 
@@ -171,10 +176,24 @@ const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
 // company's results releases with no stated change that gives the first
 // full-year guidance on file for a year (Releases.initiatedFrom). Only that
 // column and its quote are written.
-async function initiatedPass(sym) {
+// With `recheck` (--initiated, the owner's OK of 2026-10-24) a stored
+// "initiated" from before the rule (the model's own word) is tested too: kept
+// where the history agrees, cleared where it does not or cannot say.
+async function initiatedPass(sym, recheck) {
   const rows = await store.readEarningsReleases(sym, 160).catch(() => []);
   for (const r of rows) {
-    if (!r.isResults || r.guideChange) continue;
+    if (!r.isResults) continue;
+    if (r.guideChange === 'initiated' && recheck) {
+      const v = Rel.initiatedVerdict(r, rows).verdict;
+      if (v === 'yes') { tally.iniKept++; continue; }
+      // The history cannot say, or the company says in words it is starting
+      // full-year guidance (again): its words stand.
+      if (v === 'unknown' || Rel.saysFullYearStart(r.guideChangeQuote)) { tally.iniWords = (tally.iniWords || 0) + 1; continue; }
+      tally.iniCleared++;
+      if (COMMIT) await store.writeReleaseChange(r.accn, null, null);
+      continue;
+    }
+    if (r.guideChange) continue;
     const it = Rel.initiatedFrom(r, rows);
     if (!it) continue;
     tally.initiated++;
@@ -277,6 +296,12 @@ async function readOne(sym, e, meta, text, facts) {
   if (LIMIT) rows = rows.slice(0, LIMIT);
   console.log(`[${new Date().toISOString()}] results releases filed since ${SINCE}: ${rows.length} companies; model ${MODEL}, ${CONC} at once; `
     + `stop at $${MAX_USD.toFixed(2)} or ${MAX_MIN} min. ` + (LIST_ONLY ? 'LIST ONLY' : COMMIT ? 'COMMIT' : 'DRY RUN: nothing will be written'));
+  if (INITIATED) {
+    console.log('  INITIATED: the history rule over every company; stored "initiated" checked against it');
+    for (const r of rows) { await initiatedPass(r.symbol, true); tally.companies++; }
+    console.log('  initiated: ' + tally.iniKept + ' kept (the history agrees), ' + (tally.iniWords || 0) + ' kept on the company’s words (the history cannot say),' + tally.iniCleared + ' cleared (the history says otherwise), ' + tally.initiated + ' newly marked; ' + (COMMIT ? 'written' : 'DRY RUN, nothing written'));
+    process.exit(0);
+  }
   if (RECHANGE) { console.log('  RECHANGE: the stored releases with an outlook and no stated change, read again; then Initiated from the history'); await rechangeRun(rows); finish(); process.exit(0); }
   let stop = 'done';
   outer:

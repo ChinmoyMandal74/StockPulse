@@ -267,7 +267,7 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
       + 'Updating full year 2019 Adjusted EBITDA guidance to a range of $550 million to $570 million from $610 million to $630 million. '
       + 'The company now expects revenue growth of 7 to 7.5%, up from the prior guidance of 6 to 7%. '
       + 'The company continues to expect organic sales growth of 3% for 2017. Consistent with the prior outlook, full-year EPS is forecast to be between $3.14 and $3.30. '
-      + 'Company Provides 2024 Financial Outlook. Revenue of $15.1 billion, compared with prior guidance of $15.1 billion. Full-year 2017 earnings guidance maintained; 2018 guidance initiated.';
+      + 'Company Provides 2024 Financial Outlook. Revenue of $15.1 billion, compared with prior guidance of $15.1 billion. Full-year 2017 earnings guidance maintained; 2018 guidance initiated. Company initiates second-quarter 2020 operating earnings guidance of $0.75 to $0.85.';
     const n2 = t2.replace(/\s+/g, ' '), p2 = [];
     const gc = (direction, quote, compared) => Rel.guideChange({ direction, quote, compared: compared || [] }, n2, p2);
     const up = { measure: 'GAAP EPS', from_printed: '$5.94 to $6.14', to_printed: '$6.24 to $6.44' };
@@ -289,7 +289,11 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
     check('change: "continues to expect" and "consistent with the prior outlook" say reaffirmed',
       gc('reaffirmed', 'The company continues to expect organic sales growth of 3% for 2017').change === 'reaffirmed'
       && gc('reaffirmed', 'Consistent with the prior outlook, full-year EPS is forecast to be between $3.14 and $3.30').change === 'reaffirmed');
-    check('change: the model\'s "initiated" is never taken (worked out from the history)', gc('initiated', 'Full-year 2017 earnings guidance maintained; 2018 guidance initiated').change === null);
+    check('change: full-year guidance started (again) in the company\'s words stands; a quarterly "initiates" does not',
+      Rel.saysFullYearStart('Company Initiates Full-Year 2024 Guidance Reflecting Completion of Solventum Spin') && Rel.saysFullYearStart('UnitedHealth Group Re-Establishes Full Year Outlook')
+      && !Rel.saysFullYearStart('The Company initiated fiscal 2024 third quarter guidance:') && !Rel.saysFullYearStart('Company initiates second-quarter 2020 operating earnings guidance')
+      && !Rel.saysFullYearStart('Company Provides 2024 Financial Outlook'));
+    check('change: the model\'s "initiated" is never taken (worked out from the history)', gc('initiated', 'Company initiates second-quarter 2020 operating earnings guidance of $0.75 to $0.85').change === null && gc('initiated', 'Full-year 2017 earnings guidance maintained; 2018 guidance initiated').change === 'initiated');
     gc('lowered', 'Company Provides 2024 Financial Outlook');
     check('change: a refused claim keeps its quote in the notes', /the quote does not say so \("Company Provides 2024 Financial Outlook"\)/.test(p2[p2.length - 1]), p2[p2.length - 1]);
     check('printed: a dash between figures is a range, brackets a loss', Rel.printedMid('$15.1 - $15.5 billion', null).mid === 15.3 && Math.abs(Rel.printedMid('($4.52) to ($4.45)', null).mid + 4.485) < 1e-9);

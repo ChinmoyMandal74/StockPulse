@@ -403,6 +403,12 @@ function comparedDirection(list, norm) {
   const change = up && down ? 'mixed' : up ? 'raised' : down ? 'lowered' : 'reaffirmed';
   return { change, pairs };
 }
+function saysFullYearStart(q) {
+  const t = String(q || '');
+  return /\b(initiat|re-?establish|reinstat|re-?introduc)\w*/i.test(t)
+    && /\b(full[- ]year|annual|fiscal(\s+year)?\s+(20)?\d\d|\b20\d\d\s+(financial\s+)?(outlook|guidance))/i.test(t)
+    && !/\b(first|second|third|fourth|1st|2nd|3rd|4th)[- ]quarter|\bq[1-4]\b/i.test(t);
+}
 // A refused claim keeps its quote in the reading's notes, so a blank can be
 // looked into later without reading the release again.
 const said = (q) => (q ? ' ("' + String(q).replace(/\s+/g, ' ').slice(0, 140) + '")' : '');
@@ -429,6 +435,12 @@ function guideChange(c, norm, problems) {
   // INITIATED IS WORKED OUT FROM THE HISTORY (the owner's choice, 2026-10-24):
   // the first full-year guidance on file for a year (initiatedFrom), never the
   // model's word, which it gave to every routine outlook.
+  // ONE EXCEPTION, the company's own words: a quote that says it is
+  // initiating, re-establishing or reinstating FULL-YEAR guidance (3M's
+  // "Initiates Full-Year 2024 Guidance" after a spin-off, UnitedHealth's
+  // "Re-Establishes Full Year Outlook" after withdrawing it). A quarterly
+  // "initiates second-quarter guidance" is not one.
+  if (d === 'initiated' && quoteOk && saysFullYearStart(quote0)) return { change: 'initiated', quote: quote0.slice(0, 200) };
   if (!d || d === 'none' || d === 'initiated') return { change: null, quote: null };
   // 2. The words, where there are no figures to compare.
   const quote = quote0;
@@ -450,19 +462,30 @@ function guideChange(c, norm, problems) {
 // those 450 days read for its guidance items. `earlier`: the company's other
 // readings (any order; later ones and non-results are ignored). Returns the
 // item the release initiates (its sentence is the company's words), or null.
-function initiatedFrom(row, earlier) {
-  if (!row || !row.isResults || row.guideChange || !Array.isArray(row.guides) || !row.filed) return null;
+// THE VERDICT behind it: 'yes' (with the item), 'no' (no full-year guidance,
+// or every year it guides was guided before), or 'unknown' (the history on
+// file cannot say: less than a year of it, or an earlier release never read
+// for its items). A stored "initiated" is cleared only on 'no' (2026-10-24):
+// where the history cannot say, the company's own words stand.
+function initiatedVerdict(row, earlier) {
+  if (!row || !row.isResults || !row.filed || !Array.isArray(row.guides)) return { verdict: 'unknown', item: null };
   const fy = row.guides.filter((g) => g && g.periodType === 'full_year' && guideYear(g.periodLabel));
-  if (!fy.length) return null;
+  if (!fy.length) return { verdict: 'no', item: null };
   const day = (d) => Date.parse(String(d) + 'T12:00:00Z');
   const t = day(row.filed);
   const prior = (earlier || []).filter((r) => r && r.isResults && r.filed && r.filed < row.filed && r.accn !== row.accn);
-  if (!prior.some((r) => t - day(r.filed) >= 330 * 86400000)) return null;
+  if (!prior.some((r) => t - day(r.filed) >= 330 * 86400000)) return { verdict: 'unknown', item: null };
   const window = prior.filter((r) => t - day(r.filed) <= 450 * 86400000);
-  if (window.some((r) => !Array.isArray(r.guides))) return null;
+  if (window.some((r) => !Array.isArray(r.guides))) return { verdict: 'unknown', item: null };
   const seen = new Set();
   for (const r of window) for (const g of r.guides) if (g && g.periodType === 'full_year') { const y = guideYear(g.periodLabel); if (y) seen.add(y); }
-  return fy.find((g) => !seen.has(guideYear(g.periodLabel))) || null;
+  const item = fy.find((g) => !seen.has(guideYear(g.periodLabel))) || null;
+  return item ? { verdict: 'yes', item } : { verdict: 'no', item: null };
+}
+function initiatedFrom(row, earlier) {
+  if (!row || row.guideChange) return null;
+  const v = initiatedVerdict(row, earlier);
+  return v.verdict === 'yes' ? v.item : null;
 }
 // THE YEAR A FULL-YEAR ITEM IS FOR, from its label ("fiscal 2027", "FY27",
 // "full year 2026"); null when it names none.
@@ -721,4 +744,4 @@ function trackRecord(rows) {
     revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
 }
 
-module.exports = { printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
