@@ -9,6 +9,7 @@
 //   node --use-system-ca release-history-load.js --commit --max-usd 10
 //   ... --symbols NVDA,GE      those companies only
 //   ... --since 2017-01-01     the first filing date read (the default)
+//   ... --skip 900             start at the 900th company by market value
 //   ... --list-only            count the filings, call no model (SEC fetches only)
 //   ... --rechange             read again the stored results releases that gave an
 //                              outlook but have no stated change, writing ONLY the
@@ -56,6 +57,9 @@ const LIST_ONLY = flag('--list-only');
 const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since') : '2017-01-01';
 const SYMBOLS = (opt('--symbols', '') || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
 const LIMIT = Math.max(0, Number(opt('--limit', 0)) || 0);
+// --skip N: start at the Nth company by market value (a run resumed after
+// the companies already done, rather than listing them again).
+const SKIP = Math.max(0, Number(opt('--skip', 0)) || 0);
 const FORCE = flag('--force') && SYMBOLS.length > 0;
 const RECHANGE = flag('--rechange');
 // --initiated: the history rule over every company, nothing read again
@@ -293,6 +297,7 @@ async function readOne(sym, e, meta, text, facts) {
   let rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && r.instrumentType !== 'ETF' && ids[r.symbol]);
   if (SYMBOLS.length) rows = rows.filter((r) => SYMBOLS.includes(r.symbol));
   rows.sort((x, y) => (Number(y.marketCap) || 0) - (Number(x.marketCap) || 0));
+  if (SKIP) rows = rows.slice(SKIP);
   if (LIMIT) rows = rows.slice(0, LIMIT);
   console.log(`[${new Date().toISOString()}] results releases filed since ${SINCE}: ${rows.length} companies; model ${MODEL}, ${CONC} at once; `
     + `stop at $${MAX_USD.toFixed(2)} or ${MAX_MIN} min. ` + (LIST_ONLY ? 'LIST ONLY' : COMMIT ? 'COMMIT' : 'DRY RUN: nothing will be written'));
