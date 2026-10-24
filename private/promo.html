@@ -2394,6 +2394,18 @@
         <p class="hint" id="igMsg"></p>
       </div>
 
+      <!-- The card as a video (2026-10-23, admin only): shown under any card
+           cardvideo.js draws, 9:16 for Instagram Reels and YouTube Shorts. -->
+      <div id="cvBox" hidden>
+        <label style="margin-top:22px">This card as a video (9:16)</label>
+        <div id="cvMusic"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" id="cvPlay" type="button">Play</button>
+          <button class="btn" id="cvRec" type="button">Record the video</button>
+        </div>
+        <p class="hint" id="cvMsg">The card's own figures, scene by scene, for Instagram Reels and YouTube Shorts. Record saves an MP4 (Chrome) at 1080 by 1920, in real time, so keep the tab in front. The card's choices (the stock, the group, the colour) carry into the video.</p>
+      </div>
+
       <button class="btn" id="reloadBtn">Re-pull tonight's data</button>
 
       <!-- Saved posts: the card as it stands, named and kept, so it can be
@@ -2432,6 +2444,7 @@
   <script src="/cardshot.js"></script>
   <script src="/reel.js"></script>
   <script src="/trackreel.js"></script>
+  <script src="/cardvideo.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -3891,6 +3904,51 @@
         render();
       }
     }
+    // ---- the card videos (2026-10-23, admin only) ------------------------------
+    // CardVideo.paint draws any frame from the time alone, from the card's own
+    // figures (Cards.videoFrame), so a video and its card cannot disagree.
+    let cvBusy = false;
+    const cvMusic = Reel.musicPicker($('cvMusic'));
+    const cvMsg = (t, cls) => { const m = $('cvMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+    async function cardVideoRun(record) {
+      if (cvBusy) return;
+      const M = Cards.videoFrame(tpl, cardCtx()).model;
+      if (!M) { cvMsg('The card has nothing to animate yet: let its data load, or pick a stock or group with figures on file.', 'warn'); return; }
+      if (record && !Reel.mime()) { cvMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      cvBusy = true;
+      $('cvPlay').disabled = $('cvRec').disabled = true;
+      const stage = $('stage');
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const cv = document.createElement('canvas');
+        cv.width = CardVideo.W; cv.height = CardVideo.H;
+        cv.style.display = 'block';
+        stage.style.height = CardVideo.H + 'px';
+        stage.innerHTML = '';
+        stage.appendChild(cv);
+        const g = cv.getContext('2d');
+        const len = CardVideo.duration(M);
+        cvMsg(record ? 'Recording \u2014 keep this tab in front for ' + Math.round(len / 1000) + ' seconds.' : 'Playing\u2026');
+        const out = await Reel.run(cv, len, (t) => CardVideo.paint(g, M, t), record, cvMusic.get());
+        if (out) {
+          const { blob, ext } = out;
+          const name = tpl + (M.sym ? '-' + String(M.sym).toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') + '.' + ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          cvMsg('Saved ' + name + ' (' + (blob.size / 1e6).toFixed(1) + ' MB' + (ext === 'webm' ? '; this browser records WebM \u2014 use Chrome for MP4' : '') + ').', ext === 'webm' ? 'warn' : '');
+        } else cvMsg('Played. Record to save it as a video.');
+      } catch (e) {
+        cvMsg('Could not make the video: ' + (e && e.message ? e.message : e), 'warn');
+      } finally {
+        cvBusy = false;
+        $('cvPlay').disabled = $('cvRec').disabled = false;
+        render();
+      }
+    }
+    $('cvPlay').addEventListener('click', () => cardVideoRun(false));
+    $('cvRec').addEventListener('click', () => cardVideoRun(true));
     $('tkPlay').addEventListener('click', () => trackRun(false));
     $('tkRec').addEventListener('click', () => trackRun(true));
     // ---- Video from cards (2026-10-20, admin only) -----------------------------
@@ -4509,6 +4567,7 @@
       $('glcBox').style.display = tpl === 'glance' ? 'block' : 'none';
       $('srBox').style.display = tpl === 'stkresults' ? 'block' : 'none';
       $('tkBox').style.display = tpl === 'stktrack' ? 'block' : 'none';
+      $('cvBox').hidden = !(canAnnounce && window.CardVideo && CardVideo.has(tpl));
       $('tkVideo').hidden = !canAnnounce;
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';

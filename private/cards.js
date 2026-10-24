@@ -622,6 +622,14 @@
       const verdict = (s) => (scored[s.symbol] || {}).action || null;
       const flagOf = (s) => (scored[s.symbol] || {}).flag || null;
       const rows = scope.rows.filter((s) => verdict(s));
+      if (vidCap && rows.length) {
+        const tl = {};
+        rows.forEach((s) => { const fl = flagOf(s); if (fl) { tl[fl] = tl[fl] || { n: 0, w: verdict(s) }; tl[fl].n++; } });
+        vidCap.model = { kind: 'advboard', label: scope.label, n: rows.length,
+          ladder: ActionRules.ACTIONS.slice().reverse().map((w) => ({ word: w, color: pal.tints[w] || pal.flat, n: rows.filter((s) => verdict(s) === w).length })),
+          rules: Object.entries(tl).sort((a, b) => b[1].n - a[1].n).slice(0, 5).map(([fl, g]) => ({ flag: fl, n: g.n, word: g.w, color: pal.tints[g.w] || pal.flat })),
+          date: dateStr().split(' \u00b7 ')[0], ink: reelInk(pal) };
+      }
       const prof = profile === 'Balanced' ? '' : ` \u00b7 ${profile} rules`;
 
       if (!rows.length) {
@@ -1888,6 +1896,10 @@
     let raceCap = null;
     // The Reel's hook (2026-10-19): tplReel leaves every number it would paint here.
     let reelCap = null;
+    // THE CARD VIDEOS' HOOK (2026-10-23, private/cardvideo.js): a template the
+    // videos cover leaves the figures it draws here, worded, when
+    // Cards.videoFrame asks. Unset, nothing changes.
+    let vidCap = null;
     // THE CHART FILLS ITS CARD (2026-10-16, the owner, over a Race chart with a
     // gap above the kicker and another above the footer). The body centres its
     // content, so a fixed chart height left the spare room split in two. The
@@ -4287,6 +4299,15 @@
     // taken off a loss, which are arithmetic rather than cheapness.
     const peF = (v) => (v == null ? '\u2014' : (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(1)) + '\u00d7');
 
+    if (vidCap) {
+      const fc = (l, a, b, fm, plain) => { const ch = evoChange(a, b); return { label: l, from: fm(a), to: fm(b), change: ch ? ch.t : '\u2014', dir: ch && !plain ? ch.c : null }; };
+      const num = (v) => (v == null || !isFinite(v) ? null : v);
+      vidCap.model = { kind: 'evolution', name: nameOf(row), sym, kick: [row.sector, row.industry].filter(Boolean).join(' \u00b7 ') || 'From the filings', mLabel, from: dates[0], to: dates[dates.length - 1],
+        series: series.map(num), caps: vCaps.map(num), measureNow: fmtM(at(Z, field)), capNow: money(at(V, 'cap')),
+        figures: [fc('Revenue', at(A, 'revenue'), at(Z, 'revenue'), money), fc('Earnings', at(A, 'netIncome'), at(Z, 'netIncome'), money),
+          fc('Market value', at(A, 'cap'), at(V, 'cap'), money), fc('P/E', at(A, 'pe'), at(V, 'pe'), peF, true)],
+        date: dateStr().split(' \u00b7 ')[0], ink: reelInk(pal) };
+    }
     const span = dates[0] + ' \u2192 ' + dates[dates.length - 1];
     const whole = ev.total != null && pts.length >= ev.total;
     const kick = [row.sector, row.industry].filter(Boolean).join(' \u00b7 ') || 'From the filings';
@@ -9383,6 +9404,14 @@
       + '<span>Open-market trades</span><span class="sb-hr" style="color:' + A + '">Bought</span><span class="sb-hr" style="color:' + B + '">Sold</span></div>';
     const day = (iso) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t.getTime()) ? iso : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
     const starred = top.some((p) => p.sold > 0 && p.allPlanned);
+    if (vidCap) {
+      vidCap.model = { kind: 'insiders', name: n, sym, span, bought: W.bought.trades ? money(W.bought.value) : '\u2014', sold: W.sold.trades ? money(W.sold.value) : '\u2014',
+        boughtN: W.bought.trades || 0, soldN: W.sold.trades || 0, boughtP: W.bought.people || 0, soldP: W.sold.people || 0,
+        net: W.net == null ? '\u2014' : (W.net > 0 ? '+' : '') + money(W.net), netWord: W.net == null ? 'no priced trades' : W.net > 0 ? 'more bought than sold' : W.net < 0 ? 'more sold than bought' : 'even',
+        planned: W.plannedShare == null ? null : Math.round(W.plannedShare) + '%',
+        people: top.slice(0, 7).map((p) => ({ name: p.name, role: p.role || '', b: p.bought / scale, s: p.sold / scale, bt: p.bought > 0 ? money(p.bought) : '', st: p.sold > 0 ? money(p.sold) : '' })),
+        a: pal.ink('#7c9cff'), bc: B, date: dateStr().split(' \u00b7 ')[0], ink: reelInk(pal) };
+    }
     const note = 'Open-market purchases and sales of ' + sym + ' shares by its own officers, directors and largest holders, from the Form 4s filed with the SEC in the ' + span + ' to ' + day(data.digest.today) + '. '
       + (W.peopleCount > top.length ? 'These are the ' + top.length + ' with the largest net amounts, of ' + W.peopleCount + '. ' : '')
       + 'Stock received as pay, option exercises and shares withheld for tax are not trades and are left out. '
@@ -9774,6 +9803,12 @@
         + tf('Positive', String(W.positive), Math.round(W.positive / W.count * 100) + '% of them', POS, POS)
         + tf('Negative', String(W.negative), Math.round(W.negative / W.count * 100) + '% of them', NEG, NEG)
       : tf('Average tone', '—', 'none in the last 7 days', null, NEU) + tf('Articles read', '0', 'in the last 7 days', null, CNT) + tf('Positive', '—', '', null, POS) + tf('Negative', '—', '', null, NEG);
+    if (vidCap) {
+      vidCap.model = { kind: 'tonestock', name: n, sym,
+        week: W ? { avg: toneNum(W.avg), word: toneLabel(W.avg), color: colorOf(W.avg), count: W.count, pos: W.positive, neg: W.negative } : null,
+        items: items.slice(0, 4).map((x) => ({ head: x.headline, label: toneLabel(x.tone) + ' ' + toneNum(x.tone), color: colorOf(x.tone) || NEU, meta: [day(x.published_at), x.source].filter(Boolean).join(' · ') })),
+        pos: POS, neg: NEG, neu: NEU, date: dateStr().split(' · ')[0], ink: reelInk(pal) };
+    }
     const list = items.map((x) => {
       const c = colorOf(x.tone);
       const meta = [day(x.published_at), x.source, x.kindLabel].filter(Boolean).join(' · ');
@@ -11095,6 +11130,17 @@
     const head = '<span class="s-kick">' + esc((row && !IS_BENCH.has(row.symbol) && label !== row.symbol ? row.symbol + ' \u00b7 ' : '')
       + ddDay(an.from) + ' to ' + ddDay(an.to)) + '</span>'
       + '<h2 class="s-title">' + esc(label) + '<span class="dim">below its own high</span></h2>';
+    if (vidCap) {
+      const step = Math.max(1, Math.ceil(an.under.length / 360)), pick = [];
+      for (let i = 0; i < an.under.length; i += step) pick.push(i);
+      if (pick[pick.length - 1] !== an.under.length - 1) pick.push(an.under.length - 1);
+      const at = (k) => { const j = pick.findIndex((i) => i >= k); return j < 0 ? pick.length - 1 : j; };
+      const top3 = an.episodes.slice().sort((a, b) => a.depth - b.depth).slice(0, 3);
+      vidCap.model = { kind: 'drawdown', name: label, sym: need.symbol, from: ddDay(an.from), to: ddDay(an.to), dates: pick.map((i) => an.dates[i]), under: pick.map((i) => an.under[i]),
+        worst: an.worst, min: an.min, count: an.episodes.length, recovered: an.recovered, medBack: an.medBack, now: an.now.pct, nowSince: ddDay(an.now.since),
+        episodes: top3.map((e) => ({ depth: e.depth, peak: ddDay(e.peakDate), trough: ddDay(e.troughDate), back: e.daysBack, ti: at(e.ti) })),
+        date: dateStr().split(' \u00b7 ')[0], ink: reelInk(pal) };
+    }
     const note = ddSummary(an) + ' Each point is how far the close sat below the highest close before it in this window. '
       + 'The window opens on ' + ddDay(an.from) + ' and cannot see a high before that, so a drawdown marked \u201cbefore\u201d was already under way. '
       + 'Prices are split-adjusted and leave out dividends. What happened, not what happens next.';
@@ -11238,6 +11284,15 @@
     const lists = Array.isArray(H.buyers) && Array.isArray(H.sellers)
       ? '<div class="ifl-two">' + list(H.buyers, 'Added the most, ' + (H.quarter || '')) + list(H.sellers, 'Cut the most') + '</div>' : '';
 
+    if (vidCap) {
+      const mv = (m) => (m.value == null ? shs(m.delta) : (m.value > 0 ? '+' : '') + usd(m.value));
+      vidCap.model = { kind: 'instflow', name: label, sym: need.symbol, span: qs.length >= 2 ? first.quarter + ' to ' + last.quarter : (H.quarter || ''),
+        quarters: qs.map((q) => ({ q: short(q), change: q.change, text: sg(q.change) })),
+        managers: Number(H.managers).toLocaleString('en-US'), held: qs.length >= 2 ? sg((chain - 1) * 100) : sg(H.sharesChange), lastQ: sg(H.sharesChange), worth: usd(H.value), quarter: H.quarter || '',
+        buyers: (H.buyers || []).slice(0, 5).map((m) => ({ name: m.name, v: mv(m), tag: m.isNew ? 'new' : '' })),
+        sellers: (H.sellers || []).slice(0, 5).map((m) => ({ name: m.name, v: mv(m), tag: m.isExit ? 'exited' : '' })),
+        up: pal.ink('#7c9cff'), dn: pal.ink('#fb923c'), date: dateStr().split(' · ')[0], ink: reelInk(pal) };
+    }
     const head = '<span class="s-kick">' + esc((label !== need.symbol ? need.symbol + ' · ' : '') + '13F managers · '
       + (qs.length >= 2 ? first.quarter + ' to ' + last.quarter : (H.quarter || ''))) + '</span>'
       + '<h2 class="s-title">' + esc(label) + '<br><span class="dim">who added, who cut</span></h2>';
@@ -12565,6 +12620,7 @@
       + '<span><i class="rs-no"></i>' + all.unstated + ' no change stated</span></div>';
     const chip = (k) => (k && HEX[k] ? '<span class="sr-pill gs-pill" style="background:' + HEX[k] + '">' + esc(WORD[k] || k) + '</span>' : '');
     let table, lists = '';
+    const VC = { groups: [], raised: [], lowered: [], cos: [] };
     if (dim === 'market' || dim === 'sector') {
       const key = dim === 'market' ? 'sector' : 'industry';
       const word = dim === 'market' ? ['Sector', 'sectors', 'sector'] : ['Industry', 'industries', 'industry'];
@@ -12587,6 +12643,9 @@
       const line = (title, k, list) => (list.length ? '<div class="gs-list">' + chip(k) + '<span>' + list.slice(0, maxSyms).map((x) => esc(x.m.symbol)).join(' · ')
         + (list.length > maxSyms ? ' <em>and ' + (list.length - maxSyms) + ' more</em>' : '') + '</span></div>' : '');
       lists = line('Raised', 'raised', who(['raised'])) + line('Lowered', 'lowered', who(['lowered', 'withdrawn']));
+      VC.groups = gRows.slice(0, 8).map((x) => ({ k: x.k, gave: x.s.gave, n: x.s.n, raised: x.s.raised, reaffirmed: x.s.reaffirmed, lowered: x.s.lowered + x.s.withdrawn }));
+      VC.raised = who(['raised']).map((x) => x.m.symbol);
+      VC.lowered = who(['lowered', 'withdrawn']).map((x) => x.m.symbol);
     } else {
       // A row a company: those reported this season first, the largest first.
       const byM = new Map(inSeason.map((x) => [x.m.symbol, x]));
@@ -12604,6 +12663,8 @@
           + '<span>' + state + '</span>'
           + '<span>' + esc(g.epsVsFy != null ? sg(g.epsVsFy) : g.revVsQ != null ? sg(g.revVsQ) : '—') + '</span></div>';
       };
+      VC.cos = ordered.slice(0, 12).map((m) => { const x = byM.get(m.symbol); const k = x && x.r.guideChange && HEX[x.r.guideChange] ? x.r.guideChange : null;
+        return { sym: m.symbol, name: nameOf(m), state: !x ? 'not yet reported' : k ? (WORD[k] || k) : gave(x.r) ? 'no change stated' : 'no guidance given', color: k ? HEX[k] : null }; });
       table = '<div class="rs-tab gs-tab"><div class="rs-r rs-co rs-hd"><span class="rs-sym rs-hdsym">Company</span><span></span><span>Reported</span><span>Guidance</span><span>Vs. prior</span></div>'
         + ordered.slice(0, maxRows).map(crow).join('')
         + (ordered.length > maxRows ? '<div class="fd-more">and ' + (ordered.length - maxRows) + ' more compan' + (ordered.length - maxRows === 1 ? 'y' : 'ies') + '</div>' : '') + '</div>';
@@ -12616,6 +12677,13 @@
       + 'guidance with no such statement counts as no change stated. '
       + (dim === 'industry' || dim === 'theme' ? 'Vs. prior is full-year EPS guidance against the year before, else next quarter’s revenue guidance against this quarter. ' : 'Companies are listed largest first. ')
       + 'A record of what was said, not a forecast and not a reading of any stock.';
+    if (vidCap) {
+      vidCap.model = Object.assign({ kind: 'gdsum', dim, kick: 'Guidance summary · ' + label, title: dim === 'market' ? qName + ' guidance' : name, qName, asOf,
+        sub: all.gave + ' of ' + all.n + ' reported gave guidance', gave: all.gave, n: all.n,
+        counts: GS_KINDS.filter((k) => all[k]).map((k) => ({ word: WORD[k] || k, n: all[k], color: HEX[k] || null })).concat(all.unstated ? [{ word: 'No change stated', n: all.unstated, color: null }] : []),
+        groupWord: dim === 'market' ? 'sector' : 'industry', raisedColor: HEX.raised || null, loweredColor: HEX.lowered || null,
+        date: dateStr().split(' · ')[0], ink: reelInk(pal) }, VC);
+    }
     return chromeTop()
       + '<div class="s-body"><div class="rs-in">'
       + '<span class="s-kick">' + esc('Guidance summary · ' + label) + '</span>'
@@ -13086,6 +13154,13 @@
       + 'With about ' + years.length + ' readings a month and twelve months to choose from, one will always '
       + 'look special by chance — a record of what happened, not a pattern to trade.';
 
+    if (vidCap) {
+      const ys = years.slice(0, 5).reverse();
+      const num = (v) => (v == null || !isFinite(v) ? null : v);
+      vidCap.model = { kind: 'months', name: G.name, kick: G.kick(years.length + (years.length === 1 ? ' year' : ' years')), rel, years: ys, months: MON_NAMES.slice(),
+        cells: ys.map((y) => MON_NAMES.map((_, i) => num(val(y + '-' + String(i + 1).padStart(2, '0'))))), yearTot: ys.map((y) => num(valY(y))), lastYm,
+        date: dateStr().split(' · ')[0], ink: reelInk(pal) };
+    }
     const n = G.name;
     return chromeTop()
       + '<div class="s-body"><div class="mh-in">'
@@ -16617,6 +16692,12 @@
       trackCap = {};
       try { const html = this.build('stktrack', ctx); return { html, model: trackCap.model || null }; }
       finally { trackCap = null; }
+    },
+    // A card video's model (cardvideo.js): the same template, its figures captured.
+    videoFrame(tpl, ctx) {
+      vidCap = {};
+      try { const html = this.build(tpl, ctx); return { html, model: vidCap.model || null }; }
+      finally { vidCap = null; }
     },
     build(id, ctx) {
       const c = ctx || {};
