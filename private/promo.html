@@ -2602,10 +2602,10 @@
     // page's presentation and nothing else; cards.js, the server and the phone
     // know nothing about it.
     //
-    // So #tplSelect still holds an <option> per id. Inside the group exactly
-    // ONE is shown -- the sub-template last used -- and it reads 'Stock
-    // spotlight'; the others are hidden. Choosing the entry therefore comes
-    // back to the view you left.
+    // So #tplSelect holds ONE <option> a group (2026-10-24: hidden options
+    // listed every view on iOS), its value the sub-template last used and its
+    // text the group's name ('Stock spotlight'). Choosing the entry therefore
+    // comes back to the view you left; the views themselves are under Sub-template.
     const SPOT_NAME = 'Stock spotlight';
     const SPOT_VIEWS = [
       ['spotlight', 'Overview', 'spotSym'],
@@ -4684,21 +4684,30 @@
       const tpls = visibleTpls();
       // Rebuilt only when the LIST changes — /api/me decides whether the
       // owner-only template is in it, and that lands after the first paint.
-      const key = tpls.map((t) => t.id).join(',') + (picked ? '' : '|unpicked');
-      if ($('tplSelect').dataset.built !== key) {
-        $('tplSelect').innerHTML = (picked ? '' : '<option value="" disabled>Choose a template…</option>') + tpls.map((t) =>
-          `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
-        $('tplSelect').dataset.built = key;
-      }
       const grp = groupOf(tpl);
-      if (grp) grp.last = tpl;
-      for (const o of $('tplSelect').options) {
-        const g = groupOf(o.value);
-        if (!g) continue;
-        o.hidden = o.value !== g.last;
-        // The hidden ones are named in full for a browser that ignores
-        // `hidden` on an option and lists them anyway.
-        o.textContent = o.value === g.last ? g.name : g.name + ' — ' + g.views.find((v) => v[0] === o.value)[1];
+      if (grp && picked) grp.last = tpl;
+      // ONE ENTRY A GROUP, NO HIDDEN ONES (2026-10-24, the owner, on an iPhone:
+      // "why does template field also shows the sub template"). The list held
+      // an option for every template and hid all but one of each group, and
+      // iOS Safari ignores `hidden` on an option, so it listed every view as
+      // "Market — Narrow or broad" and the rest. Now a group is one option,
+      // its value the view last used in it (the views are chosen under
+      // Sub-template), and a template outside any group is its own option.
+      const entries = [], seenG = new Set();
+      for (const t of tpls) {
+        const g = groupOf(t.id);
+        if (!g) { entries.push([t.id, t.name]); continue; }
+        if (seenG.has(g)) continue;
+        seenG.add(g);
+        const last = tpls.some((x) => x.id === g.last) ? g.last : (g.views.find((v) => tpls.some((x) => x.id === v[0])) || [t.id])[0];
+        g.last = last;
+        entries.push([last, g.name]);
+      }
+      const key = entries.map((e) => e[0] + ':' + e[1]).join(',') + (picked ? '' : '|unpicked');
+      if ($('tplSelect').dataset.built !== key) {
+        $('tplSelect').innerHTML = (picked ? '' : '<option value="" disabled>Choose a template…</option>')
+          + entries.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+        $('tplSelect').dataset.built = key;
       }
       // The picker is refilled only when the GROUP changes, so it is never
       // rebuilt under the pointer.

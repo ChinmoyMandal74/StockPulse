@@ -259,3 +259,6 @@ The owner: "When a user comes to promo do not load anything .. let the user sele
 - **A link that names a card** (`/promo?tpl=...`, the screener's drill-down) is a choice already made and loads at once (`boot()`).
 - `render()` draws the prompt until `picked` and `dataReady`; `dataReady` is set when the rows arrive.
 - Tested (scratchpad `pick-test.js`, 13 checks, a mock server logging every request): arrival as owner and as member, a group then its view, a template outside any group, switching afterwards, a `?tpl=` link, the member's list without the owner-only templates.
+
+## One entry a group in the Template list (2026-10-24)
+The owner, on an iPhone: "why does template field also shows the sub template". `#tplSelect` held an option for every template and hid all but the last-used one of each group with `option.hidden`; iOS Safari ignores `hidden` on an option, so the phone listed every view as "Market — Narrow or broad" and the rest. `paintControls` now builds one option a group (its value the view last used, its text the group's name) and one for each template outside any group; nothing is hidden. Choosing a group still returns to the view left in it, and the views are chosen under Sub-template. Tested in `pick-test.js` (16 checks): every entry visible, no "Group — view" entries before or after a choice, Market and back returning to the view left.
