@@ -222,6 +222,14 @@
     :root[data-theme="light"] .deck { background: var(--surface-2); }
     :root[data-theme="light"] .panel .sp-list { background: var(--surface); }
     :root[data-theme="light"] .ig-item button { background: var(--surface-2); }
+    /* NOTHING UNTIL A CHOICE (2026-10-24, the owner: "When a user comes to
+       promo do not load anything .. let the user select the template and sub
+       template first"). Until then the panel shows only the pickers. */
+    body.unpicked .panel > *:not(.pk-keep) { display: none !important; }
+    .pk-prompt { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 420px; padding: 40px;
+                 font-family: var(--sans); color: var(--muted); text-align: center; }
+    .pk-prompt b { font-size: 22px; font-weight: 600; color: var(--text); }
+    .pk-prompt span { font-size: 15px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -230,23 +238,23 @@
 
   <div class="studio">
     <aside class="panel">
-      <h1 id="pgTitle">Visuals</h1>
-      <p class="sub" id="pgSub">Pick a template, screenshot the card, post it. Every card renders from
+      <h1 id="pgTitle" class="pk-keep">Visuals</h1>
+      <p class="sub pk-keep" id="pgSub">Pick a template, screenshot the card, post it. Every card renders from
         tonight's data in the site's own theme, at a fixed artboard size.</p>
       <!-- Before anything is exported: when the prices behind these cards were
            last pulled. The card carries the DATA's date; this says when that
            data arrived, and goes amber when it is over a day old. -->
-      <p class="freshline" id="freshLine">Checking the data…</p>
+      <p class="freshline pk-keep" id="freshLine">Checking the data…</p>
 
-      <label>Template</label>
-      <select id="tplSelect" aria-label="Template"></select>
+      <label class="pk-keep">Template</label>
+      <select id="tplSelect" class="pk-keep" aria-label="Template"></select>
       <!-- A GROUP'S VIEWS. The whole-market templates are one entry in the
            list above and the single-stock ones another; each is told apart here. -->
-      <div id="tplSubBox" hidden>
+      <div id="tplSubBox" class="pk-keep" hidden>
         <label>Sub-template</label>
         <select id="tplSub" aria-label="Sub-template"></select>
       </div>
-      <p class="tplnote" id="tplNote"></p>
+      <p class="tplnote pk-keep" id="tplNote"></p>
 
       <!-- The ground, for EVERY card. It sits here rather than in a
            per-template box because it applies to all of them — the same
@@ -2573,6 +2581,10 @@
     let size = SIZES[0];
     // True while a card video plays in the stage (see Video from cards).
     let vidPlaying = false;
+    // NOTHING UNTIL A CHOICE (2026-10-24): `picked` once a template (and in a
+    // group, a view) has been chosen; `dataReady` once its data has arrived.
+    // `pendingGroup`: a group chosen whose view is not yet.
+    let picked = false, dataReady = false, pendingGroup = null;
     let stocks = [];
     let loadedAt = null;
     let myLists = {};        // the viewer's own portfolios, for the scope picker
@@ -4423,10 +4435,30 @@
       return Math.abs(gap) > 3 ? gap : 0;
     }
 
+    // The stage before a choice, and while the chosen card's data is on its way.
+    function paintPrompt() {
+      const stage = $('stage');
+      stage.style.height = 'auto';
+      stage.innerHTML = !picked
+        ? '<div class="pk-prompt"><b>Pick a template' + (pendingGroup ? '' : ', then a view') + '</b><span>' + (pendingGroup ? 'Now pick a view of ' + esc(pendingGroup.name) + ' under Sub-template.' : 'Nothing is loaded until you choose: the card and its data come after.') + '</span></div>'
+        : '<div class="pk-prompt"><b>Reading the data…</b><span>The card draws as soon as it arrives.</span></div>';
+    }
+    // A template chosen: load the data (once), then draw.
+    function pick(id) {
+      tpl = id; picked = true; pendingGroup = null;
+      if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
+      if (tpl === 'reel') size = SIZES.find((z) => z.id === 'story') || size;
+      document.body.classList.remove('unpicked');
+      paintControls();
+      if (dataReady) { render(); return; }
+      paintPrompt();
+      load();
+    }
     function render() {
       // A card video playing in the stage owns it until it ends; a data reply
       // landing meanwhile would otherwise wipe the canvas mid-recording.
       if (vidPlaying) return;
+      if (!picked || !dataReady) { paintPrompt(); return; }
       syncStockPickers();
       syncIndustries(false);
       if (tpl === 'glance') paintGlanceChips();
@@ -4652,9 +4684,9 @@
       const tpls = visibleTpls();
       // Rebuilt only when the LIST changes — /api/me decides whether the
       // owner-only template is in it, and that lands after the first paint.
-      const key = tpls.map((t) => t.id).join(',');
+      const key = tpls.map((t) => t.id).join(',') + (picked ? '' : '|unpicked');
       if ($('tplSelect').dataset.built !== key) {
-        $('tplSelect').innerHTML = tpls.map((t) =>
+        $('tplSelect').innerHTML = (picked ? '' : '<option value="" disabled>Choose a template…</option>') + tpls.map((t) =>
           `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
         $('tplSelect').dataset.built = key;
       }
@@ -4679,6 +4711,20 @@
       $('tplSubBox').hidden = !grp;
       if (grp && $('tplSub').value !== tpl) $('tplSub').value = tpl;
       if ($('tplSelect').value !== tpl) $('tplSelect').value = tpl;
+      // Before a choice: the template picker reads "Choose a template…", or the
+      // group chosen; its views wait under "Choose a view…".
+      if (!picked) {
+        $('tplSelect').value = pendingGroup ? pendingGroup.last : '';
+        $('tplSubBox').hidden = !pendingGroup;
+        if (pendingGroup) {
+          $('tplSub').innerHTML = '<option value="" disabled selected>Choose a view…</option>';
+          for (const [id, label] of pendingGroup.views) if (tpls.some((t) => t.id === id)) $('tplSub').appendChild(new Option(label, id));
+          $('tplSub').dataset.group = '';
+          $('tplSub').value = '';
+        }
+        $('tplNote').textContent = pendingGroup ? 'Pick one of its views to draw it.' : '';
+        return;
+      }
       const cur = tpls.find((t) => t.id === tpl);
       $('tplNote').textContent = cur ? cur.note : '';
       $('sizeList').innerHTML = SIZES.map((z) =>
@@ -4710,6 +4756,7 @@
 
     $('tplSub').addEventListener('change', (e) => {
       if (!groupOf(e.target.value)) return;
+      if (!picked) { pick(e.target.value); return; }
       tpl = e.target.value;
       if (tpl === 'avatar') size = SIZES.find((z) => z.id === 'square') || size;
       if (tpl === 'reel') size = SIZES.find((z) => z.id === 'story') || size;
@@ -4723,6 +4770,12 @@
       const el = $(p + part); if (el) el.addEventListener('change', () => scopeSyncFrom(p + part));
     }
     $('tplSelect').addEventListener('change', (e) => {
+      if (!picked) {
+        const g = groupOf(e.target.value);
+        if (g) { pendingGroup = g; paintControls(); paintPrompt(); return; }
+        if (e.target.value) pick(e.target.value);
+        return;
+      }
       tpl = e.target.value;
       // an avatar is square by definition; the other cards keep whatever
       // shape was already picked
@@ -5774,6 +5827,7 @@
         const pFilers = soft('/api/filers', null);
         const data = await fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json());
         stocks = (data.stocks || []).filter((s) => !s.error);
+        dataReady = true;
         pulledAt = data.updatedAt || null;
         paintFresh(data.updatedAt, stocks);
         // "This week" / "this month": the row's price against its last close
@@ -6152,7 +6206,33 @@
         document.querySelector('.deck').innerHTML = `<div class="err">Failed to load: ${esc(err.message)}</div>`;
       }
     }
-    load();
+    // START-UP (2026-10-24): who is here, so the template list is theirs, and
+    // nothing else. A link that names a card (/promo?tpl=..., the screener's
+    // drill-down) is a choice already made, and loads at once.
+    async function boot() {
+      const qt = String(new URLSearchParams(location.search).get('tpl') || '');
+      if (qt) { picked = true; load(); return; }
+      document.body.classList.add('unpicked');
+      $('freshLine').textContent = 'Pick a template to begin.';
+      try {
+        const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
+        if (me.guest) {
+          document.querySelector('.deck').innerHTML =
+            '<div class="err">The studio needs an account. <a href="/" style="color:var(--accent)">Back to the screener</a>.</div>';
+          return;
+        }
+        canAnnounce = !!me.admin;
+        memberMode = !me.admin;
+        document.body.classList.toggle('mem', memberMode);
+        if (memberMode) {
+          $('cardTheme').value = siteGround();
+          $('pgSub').textContent = 'Pick a view, then a stock, a sector or a ranking. Every card is drawn from the latest data on file; the date on a card is the date of its data.';
+        }
+      } catch (e) { /* the list stays the member's; the server still gates every card */ }
+      paintControls();
+      paintPrompt();
+    }
+    boot();
   </script>
 </body>
 </html>

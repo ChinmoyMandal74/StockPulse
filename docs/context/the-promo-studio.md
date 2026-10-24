@@ -250,3 +250,12 @@ The owner, over a social-media chart of AI stocks below their highs ("Are all th
 ## Light blue (sky) retired (2026-10-21, the owner: "remove the light blue theme from promo")
 - No picker offers it: the card ground is Dark, Light, Navy; the Video from cards colour and `/reelmaker` lost Sky too. **A post saved on it draws on Light**, the ground it was a tint of: `themeOf` maps it (`RETIRED_GROUND`), so the studio, the phone, saved images and the video painter agree, and `openPost` sets the picker to Light (without it the picker read blank and the card fell to dark, which the test caught). The `sky` palette and its CSS stay defined, unused; un-retiring is one line.
 - Same commit: `openPost` now refills the three group tone cards' group lists under their saved index before choosing the group (`fillToneNames`), as it does for every other group card.
+
+## Nothing loads until a choice (2026-10-24)
+The owner: "When a user comes to promo do not load anything .. let the user select the template and sub template first".
+
+- **On arrival** the page asks only who is here (`/api/me`, so the template list is that person's; `wmark.js` asks it too, as on every page). The pickers read "Choose a template…", the stage says "Pick a template, then a view", and the panel shows only the heading and the pickers (`body.unpicked` hides everything else; the kept elements carry `pk-keep`). No `/api/stocks`, no lists, no saved posts, no card.
+- **Choosing:** a group entry (Stock spotlight, Market, ...) opens its views under "Choose a view…" and still loads nothing; a view, or a template outside any group, is the choice (`pick(id)`): the stage says "Reading the data…", `load()` runs once, and the card draws. After that the pickers behave as before: switching draws at once, with no second load.
+- **A link that names a card** (`/promo?tpl=...`, the screener's drill-down) is a choice already made and loads at once (`boot()`).
+- `render()` draws the prompt until `picked` and `dataReady`; `dataReady` is set when the rows arrive.
+- Tested (scratchpad `pick-test.js`, 13 checks, a mock server logging every request): arrival as owner and as member, a group then its view, a template outside any group, switching afterwards, a `?tpl=` link, the member's list without the owner-only templates.
