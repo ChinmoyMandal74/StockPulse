@@ -262,3 +262,12 @@ The owner: "When a user comes to promo do not load anything .. let the user sele
 
 ## One entry a group in the Template list (2026-10-24)
 The owner, on an iPhone: "why does template field also shows the sub template". `#tplSelect` held an option for every template and hid all but the last-used one of each group with `option.hidden`; iOS Safari ignores `hidden` on an option, so the phone listed every view as "Market — Narrow or broad" and the rest. `paintControls` now builds one option a group (its value the view last used, its text the group's name) and one for each template outside any group; nothing is hidden. Choosing a group still returns to the view left in it, and the views are chosen under Sub-template. Tested in `pick-test.js` (16 checks): every entry visible, no "Group — view" entries before or after a choice, Market and back returning to the view left.
+
+## Pickers start empty (2026-10-24)
+The owner: "In Promo, wherever there is a need to pick a stock or a sector or an industry do not default it to first item, let the user pick something first".
+
+- **Every single-choice picker** (a stock: `…Sym`, `…SymA/B/2`; a sector, industry or theme name: `…Name`) opens on "Choose a …", named from its own label, on the first load (`blankEntityPickers`; a `?sym=` link keeps its stock). Filters that open on "All sectors", "All sizes" and the like are real choices and are left alone.
+- **A card that shows a picker still on "Choose"** draws a prompt ("Pick a stock for this card") instead of the first item, and asks for no data (`unpickedShown`). To know which pickers a card shows, the control-box toggles moved out of `render` into `paintBoxes()`, which now runs before the card is built.
+- **A choice is remembered** (`dataset.chosen`, set on change); a list refilled later (a reload of the rows, a scope change) gets its "Choose" back and stays on it only if nothing was chosen (`ensureEntityPickers`). The stock views of Stock spotlight still carry one stock between them, so a stock picked once is not asked for again.
+- The searchable stock list skips the "Choose" option.
+- Tested: `pick2-test.js` (10 checks: the track record asks for a stock and fetches nothing until one is picked, then only that stock; the other stock views carry it; a sector card asks for a sector; the market Snapshot draws at once; a `?sym=` link draws), `pick-sweep.js` (all 110 templates: 85 draw with nothing to pick, 24 ask, every one of them draws once picked, no errors; the avatar card has no card body by design), `pick-test.js` updated (17 checks).

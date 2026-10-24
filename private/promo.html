@@ -4168,7 +4168,7 @@
       const out = [];
       const named = !!SP_NAMED[sel.id];
       for (const o of sel.options) {
-        if (named && !o.value) continue;
+        if (!o.value) continue;   // the "Choose" option is no stock
         const sym = o.value, text = o.textContent, cut = text.indexOf(' \u2014 ');
         // A named picker (a holder) has no ticker: its whole label is the name.
         const name = named ? text : cut < 0 ? '' : text.slice(cut + 3);
@@ -4454,42 +4454,9 @@
       paintPrompt();
       load();
     }
-    function render() {
-      // A card video playing in the stage owns it until it ends; a data reply
-      // landing meanwhile would otherwise wipe the canvas mid-recording.
-      if (vidPlaying) return;
-      if (!picked || !dataReady) { paintPrompt(); return; }
-      syncStockPickers();
-      syncIndustries(false);
-      if (tpl === 'glance') paintGlanceChips();
-      const stage = $('stage');
-      stage.style.height = size.h + 'px';
-      // the card's own styles key off the shape it is being drawn into
-      // Strip whatever ground is on the stage, not a list of the ones that
-      // existed when this was written — with two themes the hardcoded pair
-      // worked, and with nine the classes PILED UP, so the stage ended as
-      // `th-ink th-aubergine th-petrol …` and the last rule in the sheet won.
-      // Caught by the suite rather than by eye, which is the only reason it
-      // is not a shipped bug.
-      [...stage.classList].filter((c) => c.startsWith('th-'))
-        .forEach((c) => stage.classList.remove(c));
-      const themeCls = Cards.themeClass(tpl, controlOpts());
-      // SPLIT: a ground may carry more than one class (sky is light plus a
-      // blue ground), and classList.add throws InvalidCharacterError on a
-      // string with a space in it.
-      if (themeCls) stage.classList.add(...themeCls.split(' '));
-      stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
-      stage.classList.add('sz-' + size.id);
-      cardFill = 0;
-      stage.innerHTML = '<div class="s-aura"></div>' +
-        // A member's card carries the watermark; the admin's, which is the one
-        // that gets posted, does not. Outside .s-in so it spans the artboard.
-        `<div class="s-in">${buildCard()}</div>` + (memberMode ? Cards.watermark() : '');
-      // Once more at the height that fills the card, when there is room.
-      const spare = fillGap(stage);
-      if (spare) { cardFill = spare; stage.querySelector('.s-in').innerHTML = buildCard(); cardFill = 0; }
-      linkStockNames(stage);
-      fit();
+    // THE CONTROLS FOR THE CHOSEN CARD (2026-10-24: moved out of render and run
+    // before the card is built, so a card can see which pickers it shows).
+    function paintBoxes() {
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
       $('shwBox').style.display = tpl === 'showcase' ? 'block' : 'none';
       $('covBox').style.display = tpl === 'covread' ? 'block' : 'none';
@@ -4624,6 +4591,102 @@
       $('chtMaWrap').style.display = cm === 'stock' ? 'block' : 'none';
       // With a second picker under it, "Stock" alone no longer says which.
       $('chtSymLab').textContent = cm === 'two' ? 'First stock' : 'Stock';
+    }
+    // PICKERS START EMPTY (2026-10-24, the owner: "wherever there is a need to
+    // pick a stock or a sector or an industry do not default it to first item,
+    // let the user pick something first"). Every single-choice picker -- a
+    // stock (…Sym, …SymA/B/2) or a sector, industry or theme name (…Name) --
+    // opens on "Choose a …", named from its own label; filters that open on
+    // "All sectors" are real choices and are left alone. A card whose shown
+    // picker is still on "Choose" draws a prompt instead of the first item.
+    const isEntityPicker = (el) => el && el.tagName === 'SELECT' && /(Sym[AB2]?|Name)$/.test(el.id || '') && !!el.closest('.panel');
+    function pickerLabel(sel) {
+      const anchor = sel.closest('.sp-wrap') || sel;
+      let p = anchor.previousElementSibling;
+      while (p && p.tagName !== 'LABEL') p = p.previousElementSibling;
+      return p ? p.textContent.trim().replace(/\s+/g, ' ') : '';
+    }
+    // Adds the "Choose" option when the list has none; true when it did.
+    function entityPlaceholder(sel) {
+      if ([...sel.options].some((o) => o.value === '')) return false;
+      const lab = pickerLabel(sel).toLowerCase();
+      const o = new Option('Choose ' + (lab ? (/^[aeiou]/.test(lab) ? 'an ' : 'a ') + lab : 'one') + '\u2026', '');
+      o.disabled = true;
+      sel.insertBefore(o, sel.firstChild);
+      return true;
+    }
+    function spRefresh(sel) { const w = sel.closest('.sp-wrap'); const inp = w && w.querySelector('.sp-in'); if (inp && document.activeElement !== inp) inp.value = spLabel(sel); }
+    // On the first load: every entity picker on "Choose", except one a link set.
+    function blankEntityPickers(keepSym) {
+      for (const sel of document.querySelectorAll('.panel select')) {
+        if (!isEntityPicker(sel)) continue;
+        entityPlaceholder(sel);
+        if (keepSym && sel.value === keepSym) { sel.dataset.chosen = '1'; continue; }
+        sel.value = '';
+        spRefresh(sel);
+      }
+    }
+    // A list refilled since (a reload of the rows, a scope change) gets its
+    // "Choose" back, and stays on it unless a choice was made.
+    function ensureEntityPickers() {
+      for (const sel of document.querySelectorAll('.panel select')) {
+        if (!isEntityPicker(sel)) continue;
+        if (entityPlaceholder(sel) && !sel.dataset.chosen) { sel.value = ''; spRefresh(sel); }
+      }
+    }
+    // The pickers the chosen card shows that are still on "Choose".
+    function unpickedShown() {
+      return [...document.querySelectorAll('.panel select')].filter((sel) => isEntityPicker(sel) && !sel.value
+        && sel.options.length > 1 && (sel.closest('.sp-wrap') || sel).getClientRects().length > 0);
+    }
+    document.querySelector('.panel').addEventListener('change', (e) => { if (isEntityPicker(e.target) && e.target.value) e.target.dataset.chosen = '1'; }, true);
+    function render() {
+      // A card video playing in the stage owns it until it ends; a data reply
+      // landing meanwhile would otherwise wipe the canvas mid-recording.
+      if (vidPlaying) return;
+      if (!picked || !dataReady) { paintPrompt(); return; }
+      ensureEntityPickers();
+      paintBoxes();
+      const waiting = unpickedShown();
+      if (waiting.length) {
+        const st = $('stage');
+        st.style.height = 'auto';
+        const what = waiting.map((w) => pickerLabel(w).toLowerCase() || 'one').filter((v, k, a) => a.indexOf(v) === k);
+        st.innerHTML = '<div class="pk-prompt"><b>Pick ' + esc(what.map((w) => (/^[aeiou]/.test(w) ? 'an ' : 'a ') + w).join(' and ')) + ' for this card</b><span>Nothing is chosen for you: the card draws once you pick.</span></div>';
+        return;
+      }
+      syncStockPickers();
+      syncIndustries(false);
+      if (tpl === 'glance') paintGlanceChips();
+      const stage = $('stage');
+      stage.style.height = size.h + 'px';
+      // the card's own styles key off the shape it is being drawn into
+      // Strip whatever ground is on the stage, not a list of the ones that
+      // existed when this was written — with two themes the hardcoded pair
+      // worked, and with nine the classes PILED UP, so the stage ended as
+      // `th-ink th-aubergine th-petrol …` and the last rule in the sheet won.
+      // Caught by the suite rather than by eye, which is the only reason it
+      // is not a shipped bug.
+      [...stage.classList].filter((c) => c.startsWith('th-'))
+        .forEach((c) => stage.classList.remove(c));
+      const themeCls = Cards.themeClass(tpl, controlOpts());
+      // SPLIT: a ground may carry more than one class (sky is light plus a
+      // blue ground), and classList.add throws InvalidCharacterError on a
+      // string with a space in it.
+      if (themeCls) stage.classList.add(...themeCls.split(' '));
+      stage.classList.remove('sz-portrait', 'sz-square', 'sz-story');
+      stage.classList.add('sz-' + size.id);
+      cardFill = 0;
+      stage.innerHTML = '<div class="s-aura"></div>' +
+        // A member's card carries the watermark; the admin's, which is the one
+        // that gets posted, does not. Outside .s-in so it spans the artboard.
+        `<div class="s-in">${buildCard()}</div>` + (memberMode ? Cards.watermark() : '');
+      // Once more at the height that fills the card, when there is room.
+      const spare = fillGap(stage);
+      if (spare) { cardFill = spare; stage.querySelector('.s-in').innerHTML = buildCard(); cardFill = 0; }
+      linkStockNames(stage);
+      fit();
+
     }
     // WHICH SHAPE FILLS THE SCREEN BEST, for a member. Each shape is scaled
     // to fit and the one covering the most of the space wins -- except that
@@ -6208,6 +6271,7 @@
           $('ssnPeriod').innerHTML = $('daySnapPeriod').innerHTML;
           $('ssnPeriod').value = [...$('ssnPeriod').options].some((o) => o.value === keep) ? keep : 'd'; }
         syncIndustries(true);
+        if (!reload) blankEntityPickers(String(new URLSearchParams(location.search).get('sym') || '').toUpperCase());
         paintControls();
         render();
         if (reload) $('reloadBtn').textContent = 'Re-pulled ✓';
