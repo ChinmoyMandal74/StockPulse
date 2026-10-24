@@ -15851,8 +15851,29 @@ app.get('/api/releases', requireAuth, route(async (req, res) => {
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
   if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  // ?accn=: that one filing, in full (the stock page opens a history row with it).
+  const accn = String(req.query.accn || '').trim();
+  if (accn) {
+    if (!/^\d{10}-\d{2}-\d{6}$/.test(accn)) return res.status(400).json({ error: 'Bad filing number.' });
+    const [got, earn] = await Promise.all([store.readEarningsReleasesByAccn([accn]), store.readEarnings(symbol).catch(() => [])]);
+    const r = (got || []).find((x) => x && x.symbol === symbol && x.isResults);
+    return res.json({ symbol, releases: r ? [Releases.forReader(r, earn)] : [] });
+  }
   const [rows, earn] = await Promise.all([store.readEarningsReleases(symbol, 8), store.readEarnings(symbol).catch(() => [])]);
   res.json({ symbol, releases: rows.filter((r) => r.isResults).map((r) => Releases.forReader(r, earn)) });
+}));
+// EVERY RESULTS RELEASE ON FILE for one company, a line each (2026-10-23, for
+// the stock page's history table and guidance strip): the history backfill
+// reaches back to 2017, so the full readings (summaries, guidance items,
+// reasons) are left out and fetched one at a time when a row is opened. One
+// per-symbol seek, newest first.
+app.get('/api/releases/history', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  const [rows, earn] = await Promise.all([store.readEarningsReleases(symbol, 120), store.readEarnings(symbol).catch(() => [])]);
+  res.json({ symbol, rows: rows.filter((r) => r.isResults).map((r) => globalThis.ReleaseView.historyRow(Releases.forReader(r, earn))) });
 }));
 // ONE DAY'S RESULTS RELEASES for the Results reported card: the day asked for,
 // else the newest with one, and the days on file for the picker. The studio's

@@ -133,5 +133,64 @@
       : '<p>None stated.</p>') + '</div>';
     return '<div class="rv-drv">' + col('What helped', d.helped) + col('What weighed', d.weighed) + '</div>';
   }
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, driversHtml };
+
+  // THE GUIDANCE AS A GRID (2026-10-23, the owner over CrowdStrike's
+  // "Total revenue | $1,523.2 - $1,529.2 million | $5,991.1 - $6,011.1 million"):
+  // the stored guidance items laid out as the release's own table, one row a
+  // measure and one column a period, instead of the sentence with its pipes.
+  // Money items are stored scaled; an 'other' item keeps the printed number and
+  // its unit word. Empty string when there are no items (the page then shows
+  // the sentence, as for readings made before the items were read).
+  const GUIDE_LABEL = { revenue: 'Revenue', eps_gaap: 'EPS, as reported', eps_adjusted: 'EPS, adjusted' };
+  const UNIT_WORD = { thousands: 'thousand', millions: 'million', billions: 'billion' };
+  function guideValue(g, v, cur) {
+    if (v == null) return null;
+    if (g.unit === 'percent') return (Math.abs(v) < 10 ? v.toFixed(1).replace(/\.0$/, '') : Math.round(v * 10) / 10) + '%';
+    if (g.metric === 'revenue') return money(v, cur);
+    if (g.metric === 'eps_gaap' || g.metric === 'eps_adjusted' || g.unit === 'per_share') return eps(v, cur);
+    const n = (v < 0 ? MINUS : '') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return UNIT_WORD[g.unit] ? pre(cur) + n + ' ' + UNIT_WORD[g.unit] : n;
+  }
+  function guideCell(g, cur) {
+    const lo = guideValue(g, g.low, cur), hi = guideValue(g, g.high, cur), mid = guideValue(g, g.mid, cur);
+    const v = lo && hi ? lo + ' – ' + hi : mid || (lo ? 'from ' + lo : hi ? 'up to ' + hi : null);
+    if (!v) return null;
+    const pr = guideValue(g, g.prior, cur);
+    return v + (pr ? ' (year before ' + pr + ')' : '');
+  }
+  const guideLabel = (g) => GUIDE_LABEL[g.metric]
+    || (String(g.sentence || '').split(/\s*[|:]\s*/)[0] || '').replace(/\s+/g, ' ').trim().slice(0, 70) || 'Other';
+  const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+  function guideTable(r) {
+    const items = Array.isArray(r && r.guides) ? r.guides : [];
+    const rows = [], cols = [], cell = {};
+    for (const g of items) {
+      const v = guideCell(g, r.currency);
+      if (!v) continue;
+      const k = guideLabel(g), p = cap(g.periodLabel || '') || 'Outlook';
+      if (!rows.includes(k)) rows.push(k);
+      if (!cols.includes(p)) cols.push(p);
+      if (cell[k + '\u0000' + p] == null) cell[k + '\u0000' + p] = v;
+    }
+    if (!rows.length) return '';
+    return '<div class="rv-gtw"><table class="rv-gt"><thead><tr><th></th>' + cols.map((c) => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>'
+      + rows.map((k) => '<tr><th>' + esc(k) + '</th>' + cols.map((c) => '<td>' + esc(cell[k + '\u0000' + c] || '—') + '</td>').join('') + '</tr>').join('')
+      + '</tbody></table></div>';
+  }
+  // ONE LINE A QUARTER for a history table (the stock page's, 2026-10-23): the
+  // few figures a row shows, worked out from the full reading on the server so
+  // the list stays small. The estimate is compared with the figure the price
+  // provider matched, as estimate() does.
+  function historyRow(r) {
+    const pv = r.provider || null;
+    const vs = pv && pv.estimate != null ? (pv.matches === 'adjusted' ? r.epsAdj : pv.matches === 'gaap' ? r.epsGaap : null) : null;
+    return { accn: r.accn, filed: r.filed, periodLabel: r.periodLabel || null, periodEnd: r.periodEnd || null, currency: r.currency || null,
+      revenue: r.revenue == null ? null : r.revenue, revYoY: yoy(r.revenue, r.revenuePrior),
+      epsGaap: r.epsGaap == null ? null : r.epsGaap, epsYoY: yoy(r.epsGaap, r.epsGaapPrior), epsAdj: r.epsAdj == null ? null : r.epsAdj,
+      est: pv && pv.estimate != null ? pv.estimate : null, vsEst: vs == null || !pv || pv.estimate == null ? null : Math.round((vs - pv.estimate) * 100) / 100,
+      estDiffers: !!(pv && pv.matches === 'differs'),
+      guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
+      tenQ: r.secCheck || null };
+  }
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, driversHtml, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);

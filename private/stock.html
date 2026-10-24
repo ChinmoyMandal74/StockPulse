@@ -711,6 +711,45 @@
     #rels .rl-out, #rels .rl-sum { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
     #rels .rl-out b { color: var(--text); font-weight: 600; }
     #rels .rels-note { margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--faint); }
+    /* The guidance as a grid of measure by period (ReleaseView.guideTable). */
+    #rels .rv-gtw { margin-top: 8px; overflow-x: auto; }
+    #rels .rv-gt { border-collapse: collapse; font-size: 12.5px; min-width: 0; }
+    #rels .rv-gt th, #rels .rv-gt td { padding: 4px 16px 4px 0; text-align: left; vertical-align: top; }
+    #rels .rv-gt thead th { font: 600 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    #rels .rv-gt tbody th { font-weight: 500; color: var(--muted); max-width: 320px; }
+    #rels .rv-gt td { font-family: var(--mono); color: var(--text); white-space: nowrap; }
+    /* THE HISTORY (2026-10-23): the strip of stated guidance changes, then a
+       line a quarter. A mark is one release, coloured as its label is. */
+    #rels #relsHist { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hair); }
+    #rels .rh-h { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: var(--text); }
+    #rels .rh-h span { margin-left: 10px; font-size: 12.5px; font-weight: 400; color: var(--faint); }
+    #rels .rh-strip { display: flex; gap: 3px; align-items: flex-start; overflow-x: auto; padding-bottom: 2px; }
+    #rels .rh-m { flex: 1 1 0; min-width: 9px; max-width: 26px; padding: 0; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+    #rels .rh-m i { display: block; height: 26px; border-radius: 4px; background: color-mix(in srgb, var(--wash) 12%, transparent); }
+    #rels .rh-m:hover i, #rels .rh-m:focus-visible i { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #rels .rh-m span { display: block; height: 14px; font: 500 10px var(--mono); color: var(--faint); white-space: nowrap; text-align: left; }
+    #rels .rh-raised i, #rels i.rh-raised { background: var(--gch-raised); }
+    #rels .rh-lowered i, #rels i.rh-lowered { background: var(--gch-lowered); }
+    #rels .rh-withdrawn i, #rels i.rh-withdrawn { background: var(--gch-withdrawn); }
+    #rels .rh-mixed i, #rels i.rh-mixed { background: var(--gch-mixed); }
+    #rels .rh-initiated i, #rels i.rh-initiated { background: var(--gch-initiated); }
+    #rels .rh-reaffirmed i, #rels i.rh-reaffirmed { background: var(--gch-reaffirmed); }
+    #rels .rh-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 14px; font-size: 12px; color: var(--muted); }
+    #rels .rh-lg i:not([class]) { background: color-mix(in srgb, var(--wash) 12%, transparent); }
+    #rels .rh-lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    #rels .rh-wrap { overflow-x: auto; }
+    #rels .rh-t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    /* Its own cells only: an opened release inside it has a guidance grid of its own. */
+    #rels .rh-t > thead > tr > th { padding: 6px 10px; text-align: left; font: 600 10.5px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    #rels .rh-t > tbody > tr.rh-row > td { padding: 7px 10px; border-bottom: 1px solid var(--hair); color: var(--text); white-space: nowrap; }
+    #rels .rh-t > * > tr > .rh-n { text-align: right; font-family: var(--mono); }
+    #rels .rh-t .rh-q { font-weight: 500; }
+    #rels .rh-row { cursor: pointer; }
+    #rels .rh-row:hover > td, #rels .rh-row.rh-open > td { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    #rels .rh-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    #rels .rh-t > tbody > tr.rh-det > td { border-bottom: 1px solid var(--hair); padding: 4px 10px 12px; white-space: normal; background: color-mix(in srgb, var(--wash) 3%, transparent); }
+    #rels .rh-det .rl-item { border-top: 0; padding-top: 6px; }
+    #rels .rh-wait { margin: 8px 0; font-size: 12.5px; color: var(--faint); }
     @media (max-width: 700px) { #rels .rl-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     #tone .tone-week { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 0 0 14px;
                        font-size: 13px; color: var(--muted); }
@@ -3363,7 +3402,7 @@
       } catch (err) { /* a decoration: the page stands without it */ }
     }
 
-    // RESULTS RELEASES (2026-10-22): the latest four, written out by the
+    // RESULTS RELEASES (2026-10-22): the newest in full (four until 2026-10-23), written out by the
     // shared module the /filings page uses. A guest outside the preview is
     // refused by the route, and a company with none on file keeps the card hidden.
     async function loadReleases() {
@@ -3372,7 +3411,7 @@
       try {
         const res = await fetch(`/api/releases?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
         if (!res.ok) return;
-        const list = ((await res.json()).releases || []).slice(0, 4);
+        const list = ((await res.json()).releases || []).slice(0, 1);
         if (!list.length) return;
         // The All fields section's Last Earning AI Extracted rows, from the newest
         // release, through the same mapping the screener uses.
@@ -3396,38 +3435,107 @@
         }
         const RV = window.ReleaseView, e = RV.esc;
         const fig = (k, v, sub, c) => '<div class="rl-f" style="--c:var(' + c + ')"><span class="rl-k">' + k + '</span><span class="rl-v">' + v + '</span>' + (sub || '') + '</div>';
-        const sgn = (p) => (p == null || !isFinite(p) ? '' : (p > 0 ? '+' : p < 0 ? '\u2212' : '') + Math.abs(p).toFixed(1) + '%');
+        const sgn = (p) => (p == null || !isFinite(p) ? '' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%');
         const sub = (t, title) => (t ? '<span class="rv-sub"' + (title ? ' title="' + e(title) + '"' : '') + '>' + e(t) + '</span>' : '');
-        document.getElementById('relsBody').innerHTML = list.map((r) => {
+        // ONE RELEASE IN FULL: the newest above the history, and any history row
+        // opened in place.
+        const relCard = (r, head) => {
           const cur = r.currency, figs = RV.refused(r), tq = RV.tenQ(r);
           const est = RV.estimate(r);
           const cut = est.indexOf('<span');
           return '<div class="rl-item">'
-            + '<div class="rl-head"><b>' + e(r.periodLabel || 'Quarter') + '</b><span>filed ' + e(RV.shortDay(r.filed)) + '</span>'
-            + (r.url ? '<a href="' + e(r.url) + '" target="_blank" rel="noopener">' + e(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '</div>'
+            + (head === false ? '' : '<div class="rl-head"><b>' + e(r.periodLabel || 'Quarter') + '</b><span>filed ' + e(RV.shortDay(r.filed)) + '</span>'
+              + (r.url ? '<a href="' + e(r.url) + '" target="_blank" rel="noopener">' + e(r.exhibit || 'Release') + ' &#8599;</a>' : '') + '</div>')
             + '<div class="rl-figs">'
             + fig('Revenue', e(RV.money(r.revenue, cur)), sub(RV.chg(r.revenue, r.revenuePrior)), '--azure')
             + fig('Net income', e(RV.money(r.netIncome, cur)), sub(RV.chg(r.netIncome, r.netIncomePrior)), '--cyan')
             + fig('EPS, as reported', e(RV.eps(r.epsGaap, cur)), sub(r.epsGaapPrior != null ? 'a year ago ' + RV.eps(r.epsGaapPrior, cur) : ''), '--accent-2')
-            + fig('EPS, adjusted', r.epsAdj == null ? '\u2014' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? sub('none given') : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' \u2014 leaves out ' + r.epsAdjExcludes : '')), '--sand')
+            + fig('EPS, adjusted', r.epsAdj == null ? '—' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? sub('none given') : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' — leaves out ' + r.epsAdjExcludes : '')), '--sand')
             + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut), '--slate')
             + '</div>'
             // The guidance: its label (the owner's colours), the company's words,
-            // its sentence, and the two readings where they can be measured.
-            + ((r.guideSentence || r.guideChange) ? (() => { const g = r.guideRead || {}, reads = [];
-                if (g.revVsQ != null && g.revQ) reads.push('Next quarter\u2019s revenue guide ' + sgn(g.revVsQ) + ' on this quarter');
+            // the figures as a grid of measure by period (the sentence when the
+            // items were never read), and the two readings where they can be measured.
+            + ((r.guideSentence || r.guideChange || (r.guides && r.guides.length)) ? (() => { const g = r.guideRead || {}, reads = [];
+                if (g.revVsQ != null && g.revQ) reads.push('Next quarter’s revenue guide ' + sgn(g.revVsQ) + ' on this quarter');
                 if (g.epsVsFy != null && g.epsFy) reads.push((g.epsFy.basis === 'GAAP' ? 'GAAP' : 'Adjusted') + ' EPS guide ' + sgn(g.epsVsFy) + ' on the year before (' + RV.eps(g.epsFy.prior, cur) + ', ' + (g.epsFy.priorFrom === 'release' ? 'as printed' : 'from the 10-K') + ')');
                 const k = RV.changeKey(r.guideChange);
+                const grid = RV.guideTable(r);
                 return '<div class="rl-guide" style="--c:' + (k ? 'var(--gch-' + k + ')' : 'var(--indigo)') + '"><b>Guidance</b>' + RV.changeTag(r.guideChange)
-                  + (r.guideChangeQuote ? '<span class="rl-q">\u201c' + e(r.guideChangeQuote) + '\u201d</span>' : '')
-                  + (r.guideSentence ? '<span class="rl-s">' + e(r.guideSentence) + '</span>' : '')
-                  + (reads.length ? '<span class="rl-read">' + e(reads.join(' \u00b7 ')) + '</span>' : '') + '</div>'; })() : '')
+                  + (r.guideChangeQuote ? '<span class="rl-q">“' + e(r.guideChangeQuote) + '”</span>' : '')
+                  + (grid || (r.guideSentence ? '<span class="rl-s">' + e(r.guideSentence) + '</span>' : ''))
+                  + (reads.length ? '<span class="rl-read">' + e(reads.join(' · ')) + '</span>' : '') + '</div>'; })() : '')
             + '<p class="rl-sum">' + e(r.summary || '') + (tq ? ' ' + tq : '')
             + (figs.length ? ' <span class="rv-amb" title="' + e(figs.join('; ')) + '">' + figs.length + ' figure' + (figs.length === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</p>'
             + RV.driversHtml(r)
             + '</div>';
-        }).join('');
+        };
+        document.getElementById('relsBody').innerHTML = relCard(list[0]);
         card.hidden = false;
+        // THE HISTORY (2026-10-23, the owner: "Do we need to show the history of
+        // results like this", then the table and the strip): every results
+        // release on file, a line a quarter, and above it a strip of the stated
+        // guidance changes, oldest to newest. A row opens its release in full.
+        const hist = await fetch(`/api/releases/history?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        const rows = (hist && hist.rows) || [];
+        const box = document.getElementById('relsHist');
+        if (!box || rows.length < 2) return;
+        const WORD = RV.CHANGE_WORD;
+        const counts = {};
+        for (const h of rows) { const k = h.guideChange || 'none'; counts[k] = (counts[k] || 0) + 1; }
+        const asc = rows.slice().reverse();
+        let lastYear = '';
+        const strip = asc.map((h) => {
+          const y = String(h.filed || '').slice(0, 4), lab = y !== lastYear ? y : '';
+          lastYear = y;
+          const k = h.guideChange;
+          const tip = (h.periodLabel || 'Quarter') + ', filed ' + RV.shortDay(h.filed) + ': ' + (k ? 'guidance ' + WORD[k].toLowerCase() : 'no stated change in guidance');
+          return '<button type="button" class="rh-m' + (k ? ' rh-' + k : '') + '" data-accn="' + e(h.accn) + '" title="' + e(tip) + '" aria-label="' + e(tip) + '"><i></i><span>' + e(lab) + '</span></button>';
+        }).join('');
+        const order = ['raised', 'reaffirmed', 'initiated', 'mixed', 'lowered', 'withdrawn'];
+        const legend = order.filter((k) => counts[k]).map((k) => '<span class="rh-lg"><i class="rh-' + k + '"></i>' + WORD[k] + ' ' + counts[k] + '</span>').join('')
+          + (counts.none ? '<span class="rh-lg"><i></i>No stated change ' + counts.none + '</span>' : '');
+        const vsEst = (h) => (h.estDiffers ? '<span class="rv-amb" title="The price provider’s figure for this report is neither of the company’s.">provider differs</span>'
+          : h.vsEst == null ? '—' : h.vsEst === 0 ? 'in line' : (h.vsEst > 0 ? '+' : '−') + RV.eps(Math.abs(h.vsEst), h.currency));
+        const tenq = (h) => (h.tenQ === 'match' ? '<span class="rv-ok">Matches</span>' : h.tenQ === 'differs' ? '<span class="rv-amb">Differs</span>' : '—');
+        const body = rows.slice(1).map((h) => '<tr class="rh-row" data-accn="' + e(h.accn) + '" tabindex="0" aria-expanded="false">'
+          + '<td class="rh-q">' + e(h.periodLabel || 'Quarter') + '</td><td>' + e(RV.shortDay(h.filed)) + '</td>'
+          + '<td class="rh-n">' + e(RV.money(h.revenue, h.currency)) + '</td><td class="rh-n">' + (h.revYoY == null ? '—' : e(sgn(h.revYoY))) + '</td>'
+          + '<td class="rh-n">' + e(RV.eps(h.epsGaap, h.currency)) + '</td><td class="rh-n">' + e(RV.eps(h.epsAdj, h.currency)) + '</td>'
+          + '<td class="rh-n">' + vsEst(h) + '</td><td>' + (h.guideChange ? RV.changeTag(h.guideChange) : '<span class="rv-ok">—</span>') + '</td><td>' + tenq(h) + '</td></tr>').join('');
+        box.innerHTML = '<h3 class="rh-h">Every quarter on file <span>' + rows.length + ' results releases since ' + e(RV.shortDay(asc[0].filed)) + '</span></h3>'
+          + '<div class="rh-strip" role="group" aria-label="Guidance changes, oldest to newest">' + strip + '</div>'
+          + '<div class="rh-legend">' + legend + '</div>'
+          + '<div class="rh-wrap"><table class="rh-t"><thead><tr><th>Quarter</th><th>Filed</th><th class="rh-n">Revenue</th><th class="rh-n">On a year ago</th>'
+          + '<th class="rh-n">EPS, as reported</th><th class="rh-n">EPS, adjusted</th><th class="rh-n">Against estimate</th><th>Guidance</th><th>10-Q</th></tr></thead>'
+          + '<tbody>' + body + '</tbody></table></div>';
+        box.hidden = false;
+        // Open a row: its release in full, under it, fetched once.
+        const held = {};
+        const toggle = async (tr) => {
+          const next = tr.nextElementSibling;
+          if (next && next.classList.contains('rh-det')) { next.remove(); tr.setAttribute('aria-expanded', 'false'); tr.classList.remove('rh-open'); return; }
+          const accn = tr.dataset.accn;
+          const det = document.createElement('tr'); det.className = 'rh-det';
+          det.innerHTML = '<td colspan="9"><p class="rh-wait">Reading…</p></td>';
+          tr.after(det); tr.setAttribute('aria-expanded', 'true'); tr.classList.add('rh-open');
+          try {
+            if (!held[accn]) held[accn] = await fetch(`/api/releases?symbol=${encodeURIComponent(SYMBOL)}&accn=${encodeURIComponent(accn)}`, { cache: 'no-store' }).then((x) => x.json());
+            const r = held[accn].releases && held[accn].releases[0];
+            det.firstChild.innerHTML = r ? relCard(r) : '<p class="rh-wait">This release could not be read.</p>';
+          } catch (err) { det.firstChild.innerHTML = '<p class="rh-wait">This release could not be read.</p>'; }
+        };
+        box.querySelector('tbody').addEventListener('click', (ev) => { const tr = ev.target.closest('tr.rh-row'); if (tr && !ev.target.closest('a')) toggle(tr); });
+        box.querySelector('tbody').addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr.rh-row'); if (tr && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); toggle(tr); } });
+        // A mark on the strip: the newest is the release above; any other opens its row.
+        box.querySelector('.rh-strip').addEventListener('click', (ev) => {
+          const m = ev.target.closest('.rh-m'); if (!m) return;
+          if (m.dataset.accn === rows[0].accn) { document.getElementById('relsBody').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+          const tr = box.querySelector('tr.rh-row[data-accn="' + CSS.escape(m.dataset.accn) + '"]');
+          if (!tr) return;
+          if (tr.getAttribute('aria-expanded') !== 'true') toggle(tr);
+          tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
       } catch (err) { /* a decoration: the page stands without it */ }
     }
 
@@ -4012,11 +4120,13 @@
         <section class="bezel card" id="rels" data-jump="Results releases" data-icon="i-calendar" hidden><div class="core">
           <div class="sec-h"><h2>Results releases</h2></div>
           <div id="relsBody"></div>
+          <div id="relsHist" hidden></div>
           <p class="rels-note">Each quarter's results press release (the 8-K's Exhibit 99.1), read by an AI model that copies the
             figures out as printed; every figure is checked against the release's own text, and one that cannot be found there is left
             out. "As reported" is the GAAP diluted figure. The adjusted one is the company's own, under its own name, and has no standard
             definition. The estimate comes from the price data provider. Once the quarter's 10-Q is filed, the release is compared with it.
-            A record of what the company said, not a forecast.</p>
+            Every quarter on file is listed under the newest, back to 2017 where the filings reach; the strip shows, oldest to newest,
+            what each release itself said about its outlook. A record of what the company said, not a forecast.</p>
         </div></section>
 
         ${peersCard(payload.peers, stock.symbol)}
