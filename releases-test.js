@@ -315,5 +315,35 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('fields: the three guidance columns and their notes', fl2.erGuideChange === 'Raised' && fl2.erGuideChangeQuote === 'q' && fl2.erEpsGuideVsFy === g.epsVsFy && /Adjusted EPS guidance for fiscal year 2027: \$33\.18 to \$34\.08, against \$30\.12/.test(fl2.erEpsGuideNote) && /Revenue guidance for fourth quarter 2026/.test(fl2.erGuideVsQNote), fl2);
 }
 
+// THE TRACK RECORD (2026-10-23): the strip, the counts, revenue against the
+// company's own guide, the run, the last cut, the revenue bars.
+{
+  const q = (filed, pe, rev, prior, change, guideMid, extra) => Object.assign({ accn: 'a' + filed, isResults: true, filed, periodEnd: pe, periodLabel: 'Q ' + pe, currency: 'USD',
+    revenue: rev, revenuePrior: prior, guideChange: change || null,
+    guides: guideMid == null ? [] : [{ metric: 'revenue', periodType: 'quarter', unit: 'billions', low: null, high: null, mid: guideMid }] }, extra || {});
+  const rows = [
+    q('2025-02-01', '2024-12-31', 10e9, 8e9, 'initiated', 10.5e9),
+    q('2025-05-01', '2025-03-31', 11e9, 9e9, 'raised', 11.5e9),       // 11.0 vs the 10.5 guided: above
+    q('2025-08-01', '2025-06-30', 11.2e9, 9e9, 'lowered', 12e9),      // 11.2 vs 11.5: at or below
+    q('2025-11-01', '2025-09-30', 30e9, 9e9, 'raised', 12.5e9),       // 30 vs 12: over a factor of two, left out
+    q('2026-02-01', '2025-12-31', 13e9, 10e9, 'raised', null),        // 13 vs 12.5: above
+    { accn: 'x', isResults: false, filed: '2026-03-01' },
+    q('2026-05-01', '2026-03-31', 14e9, 11e9, 'raised', null),        // no guide the quarter before: not compared
+  ];
+  const t = Rel.trackRecord(rows.slice().reverse());
+  check('track: oldest first, results only', t.n === 6 && t.marks[0].filed === '2025-02-01' && t.marks[5].filed === '2026-05-01');
+  check('track: how many gave an outlook at all', t.guided === 6 && Rel.trackRecord([q('2025-02-01', '2024-12-31', 10e9, 8e9, null, null), q('2025-05-01', '2025-03-31', 11e9, 9e9, null, 11e9)]).guided === 1);
+  check('track: counts of each stated change', t.counts.raised === 4 && t.counts.lowered === 1 && t.counts.initiated === 1 && t.counts.none === 0, t.counts);
+  check('track: revenue against its own guide, the factor-of-two and the missing guide left out', t.guide.n === 3 && t.guide.above === 2 && t.guide.atOrBelow === 1, t.guide);
+  check('track: the run is the newest change and how many in a row', t.run && t.run.kind === 'raised' && t.run.n === 3, t.run);
+  check('track: the last cut', t.lastCut && t.lastCut.filed === '2025-08-01');
+  check('track: revenue bars oldest first, and the newest change on a year ago', t.revenue.length === 6 && t.revenue[5].revenue === 14e9 && Math.abs(t.latestRevYoY - 27.27) < 0.01, [t.revenue.length, t.latestRevYoY]);
+  const gap = Rel.trackRecord([q('2025-02-01', '2024-12-31', 10e9, 8e9, null, 10.5e9), q('2025-11-01', '2025-09-30', 11e9, 9e9, null, null)]);
+  check('track: a skipped quarter is not compared', gap.guide.n === 0 && gap.run === null && gap.lastCut === null && gap.counts.none === 2);
+  check('track: fewer than two results releases is no track', Rel.trackRecord([rows[0]]) === null && Rel.trackRecord([]) === null);
+  const fx = Rel.trackRecord([q('2025-02-01', '2024-12-31', 10e9, 8e9, null, 10.5e9), q('2025-05-01', '2025-03-31', 11e9, 9e9, null, null, { currency: 'EUR' })]);
+  check('track: two currencies are not compared', fx.guide.n === 0);
+}
+
 console.log(`${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

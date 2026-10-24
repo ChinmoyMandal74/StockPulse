@@ -2126,6 +2126,21 @@
         <select id="srsSym"></select>
         <p class="hint">The company’s newest results press release, as read for the screener: revenue, net income and EPS against a year earlier, the guidance and what the company says it did to it, and what it says helped and weighed on the quarter. A story adds the AI summary.</p>
       </div>
+      <!-- Earnings track record (2026-10-23): one company's results releases read together. -->
+      <div id="tkBox">
+        <label>Stock</label>
+        <select id="trkSym"></select>
+        <p class="hint">Every results press release on file for the company, back to 2017 where the filings reach: how often revenue came in above the middle of its own guide from the quarter before, what each release said it did to its outlook (a mark each, in the guidance label's colours), the current run and the last cut, and revenue quarter by quarter.</p>
+        <div id="tkVideo" hidden>
+          <label>Video (9:16, about 27 seconds)</label>
+          <div id="tkMusic"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" id="tkPlay" type="button">Play</button>
+            <button class="btn" id="tkRec" type="button">Record the video</button>
+          </div>
+          <p class="hint" id="tkMsg">The card as a video for Instagram Reels and YouTube Shorts: the strip fills a release at a time, then the headline, the record and the revenue. Record saves an MP4 (Chrome) at 1080 by 1920, in real time, so keep the tab in front.</p>
+        </div>
+      </div>
       <div id="dbdBox">
         <label>Stock</label>
         <select id="dbdSym"></select>
@@ -2416,6 +2431,7 @@
   <script src="/cards.js"></script>
   <script src="/cardshot.js"></script>
   <script src="/reel.js"></script>
+  <script src="/trackreel.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) =>
@@ -2504,6 +2520,7 @@
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'glance', name: 'At a glance', note: 'One company topic by topic, as the top of its stock page sums it up' },
       { id: 'stkresults', name: 'Quarterly results', note: 'One company’s newest results release: the figures, the guidance and what the company says helped and weighed' },
+      { id: 'stktrack', name: 'Earnings track record', note: 'One company’s results releases since 2017: what it said about its outlook, and what it then reported' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
       { id: 'movers', name: 'Movers', note: 'Gainers or losers, any window, any list' },
       { id: 'bars', name: 'Bars', note: 'Any one measure, ranked highest or lowest — returns, technicals, fundamentals' },
@@ -2573,6 +2590,7 @@
       ['days', 'Day by day', 'dbdSym'],
       ['glance', 'At a glance', 'glcSym'],
       ['stkresults', 'Quarterly results', 'srsSym'],
+      ['stktrack', 'Earnings track record', 'trkSym'],
       ['evolution', 'Evolution', 'evoSym'],
       ['drawdown', 'Drawdowns', 'ddSym'],
       ['stkchart', 'Chart — any measure', 'sclSym'],
@@ -3438,6 +3456,20 @@
         .catch(() => { srPending[k] = false; srCache[k] = { releases: [] }; if (tpl === 'stkresults' || tpl === 'glance') render(); });
       return null;
     }
+    // The Earnings track record card: one company's releases read together.
+    const tkCache = {}, tkPending = {};
+    function getTrack(need) {
+      const k = need && need.symbol;
+      if (!k) return null;
+      if (tkCache[k]) return tkCache[k];
+      if (tkPending[k]) return null;
+      tkPending[k] = true;
+      fetch('/api/releases/track?symbol=' + encodeURIComponent(k), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { track: null }))
+        .then((d) => { tkPending[k] = false; tkCache[k] = d || { track: null }; if (tpl === 'stktrack') render(); })
+        .catch(() => { tkPending[k] = false; tkCache[k] = { track: null }; if (tpl === 'stktrack') render(); });
+      return null;
+    }
     function getReported(need) {
       const k = need.date || 'latest';
       if (rptCache[k]) return rptCache[k];
@@ -3533,7 +3565,7 @@
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
-      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick', 'srsSym',
+      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick', 'srsSym', 'trkSym',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
@@ -3557,7 +3589,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -3817,6 +3849,50 @@
       }
     }
     $('rlPlay').addEventListener('click', () => reelRun(false));
+    // ---- the Earnings track record video (2026-10-23, admin only) -------------
+    // TrackReel.paint draws any frame from the time alone, from the card's own
+    // model (Cards.trackFrame), so the video and the card cannot disagree.
+    let tkBusy = false;
+    const tkMusic = Reel.musicPicker($('tkMusic'));
+    const tkMsg = (t, cls) => { const m = $('tkMsg'); m.textContent = t; m.className = 'hint' + (cls ? ' ' + cls : ''); };
+    async function trackRun(record) {
+      if (tkBusy) return;
+      const M = Cards.trackFrame(cardCtx()).model;
+      if (!M) { tkMsg('Pick a stock with at least four results releases on file, and let its history load.', 'warn'); return; }
+      if (record && !Reel.mime()) { tkMsg('This browser cannot record video. Use Chrome.', 'warn'); return; }
+      tkBusy = true;
+      $('tkPlay').disabled = $('tkRec').disabled = true;
+      const stage = $('stage');
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        const cv = document.createElement('canvas');
+        cv.width = TrackReel.W; cv.height = TrackReel.H;
+        cv.style.display = 'block';
+        stage.style.height = TrackReel.H + 'px';
+        stage.innerHTML = '';
+        stage.appendChild(cv);
+        const g = cv.getContext('2d');
+        tkMsg(record ? 'Recording — keep this tab in front for ' + Math.round(TrackReel.DURATION / 1000) + ' seconds.' : 'Playing…');
+        const out = await Reel.run(cv, TrackReel.DURATION, (t) => TrackReel.paint(g, M, t), record, tkMusic.get());
+        if (out) {
+          const { blob, ext } = out;
+          const name = 'track-' + M.sym.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          tkMsg('Saved ' + name + ' (' + (blob.size / 1e6).toFixed(1) + ' MB' + (ext === 'webm' ? '; this browser records WebM — use Chrome for MP4' : '') + ').', ext === 'webm' ? 'warn' : '');
+        } else tkMsg('Played. Record to save it as a video.');
+      } catch (e) {
+        tkMsg('Could not make the video: ' + (e && e.message ? e.message : e), 'warn');
+      } finally {
+        tkBusy = false;
+        $('tkPlay').disabled = $('tkRec').disabled = false;
+        render();
+      }
+    }
+    $('tkPlay').addEventListener('click', () => trackRun(false));
+    $('tkRec').addEventListener('click', () => trackRun(true));
     // ---- Video from cards (2026-10-20, admin only) -----------------------------
     // Each queued card is the template and the controls it was added with. At
     // Play or Record it is built again OFF-SCREEN at the video's shape and
@@ -4432,6 +4508,8 @@
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('glcBox').style.display = tpl === 'glance' ? 'block' : 'none';
       $('srBox').style.display = tpl === 'stkresults' ? 'block' : 'none';
+      $('tkBox').style.display = tpl === 'stktrack' ? 'block' : 'none';
+      $('tkVideo').hidden = !canAnnounce;
       $('ptrBox').style.display = tpl === 'peertrend' ? 'block' : 'none';
       $('prfBox').style.display = tpl === 'perf' ? 'block' : 'none';
       $('histBox').style.display = tpl === 'histogram' ? 'block' : 'none';
@@ -4767,6 +4845,7 @@
     // the module so it cannot offer a value the card does not know.
     $('glcSym').addEventListener('change', () => { if (tpl === 'glance') render(); });
     $('srsSym').addEventListener('change', () => { if (tpl === 'stkresults') render(); });
+    $('trkSym').addEventListener('change', () => { if (tpl === 'stktrack') render(); });
     $('glcDefault').addEventListener('click', () => { $('glcPick').value = Cards.glanceDefault().join('|'); if (tpl === 'glance') render(); });
     ['monSym', 'monView'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'months') render(); }));
@@ -5717,6 +5796,8 @@
           if ([...$('dbdSym').options].some((o) => o.value === keep)) $('dbdSym').value = keep; }
         { const keep = $('srsSym').value; $('srsSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('srsSym').options].some((o) => o.value === keep)) $('srsSym').value = keep; }
+        { const keep = $('trkSym').value; $('trkSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('trkSym').options].some((o) => o.value === keep)) $('trkSym').value = keep; }
         { const keep = $('glcSym').value; $('glcSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('glcSym').options].some((o) => o.value === keep)) $('glcSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;

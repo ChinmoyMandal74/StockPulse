@@ -58,6 +58,7 @@
   // The screener's release column (each company's newest results release), or null while it loads.
   let getReleaseColumn = () => null;
   let getRelease = () => null;
+  let getTrack = () => null;
   // One stock's At a glance cards (glance.js, built by the host from its rows), or null.
   let getGlance = () => null;
   // A sector's or an industry's lines from its members' stored series (the group Lines cards), or null while they load.
@@ -12401,6 +12402,103 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Earnings track record: one company, what it said and what it did ----
+  //
+  // The owner (2026-10-23): "a good promo for earning / guidance history ...
+  // at individual stock level", then "Build card with 1 included" (1: the
+  // video). From every results release on file (the history backfill reaches
+  // 2017), read together on the server (Releases.trackRecord, through
+  // getTrack: the studio's /api/releases/track, the phone route's own read):
+  //   the headline   revenue against the company's own guide: in how many
+  //                  quarters it came in above the middle of the range the
+  //                  release before gave (the counts of raised when there are
+  //                  too few to compare)
+  //   the strip      each release, oldest to newest, in its guidance label's
+  //                  colour (ReleaseView.CHANGE_HEX, the owner's exception to
+  //                  green-and-red-mean-price), plain where it stated no change
+  //   three lines    how often it raised, the current run, the last cut
+  //   the bars       revenue quarter by quarter, the newest on a year ago
+  // What the company printed and then reported: nothing here rates the stock
+  // or says what it will do next. trackCap (Cards.trackFrame) hands the same
+  // figures, worded, to the video painter (trackreel.js).
+  function trackNeed(tpl, opts) {
+    return tpl === 'stktrack' ? { symbol: (opts && opts.trkSym) || null } : null;
+  }
+  let trackCap = null;
+  const TK_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const tkMonth = (d) => { const m = /^(\d{4})-(\d{2})/.exec(String(d || '')); return m ? TK_MONTHS[Number(m[2]) - 1] + ' ' + m[1] : ''; };
+  function tplStockTrack() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const sym = O.trkSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell('Earnings track record', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const n = nameOf(row);
+    const d = getTrack({ symbol: sym });
+    if (!d) return shell('Earnings track record', n, 'reading its releases…');
+    const T = d.track;
+    if (!T || T.n < 4) return shell('Earnings track record', n, 'not enough history yet', 'Fewer than four of ' + sym + '’s results press releases are on file so far; the history is being read back to 2017.');
+    const RVG = typeof globalThis !== 'undefined' && globalThis.ReleaseView ? globalThis.ReleaseView : null;
+    const WORD = RVG ? RVG.CHANGE_WORD : {};
+    const HEX = RVG ? RVG.CHANGE_HEX : {};
+    const NONE = 'color-mix(in srgb, var(--muted) 22%, transparent)';
+    const ORDER = ['raised', 'reaffirmed', 'initiated', 'mixed', 'lowered', 'withdrawn'];
+    const since = T.first ? T.first.slice(0, 4) : '';
+    // The headline: revenue against its own guide where there are enough
+    // quarters to say it; otherwise how often it raised.
+    const G = T.guide || { n: 0 };
+    const hero = G.n >= 4
+      ? { big: G.above + ' of ' + G.n, text: 'quarters, revenue came in above the middle of the company’s own guide from the quarter before' }
+      : { big: (T.counts.raised || 0) + ' of ' + T.n, text: 'results releases raised the company’s outlook' };
+    const lines = [];
+    // A company that gives a fresh outlook each quarter without calling it
+    // raised (NVIDIA) reads as how often it gave one, not as raised 0 times.
+    lines.push(T.counts.raised ? ['Raised its outlook', T.counts.raised + ' of ' + T.n + ' releases'] : ['Gave an outlook', (T.guided || 0) + ' of ' + T.n + ' releases']);
+    if (T.run && T.run.n >= 2) lines.push(['Current run', WORD[T.run.kind] + ' ' + T.run.n + ' releases in a row']);
+    else if (T.run) lines.push(['Newest release', WORD[T.run.kind] + ' its outlook']);
+    else lines.push(['Newest release', 'stated no change to its outlook']);
+    lines.push(T.lastCut ? ['Last lowered or withdrawn', tkMonth(T.lastCut.filed) + (T.lastCut.periodLabel ? ' · ' + T.lastCut.periodLabel : '')] : ['Lowered or withdrawn', 'not once since ' + since]);
+    // The strip, oldest to newest, a year under the first mark of each year.
+    let lastY = '';
+    const marks = T.marks.map((m) => { const y = String(m.filed).slice(0, 4), lab = y !== lastY ? y : ''; lastY = y; return { y: lab, kind: m.change, color: m.change ? (HEX[m.change] || NONE) : NONE }; });
+    const legend = ORDER.filter((k) => T.counts[k]).map((k) => ({ word: WORD[k], n: T.counts[k], color: HEX[k] }))
+      .concat(T.counts.none ? [{ word: 'No stated change', n: T.counts.none, color: NONE }] : []);
+    const strip = '<div class="tk-strip">' + marks.map((m) => '<i style="background:' + m.color + '"><span>' + esc(m.y) + '</span></i>').join('') + '</div>'
+      + '<div class="tk-legend">' + legend.map((l) => '<span><b style="background:' + l.color + '"></b>' + esc(l.word) + ' ' + l.n + '</span>').join('') + '</div>';
+    // Revenue, quarter by quarter.
+    const pre = (c) => (!c || c === 'USD' ? '$' : c + ' ');
+    const money = (v, c) => { if (v == null) return '—'; const a = Math.abs(v); return (v < 0 ? '−' : '') + pre(c) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
+    const revs = (T.revenue || []).filter((x) => x.revenue != null && x.revenue > 0);
+    const top = revs.reduce((m, x) => Math.max(m, x.revenue), 0) || 1;
+    const lastRev = revs.length ? revs[revs.length - 1].revenue : null;
+    const yoy = T.latestRevYoY == null ? '' : (T.latestRevYoY > 0 ? '+' : T.latestRevYoY < 0 ? '−' : '') + Math.abs(T.latestRevYoY).toFixed(1) + '% on a year ago';
+    const BAR = pal.ink('#60a5fa');
+    const bars = revs.length >= 2 ? '<div class="tk-rev"><h4><span>Revenue, quarter by quarter</span><em>' + esc(money(lastRev, T.currency)) + (yoy ? ' · ' + esc(yoy) : '') + '</em></h4>'
+      + '<div class="tk-bars">' + revs.map((x) => '<i style="height:' + Math.max(3, Math.round(x.revenue / top * 100)) + '%;background:' + BAR + '"></i>').join('') + '</div></div>' : '';
+    const note = 'From ' + n + '’s results press releases filed with the SEC since ' + since + ', each read by an AI model and checked against its own text. '
+      + 'Each mark is one release, coloured by what the company itself said it did to its outlook. Revenue is compared with the middle of the quarterly revenue guide the release before gave. '
+      + 'A record of what was said and reported, not a reading of the stock.';
+    if (trackCap) {
+      trackCap.model = { sym, name: n, kick: [row.sector, row.industry].filter(Boolean).join(' · '), since, n: T.n,
+        hero, lines, marks, legend: legend.map((l) => ({ word: l.word, n: l.n, color: l.color === NONE ? null : l.color })),
+        revenue: revs.map((x) => x.revenue / top), revLabel: money(lastRev, T.currency), yoy, date: dateStr().split(' · ')[0], ink: reelInk(pal) };
+    }
+    return chromeTop()
+      + '<div class="s-body"><div class="tk-in">'
+      + '<span class="s-kick">Earnings track record · since ' + esc(since) + '</span>'
+      + '<h2 class="s-title">' + esc(n) + '<br><span class="dim">' + esc(sym) + '</span></h2>'
+      + '<div class="tk-mid">'
+      + '<div class="tk-hero"><b>' + esc(hero.big) + '</b><span>' + esc(hero.text) + '</span></div>'
+      + '<div class="tk-sb"><h4>What each results release said about its outlook</h4>' + strip + '</div>'
+      + '<div class="tk-lines">' + lines.map((l) => '<div><span>' + esc(l[0]) + '</span><b>' + esc(l[1]) + '</b></div>').join('') + '</div>'
+      + bars
+      + '</div>'
+      + '<p class="s-sub wide fd-note tk-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Guidance summary: the season's guidance across an index (2026-10-23) ----
   //
   // The owner: "One thing we are not showing on this is the guidance fields,
@@ -13486,6 +13584,7 @@
     thmgdsum: () => tplGuidanceSummary('thmgdsum'),
     glance: tplGlance,
     stkresults: tplStockResults,
+    stktrack: tplStockTrack,
     seclines: () => tplGroupLines('seclines'),
     indlines: () => tplGroupLines('indlines'),
     thmlines: () => tplGroupLines('thmlines'),
@@ -15423,6 +15522,42 @@
     .sz-story .sr-guide p { font-size: 22px; }
     .sz-story .sr-drv { grid-template-columns: 1fr; gap: 22px; }
     .sz-story .sr-drv li { font-size: 25px; margin-bottom: 12px; }
+    /* Earnings track record (2026-10-23): the headline, the strip, three lines, the bars. */
+    .tk-in { height: 100%; display: flex; flex-direction: column; }
+    .tk-mid { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-evenly; gap: 20px; padding: 14px 0 6px; min-height: 0; }
+    .tk-hero b { display: block; font: 800 96px/1 var(--sans); letter-spacing: -0.04em; color: var(--text); }
+    .tk-hero span { display: block; margin-top: 10px; font-size: 24px; line-height: 1.35; color: var(--muted); max-width: 30ch; }
+    .tk-sb h4, .tk-rev h4 { margin: 0 0 12px; font: 600 14px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+    .tk-strip { display: flex; gap: 4px; align-items: flex-start; }
+    .tk-strip i { position: relative; flex: 1 1 0; min-width: 0; height: 54px; border-radius: 5px; }
+    .tk-strip i span { position: absolute; left: 0; top: 62px; font: 500 13px var(--mono); font-style: normal; color: var(--faint); white-space: nowrap; }
+    .tk-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 34px; font-size: 16px; color: var(--muted); }
+    .tk-legend b { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 8px; vertical-align: -1px; }
+    .tk-lines { display: grid; gap: 12px; }
+    .tk-lines div { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; border-bottom: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); padding-bottom: 10px; }
+    .tk-lines span { font-size: 19px; color: var(--muted); }
+    .tk-lines b { font: 700 21px var(--mono); color: var(--text); text-align: right; }
+    .tk-rev h4 { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+    .tk-rev h4 em { font: 600 17px var(--mono); font-style: normal; letter-spacing: 0; text-transform: none !important; color: var(--text); white-space: nowrap; }
+    .tk-bars { display: flex; align-items: flex-end; gap: 5px; height: 120px; }
+    .tk-bars i { flex: 1 1 0; min-width: 0; border-radius: 4px 4px 0 0; opacity: 0.9; }
+    .sz-square .tk-hero b { font-size: 72px; }
+    .sz-square .tk-hero span { font-size: 19px; max-width: 40ch; }
+    .sz-square .tk-strip i { height: 40px; }
+    .sz-square .tk-strip i span { top: 46px; }
+    .sz-square .tk-legend { margin-top: 26px; font-size: 14px; }
+    .sz-square .tk-lines { gap: 8px; }
+    .sz-square .tk-lines span { font-size: 16px; }
+    .sz-square .tk-lines b { font-size: 17px; }
+    .sz-square .tk-bars { height: 70px; }
+    .sz-story .tk-hero b { font-size: 124px; }
+    .sz-story .tk-hero span { font-size: 28px; }
+    .sz-story .tk-strip i { height: 80px; }
+    .sz-story .tk-strip i span { top: 88px; font-size: 15px; }
+    .sz-story .tk-legend { margin-top: 44px; font-size: 19px; }
+    .sz-story .tk-lines span { font-size: 23px; }
+    .sz-story .tk-lines b { font-size: 25px; }
+    .sz-story .tk-bars { height: 200px; }
     .sz-story .sr-fig b { font-size: 52px; }
     .sz-story .sr-fig i { font-size: 18px; }
     .sz-story .sr-guide p { font-size: 25px; }
@@ -16340,7 +16475,7 @@
     shortBuildRanks: () => Object.keys(SBA_RANKS).map((k) => [k, SBA_RANKS[k]]),
     earnAheadWindows: () => Object.keys(EA_WINS).map((k) => [k, EA_WINS[k]]),
     earnAheadWindow: eaWindow,
-    reportedNeed, resultsSummaryNeed, stockResultsNeed,
+    reportedNeed, resultsSummaryNeed, stockResultsNeed, trackNeed,
     filedNeed, filedShows: () => FLD_SHOW.map((p) => p.slice()),
     glanceTopics: () => GLC_TOPICS.map((t) => t.slice()), glanceDefault: () => GLC_DEFAULT.slice(),
     glanceMax: (sizeId) => GLC_MAX[sizeId] || GLC_MAX.portrait, glancePick,
@@ -16477,6 +16612,12 @@
       try { const html = this.build('reel', ctx); return { html, model: reelCap.model || null }; }
       finally { reelCap = null; }
     },
+    // The Earnings track record video's model: every figure, worded by tplStockTrack.
+    trackFrame(ctx) {
+      trackCap = {};
+      try { const html = this.build('stktrack', ctx); return { html, model: trackCap.model || null }; }
+      finally { trackCap = null; }
+    },
     build(id, ctx) {
       const c = ctx || {};
       stocks = c.stocks || [];
@@ -16502,6 +16643,7 @@
       getReported = c.getReported || (() => null);
       getReleaseColumn = c.getReleaseColumn || (() => null);
       getRelease = c.getRelease || (() => null);
+      getTrack = c.getTrack || (() => null);
       getGlance = c.getGlance || (() => null);
       getGroupLines = c.getGroupLines || (() => null);
       getHolders = c.getHolders || (() => null);

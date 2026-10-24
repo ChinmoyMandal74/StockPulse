@@ -550,4 +550,68 @@ function reconStatus(r) {
   return { status: !compared ? 'incomplete' : differs.length ? 'differs' : 'agrees', differs };
 }
 
-module.exports = { bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+// THE TRACK RECORD (2026-10-23, the owner: "a good promo for earning /
+// guidance history ... at individual stock level"): one company's results
+// releases on file, read together. Pure: `rows` are its stored readings (any
+// order; the not-results ones are left out). Returns null with fewer than two
+// results releases.
+//
+//   marks       oldest to newest: what each release said it did to its outlook
+//               (a CHANGE_WORDS key, or null when it stated no change)
+//   counts      how many of each, and `none`
+//   guide       REVENUE AGAINST ITS OWN GUIDE: each quarter's revenue against
+//               the middle of the quarterly revenue guide the release before
+//               gave for it. Compared only when the next release is the next
+//               quarter (period ends 50 to 130 days apart), both are in one
+//               currency, and the two are within a factor of two of each other
+//               (a guide for another line, net revenue against total, is left
+//               out rather than counted). { above, atOrBelow, n, last: [...] }
+//   run         the newest release's stated change and how many releases in a
+//               row, newest first, said the same ({ kind, n }; null when the
+//               newest stated none)
+//   lastCut     the newest release that lowered or withdrew its outlook
+//   revenue     up to the newest 20 quarters' revenue, oldest first, with the
+//               newest one's change on a year earlier
+// A record of what the company printed and then reported: nothing here rates
+// or forecasts the stock.
+function trackRecord(rows) {
+  const rs = (rows || []).filter((r) => r && r.isResults && r.filed).slice()
+    .sort((a, b) => (a.filed < b.filed ? -1 : a.filed > b.filed ? 1 : String(a.accn) < String(b.accn) ? -1 : 1));
+  if (rs.length < 2) return null;
+  const key = (c) => { const k = String(c || '').toLowerCase(); return CHANGE_WORDS[k] ? k : null; };
+  const marks = rs.map((r) => ({ filed: r.filed, periodLabel: r.periodLabel || null, change: key(r.guideChange) }));
+  const counts = { none: 0 };
+  for (const m of marks) { const k = m.change || 'none'; counts[k] = (counts[k] || 0) + 1; }
+  // How many gave an outlook at all: guidance items, a headline guide, or a stated change.
+  const guided = rs.filter((r) => (Array.isArray(r.guides) && r.guides.length) || r.guideSentence || r.guideKind || key(r.guideChange)).length;
+  const day = (d) => Date.parse(String(d) + 'T12:00:00Z');
+  const guide = { above: 0, atOrBelow: 0, n: 0, last: [] };
+  for (let i = 0; i + 1 < rs.length; i++) {
+    const a = rs[i], b = rs[i + 1];
+    const mid = guideMidOf(guideReadings(a).revQ) != null ? guideMidOf(guideReadings(a).revQ)
+      : (() => { const g = guideReadings(a); return g.revVsQ != null && a.revenue > 0 ? a.revenue * (1 + g.revVsQ / 100) : null; })();
+    if (mid == null || !(mid > 0) || !(b.revenue > 0)) continue;
+    const gap = a.periodEnd && b.periodEnd ? (day(b.periodEnd) - day(a.periodEnd)) / 86400000 : (day(b.filed) - day(a.filed)) / 86400000;
+    if (!(gap >= 50 && gap <= 130)) continue;
+    if ((a.currency || 'USD') !== (b.currency || 'USD')) continue;
+    const k = b.revenue / mid;
+    if (k < 0.5 || k > 2) continue;
+    const above = b.revenue > mid;
+    guide.n++; if (above) guide.above++; else guide.atOrBelow++;
+    guide.last.push({ periodLabel: b.periodLabel || null, filed: b.filed, revenue: b.revenue, guideMid: mid, above });
+  }
+  guide.last = guide.last.slice(-12);
+  let run = null;
+  const newest = marks[marks.length - 1].change;
+  if (newest) { let n = 0; for (let i = marks.length - 1; i >= 0 && marks[i].change === newest; i--) n++; run = { kind: newest, n }; }
+  let lastCut = null;
+  for (let i = marks.length - 1; i >= 0; i--) if (marks[i].change === 'lowered' || marks[i].change === 'withdrawn') { lastCut = Object.assign({}, marks[i]); break; }
+  const recent = rs.slice(-20);
+  const cur = recent[recent.length - 1].currency || 'USD';
+  const revenue = recent.filter((r) => (r.currency || 'USD') === cur).map((r) => ({ filed: r.filed, periodLabel: r.periodLabel || null, revenue: r.revenue == null ? null : r.revenue }));
+  const last = rs[rs.length - 1];
+  return { n: rs.length, first: rs[0].filed, last: last.filed, marks, counts, guided, guide, run, lastCut,
+    revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
+}
+
+module.exports = { trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

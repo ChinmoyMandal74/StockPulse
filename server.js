@@ -12869,6 +12869,13 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     const sym = String(srNeed.symbol || '').toUpperCase();
     try { srd = /^[A-Z0-9.-]{1,15}$/.test(sym) ? { symbol: sym, releases: (await store.readEarningsReleases(sym, 2)).filter((r) => r.isResults).map((r) => Releases.forReader(r, [])) } : { releases: [] }; } catch { srd = { releases: [] }; }
   }
+  // The Earnings track record card: that company's releases read together.
+  let trk = null;
+  const trkNeed = Cards.trackNeed(post.tpl, post.opts || {});
+  if (trkNeed) {
+    const sym = String(trkNeed.symbol || (stocks[0] && stocks[0].symbol) || '').toUpperCase();
+    try { trk = /^[A-Z0-9.-]{1,15}$/.test(sym) ? { symbol: sym, track: Releases.trackRecord(await store.readEarningsReleases(sym, 120)) } : { track: null }; } catch { trk = { track: null }; }
+  }
   // The At a glance card: its stock's newest release for Earnings and guidance.
   let glRel = null;
   if (post.tpl === 'glance') {
@@ -12906,6 +12913,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getReported: () => rptd,
       getReleaseColumn: () => rcol || { rows: {} },
       getRelease: () => srd || { releases: [] },
+      getTrack: () => trk || { track: null },
       // The At a glance card: the stock page's own cards, over the same rows.
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(glRel && glRel.symbol === s ? Object.assign({}, r, glRel.fields) : r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
@@ -15894,6 +15902,16 @@ async function releasesDayPayload(asked) {
 // its rows there, as Tone 7D is: never stamped on a snapshot row, never read
 // by the Signal. Members only; kept ten minutes per instance.
 let releaseColHeld = null;
+// ONE COMPANY'S TRACK RECORD (2026-10-23, the Earnings track record card):
+// its releases on file read together (Releases.trackRecord). The phone's
+// saved-post route reads the same rows through the same function.
+app.get('/api/releases/track', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
+  res.json({ symbol, track: Releases.trackRecord(await store.readEarningsReleases(symbol, 120)) });
+}));
 app.get('/api/releases/column', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
