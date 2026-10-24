@@ -3091,6 +3091,12 @@ async function writeReleaseDrivers(accn, drivers) {
   await init();
   await db.execute({ sql: 'update earnings_releases set drivers = ? where accn = ?', args: [JSON.stringify(drivers || { helped: [], weighed: [] }), String(accn)] });
 }
+// The stated guidance change alone (2026-10-24): Initiated worked out from the
+// history, after the reading is written. Nothing else in the row is touched.
+async function writeReleaseChange(accn, change, quote) {
+  await init();
+  await db.execute({ sql: 'update earnings_releases set guide_change = ?, guide_change_quote = ? where accn = ?', args: [change || null, quote ? String(quote).slice(0, 200) : null, String(accn)] });
+}
 async function readEarningsReleasesOn(day) {
   await init();
   const r = await db.execute({ sql: 'select * from earnings_releases where filed = ?', args: [String(day)] });
@@ -8248,7 +8254,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

@@ -10,6 +10,10 @@
 //   ... --symbols NVDA,GE      those companies only
 //   ... --since 2017-01-01     the first filing date read (the default)
 //   ... --list-only            count the filings, call no model (SEC fetches only)
+//   ... --rechange             read again the stored results releases that gave an
+//                              outlook but have no stated change, writing ONLY the
+//                              guidance columns, then work out Initiated from the
+//                              history for every company (2026-10-24)
 //   ... --force --symbols NVDA read those companies' filings again, replacing
 //                              the stored readings (after a reader fix)
 //
@@ -51,6 +55,7 @@ const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since') : 
 const SYMBOLS = (opt('--symbols', '') || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
 const LIMIT = Math.max(0, Number(opt('--limit', 0)) || 0);
 const FORCE = flag('--force') && SYMBOLS.length > 0;
+const RECHANGE = flag('--rechange');
 const CONC = Math.max(1, Math.min(8, Number(opt('--conc', 4)) || 4));
 const MAX_USD = Number(opt('--max-usd', 2)) || 2;
 const MAX_MIN = Number(opt('--max-minutes', 600)) || 600;
@@ -158,10 +163,81 @@ function refAt(facts, filed) {
 const inflight = new Set();
 async function slot() { while (inflight.size >= CONC) await Promise.race(inflight); }
 let stopErr = null;
-const tally = { companies: 0, listed: 0, known: 0, read: 0, results: 0, notResults: 0, flagged: 0, failed: 0, written: 0, checked: 0, differ: 0, noRef: 0 };
+const tally = { rechanged: 0, kinds: {}, initiated: 0, companies: 0, listed: 0, known: 0, read: 0, results: 0, notResults: 0, flagged: 0, failed: 0, written: 0, checked: 0, differ: 0, noRef: 0 };
 const logLine = (s) => console.log(s);
 const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
 
+// INITIATED, FROM THE HISTORY (the owner's choice, 2026-10-24): each of the
+// company's results releases with no stated change that gives the first
+// full-year guidance on file for a year (Releases.initiatedFrom). Only that
+// column and its quote are written.
+async function initiatedPass(sym) {
+  const rows = await store.readEarningsReleases(sym, 160).catch(() => []);
+  for (const r of rows) {
+    if (!r.isResults || r.guideChange) continue;
+    const it = Rel.initiatedFrom(r, rows);
+    if (!it) continue;
+    tally.initiated++;
+    if (COMMIT) await store.writeReleaseChange(r.accn, 'initiated', it.sentence || null);
+  }
+}
+// THE CHANGE, READ AGAIN (--rechange): the same request as a reading, only the
+// guidance kept. Guidance items the new reading lacks keep the stored ones.
+async function rechangeOne(sym, x, text, facts) {
+  try {
+    const got = await ask(text);
+    const { row, problems } = Rel.toRow(got.ans, text, { accn: x.accn, symbol: sym, filed: x.filed, url: x.url });
+    if (!row.isResults) { logLine(`  ${sym} ${x.filed}: read as not results this time; left as stored | $${got.usd.toFixed(4)}`); return; }
+    const guides = row.guides && row.guides.length ? row.guides : (x.guides || []);
+    const it = guides.find((g) => g.metric === 'eps_gaap' && g.periodType === 'full_year' && g.prior == null);
+    const g = { guides, guideChange: row.guideChange || null, guideChangeQuote: row.guideChangeQuote || null, epsGuidePrior: it ? Rel.priorFyEps(it, facts) : x.epsGuidePrior };
+    tally.rechanged++;
+    const k = g.guideChange || 'none'; tally.kinds[k] = (tally.kinds[k] || 0) + 1;
+    const gp = problems.filter((p) => /^guidance change/.test(p));
+    logLine(`  ${sym} ${x.filed}: ${g.guideChange || 'no change stated'}${g.guideChangeQuote ? ' "' + g.guideChangeQuote.slice(0, 90) + '"' : ''}${gp.length ? ' | ' + gp[0].slice(0, 120) : ''} | $${got.usd.toFixed(4)}`);
+    if (COMMIT) await store.writeReleaseGuidance(x.accn, g);
+  } catch (err) {
+    if (err instanceof Stop) { stopErr = stopErr || err; return; }
+    tally.failed++;
+    logLine(`  ${sym} ${x.filed}: failed (${String(err.message).slice(0, 120)}); next run`);
+  }
+}
+async function rechangeRun(rows) {
+  let stop = 'done';
+  outer:
+  for (const r of rows) {
+    const sym = r.symbol;
+    const stored = await store.readEarningsReleases(sym, 160).catch(() => []);
+    // Only the readings whose claimed change was refused: where the model said
+    // none, the history alone decides Initiated (initiatedPass, below).
+    const targets = stored.filter((x) => x.isResults && !x.guideChange && x.url && /\.htm/i.test(x.url)
+      && ((Array.isArray(x.guides) && x.guides.length) || x.guideSentence || x.guideKind)
+      && (x.problems || []).some((p) => /^guidance change/.test(p)));
+    tally.companies++;
+    if (targets.length) {
+      console.log(`  ${sym}: ${targets.length} with an outlook and no stated change`);
+      const facts = ((await store.readSecFactsSince([sym], (Number(SINCE.slice(0, 4)) - 2) + '-01-01').catch(() => new Map())).get(sym) || []).filter((f) => f && f.periodType !== 'Q');
+      for (const x of targets) {
+        if (stopErr) break outer;
+        if (spent >= MAX_USD) { stop = 'the dollar limit'; break outer; }
+        if (Date.now() - t0 > MAX_MIN * 60000) { stop = 'the time limit'; break outer; }
+        try {
+          const html = await sec(x.url);
+          if (!html) { console.log(`  ${sym} ${x.filed}: the exhibit did not load; next run`); tally.failed++; continue; }
+          const text = Rel.toText(html);
+          await slot();
+          const p = rechangeOne(sym, x, text, facts).finally(() => inflight.delete(p));
+          inflight.add(p);
+        } catch (err) { if (err instanceof Stop) throw err; tally.failed++; }
+      }
+      await Promise.all(inflight);
+    }
+    await initiatedPass(sym);
+  }
+  await Promise.all(inflight);
+  if (stopErr) throw stopErr;
+  if (stop !== 'done') console.log('  stopping: ' + stop);
+}
 async function readOne(sym, e, meta, text, facts) {
   try {
     const got = await ask(text);
@@ -201,6 +277,7 @@ async function readOne(sym, e, meta, text, facts) {
   if (LIMIT) rows = rows.slice(0, LIMIT);
   console.log(`[${new Date().toISOString()}] results releases filed since ${SINCE}: ${rows.length} companies; model ${MODEL}, ${CONC} at once; `
     + `stop at $${MAX_USD.toFixed(2)} or ${MAX_MIN} min. ` + (LIST_ONLY ? 'LIST ONLY' : COMMIT ? 'COMMIT' : 'DRY RUN: nothing will be written'));
+  if (RECHANGE) { console.log('  RECHANGE: the stored releases with an outlook and no stated change, read again; then Initiated from the history'); await rechangeRun(rows); finish(); process.exit(0); }
   let stop = 'done';
   outer:
   for (const r of rows) {
@@ -253,6 +330,9 @@ async function readOne(sym, e, meta, text, facts) {
         console.log(`  ${sym} ${e.filed}: failed (${String(err.message).slice(0, 120)}); next run`);
       }
     }
+    // The company's readings all in: Initiated from its history.
+    await Promise.all(inflight);
+    await initiatedPass(sym);
   }
   await Promise.all(inflight);
   if (stopErr) throw stopErr;
@@ -267,6 +347,7 @@ async function readOne(sym, e, meta, text, facts) {
 });
 function finish() {
   const t = tally;
+  if (RECHANGE || t.initiated) console.log(`  guidance change: ${t.rechanged} read again (${JSON.stringify(t.kinds)}); ${t.initiated} initiated from the history`);
   console.log(`  done: ${t.companies} companies, ${t.listed} results 8-Ks listed (${t.known} read before); ${t.read} read (${t.results} results, ${t.notResults} not), `
     + `${t.flagged} with a figure refused, ${t.failed} to retry, ${t.noRef} without a size reference; 10-Q ${t.checked} compared, ${t.differ} differ; `
     + `${COMMIT ? t.written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);

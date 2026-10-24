@@ -209,6 +209,9 @@ async function guidancePass() {
       const { row, problems } = Rel.toRow(got.ans, text, { accn: r.accn, symbol: r.symbol, filed: r.filed, url: r.url });
       const g = { guides: row.isResults ? row.guides || [] : [], guideChange: row.guideChange, guideChangeQuote: row.guideChangeQuote };
       g.epsGuidePrior = await epsGuidePrior(Object.assign({ symbol: r.symbol }, g));
+      if (!g.guideChange) {
+        try { const it = Rel.initiatedFrom(Object.assign({}, r, { guides: g.guides, guideChange: null }), await store.readEarningsReleases(r.symbol, 160)); if (it) { g.guideChange = 'initiated'; g.guideChangeQuote = it.sentence || null; } } catch (err) { /* left as no change stated */ }
+      }
       const gp = problems.filter((p) => /^guidance/.test(p));
       console.log(`  ${r.symbol} ${r.filed}: ${g.guides.length} item(s)` + (g.guideChange ? `, ${g.guideChange}` : '') + (g.epsGuidePrior != null ? `, prior FY EPS ${g.epsGuidePrior} (10-K)` : '') + (gp.length ? ' | ' + gp.join('; ') : '') + ` | $${got.usd.toFixed(4)}`);
       if (COMMIT) await store.writeReleaseGuidance(r.accn, g);
@@ -309,6 +312,11 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       if (problems.length) flagged++;
       delete row.ref;
       if (row.isResults) row.epsGuidePrior = await epsGuidePrior(row);
+      // INITIATED, FROM THE HISTORY (2026-10-24): the first full-year guidance
+      // on file for a year, from the company's earlier readings.
+      if (row.isResults && !row.guideChange) {
+        try { const it = Rel.initiatedFrom(row, await store.readEarningsReleases(e.symbol, 160)); if (it) { row.guideChange = 'initiated'; row.guideChangeQuote = it.sentence || null; } } catch (err) { /* left as no change stated */ }
+      }
       const out = Object.assign(row, { problems, model: ex ? MODEL : null, inTok: cost.inTok, outTok: cost.outTok, usd: cost.usd, readAt: Date.now() });
       const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
       console.log(`  ${e.symbol} ${e.filed}: ` + (row.isResults

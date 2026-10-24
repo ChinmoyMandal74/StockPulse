@@ -260,6 +260,53 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('change: about costs, not revenue or earnings, is refused (Meta)', ch('raised', 'We are raising our expense outlook').change === null && /costs/.test(cp[cp.length - 1]));
   check('change: "we expect" is not "initiated" (Crown)', ch('initiated', 'We expect full year adjusted diluted earnings per share to be in the range of $8.35 to $8.45').change === null);
   check('change: none is no change', ch('none', '').change === null);
+  // THE GUIDANCE CHANGE, READ BETTER (2026-10-24): the figures decide, more
+  // wordings count, Initiated only from the history, refused quotes kept.
+  {
+    const t2 = 'Raising full-year 2026 guidance: GAAP diluted EPS guidance range to $6.24 to $6.44 from $5.94 to $6.14. '
+      + 'Updating full year 2019 Adjusted EBITDA guidance to a range of $550 million to $570 million from $610 million to $630 million. '
+      + 'The company now expects revenue growth of 7 to 7.5%, up from the prior guidance of 6 to 7%. '
+      + 'The company continues to expect organic sales growth of 3% for 2017. Consistent with the prior outlook, full-year EPS is forecast to be between $3.14 and $3.30. '
+      + 'Company Provides 2024 Financial Outlook. Revenue of $15.1 billion, compared with prior guidance of $15.1 billion. Full-year 2017 earnings guidance maintained; 2018 guidance initiated.';
+    const n2 = t2.replace(/\s+/g, ' '), p2 = [];
+    const gc = (direction, quote, compared) => Rel.guideChange({ direction, quote, compared: compared || [] }, n2, p2);
+    const up = { measure: 'GAAP EPS', from_printed: '$5.94 to $6.14', to_printed: '$6.24 to $6.44' };
+    const down = { measure: 'Adjusted EBITDA', from_printed: '$610 million to $630 million', to_printed: '$550 million to $570 million' };
+    check('change: figures up are raised, whatever the quote says', gc('raised', 'Raising full-year 2026 guidance', [up]).change === 'raised');
+    const r = gc('reaffirmed', 'Updating full year 2019 Adjusted EBITDA guidance', [down]);
+    check('change: figures down are lowered, and a model word that disagrees is noted', r.change === 'lowered' && /figures say "lowered"/.test(p2[p2.length - 1]), [r, p2[p2.length - 1]]);
+    check('change: one up and one down is mixed', gc('raised', '', [up, down]).change === 'mixed');
+    check('change: a raise the company states in the quote joins the figures (one pair down, the raise in words: mixed)', gc('mixed', 'Raising full-year 2026 guidance', [down]).change === 'mixed' && gc('lowered', 'Raising full-year 2026 guidance', [down]).change === 'lowered');
+    check('change: the same figure again is reaffirmed', gc('none', '', [{ measure: 'Revenue', from_printed: '$15.1 billion', to_printed: '$15.1 billion' }]).change === 'reaffirmed');
+    check('change: with no quote in the text, the pairs themselves are the quote', /\$6\.24 to \$6\.44 \(was \$5\.94 to \$6\.14\)/.test(gc('raised', 'not in the text', [up]).quote || ''));
+    check('change: a figure not in the release is no evidence (falls back to the words)', gc('raised', 'Raising full-year 2026 guidance', [{ measure: 'EPS', from_printed: '$1.00', to_printed: '$9.99' }]).change === 'raised'
+      && gc('lowered', 'Raising full-year 2026 guidance', [{ measure: 'EPS', from_printed: '$1.00', to_printed: '$9.99' }]).change === null);
+    check('change: only revenue and earnings measures are compared (a currency impact is not)', Rel.comparedDirection([{ measure: 'Currency impact on full-year adjusted diluted EPS', from_printed: '$5.94 to $6.14', to_printed: '$6.24 to $6.44' }], n2) === null
+      && Rel.comparedDirection([{ measure: 'Capital expenditures', from_printed: '$5.94 to $6.14', to_printed: '$6.24 to $6.44' }], n2) === null
+      && Rel.comparedDirection([{ measure: 'Adjusted diluted EPS', from_printed: '$5.94 to $6.14', to_printed: '$6.24 to $6.44' }], n2).change === 'raised');
+    check('change: a percent beside a dollar figure is not compared', Rel.comparedDirection([{ measure: 'x', from_printed: '6 to 7%', to_printed: '$6.24 to $6.44' }], n2) === null);
+    check('change: "up from the prior guidance" says raised', gc('raised', 'The company now expects revenue growth of 7 to 7.5%, up from the prior guidance of 6 to 7%').change === 'raised');
+    check('change: "continues to expect" and "consistent with the prior outlook" say reaffirmed',
+      gc('reaffirmed', 'The company continues to expect organic sales growth of 3% for 2017').change === 'reaffirmed'
+      && gc('reaffirmed', 'Consistent with the prior outlook, full-year EPS is forecast to be between $3.14 and $3.30').change === 'reaffirmed');
+    check('change: the model\'s "initiated" is never taken (worked out from the history)', gc('initiated', 'Full-year 2017 earnings guidance maintained; 2018 guidance initiated').change === null);
+    gc('lowered', 'Company Provides 2024 Financial Outlook');
+    check('change: a refused claim keeps its quote in the notes', /the quote does not say so \("Company Provides 2024 Financial Outlook"\)/.test(p2[p2.length - 1]), p2[p2.length - 1]);
+    check('printed: a dash between figures is a range, brackets a loss', Rel.printedMid('$15.1 - $15.5 billion', null).mid === 15.3 && Math.abs(Rel.printedMid('($4.52) to ($4.45)', null).mid + 4.485) < 1e-9);
+
+    // Initiated from the history.
+    const rr = (filed, years, extra) => Object.assign({ accn: 'a' + filed, isResults: true, filed, guideChange: null,
+      guides: years.map((y) => ({ metric: 'revenue', periodType: 'full_year', periodLabel: 'fiscal ' + y, low: 1, high: 2 })) }, extra || {});
+    const hist = [rr('2024-02-01', [2024]), rr('2024-05-01', [2024]), rr('2024-08-01', [2024]), rr('2024-11-01', [2024])];
+    check('initiated: the first full-year guidance on file for a year', !!Rel.initiatedFrom(rr('2025-02-01', [2025]), hist));
+    check('initiated: a year already guided is not', Rel.initiatedFrom(rr('2025-02-01', [2024]), hist) === null);
+    check('initiated: a stated change stands instead', Rel.initiatedFrom(rr('2025-02-01', [2025], { guideChange: 'raised' }), hist) === null);
+    check('initiated: not decided without a year of history before it', Rel.initiatedFrom(rr('2025-02-01', [2025]), hist.slice(2)) === null);
+    check('initiated: not decided when an earlier release was never read for its items', Rel.initiatedFrom(rr('2025-02-01', [2025]), hist.concat([rr('2024-12-01', [], { guides: null })])) === null);
+    check('initiated: quarterly guidance alone is not', Rel.initiatedFrom(Object.assign(rr('2025-02-01', []), { guides: [{ metric: 'revenue', periodType: 'quarter', periodLabel: 'Q1 2025', low: 1, high: 2 }] }), hist) === null);
+  }
+
+
 
   check('year: from the label', Rel.guideYear('fiscal year 2027') === 2027 && Rel.guideYear("FY27") === 2027 && Rel.guideYear('full year 2026') === 2026 && Rel.guideYear('next year') === null);
   const facts = [{ periodType: 'FY', form: '10-K', periodEnd: '2025-12-31', epsDiluted: 0.47, filed: '2026-02-20' }, { periodType: 'FY', form: '10-K', periodEnd: '2024-12-31', epsDiluted: 6.47, filed: '2026-02-20' },

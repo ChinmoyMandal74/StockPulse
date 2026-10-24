@@ -98,11 +98,16 @@ const SCHEMA = { type: 'object', additionalProperties: false,
         unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions', 'percent', 'per_share', 'none'] },
         prior_year_printed: { type: 'string', description: 'Only for a full-year item: the PREVIOUS full year’s actual figure of the same measure, if the release prints it beside the outlook (e.g. "compared with $5.10 in 2025"), as printed. Empty otherwise.' },
         sentence: { type: 'string', description: 'The sentence or table line it comes from, word for word, under 240 characters.' } } } },
-    guidance_change: { type: 'object', additionalProperties: false, required: ['direction', 'quote'], description: 'Whether the company says it changed its outlook. Only what the release itself states.',
+    guidance_change: { type: 'object', additionalProperties: false, required: ['direction', 'quote', 'compared'], description: 'Whether the company says it changed its outlook. Only what the release itself states.',
       properties: {
         direction: { type: 'string', enum: ['raised', 'reaffirmed', 'lowered', 'initiated', 'withdrawn', 'mixed', 'none'],
           description: 'Judge ONLY the revenue and earnings (EPS, net income) outlook; ignore expense, capital spending, tax and other guidance. raised: it raises at least one revenue or earnings figure and lowers none (reaffirming the rest is still raised). lowered: it lowers at least one and raises none. reaffirmed (or maintained, reiterated): it keeps them unchanged. mixed: it raises one revenue or earnings figure and lowers another. initiated: it gives a revenue or earnings outlook for a new period for the first time. withdrawn: it withdraws or suspends it. none: it says nothing about a change to its revenue or earnings outlook, or gives none.' },
-        quote: { type: 'string', description: 'The words that say it, copied exactly from the release, under 200 characters. Empty for none.' } } },
+        quote: { type: 'string', description: 'The words that say it, copied exactly from the release, under 200 characters. Empty for none.' },
+        compared: { type: 'array', description: 'Every revenue or earnings outlook figure the release sets beside its EARLIER guidance for the same measure and period ("to $6.24 to $6.44 from $5.94 to $6.14", "$15.1 billion, previously $15.0 billion", "up from the prior 6 to 7%", or a table with a prior and a current column). Each figure copied exactly as printed. Empty array if the release gives no earlier figure beside a new one.',
+          items: { type: 'object', additionalProperties: false, required: ['measure', 'from_printed', 'to_printed'], properties: {
+            measure: { type: 'string', description: 'What it is, as the release names it (e.g. "Adjusted EPS", "Net revenue").' },
+            from_printed: { type: 'string', description: 'The EARLIER guidance figure or range, exactly as printed.' },
+            to_printed: { type: 'string', description: 'The NEW guidance figure or range, exactly as printed.' } } } } } },
     // WHAT HELPED AND WHAT WEIGHED (2026-10-23): the company's own explanation
     // of the quarter, never an opinion of ours, each point backed by a phrase
     // copied from the release.
@@ -121,7 +126,7 @@ const SYSTEM = 'You read a company’s quarterly results press release and copy 
   + 'Copy each number EXACTLY as printed in the document; never compute, round, convert or derive one, and never turn a midpoint plus-or-minus into a range. '
   + 'If a figure or text is not in the document, give an empty string. Quarter figures only, never year-to-date or full-year (except in guidance, which may be for a year). '
   + 'In drivers, give only the reasons the company itself states for this quarter, each with a phrase copied from the release. '
-  + 'For the outlook, list every figure in guidance_items, and say in guidance_change only what the company itself states about raising, lowering, reaffirming, initiating or withdrawing it. '
+  + 'For the outlook, list every figure in guidance_items, and say in guidance_change only what the company itself states about raising, lowering, reaffirming, initiating or withdrawing it; where the release prints an earlier guidance figure beside a new one, copy both into compared. '
   + 'Report what the document says; add nothing.';
 // 6000, not 3000 (the history backfill, 2026-10-23): a hundred releases with
 // long outlooks (Intuit, J&J, Cigna, Danaher) stopped at the limit and were
@@ -334,28 +339,130 @@ const guideMidOf = (g) => (!g ? null : g.mid != null ? g.mid : g.low != null && 
 // THE STATED CHANGE: kept only when its quote is in the release, word for
 // word, and carries a word that says that change. The model's own view of the
 // outlook is never asked for or taken: this is what the company says.
+// More of the companies' own wordings (2026-10-24, from a re-read of 260
+// refused claims): "up from the prior guidance", "continues to expect",
+// "consistent with the prior outlook", "reconfirms", "on track".
 const CHANGE_WORDS = {
-  raised: /\b(rais|increas|lift|boost|upgrad|higher)/i,
-  lowered: /\b(lower|reduc|cut|decreas|trim|downgrad)/i,
-  reaffirmed: /\b(reaffirm|affirm|maintain|reiterat|confirm|unchanged)/i,
+  raised: /\b(rais|increas|lift|boost|upgrad|higher|up from|above (the |its |our )?(prior|previous|earlier))/i,
+  lowered: /\b(lower|reduc|cut|decreas|trim|downgrad|down from|below (the |its |our )?(prior|previous|earlier)|no longer expect)/i,
+  reaffirmed: /\b(reaffirm|affirm|maintain|reiterat|confirm|reconfirm|unchanged|continues? to (expect|anticipate|project|forecast|see)|consistent with (its |the |our )?(prior|previous|initial|earlier)|in line with (its |the |our )?(prior|previous|initial|earlier)|on track)/i,
   // Not "expect" or "provide": every outlook sentence says those (Crown, 2026-10-19).
   initiated: /\b(initiat|introduc|establish|initial|first)/i,
   withdrawn: /\b(withdr|suspend|no longer)/i,
 };
 const flatQ = (t) => String(t).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').toLowerCase();
+// A printed guidance figure or range as one number: the middle of a range
+// ("$6.24 to $6.44", "$15.1 - $15.5 billion", "($4.52) to ($4.45)"), the
+// figure itself otherwise, with its scale word. Every number in it must be in
+// the release (inText); null when one is not, or when there is no number.
+function printedMid(p, norm) {
+  const s0 = blankStr(p);
+  if (s0 == null) return null;
+  const sp = split(s0) || { core: s0, mult: null };
+  // A dash between two figures is a range, not a minus.
+  const s = sp.core.replace(/(\d%?)\s*[-–—]\s*(?=\(?\$?\s?\d)/g, '$1 to ');
+  const toks = s.match(/\(?[-−]?\$?\s?\d[\d,]*(?:\.\d+)?\)?/g) || [];
+  const vals = [];
+  for (const t of toks.slice(0, 2)) {
+    const core = t.replace(/^\(|\)$/g, '').replace(/^[-−]/, '').trim();
+    if (norm != null && !inText(norm, core)) return null;
+    const v = num(t.trim());
+    if (v == null) return null;
+    vals.push(v);
+  }
+  if (!vals.length) return null;
+  const mid = vals.length === 2 ? (vals[0] + vals[1]) / 2 : vals[0];
+  return { mid, mult: sp.mult || null, pct: /%|percent/i.test(s0) };
+}
+// THE FIGURES DECIDE (2026-10-24). Each pair the release prints (earlier
+// guidance beside the new), both found in the text, compared: higher is up,
+// lower is down, within a tenth of a percent is the same. Pairs in different
+// units (a percent beside a dollar figure) are left out.
+// Only revenue and earnings measures are compared: a currency impact, a tax
+// rate, a cost or a spending line moving is not the outlook for what the
+// company earns (Philip Morris's "currency impact on EPS: 0.18 (was 0.24)").
+const OUTLOOK_MEASURE = /revenue|sales|\beps\b|earning|income|ebit|profit|\bffo\b|\baffo\b|per (diluted |common )?share|bookings|\barr\b|net interest/i;
+const NOT_OUTLOOK = /currency|impact|\btax|expense|cost|capex|capital|spend|headwind|tailwind|share count|shares outstanding|dilution|interest expense|depreciation|amortization/i;
+function comparedDirection(list, norm) {
+  let up = 0, down = 0, same = 0;
+  const pairs = [];
+  for (const it of Array.isArray(list) ? list.slice(0, 12) : []) {
+    const m = String((it && it.measure) || '');
+    if (!OUTLOOK_MEASURE.test(m) || NOT_OUTLOOK.test(m)) continue;
+    const a = printedMid(it && it.from_printed, norm), b = printedMid(it && it.to_printed, norm);
+    if (!a || !b || a.pct !== b.pct) continue;
+    const ka = a.mult || b.mult || 1, kb = b.mult || a.mult || 1;
+    const x = a.mid * ka, y = b.mid * kb;
+    if (!(Math.abs(x) > 0)) continue;
+    const r = (y - x) / Math.abs(x);
+    const dir = Math.abs(r) < 0.001 ? 'same' : r > 0 ? 'up' : 'down';
+    if (dir === 'up') up++; else if (dir === 'down') down++; else same++;
+    pairs.push({ measure: blankStr(it.measure), from: blankStr(it.from_printed), to: blankStr(it.to_printed), dir });
+  }
+  if (!pairs.length) return null;
+  const change = up && down ? 'mixed' : up ? 'raised' : down ? 'lowered' : 'reaffirmed';
+  return { change, pairs };
+}
+// A refused claim keeps its quote in the reading's notes, so a blank can be
+// looked into later without reading the release again.
+const said = (q) => (q ? ' ("' + String(q).replace(/\s+/g, ' ').slice(0, 140) + '")' : '');
 function guideChange(c, norm, problems) {
   const d = c && c.direction;
-  if (!d || d === 'none') return { change: null, quote: null };
-  const quote = blankStr(c.quote);
-  if (!quote || !flatQ(norm).includes(flatQ(quote))) { problems.push('guidance change "' + d + '": its words are not in the release'); return { change: null, quote: null }; }
+  const quote0 = blankStr(c && c.quote);
+  const quoteOk = !!quote0 && flatQ(norm).includes(flatQ(quote0));
+  // 1. The figures, where the release prints the earlier guidance beside the
+  //    new: their direction stands, whatever word the model chose.
+  const cmp = comparedDirection(c && c.compared, norm);
+  if (cmp) {
+    // The figures may be a partial list: a direction the company STATES in
+    // the quoted words (and the model named) joins theirs. Philip Morris
+    // "REVISES ... REPORTED DILUTED EPS FORECAST ... AND RAISES" its adjusted
+    // EPS (2021-07-20): one pair down, the raise in words, so mixed.
+    let up = cmp.pairs.some((p) => p.dir === 'up'), down = cmp.pairs.some((p) => p.dir === 'down');
+    if (quoteOk && (d === 'raised' || d === 'mixed') && CHANGE_WORDS.raised.test(quote0)) up = true;
+    if (quoteOk && (d === 'lowered' || d === 'mixed') && CHANGE_WORDS.lowered.test(quote0)) down = true;
+    const change = up && down ? 'mixed' : up ? 'raised' : down ? 'lowered' : 'reaffirmed';
+    if (d && d !== 'none' && d !== change && d !== 'initiated') problems.push('guidance change: the model said "' + d + '", the figures say "' + change + '"' + said(quote0));
+    const q = quoteOk ? quote0 : cmp.pairs.map((p) => (p.measure ? p.measure + ': ' : '') + p.to + ' (was ' + p.from + ')').join('; ');
+    return { change, quote: q.slice(0, 200) };
+  }
+  // INITIATED IS WORKED OUT FROM THE HISTORY (the owner's choice, 2026-10-24):
+  // the first full-year guidance on file for a year (initiatedFrom), never the
+  // model's word, which it gave to every routine outlook.
+  if (!d || d === 'none' || d === 'initiated') return { change: null, quote: null };
+  // 2. The words, where there are no figures to compare.
+  const quote = quote0;
+  if (!quote || !quoteOk) { problems.push('guidance change "' + d + '": its words are not in the release' + said(quote)); return { change: null, quote: null }; }
   const ok = d === 'mixed' ? CHANGE_WORDS.raised.test(quote) && CHANGE_WORDS.lowered.test(quote) : !!(CHANGE_WORDS[d] && CHANGE_WORDS[d].test(quote));
-  if (!ok) { problems.push('guidance change "' + d + '": the quote does not say so'); return { change: null, quote: null }; }
+  if (!ok) { problems.push('guidance change "' + d + '": the quote does not say so' + said(quote)); return { change: null, quote: null }; }
   // About revenue or earnings, not costs: Meta's "raising our expense outlook"
   // (2026-10-21) is not a change to what it expects to earn.
   if (/\b(expense|cost|capex|capital expenditure|tax rate|spending)/i.test(quote) && !/\b(revenue|sales|eps|earnings|income|per share|profit|outlook for the (year|quarter)|guidance)\b/i.test(quote.replace(/expense outlook/ig, ''))) {
-    problems.push('guidance change "' + d + '": the quote is about costs, not revenue or earnings'); return { change: null, quote: null };
+    problems.push('guidance change "' + d + '": the quote is about costs, not revenue or earnings' + said(quote)); return { change: null, quote: null };
   }
   return { change: d, quote: quote.slice(0, 200) };
+}
+// INITIATED, FROM THE HISTORY (the owner, 2026-10-24: option b). A release
+// with no stated change is "initiated" when it gives full-year guidance for a
+// year that no earlier release on file gave full-year guidance for. Decided
+// only where the history can say so: an earlier release on file at least 330
+// days before (so the year before is covered), and every earlier release in
+// those 450 days read for its guidance items. `earlier`: the company's other
+// readings (any order; later ones and non-results are ignored). Returns the
+// item the release initiates (its sentence is the company's words), or null.
+function initiatedFrom(row, earlier) {
+  if (!row || !row.isResults || row.guideChange || !Array.isArray(row.guides) || !row.filed) return null;
+  const fy = row.guides.filter((g) => g && g.periodType === 'full_year' && guideYear(g.periodLabel));
+  if (!fy.length) return null;
+  const day = (d) => Date.parse(String(d) + 'T12:00:00Z');
+  const t = day(row.filed);
+  const prior = (earlier || []).filter((r) => r && r.isResults && r.filed && r.filed < row.filed && r.accn !== row.accn);
+  if (!prior.some((r) => t - day(r.filed) >= 330 * 86400000)) return null;
+  const window = prior.filter((r) => t - day(r.filed) <= 450 * 86400000);
+  if (window.some((r) => !Array.isArray(r.guides))) return null;
+  const seen = new Set();
+  for (const r of window) for (const g of r.guides) if (g && g.periodType === 'full_year') { const y = guideYear(g.periodLabel); if (y) seen.add(y); }
+  return fy.find((g) => !seen.has(guideYear(g.periodLabel))) || null;
 }
 // THE YEAR A FULL-YEAR ITEM IS FOR, from its label ("fiscal 2027", "FY27",
 // "full year 2026"); null when it names none.
@@ -614,4 +721,4 @@ function trackRecord(rows) {
     revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
 }
 
-module.exports = { trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
