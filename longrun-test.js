@@ -236,5 +236,59 @@ const good = () => [
   check('the reports must be consecutive years', LR.piotroski(gap, [], TODAY), null);
 }
 
+console.log('the compounding record');
+// Eleven annual reports, 2015 to 2025: revenue up every year, earnings
+// doubling over the decade with the share count falling, steady margins and
+// cash flow at net income. Every check passes.
+const steady = () => {
+  const out = [];
+  for (let y = 2025; y >= 2015; y--) {
+    const k = y - 2015;                                  // 0..10
+    const rev = 1000 * Math.pow(1.08, k), ni = 100 * Math.pow(1.12, k);
+    out.push({ periodType: 'FY', periodEnd: y + '-12-31', filed: (y + 1) + '-02-20', revenue: rev, operatingIncome: rev * 0.2,
+      netIncome: ni, freeCashFlow: ni * 1.0, sharesDiluted: 100 * Math.pow(0.99, k) });
+  }
+  return out;
+};
+{
+  const r = LR.compounding(steady(), [], TODAY);
+  check('steady: five of five, ten years', [r.checks, r.bits, r.years, r.revUp, r.revN], [5, '11111', 11, 10, 10]);
+  check('steady: EPS growth a year is earnings over shares, ~13.1%', Math.abs(r.epsG - 13.1) < 0.2, true);
+  check('steady: shares about -1% a year, margins never below typical, FCF 1.0', [Math.round(r.shares), r.marginLow, r.fcfConv], [-1, 100, 1]);
+  // A 10-for-1 split in 2021: the earlier reports' counts are a tenth.
+  const sp = steady(); for (const x of sp) if (x.periodEnd < '2021') x.sharesDiluted /= 10;
+  const r2 = LR.compounding(sp, [{ d: '2021-06-01', f: 10 }], TODAY);
+  check('a split is not a fall in EPS or a jump in shares', [r2.checks, Math.round(r2.shares)], [5, -1]);
+  check('...and without the split it would read as a tenfold dilution', LR.compounding(sp, [], TODAY).shares > 20, true);
+  check('no split history held: no per-share reading and no count', [LR.compounding(steady(), null, TODAY).epsG, LR.compounding(steady(), null, TODAY).checks], [null, null]);
+  // A bad year: margin falls to a third of typical, revenue down that year.
+  const dip = steady(); dip[5].operatingIncome = dip[5].revenue * 0.06; dip[5].revenue = dip[6].revenue * 0.9;
+  const r3 = LR.compounding(dip, [], TODAY);
+  check('a deep margin year fails that check, and revenue rose 9 of 10 (still passes)', [r3.bits[0], r3.bits[2], r3.revUp], ['1', '0', 9]);
+  // A loss at the start: no EPS growth from a loss, so no count.
+  const loss = steady(); loss[10].netIncome = -50;
+  check('a loss at either end: no EPS growth, and no count', [LR.compounding(loss, [], TODAY).epsG, LR.compounding(loss, [], TODAY).checks], [null, null]);
+  // Free cash flow well short of net income.
+  const thin = steady(); for (const x of thin) x.freeCashFlow = x.netIncome * 0.4;
+  check('FCF at 40% of net income fails that check', LR.compounding(thin, [], TODAY).bits[3], '0');
+  // Dilution: 3% more shares a year.
+  const dil = steady(); dil.forEach((x, i) => { x.sharesDiluted = 100 * Math.pow(1.03, 10 - i); });
+  check('3% more shares a year fails that check', LR.compounding(dil, [], TODAY).bits[4], '0');
+  // A missing year breaks the run: only the newest unbroken run counts.
+  const gap = steady().filter((x) => x.periodEnd !== '2020-12-31');
+  check('a missing year leaves a run of five, under seven: nothing', LR.compounding(gap, [], TODAY), null);
+  const gap2 = steady().filter((x) => x.periodEnd !== '2017-12-31');
+  check('a gap further back: the newest eight years are read', LR.compounding(gap2, [], TODAY).years, 8);
+  check('a lender: no margin and no FCF, so no count', (() => { const r = LR.compounding(steady(), [], TODAY, true); return [r.marginLow, r.fcfConv, r.checks, r.revUp]; })(), [null, null, null, 10]);
+  const stale = steady().map((x) => Object.assign({}, x, { periodEnd: String(Number(x.periodEnd.slice(0, 4)) - 2) + x.periodEnd.slice(4) }));
+  check('the newest report more than 460 days old: nothing', LR.compounding(stale, [], TODAY), null);
+  // A foreign filer: the dollar figures carry each year's rate; own currency is read.
+  const fx = steady().map((x, i) => Object.assign({}, x, { currency: 'EUR', fxAvg: 1 + i * 0.02, revenue: x.revenue * (1 + i * 0.02), operatingIncome: x.operatingIncome * (1 + i * 0.02), netIncome: x.netIncome * (1 + i * 0.02), freeCashFlow: x.freeCashFlow * (1 + i * 0.02) }));
+  const r4 = LR.compounding(fx, [], TODAY);
+  check('a foreign filer is read in its own currency (the same record)', [r4.checks, r4.revUp, Math.abs(r4.epsG - 13.1) < 0.2], [5, 10, true]);
+  const neg = steady(); for (const x of neg) x.operatingIncome = -x.revenue * 0.05;
+  check('a typical year at a loss: no margin reading', LR.compounding(neg, [], TODAY).marginLow, null);
+}
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

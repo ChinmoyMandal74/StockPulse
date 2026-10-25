@@ -62,7 +62,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `reportdue.js` | **Report-triggered refresh**: which companies' fundamentals the nightly re-pulls because their results 8-K was just filed (up to `REPORT_REFRESH_MAX`, 100), on top of the 7-day rotation; the SEC daily read runs first to see them. `reportdue-test.js` |
 | `earndate.js`, `earndate-load.js` | The next report date when the provider gives none (nearly always): the same quarter last year plus 52 weeks, else the last report plus 91. **It feeds the Signal's Earnings soon rule.** The re-estimate script needs no API calls |
 | `grouplines.js` | **Sector, Industry and Theme lines**: a group's line from its companies' stored quarterly series (`line_series`, kept by the Long run slice): sums, summed ratios, the median company's price. Pure; `grouplines-test.js` |
-| `longrun.js` | **The Long run group**: growth over three and five years from the filings (and, as built, P/E against its own ten-year median, the dividend record, interest coverage, Piotroski). Arithmetic only; `longrun-test.js` |
+| `longrun.js` | **The Long run group**: growth over three and five years from the filings (and, as built, P/E against its own ten-year median, the dividend record, interest coverage, Piotroski, and the compounding record over ten years of annual reports). Arithmetic only; `longrun-test.js` |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
 | `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |

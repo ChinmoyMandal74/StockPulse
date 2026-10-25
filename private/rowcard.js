@@ -547,6 +547,14 @@
     ['lrun',  'Dividend /yr 5Y', (s) => V.smag(s.divGrowth5y)],
     ['lrun',  'Interest cover', (s) => (ok(s.intCover) ? { t: Number(s.intCover).toFixed(1) + '×', c: '', n: Number(s.intCover), u: 'num' } : null)],
     ['lrun',  'F-score',        (s) => (ok(s.fScore) ? { t: s.fScore + ' of 9', c: '', n: Number(s.fScore), u: 'num' } : null)],
+    // The compounding record (2026-10-25): ten years of annual reports,
+    // described, uncoloured. The count is checks passed, not a rating.
+    ['lrun',  'Compounding record', (s) => (ok(s.crChecks) ? { t: s.crChecks + ' of 5 checks', c: '', n: Number(s.crChecks), u: 'num' } : null)],
+    ['lrun',  'Revenue up years', (s) => (ok(s.crRevUp) && ok(s.crRevN) ? { t: s.crRevUp + ' of ' + s.crRevN, c: '', n: s.crRevN ? s.crRevUp / s.crRevN * 100 : null, u: 'pct' } : null)],
+    ['lrun',  'EPS /yr 10Y',    (s) => V.smag(s.crEpsG)],
+    ['lrun',  'Worst margin vs typical', (s) => (ok(s.crMarginLow) ? { t: Math.round(s.crMarginLow) + '%', c: '', n: Number(s.crMarginLow), u: 'pct' } : null)],
+    ['lrun',  'FCF / net income', (s) => (ok(s.crFcfConv) ? { t: Number(s.crFcfConv).toFixed(2), c: '', n: Number(s.crFcfConv), u: 'num' } : null)],
+    ['lrun',  'Shares /yr 10Y', (s) => V.smag(s.crShares)],
     // LAST EARNING AI EXTRACTED (2026-10-22): each company's newest results
     // release as read by releases.js, merged into a row from the release
     // column (the screener) or the stock's own releases (the stock page).

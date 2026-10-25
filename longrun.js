@@ -173,8 +173,13 @@ const GROWTH_YEARS = 6.8;
 // rows trendSeries already reads, and stores them.
 
 // A company's annual reports, newest first, one a fiscal year.
+// NOT A 10-Q (2026-10-25): Amazon's quarterly reports tag trailing-year facts
+// that read as fiscal years ending each quarter (55 such rows against 19
+// annual reports), with no revenue or share count; between two real years
+// they broke every "consecutive years" test here, so Amazon had no F-score,
+// dividend record or compounding record.
 function annuals(filled) {
-  return (filled || []).filter((r) => r && r.periodType === 'FY' && r.periodEnd)
+  return (filled || []).filter((r) => r && r.periodType === 'FY' && r.periodEnd && !/^10-Q/.test(String(r.form || '')))
     .sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1));
 }
 // The filing a row's figure came from. latestFilled fills a blank from an
@@ -394,6 +399,118 @@ const PIOTROSKI_TESTS = ['Net income above zero', 'Operating cash flow above zer
   'Cash flow above net income', 'Long-term debt to assets down', 'Current ratio up', 'No new shares',
   'Gross margin up', 'Asset turnover up'];
 
+// ---- The compounding record (2026-10-25, the owner: "how I can identify
+// permanent compounders" ... "Build it now") ----------------------------------
+//
+// A DESCRIPTION OF THE PAST TEN YEARS, NEVER A FORECAST OR A RATING: what the
+// annual reports show about the traits people mean by a compounder. Five
+// readings, each on its own, from the newest unbroken run of consecutive
+// annual reports (up to 11, so 10 year-on-year steps; at least 7):
+//   revUp/revN  the years revenue rose against the year before, in the
+//               company's own currency
+//   epsG        net income per share, compound growth a year from the first
+//               report of the run to the last, over the diluted count in
+//               today's shares (a split is not a fall in earnings per share);
+//               both ends positive
+//   marginLow   the worst year's operating margin as a percent of the median
+//               year's (100 = never below typical; a loss year reads negative)
+//   fcfConv     free cash flow over net income, both summed over the years
+//               (net income summed must be positive)
+//   shares      the diluted count's change a year, in today's shares
+// and `checks`, how many of five pass -- revenue rose in 80% of years, EPS
+// grew 10% a year, the worst margin held 70% of typical, FCF was 80% of net
+// income, the share count grew no more than 0.5% a year -- ONLY WHEN ALL FIVE
+// CAN BE SCORED, the F-score's rule: a reading that cannot be made is not a
+// fail. A lender has no operating margin or free cash flow that means the
+// same thing, so it gets neither, and so no count. No split history held:
+// no per-share or share-count reading (guessing a split is the whole factor).
+const CR_MIN_REPORTS = 7;
+const CR_MAX_REPORTS = 11;
+const CR_PASS = { revUp: 0.8, epsG: 10, marginLow: 70, fcfConv: 0.8, shares: 0.5 };
+const CR_TESTS = ['Revenue rose in at least 80% of years', 'EPS grew at least 10% a year', 'The worst year kept at least 70% of the typical margin',
+  'Free cash flow at least 80% of net income', 'Share count grew no more than 0.5% a year'];
+function compounding(filled, splitList, today, isLender) {
+  const fyAll = annuals(filled);                       // newest first
+  if (!fyAll.length) return null;
+  const t = today || new Date().toISOString().slice(0, 10);
+  if (!(daysBetween(fyAll[0].periodEnd, t) <= FY_STALE_DAYS)) return null;
+  // The newest unbroken run of consecutive fiscal years.
+  const run = [fyAll[0]];
+  for (let i = 1; i < fyAll.length && run.length < CR_MAX_REPORTS; i++) {
+    const g = daysBetween(fyAll[i].periodEnd, run[run.length - 1].periodEnd);
+    if (g < 330 || g > 400) break;
+    run.push(fyAll[i]);
+  }
+  if (run.length < CR_MIN_REPORTS) return null;
+  const yrs = run.slice().reverse();                  // oldest first
+  const span = daysBetween(yrs[0].periodEnd, yrs[yrs.length - 1].periodEnd) / 365.25;
+  const r1 = (v) => (v == null || !isFinite(v) ? null : Math.round(v * 10) / 10);
+  const r2 = (v) => (v == null || !isFinite(v) ? null : Math.round(v * 100) / 100);
+
+  // Revenue rising, year on year, both years present and positive.
+  let revUp = 0, revN = 0;
+  for (let i = 1; i < yrs.length; i++) {
+    const a = own(yrs[i - 1], 'revenue'), b = own(yrs[i], 'revenue');
+    if (a == null || b == null || !(a > 0) || !(b > 0)) continue;
+    revN++; if (b > a) revUp++;
+  }
+  const revOk = revN >= CR_MIN_REPORTS - 1;
+
+  // Shares in today's units, and net income per share.
+  const sp = Array.isArray(splitList) ? realSplits(splitList) : null;
+  // WHERE NO DILUTED COUNT IS TAGGED (Visa, several share classes), the same
+  // report states it a second way: net income over diluted EPS, off an EPS
+  // large enough that its rounding to a cent is not most of the answer (the
+  // rule adjusted.js already uses). Dated by the EPS figure's own filing.
+  const sh = (r) => {
+    if (!sp) return null;
+    let s = num(r.sharesDiluted), src = 'sharesDiluted';
+    if (!(s > 0)) {
+      const ni = num(r.netIncome), eps = num(r.epsDiluted);
+      s = ni != null && eps != null && Math.abs(eps) >= 0.2 && ni / eps > 0 ? ni / eps : null;
+      src = 'epsDiluted';
+    }
+    return s != null && s > 0 ? s * splitsSince(sourceFiled(r, src), sp) : null;
+  };
+  // The per-share ends are the oldest and newest years of the run that HAVE a
+  // count (Alphabet's 2015 report carries none), at least five years apart.
+  const first = yrs[0], last = yrs[yrs.length - 1];
+  const withSh = yrs.filter((r) => sh(r) != null);
+  const pF = withSh[0], pL = withSh[withSh.length - 1];
+  const pSpan = pF && pL ? daysBetween(pF.periodEnd, pL.periodEnd) / 365.25 : 0;
+  const shF = pSpan >= 4.9 ? sh(pF) : null, shL = pSpan >= 4.9 ? sh(pL) : null;
+  const shares = shF && shL ? r2((Math.pow(shL / shF, 1 / pSpan) - 1) * 100) : null;
+  const niF = shF ? own(pF, 'netIncome') : null, niL = shL ? own(pL, 'netIncome') : null;
+  const epsG = shF && shL && niF != null && niL != null ? cagr(niL / shL, niF / shF, pSpan) : null;
+
+  // The worst year's operating margin against the median year's.
+  let marginLow = null;
+  if (!isLender) {
+    const m = yrs.map((r) => { const rev = own(r, 'revenue'), oi = own(r, 'operatingIncome'); return rev != null && rev > 0 && oi != null ? oi / rev : null; }).filter((v) => v != null);
+    if (m.length >= CR_MIN_REPORTS) {
+      const med = median(m);
+      if (med > 0) marginLow = r1(Math.min(...m) / med * 100);
+    }
+  }
+  // Free cash flow against net income, summed over the years both are filed.
+  let fcfConv = null;
+  if (!isLender) {
+    let f = 0, ni = 0, k = 0;
+    for (const r of yrs) { const a = own(r, 'freeCashFlow'), b = own(r, 'netIncome'); if (a == null || b == null) continue; f += a; ni += b; k++; }
+    if (k >= CR_MIN_REPORTS && ni > 0) fcfConv = r2(f / ni);
+  }
+
+  const out = { revUp: revOk ? revUp : null, revN: revOk ? revN : null, epsG, marginLow, fcfConv, shares,
+    years: yrs.length, from: first.periodEnd, end: last.periodEnd, checks: null, bits: null };
+  if (revOk && epsG != null && marginLow != null && fcfConv != null && shares != null) {
+    const tests = [revUp / revN >= CR_PASS.revUp, epsG >= CR_PASS.epsG, marginLow >= CR_PASS.marginLow, fcfConv >= CR_PASS.fcfConv, shares <= CR_PASS.shares];
+    out.checks = tests.filter(Boolean).length;
+    out.bits = tests.map((x) => (x ? 1 : 0)).join('');
+  }
+  const any = out.revUp != null || epsG != null || marginLow != null || fcfConv != null || shares != null;
+  return any ? out : null;
+}
+
 module.exports = { growth, cagr, quarters, ttmAt, own, ownI, GROWTH_YEARS, GROWTH_MAX, Q_STALE_DAYS, FY_STALE_DAYS,
   peVsHistory, dividends, coverage, piotroski, realSplits, splitsSince, sourceFiled, median,
-  MIN_PE_POINTS, PE_MAX, COVER_MAX, PIOTROSKI_TESTS };
+  MIN_PE_POINTS, PE_MAX, COVER_MAX, PIOTROSKI_TESTS, compounding, CR_TESTS, CR_PASS, CR_MIN_REPORTS };
