@@ -753,7 +753,7 @@ function resultsPage(rels, names, today) {
       const cur = r.currency;
       const adj = r.epsAdj != null ? cell(htmlEsc(RV.eps(r.epsAdj, cur)), [pctTxt(pct(r.epsAdj, r.epsAdjPrior)), r.epsAdjLabel].filter(Boolean).join(' · ')) : '<td class="n">—</td>';
       return '<tr>' +
-        `<td><span class="er-sym">${htmlEsc(r.symbol)}</span><span class="er-co">${htmlEsc(names[r.symbol] || '')}</span></td>` +
+        `<td><a class="er-link" href="/stock/${encodeURIComponent(r.symbol)}"><span class="er-sym">${htmlEsc(r.symbol)}</span><span class="er-co">${htmlEsc(names[r.symbol] || '')}</span></a></td>` +   // the company opens its stock page (2026-10-24)
         `<td>${htmlEsc(r.periodLabel || '')}${r.periodEnd ? `<span class="er-sub">ended ${htmlEsc(RV.shortDay(r.periodEnd))}</span>` : ''}</td>` +
         cell(htmlEsc(RV.money(r.revenue, cur)), pctTxt(pct(r.revenue, r.revenuePrior))) +
         cell(htmlEsc(RV.money(r.netIncome, cur)), pctTxt(pct(r.netIncome, r.netIncomePrior))) +
