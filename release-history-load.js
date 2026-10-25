@@ -198,10 +198,13 @@ async function initiatedPass(sym, recheck) {
       continue;
     }
     if (r.guideChange) continue;
-    const it = Rel.initiatedFrom(r, rows);
-    if (!it) continue;
-    tally.initiated++;
-    if (COMMIT) await store.writeReleaseChange(r.accn, 'initiated', it.sentence || null);
+    // Initiated first, else the change against the previous release (2026-10-25).
+    const h = Rel.changeFromHistory(r, rows);
+    if (!h) continue;
+    if (h.change === 'initiated') tally.initiated++;
+    else { tally.fromPrev = tally.fromPrev || {}; tally.fromPrev[h.change] = (tally.fromPrev[h.change] || 0) + 1; }
+    if (COMMIT) await store.writeReleaseChange(r.accn, h.change, h.quote);
+    r.guideChange = h.change;
   }
 }
 // THE CHANGE, READ AGAIN (--rechange): the same request as a reading, only the
@@ -305,6 +308,7 @@ async function readOne(sym, e, meta, text, facts) {
     console.log('  INITIATED: the history rule over every company; stored "initiated" checked against it');
     for (const r of rows) { await initiatedPass(r.symbol, true); tally.companies++; }
     console.log('  initiated: ' + tally.iniKept + ' kept (the history agrees), ' + (tally.iniWords || 0) + ' kept on the company’s words (the history cannot say),' + tally.iniCleared + ' cleared (the history says otherwise), ' + tally.initiated + ' newly marked; ' + (COMMIT ? 'written' : 'DRY RUN, nothing written'));
+    console.log('  against the previous release: ' + JSON.stringify(tally.fromPrev || {}));
     process.exit(0);
   }
   if (RECHANGE) { console.log('  RECHANGE: the stored releases with an outlook and no stated change, read again; then Initiated from the history'); await rechangeRun(rows); finish(); process.exit(0); }

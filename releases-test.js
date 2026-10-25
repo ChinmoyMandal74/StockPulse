@@ -396,5 +396,46 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('track: two currencies are not compared', fx.guide.n === 0);
 }
 
+// ---- the change against the previous release (2026-10-25) ----
+{
+  const rel = (accn, filed, guides, extra) => Object.assign({ accn, filed, isResults: true, guides, guideChange: null }, extra || {});
+  const rev = (label, low, high) => ({ metric: 'revenue', periodLabel: label, periodType: 'full_year', low, high, mid: null, unit: 'billions' });
+  const eps = (label, low, high, metric) => ({ metric: metric || 'eps_adjusted', periodLabel: label, periodType: 'full_year', low, high, mid: null, unit: 'per_share' });
+  const q4 = rel('a', '2026-02-10', [rev('2026', 10e9, 11e9), eps('2026', 2.0, 2.2)]);
+  const up = Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('fiscal 2026', 10.5e9, 11.5e9)]), [q4]);
+  check('previous: a higher range reads raised, with the earlier figures and date', up && up.change === 'raised' && /was 10B-11B on 2026-02-10/.test(up.quote), up);
+  const dn = Rel.changeFromPrevious(rel('b', '2026-04-28', [eps('2026', 1.9, 2.1)]), [q4]);
+  check('previous: a lower EPS range reads lowered', dn && dn.change === 'lowered', dn);
+  const mx = Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('2026', 10.5e9, 11.5e9), eps('2026', 1.9, 2.1)]), [q4]);
+  check('previous: one up and one down reads mixed', mx && mx.change === 'mixed', mx);
+  const same = Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('2026', 10e9, 11e9)]), [q4]);
+  check('previous: the same range reads reaffirmed', same && same.change === 'reaffirmed', same);
+  // Robinhood's shape: an expense outlook only. Cost outlooks stay blank.
+  const cost = { metric: 'other', periodLabel: '2026', periodType: 'full_year', low: 2.7, high: 2.825, mid: null, unit: 'billions' };
+  check('previous: an "other" (cost) outlook is never compared', Rel.changeFromPrevious(rel('b', '2026-04-28', [cost]), [rel('a', '2026-02-10', [Object.assign({}, cost, { low: 2.6, high: 2.725 })])]) === null);
+  check('previous: a different year is not compared', Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('2027', 12e9, 13e9)]), [q4]) === null);
+  check('previous: a quarter item is not compared', Rel.changeFromPrevious(rel('b', '2026-04-28', [Object.assign(rev('Q2 2026', 3e9, 3.2e9), { periodType: 'quarter' })]), [q4]) === null);
+  check('previous: a range against a single figure is not compared', Rel.changeFromPrevious(rel('b', '2026-04-28', [{ metric: 'revenue', periodLabel: '2026', periodType: 'full_year', low: null, high: null, mid: 10.5e9, unit: 'billions' }]), [q4]) === null);
+  check('previous: over a factor of 2 is a scale fault, skipped', Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('2026', 10e12, 11e12)]), [q4]) === null);
+  check('previous: more than 200 days back is not compared', Rel.changeFromPrevious(rel('b', '2026-09-10', [rev('2026', 10.5e9, 11.5e9)]), [q4]) === null);
+  check('previous: a stated change is left alone', Rel.changeFromPrevious(rel('b', '2026-04-28', [rev('2026', 10.5e9, 11.5e9)], { guideChange: 'lowered' }), [q4]) === null);
+  // The newest earlier release that gave the item, not an older one.
+  const q1 = rel('c', '2026-04-28', [rev('2026', 10.5e9, 11.5e9)]);
+  const q2 = Rel.changeFromPrevious(rel('d', '2026-07-29', [rev('2026', 10.5e9, 11.5e9)]), [q4, q1]);
+  check('previous: compared with the newest earlier release', q2 && q2.change === 'reaffirmed' && /2026-04-28/.test(q2.quote), q2);
+  // Home Depot 2023-11-14: a decline printed as positive beside an earlier negative.
+  const pct = (low, high) => ({ metric: 'revenue', periodLabel: '2023', periodType: 'full_year', low, high, mid: null, unit: 'percent' });
+  check('previous: a growth percentage with flipped signs is not compared', Rel.changeFromPrevious(rel('b', '2023-11-14', [pct(3, 4)]), [rel('a', '2023-08-15', [pct(-5, -2)])]) === null);
+  check('previous: a growth percentage with the same signs is', (Rel.changeFromPrevious(rel('b', '2023-11-14', [pct(4, 5)]), [rel('a', '2023-08-15', [pct(3, 4)])]) || {}).change === 'raised');
+  // Coca-Cola: two adjusted EPS growth items in one release.
+  const kpct = (low, high) => ({ metric: 'eps_adjusted', periodLabel: '2026', periodType: 'full_year', low, high, mid: null, unit: 'percent' });
+  check('previous: two items for one measure are not compared', Rel.changeFromPrevious(rel('b', '2026-04-28', [kpct(8, 9), kpct(6, 7)]), [rel('a', '2026-02-10', [kpct(5, 6)])]) === null);
+  check('previous: nor against an earlier release with two', Rel.changeFromPrevious(rel('b', '2026-04-28', [kpct(8, 9)]), [rel('a', '2026-02-10', [kpct(5, 6), kpct(7, 8)])]) === null);
+  // Initiated first: a year never guided before, with a year of history.
+  const old = rel('z', '2025-02-10', [rev('2025', 9e9, 10e9)]);
+  const ini = Rel.changeFromHistory(rel('e', '2026-02-10', [rev('2026', 10e9, 11e9)], { guides: [rev('2026', 10e9, 11e9)] }), [old]);
+  check('history: a new year reads initiated, before any comparison', ini && ini.change === 'initiated', ini);
+}
+
 console.log(`${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

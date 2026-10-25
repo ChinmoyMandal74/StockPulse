@@ -487,6 +487,76 @@ function initiatedFrom(row, earlier) {
   const v = initiatedVerdict(row, earlier);
   return v.verdict === 'yes' ? v.item : null;
 }
+// THE CHANGE AGAINST THE PREVIOUS RELEASE (the owner, 2026-10-25, on
+// Robinhood's "updated outlook" that printed no earlier range): for a release
+// with no stated change, each full-year revenue or EPS item set beside the
+// same item (metric, year, unit) in the newest earlier results release that
+// gave it, within 200 days. Revenue and EPS only, never 'other': cost
+// outlooks stay blank (the owner's choice the same day). Both sides must be
+// the same shape (a range against a range, a figure against a figure), and a
+// gap over a factor of 2 is taken for a scale fault and skipped. Returns
+// { change, quote } or null; the quote says it is worked out, with the date.
+const HIST_METRICS = { revenue: 'Revenue', eps_gaap: 'GAAP EPS', eps_adjusted: 'Adjusted EPS' };
+function changeFromPrevious(row, earlier) {
+  if (!row || row.guideChange || !row.isResults || !row.filed || !Array.isArray(row.guides)) return null;
+  const day = (d) => Date.parse(String(d) + 'T12:00:00Z');
+  const t = day(row.filed);
+  const prior = (earlier || []).filter((r) => r && r.isResults && r.filed && r.filed < row.filed && r.accn !== row.accn
+    && Array.isArray(r.guides) && t - day(r.filed) <= 200 * 86400000).sort((a, b) => (a.filed < b.filed ? 1 : -1));
+  const shape = (g) => (g.low != null && g.high != null ? 'range' : g.mid != null ? 'figure' : null);
+  const mid = (g) => (shape(g) === 'range' ? (g.low + g.high) / 2 : g.mid);
+  const fmt = (g) => {
+    const f = (n) => (g.metric === 'revenue' && g.unit !== 'percent'
+      ? (Math.abs(n) >= 1e9 ? (n / 1e9).toFixed(3).replace(/\.?0+$/, '') + 'B' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M')
+      : String(Math.round(n * 1000) / 1000)) + (g.unit === 'percent' ? '%' : '');
+    return shape(g) === 'range' ? f(g.low) + '-' + f(g.high) : f(g.mid);
+  };
+  // TWO ITEMS FOR ONE MEASURE (Coca-Cola's comparable EPS growth and its
+  // currency-neutral one, Philip Morris's "excluding currency"): which pairs
+  // with which is a guess, so that measure is not compared.
+  const like = (list, g, y) => list.filter((p) => p && p.metric === g.metric && p.periodType === 'full_year'
+    && guideYear(p.periodLabel) === y && (p.unit || null) === (g.unit || null));
+  const sgn = (g) => [g.low, g.high, g.mid].filter((n) => n != null).map(Math.sign).join();
+  const pairs = [];
+  for (const g of row.guides) {
+    if (!g || !HIST_METRICS[g.metric] || g.periodType !== 'full_year' || !shape(g)) continue;
+    const y = guideYear(g.periodLabel);
+    if (!y || like(row.guides, g, y).length > 1) continue;
+    let was = null, on = null;
+    for (const r of prior) {
+      const m = like(r.guides, g, y);
+      if (!m.length) continue;
+      was = m.length === 1 && shape(m[0]) === shape(g) ? m[0] : null;
+      on = r.filed;
+      break;
+    }
+    if (!was) continue;
+    // A GROWTH PERCENTAGE whose signs differ is a sign convention, not a
+    // change: Home Depot's "decline between 3% and 4%" read as +3 to +4
+    // beside an earlier -5 to -2 (2023-11-14).
+    if (g.unit === 'percent' && sgn(g) !== sgn(was)) continue;
+    const a = mid(was), b = mid(g);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    if (a !== 0 && b !== 0 && (Math.sign(a) === Math.sign(b)) && Math.max(Math.abs(a), Math.abs(b)) / Math.min(Math.abs(a), Math.abs(b)) > 2) continue;
+    const same = shape(g) === 'range' ? Math.abs(g.low - was.low) <= 1e-9 * Math.max(1, Math.abs(was.low)) && Math.abs(g.high - was.high) <= 1e-9 * Math.max(1, Math.abs(was.high))
+      : Math.abs(b - a) <= 1e-9 * Math.max(1, Math.abs(a));
+    const dir = same ? 'same' : b > a ? 'up' : b < a ? 'down' : 'same';
+    pairs.push({ dir, text: HIST_METRICS[g.metric] + ' ' + y + ': ' + fmt(g) + ' (was ' + fmt(was) + ' on ' + on + ')' });
+  }
+  if (!pairs.length) return null;
+  const up = pairs.some((p) => p.dir === 'up'), down = pairs.some((p) => p.dir === 'down');
+  const change = up && down ? 'mixed' : up ? 'raised' : down ? 'lowered' : 'reaffirmed';
+  return { change, quote: ('Against the previous release: ' + pairs.map((p) => p.text).join('; ')).slice(0, 200) };
+}
+// The history's answer for a release with no stated change: initiated (a
+// year never guided before) first, else the change against the previous
+// release. { change, quote } or null.
+function changeFromHistory(row, earlier) {
+  if (!row || row.guideChange) return null;
+  const it = initiatedFrom(row, earlier);
+  if (it) return { change: 'initiated', quote: it.sentence || null };
+  return changeFromPrevious(row, earlier);
+}
 // THE YEAR A FULL-YEAR ITEM IS FOR, from its label ("fiscal 2027", "FY27",
 // "full year 2026"); null when it names none.
 function guideYear(label) {
@@ -744,4 +814,4 @@ function trackRecord(rows) {
     revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
 }
 
-module.exports = { saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { changeFromPrevious, changeFromHistory, saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

@@ -214,7 +214,7 @@ async function guidancePass() {
       const g = { guides: row.isResults ? row.guides || [] : [], guideChange: row.guideChange, guideChangeQuote: row.guideChangeQuote };
       g.epsGuidePrior = await epsGuidePrior(Object.assign({ symbol: r.symbol }, g));
       if (!g.guideChange) {
-        try { const it = Rel.initiatedFrom(Object.assign({}, r, { guides: g.guides, guideChange: null }), await store.readEarningsReleases(r.symbol, 160)); if (it) { g.guideChange = 'initiated'; g.guideChangeQuote = it.sentence || null; } } catch (err) { /* left as no change stated */ }
+        try { const h = Rel.changeFromHistory(Object.assign({}, r, { guides: g.guides, guideChange: null }), await store.readEarningsReleases(r.symbol, 160)); if (h) { g.guideChange = h.change; g.guideChangeQuote = h.quote; } } catch (err) { /* left as no change stated */ }
       }
       const gp = problems.filter((p) => /^guidance/.test(p));
       console.log(`  ${r.symbol} ${r.filed}: ${g.guides.length} item(s)` + (g.guideChange ? `, ${g.guideChange}` : '') + (g.epsGuidePrior != null ? `, prior FY EPS ${g.epsGuidePrior} (10-K)` : '') + (gp.length ? ' | ' + gp.join('; ') : '') + ` | $${got.usd.toFixed(4)}`);
@@ -319,7 +319,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
       // INITIATED, FROM THE HISTORY (2026-10-24): the first full-year guidance
       // on file for a year, from the company's earlier readings.
       if (row.isResults && !row.guideChange) {
-        try { const it = Rel.initiatedFrom(row, await store.readEarningsReleases(e.symbol, 160)); if (it) { row.guideChange = 'initiated'; row.guideChangeQuote = it.sentence || null; } } catch (err) { /* left as no change stated */ }
+        try { const h = Rel.changeFromHistory(row, await store.readEarningsReleases(e.symbol, 160)); if (h) { row.guideChange = h.change; row.guideChangeQuote = h.quote; } } catch (err) { /* left as no change stated */ }
       }
       const out = Object.assign(row, { problems, model: ex ? MODEL : null, inTok: cost.inTok, outTok: cost.outTok, usd: cost.usd, readAt: Date.now() });
       const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(2) + 'B');
