@@ -1,5 +1,6 @@
 # Register (or remove) the Windows scheduled task that drives the nightly
-# fundamentals rotation. Two firings a weekday, 04:00 and 16:00 ET.
+# fundamentals rotation. Two firings a weekday, 04:00 and 16:00 ET, and
+# Saturday 04:00.
 #
 # WHY TWO RATHER THAN ONE BIGGER RUN. A round is 7 profiles (80 credits each
 # against a 610/minute ceiling), so refreshing N profiles takes N/7 minutes
@@ -13,6 +14,11 @@
 # earnings -- so two runs x five days re-covers the universe about 1.4 times a
 # week, which is already better than the 7-day rotation it replaces. The NEWS
 # task is separate and deliberately runs all seven days.
+#
+# SATURDAY 04:00 TOO SINCE 2026-10-24 (the owner: "add 4AM nightly job on
+# saturday too"). Friday's filings were read only on Monday's 04:00 run, so
+# /filings showed Thursday as the newest day all weekend; the Saturday run
+# reads them, heals Friday's provisional close and turns the rotation once more.
 #
 # 04:00 AND 16:00 SINCE 2026-10-21 (the owner, who chose 16:00 over 16:30 with
 # the trade-off below in front of him). Until then 07:30 and 19:30.
@@ -80,7 +86,8 @@ $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Pat
 # regular interval from each other in any case.
 $triggers = @(
   (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $days -At $morning),
-  (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $days -At $evening)
+  (New-ScheduledTaskTrigger -Weekly -DaysOfWeek $days -At $evening),
+  (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At $morning)
 )
 
 $settings = New-ScheduledTaskSettingsSet `
@@ -95,15 +102,15 @@ if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run      : $node nightly-ping.js"
   Write-Output "  in       : $Root"
-  Write-Output "  weekdays : $morning and $evening ET"
-  Write-Output "  firings  : 10 a week"
+  Write-Output "  weekdays : $morning and $evening ET; Saturday $morning"
+  Write-Output "  firings  : 11 a week"
   exit 0
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
   -Settings $settings -Description 'Drives the nightly fundamentals rotation on tickrlab.com. The server refuses a second run if one is already in flight.' -Force | Out-Null
 
-Write-Output "Registered '$TaskName' -- weekdays $morning and $evening ET (10 firings a week)."
+Write-Output "Registered '$TaskName' -- weekdays $morning and $evening ET, Saturday $morning (11 firings a week)."
 
 # Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
 try { & $node (Join-Path $Root 'schedule-report.js') } catch { Write-Output "Schedule report not sent: $($_.Exception.Message)" }

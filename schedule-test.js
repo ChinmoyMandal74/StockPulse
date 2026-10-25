@@ -54,7 +54,9 @@ ok(/nightly/.test(at('2026-10-22T08:50:00Z')) && at('2026-10-22T08:51:00Z') === 
 ok(/nightly/.test(at('2026-10-22T20:30:00Z')), '16:30 ET: evening window');
 ok(/intraday/.test(at('2026-10-22T14:15:00Z')) && /intraday/.test(at('2026-10-22T14:44:00Z')), '10:15 and 10:44 ET: intraday slots');
 ok(at('2026-10-22T14:12:00Z') === null && at('2026-10-22T14:21:00Z') === null, '10:12 and 10:21 ET: clear');
-ok(at('2026-10-24T08:00:00Z') === null && at('2026-10-24T14:15:00Z') === null, 'Saturday: clear');
+ok(/nightly/.test(at('2026-10-24T08:00:00Z')) && at('2026-10-24T14:15:00Z') === null, 'Saturday: the 04:00 nightly window (2026-10-24), no intraday slots');
+ok(at('2026-10-25T08:00:00Z') === null && at('2026-10-24T20:30:00Z') === null, 'Sunday 04:00 and Saturday 16:30: clear');
+{ const nj = S.JOBS.find((j) => j.id === 'nightly'); ok(S.runsOn(nj, 'Sat').join() === '240' && S.runsOn(nj, 'Fri').join() === '240,960' && S.runsOn(nj, 'Sun').length === 0 && /Sat/.test(S.whenText(nj)), 'the nightly runs Saturday 04:00 as well', [S.runsOn(nj, 'Sat'), S.whenText(nj)]); }
 ok(at('2026-12-03T09:00:00Z') !== null && at('2026-12-03T08:00:00Z') === null, 'December (EST): 04:00 ET is 09:00 UTC');
 
 // ---- 3. Runs, words, the Vercel cron in Eastern ----------------------------
@@ -71,7 +73,7 @@ ok(JSON.stringify(S.maskDays(62)) === JSON.stringify(['Mon', 'Tue', 'Wed', 'Thu'
 // Real report shapes (schedule-report.js --dry on the laptop, 2026-10-22).
 const tr = (kind, time, days, interval, duration) => ({ kind, start: '2026-10-01T' + time + ':00-04:00', days: days == null ? null : days, interval: interval || '', duration: duration || '', enabled: true });
 const good = () => ({ at: Date.now(), tasks: [
-  { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62)] },
+  { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62), tr('Weekly', '04:00', 64)] },
   { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')] },
   { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)] },
   { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },

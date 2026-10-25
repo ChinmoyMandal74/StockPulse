@@ -24,6 +24,9 @@ const JOBS = [
   {
     id: 'nightly', name: 'Nightly refresh', task: 'TickrLab nightly', host: 'laptop', script: 'nightly-ping.js', taskScript: 'nightly-task.ps1',
     days: WEEKDAYS, times: ['04:00', '16:00'], minutes: 55,
+    // SATURDAY 04:00 TOO (2026-10-24, the owner): Friday's 8-Ks and 13D/13G
+    // filings were read only on Monday, so /filings showed Thursday all weekend.
+    extra: [{ days: ['Sat'], times: ['04:00'] }],
     spends: { kind: 'twelve', text: 'About 14,000 credits a run: ~171 profiles at 80, seven a minute, plus prices and up to five split calls' },
     what: 'The profile rotation, then the filings phases: SEC rotation, the SEC daily index (yesterday\'s 8-Ks and 13D/13G), short interest, index holdings, insider filings, splits and options open interest.',
     log: '/refreshes',
@@ -78,6 +81,7 @@ const JOBS = [
 const RESERVED = [
   { label: 'Nightly refresh window', days: WEEKDAYS, from: '03:55', to: '04:50' },
   { label: 'Nightly refresh window', days: WEEKDAYS, from: '15:55', to: '16:50' },
+  { label: 'Nightly refresh window', days: ['Sat'], from: '03:55', to: '04:50' },
 ];
 // The intraday slots: minutes 13 to 20 and 43 to 50 of each hour, 9:10 to 16:20.
 const SLOT = { from: '09:10', to: '16:20', minutes: [[13, 20], [43, 50]] };
@@ -112,9 +116,12 @@ function cronEastern(cron, date) {
   return eastern(at).minute;
 }
 
-// Every start minute (Eastern) a job has on a day of the week.
+// Every start minute (Eastern) a job has on a day of the week. `extra`:
+// further runs on other days ({ days, times }), as the nightly's Saturday.
 function runsOn(job, day, date) {
-  if (!job.days.includes(day)) return [];
+  const more = (job.extra || []).filter((x) => x.days.includes(day)).flatMap((x) => x.times.map(hm));
+  if (!job.days.includes(day)) return more.sort((a, b) => a - b);
+  if (more.length && !job.cron && !job.repeat) return [...new Set((job.times || []).map(hm).concat(more))].sort((a, b) => a - b);
   if (job.cron) return [cronEastern(job.cron, date)];
   if (job.repeat) {
     const out = [];
@@ -129,7 +136,7 @@ function whenText(job, date) {
   const days = job.days.length === 7 ? 'every day' : job.days.join(' ') === WEEKDAYS.join(' ') ? 'weekdays' : job.days.join(', ');
   if (job.cron) return fmt(cronEastern(job.cron, date)) + ' ' + days + ' (Vercel cron ' + job.cron + ' UTC)';
   if (job.repeat) return 'every ' + job.repeat.every + ' min, ' + job.repeat.start + ' to ' + job.repeat.last + ', ' + days;
-  return job.times.join(', ') + ', ' + days;
+  return job.times.join(', ') + ', ' + days + (job.extra || []).map((x) => '; ' + x.times.join(', ') + ' ' + x.days.join(', ')).join('');
 }
 
 // ---- THE LIVE TASK LIST, as schedule-report.js sends it ---------------------
