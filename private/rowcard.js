@@ -122,6 +122,59 @@
           : vend ? '' : '\n\nNo vendor date to compare against.') };
   }
 
+  // ---- Out of date: what on this row is behind, in words -------------------
+  //
+  // THE OWNER, 2026-10-24, on AXP reading "Period Jun 30" beside "Reported
+  // Oct 17": not a colour on those cells but a column naming the issue. Each
+  // entry is one fact the row's own dates prove; none is a guess. Null for a
+  // fund (no reports to be behind on) and an empty list when nothing is.
+  //   figures   the period is more than STALE_FIG_DAYS before the announcement:
+  //             the feed recorded the report but not its quarter's figures
+  //             (a report lands 23-29 days after its quarter, so 75 clears it)
+  //   sec       the company filed an Item 2.02 the feed has not recorded
+  //   quiet     no results for more than a quarter (the Reported cell's 100)
+  //   next      the next report date has passed and no newer one is on file
+  //   profile   company data not re-pulled for STALE_PROFILE_DAYS
+  //   price     no price for STALE_PRICE_DAYS
+  // Client-only inputs (secLastResults) are read when present, so the cell
+  // changes once /api/sec/filed lands; the page repaints it then.
+  const STALE_FIG_DAYS = 75, STALE_QUIET_DAYS = 100, STALE_PROFILE_DAYS = 10, STALE_PRICE_DAYS = 5;
+  function staleIssues(s, now) {
+    if (!s || isFund(s)) return null;
+    const t = now || Date.now();
+    const day = (iso) => new Date(String(iso).slice(0, 10) + 'T12:00:00').getTime();
+    const ago = (iso) => Math.round((t - day(iso)) / 86400000);
+    const out = [];
+    const rep = s.lastEarningsDate, per = s.mostRecentQuarter;
+    if (rep && per) {
+      const gap = Math.round((day(rep) - day(per)) / 86400000);
+      if (gap > STALE_FIG_DAYS) out.push({ k: 'figures', t: 'Figures predate last results',
+        title: `The figures are to ${per}, but the company reported on ${rep}, ${gap} days later: the feed has the announcement and not yet that quarter's figures.` });
+    }
+    const sec = s.secLastResults;
+    if (sec && rep) {
+      const gap = Math.round((day(sec) - day(rep)) / 86400000);
+      if (gap > ANN_AHEAD_DAYS) out.push({ k: 'sec', t: 'Feed missed a report',
+        title: `The company filed results with the SEC (Item 2.02) on ${sec}, ${gap} days after the feed's last report date.` });
+    }
+    if (rep && ago(rep) > STALE_QUIET_DAYS) out.push({ k: 'quiet', t: 'No results in ' + ago(rep) + 'd',
+      title: `Last reported ${rep}, ${ago(rep)} days ago: more than a quarter.` });
+    const nx = s.nextEarningsDate;
+    if (nx && ago(nx) > 0 && !(rep && day(rep) >= day(nx))) out.push({ k: 'next', t: 'Report date passed',
+      title: `The next report date on file (${String(nx).slice(0, 10)}${s.nextEarningsEstimated ? ', estimated' : ''}) passed ${ago(nx)} days ago with no newer report recorded.` });
+    if (s.profileFetchedAt) {
+      const d = Math.floor((t - Number(s.profileFetchedAt)) / 86400000);
+      if (d > STALE_PROFILE_DAYS) out.push({ k: 'profile', t: 'Company data ' + d + 'd old',
+        title: `The company's data was last pulled ${d} days ago.` });
+    }
+    if (s.pricedAt) {
+      const d = Math.floor((t - s.pricedAt) / 86400000);
+      if (d > STALE_PRICE_DAYS) out.push({ k: 'price', t: 'Price ' + d + 'd old',
+        title: `The price was last fetched ${d} days ago.` });
+    }
+    return out;
+  }
+
   // --- value renderers, mirroring the screener's cell renderers ---------------
   //
   // EACH ONE ALSO REPORTS ITS RAW NUMBER (`n`) AND ITS UNIT (`u`), which is what
@@ -478,6 +531,9 @@
     // is stated after this split, which is the one thing that explains a
     // discontinuity in them.
     ['report', 'Last split',     (s) => (s.lastSplitDate ? { t: shortDate(s.lastSplitDate), c: '' } : null)],
+    // What on the row is behind, named (staleIssues). Uncoloured: the owner
+    // asked for words, not another amber.
+    ['report', 'Out of date',    (s) => { const l = staleIssues(s); return l && l.length ? { t: l.map((x) => x.t).join(' · '), c: '' } : null; }],
     // The Long run group (2026-10-19): growth a year, compounded, from the
     // company's own filings. Signed and uncoloured, like the screener cells.
     ['lrun',  'Revenue /yr 3Y', (s) => V.smag(s.revGrowth3y)],
@@ -1292,8 +1348,16 @@
   // exactly what the hover card shows for the same field, formatted the same
   // way. A second list of "fields a tile can show" is the drift this file
   // exists to prevent.
+  // DISPLAY NAMES, where a label was renamed after its key was stored
+  // (2026-10-24, the owner: Period and Reported read as one date). The key
+  // stays `group|label`, since saved tiles and layouts hold it.
+  const FIELD_NAME = { 'report|Period': 'Figures to', 'report|Reported': 'Last results out' };
+  function fieldName(key) {
+    return FIELD_NAME[key] || String(key).slice(String(key).indexOf('|') + 1);
+  }
+
   function fieldCatalogue() {
-    return FIELD_SPEC.map(([g, label]) => ({ group: g, label, key: g + '|' + label }));
+    return FIELD_SPEC.map(([g, label]) => ({ group: g, label: FIELD_NAME[g + '|' + label] || label, key: g + '|' + label }));
   }
 
   // Which ROW PROPERTIES each field reads, asked of the getters themselves
@@ -1359,7 +1423,8 @@
       if (skip.has(g + '|' + label)) continue;
       const v = readField(g, label, get, s, ctx);
       (byGroup[g] = byGroup[g] || []).push({
-        k: label,
+        k: FIELD_NAME[g + '|' + label] || label,
+        key: g + '|' + label,
         t: v ? v.t : '—',
         c: v ? (v.c || '') : 'na',
         b: v && v.b,
@@ -1415,7 +1480,7 @@
           // `drill` marks a row whose figure has a history behind it
           // (drillpop.js FIELD_OF, keyed group|label). Opt-in like `links`:
           // only /stock passes it, and only a row with a value is marked.
-          const dk = o.drill && r.t !== '—' ? o.drill[g + '|' + r.k] : null;
+          const dk = o.drill && r.t !== '—' ? o.drill[r.key || (g + '|' + r.k)] : null;
           const drill = dk ? ` data-drill="${esc(dk)}"` : '';
           return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}${drill}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
@@ -1665,7 +1730,7 @@
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
-    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, fieldName,
     fieldCatalogue, fieldValues, fieldProps, isFund,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

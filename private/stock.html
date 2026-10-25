@@ -2010,7 +2010,7 @@
     // entry would print an em-dash on the tiles, the phone and /compare —
     // which is exactly what `extra` exists for.
     //
-    // `after: 'Reported'` because this value is READ AGAINST that one: it is
+    // `after: 'Last results out'` (Reported, renamed) because this value is READ AGAINST that one: it is
     // marked when it runs ahead of it, and appended it would land twenty-five
     // rows below the only number it can be compared with.
     //
@@ -2022,7 +2022,7 @@
     const ANN_LABEL = 'Announced (SEC)';
     function annRow(pending) {
       const v = RowCard.announcedSec(stock, { pending: pending });
-      return { k: ANN_LABEL, t: v.t, c: v.c, title: v.title, after: 'Reported' };
+      return { k: ANN_LABEL, t: v.t, c: v.c, title: v.title, after: 'Last results out' };
     }
 
     // The filings land after the first paint, so the row is drawn with a

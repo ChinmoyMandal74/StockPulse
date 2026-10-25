@@ -1569,7 +1569,7 @@
         <th class="group grp-growth" data-group="growth" colspan="3">Growth</th>
         <th class="group grp-finpos" data-group="finpos" colspan="7">Financial position</th>
         <th class="group grp-divs" data-group="divs" colspan="4">Dividends and returns</th>
-        <th class="group grp-report" data-group="report" colspan="3">Reporting</th>
+        <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="9">Long run</th>
         <th class="group grp-own" data-group="own" colspan="12">Ownership</th>
         <th class="group grp-aier" data-group="aier" colspan="20">Last Earning AI Extracted</th>
@@ -1688,9 +1688,10 @@
         <th class="grp-divs" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout</th>
         <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield</th>
         <th class="grp-divs" data-key="shareholderYield" title="Dividend yield plus buyback yield: the cash returned to shareholders over the latest year as a share of today&#39;s market value. Blank where the company files no buyback line, which is not the same as zero. Before shares handed out as pay, so a company that issues many shares can return cash and still dilute: see Shares chg 1Y.">Holder<br>Yield</th>
-        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE COMPANY FIGURES COVER &mdash; revenue, the margins, ROE, net income and FCF (in Scale, Valuation, Profitability and Growth) are all a trailing twelve months ENDING on this date. Reported beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA.">Period</th>
-        <th class="grp-report" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Reported</th>
+        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE COMPANY FIGURES COVER &mdash; revenue, the margins, ROE, net income and FCF (in Scale, Valuation, Profitability and Growth) are all a trailing twelve months ENDING on this date. Last results out beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
+        <th class="grp-report" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Last results out</th>
         <th class="grp-report" data-col="secResults" title="When the company told the SEC it had results — the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. A SECOND, INDEPENDENT answer to &quot;has this company reported&quot;, from the company itself rather than from the price feed: on 2026-10-01 Micron had announced on Sep 30 and the feed still said Jun 24. Amber when it is ahead of the Reported column, which means the feed has missed a report. Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
+        <th class="left grp-report" data-key="staleIssues" title="What on this row is behind, in words: figures that predate the last results (the feed has the announcement but not yet that quarter), a results filing at the SEC the feed has not recorded, no results for more than 100 days, a next report date that has passed, company data more than 10 days old, a price more than 5 days old. Blank when nothing is. Filters as text (&quot;predate&quot;, &quot;missed&quot;); sorts by how many issues. A fund reads NA.">Out of<br>date</th>
         <th class="grp-lrun" data-key="revGrowth3y" title="Revenue growth a year, compounded, over three years: the latest four quarters against the same four quarters three years earlier, from the company's own SEC filings. +20.0 means revenue grew 20% a year, about 73% in all. A company that files in another currency is measured on its annual reports in that currency, so a currency's move is not counted as growth. Blank where three years are not on file, where the newest quarter is not recent, and for a bank, whose filings carry no revenue line. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>3Y</th>
         <th class="grp-lrun" data-key="revGrowth5y" title="Revenue growth a year, compounded, over five years: the latest four quarters against the same four quarters five years earlier, from the company's own SEC filings. A company that files in another currency is measured on its annual reports in that currency. Blank where five years are not on file, where the newest quarter is not recent, and for a bank. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>5Y</th>
         <th class="grp-lrun" data-key="niGrowth3y" title="Net income growth a year, compounded, over three years: the latest four quarters' net income against the same four quarters three years earlier, from the company's own SEC filings. Blank where either end is a loss, since from a loss there is no rate, and where three years are not on file. A rate past 1,000% a year is a base too small to measure from and is left blank too. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>3Y</th>
@@ -2255,6 +2256,15 @@
     // ahead-of-the-vendor mark all moved to `announcedSec`, and this is
     // the cell it goes in. A second copy of the wrong-channel rule is
     // exactly the drift rowcard.js exists to prevent.
+    // Out of date (2026-10-24): the issues RowCard.staleIssues finds, named
+    // and uncoloured -- the Reported cell already ambers; this says why.
+    // `data-stl` lets paintReportedCells redo it once the SEC dates land.
+    function staleCell(s) {
+      const l = RowCard.staleIssues(s) || [];
+      if (!l.length) return `<td class="left na grp-report" data-stl="${we(s.symbol)}" title="Nothing on this row is behind.">—</td>`;
+      return `<td class="left grp-report" data-stl="${we(s.symbol)}"${attr(l.map((x) => x.title).join('\n\n'))}>${we(l.map((x) => x.t).join(' · '))}</td>`;
+    }
+
     function resultsCell(s) {
       const v = RowCard.announcedSec(s);
       return `<td class="grp-report${v.c ? ' ' + v.c : ''}" data-ann="${we(s.symbol)}"${attr(v.title)}>${we(v.t)}</td>`;
@@ -2268,7 +2278,7 @@
       for (const s of stocks) by[s.symbol] = s;
       // Both cells the SEC dates feed, each from its own builder. One pass
       // over the two attributes rather than two queries over the table.
-      const jobs = [['data-rep', reportedCell], ['data-ann', resultsCell]];
+      const jobs = [['data-rep', reportedCell], ['data-ann', resultsCell], ['data-stl', staleCell]];
       for (const [attrName, build] of jobs) {
         document.querySelectorAll('td[' + attrName + ']').forEach((td) => {
           const s = by[td.getAttribute(attrName)];
@@ -3901,7 +3911,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="134">${s.error}</td>
+            <td class="na" colspan="135">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4044,6 +4054,7 @@
           ${isFund ? naRun(1, 'grp-report') : periodCell(s)}
           ${isFund ? naRun(1, 'grp-report') : reportedCell(s)}
           ${resultsCell(s)}
+          ${isFund ? naRun(1, 'grp-report') : staleCell(s)}
           ${isFund ? naRun(9, 'grp-lrun') : `
           ${growthCell(s, 'revGrowth3y')}
           ${growthCell(s, 'revGrowth5y')}
@@ -4082,7 +4093,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 159;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 160;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4137,7 +4148,7 @@
       const vals = RowCard.fieldValues(s);
       const fields = (tileCfg.fields || []).map((key) => {
         const v = vals[key];
-        return v ? { k: key.slice(key.indexOf('|') + 1), t: v.t, c: v.c } : null;
+        return v ? { k: RowCard.fieldName(key), t: v.t, c: v.c } : null;
       }).filter(Boolean);
       const v = s.action || '';
       const art = tileSpark(s.symbol);
@@ -4267,7 +4278,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="136">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="137">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4307,6 +4318,8 @@
         // By date, so a first click brings the newest filings to the top.
         : sortKey === 'lastEvent' ? (x.lastEventDate ? new Date(x.lastEventDate + 'T12:00:00').getTime() : null)
         : sortKey === 'lastHolder' ? (x.lastHolderDate ? new Date(x.lastHolderDate + 'T12:00:00').getTime() : null)
+        // By how many issues; none sorts last, as a blank.
+        : sortKey === 'staleIssues' ? ((RowCard.staleIssues(x) || []).length || null)
         : x[sortKey]);
       // Sorting by an advice column leaves whole tiers tied — five Very Strongs
       // in a row, in whatever order they happened to arrive. Cushion breaks

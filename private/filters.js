@@ -19,7 +19,7 @@
   // A score column filters on the 1-10 rating the cell shows, not the 0-100
   // score behind it.
   const RATING_FOR = { qualityScore: 'qualityRating' };
-  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary']);
+  const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary', 'staleIssues']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
     'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange']);
 
@@ -186,6 +186,14 @@
     // days since, like the report date above.
     if (key === 'erFiled' || key === 'erPeriodEnd') {
       return x[key] ? Math.round((Date.now() - new Date(x[key] + 'T12:00:00').getTime()) / 86400000) : null;
+    }
+    // Out of date: the issues as the cell words them, so a text filter
+    // ("predate", "missed") finds them. rowcard.js owns the rule; on the
+    // server it is loaded before any screen runs. None is blank, not ''.
+    if (key === 'staleIssues') {
+      const RC = (typeof globalThis !== 'undefined' ? globalThis : window).RowCard;
+      const l = RC && RC.staleIssues ? RC.staleIssues(x, c.now) : null;
+      return l && l.length ? l.map((i) => i.t).join(' · ') : null;
     }
     if (key === 'fresh3mHigh') return x.fresh3mHigh ? 'Yes' : 'No';
     // A NULL IS NOT A NO. With no holdings file imported every row is

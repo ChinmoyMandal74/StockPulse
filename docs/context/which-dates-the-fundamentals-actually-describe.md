@@ -95,3 +95,19 @@ The owner: "Netflix earning is next tuesday and not yesterday". The screener sho
 - **It feeds the Signal**: the "Earnings soon" rule reads `nextEarningsDate`. On the day, 752 of 1,258 estimated dates changed, 83 stocks entered the 7-day window and 65 left it. **The owner chose this knowingly** (2026-10-16), over a display-only change that would have left the column and the verdict disagreeing.
 - **`earndate-load.js`** re-estimates every stored estimated date from `earnings_history`, with no API calls. It is a dry run by default; `--commit` writes `nextEarningsDate` only, through `mergeProfileFields`, so `fetched_at` is untouched. A date the provider confirmed is never touched. Run once on 2026-10-16: 752 written, and a dry run afterwards finds 0 left to change. The snapshot picks the dates up on its next rebuild.
 - Copy that said "the last report plus 91 days" was changed in the same commit: the Next Earn header and hover on the screener, the Earnings ahead card's note, and its studio hint.
+
+## Figures to, Last results out, and the Out of date column (2026-10-24)
+
+**The owner, on AXP's stock page reading Period Jun 30 beside Reported Oct 17:** *"Why is the period still June, and what is the meaning of Reported field"*, then *"Yes make the label change but don't make color change, Add a column instead that shows out of date type of issues"*.
+
+- **Labels only.** Period reads **Figures to**, Reported reads **Last results out**, on the screener header, the hover card, the tiles, `/stock` and `/compare`. The stored keys stay `report|Period` and `report|Reported` (saved tiles, layouts, `drillpop.js` FIELD_OF). The display names live in one map, `FIELD_NAME` in `rowcard.js`, read by `fieldCatalogue()`, `buildSections()` and `RowCard.fieldName(key)`. `buildSections` rows carry `key` beside the display `k`, and the drill mark looks up `r.key`, so the rename did not unhook the Last results out history.
+- **No new colour.** The Reported cell's existing amber (past 100 days, or behind the SEC) is unchanged.
+- **Out of date** (`data-key="staleIssues"`, Reporting group, after Announced (SEC)): the issues in words, uncoloured, from `RowCard.staleIssues(row, now)`, one rule for the screener cell, the `FIELD_SPEC` row (`report|Out of date`, so the hover card, tiles and `/stock` show it) and the filter (`Filters.filterValue`, a text key). Each issue is a fact the row's own dates prove:
+  - **Figures predate last results**: `lastEarningsDate` more than 75 days after `mostRecentQuarter`. A report lands 23-29 days after its quarter, so 75 clears it; this is the feed recording the announcement before it replaces the quarter's figures (AXP, JPM, MU, TSM on the 2026-10-22 snapshot).
+  - **Feed missed a report**: `secLastResults` (Item 2.02) more than `ANN_AHEAD_DAYS` (40) after `lastEarningsDate`. Client-only data, so `paintReportedCells` repaints the cell (`data-stl`) when `/api/sec/filed` lands.
+  - **No results in Nd**: more than 100 days since `lastEarningsDate` (the Reported amber's threshold).
+  - **Report date passed**: `nextEarningsDate` before today with no report on or after it.
+  - **Company data Nd old** (`profileFetchedAt` over 10 days) and **Price Nd old** (`pricedAt` over 5 days).
+  - A fund is NA; nothing behind is a dash. Sorts by how many issues, none last.
+- Spans: Reporting banner 4, `PAD_SPAN` 160, error row 135, empty row 137.
+- Display only. Nothing here reaches `action.js`, the snapshot or `CHAT_FIELDS`.
