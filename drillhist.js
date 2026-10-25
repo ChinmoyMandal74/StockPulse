@@ -25,6 +25,7 @@
 // read. Nothing here is stored, stamped on a snapshot row or read by the
 // Signal.
 const SecFacts = require('./secfacts');
+const Adjusted = require('./adjusted.js');
 
 const DAY = 86400000;
 const TABLE_ROWS = 8;
@@ -122,24 +123,33 @@ function filings(F, rows) {
 // Diluted EPS. A per-share figure does not add across quarters (the share
 // count differs in each), so no trailing year is worked out: the chart is the
 // fiscal years as filed and the table the quarters as filed.
-function eps(rows) {
+// ON TODAY'S SHARE BASIS (2026-10-25, the owner: "make the adjustments so
+// that it's accurate"): each filed figure times its split factor
+// (Adjusted.epsFactors -- snapped to the splits since the period ended, so a
+// figure a later filing already restated is not divided twice). A figure whose
+// count cannot be reconciled is left blank. Where no split history is held the
+// panel stays as filed and says so.
+function eps(rows, splits) {
   const filled = SecFacts.latestFilled(Array.isArray(rows) ? rows : []);
-  const years = filled.filter((r) => r.periodType === 'FY' && num(r.epsDiluted) != null)
+  const F = Adjusted.epsFactors(SecFacts, rows, splits);
+  const adj = (r) => { const v = num(r.epsDiluted); if (v == null) return null; if (!F) return v; const f = F[r.periodType + '|' + r.periodEnd]; return f == null ? null : Math.round(v * f * 10000) / 10000; };
+  const years = filled.filter((r) => r.periodType === 'FY' && adj(r) != null)
     .sort((a, b) => (a.periodEnd < b.periodEnd ? -1 : 1));
   const q = quartersOf(rows);
-  const yearAt = new Map(years.map((r) => [r.periodEnd, num(r.epsDiluted)]));
+  const yearAt = new Map(years.map((r) => [r.periodEnd, adj(r)]));
   const table = [];
   for (const r of q) {
-    const v = num(r.epsDiluted), y = yearAt.has(r.periodEnd) ? yearAt.get(r.periodEnd) : null;
+    const v = adj(r), y = yearAt.has(r.periodEnd) ? yearAt.get(r.periodEnd) : null;
     if (table.length < TABLE_ROWS && (v != null || y != null)) table.push([monthOf(r.periodEnd), v, y]);
   }
   return {
-    source: 'SEC filings', basis: 'Each fiscal year, as filed',
-    points: years.slice(-12).map((r) => ({ d: r.periodEnd, v: num(r.epsDiluted) })),
+    source: 'SEC filings', basis: F ? 'Each fiscal year, on today’s share basis' : 'Each fiscal year, as filed',
+    points: years.slice(-12).map((r) => ({ d: r.periodEnd, v: adj(r) })),
     cols: ['Period to', 'In the quarter', 'Fiscal year'], colKinds: ['text', 'eps', 'eps'], rows: table,
     note: 'Diluted earnings per share under the accounting rules, not the adjusted figure in a press release. '
       + 'A company files three quarters and a year, and per-share figures do not add up across quarters, so the fourth quarter has no figure of its own. '
-      + 'Not restated for share splits since.',
+      + (F ? 'Restated to today\u2019s share basis: every figure from before a split (or reverse split) is put on the share count after it, from the split history, so the line has no false step. A figure whose share count cannot be reconciled is left blank.'
+        : 'As filed, not restated for share splits: no split history is held for this company.'),
     filed: q.length ? q[0].filed || null : null,
   };
 }
@@ -227,7 +237,7 @@ function build(field, data) {
   const d = data || {};
   let out;
   if (F.src === 'filings') out = filings(F, d.facts);
-  else if (F.src === 'eps') out = eps(d.facts);
+  else if (F.src === 'eps') out = eps(d.facts, d.splits);
   else if (F.src === 'value') out = value(F, d.quarters, d.series, d.facts, d.carryDays);
   else if (F.src === 'short') out = short(F, d.short);
   else out = earnings(d.earnings);

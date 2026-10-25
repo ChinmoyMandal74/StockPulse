@@ -14702,6 +14702,8 @@ app.get('/api/drill', requireMember, route(async (req, res) => {
   if (!prof) return res.status(404).json({ error: 'Not in the screener.' });
   const data = {};
   if (F.src === 'filings' || F.src === 'eps') data.facts = await store.readSecFacts(symbol);
+  // EPS restated to today's share basis needs the split history (stored only).
+  if (F.src === 'eps') data.splits = await store.readSplits(symbol).then((x) => (x ? x.splits : null)).catch(() => null);
   else if (F.src === 'short') data.short = await store.readShortInterest(symbol, 400);
   else if (F.src === 'earnings') data.earnings = await store.readEarnings(symbol);
   else {
@@ -14937,6 +14939,14 @@ app.get('/api/evolution', requireAuth, route(async (req, res) => {
 
 // owner asked for them to be visible — but symbol-guarded like every other
 // per-stock route, so the preview stays twenty stocks wide.
+// The trailing-year points with revenue and EPS per share laid on, by date.
+function withPerShare(ttm, rows, splits) {
+  const ps = Adjusted.perShareSeries(SecFacts, rows, splits);
+  if (!ps) return ttm;
+  const by = new Map(ps.map((p) => [p.d, p]));
+  return ttm.map((t) => { const p = by.get(t.d); return p ? Object.assign({}, t, { revenuePerShare: p.revenuePerShare, epsTtm: p.epsTtm }) : t; });
+}
+
 app.get('/api/sec', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
@@ -14966,6 +14976,7 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
   // the page stops contradicting the EDGAR card further down it.
   const lastFiled = all.reduce(
     (m, r) => (SecFacts.isStatement(r) && r.filed && (!m || r.filed > m) ? r.filed : m), null);
+  const splitsHeld = await store.readSplits(symbol).then((x) => (x ? x.splits : null)).catch(() => null);
   res.json({
     symbol,
     lastFiled,
@@ -14984,8 +14995,13 @@ app.get('/api/sec', requireAuth, route(async (req, res) => {
     // `latestFilled` rather than `latest`: filling only ever supplies a figure
     // the winning filing left BLANK, so this can never disagree with the `ttm`
     // row above about a NUMBER — it merely has points where that row has none.
-    ttmSeries: SecFacts.ttmSeries(
-      SecFacts.latestFilled(all).filter((r) => r.periodType === 'Q')),
+    // PER SHARE ON TODAY'S BASIS (2026-10-25, the owner), merged into the
+    // same points: revenuePerShare and epsTtm, trailing year over the diluted
+    // count at each quarter end, split history applied (Adjusted.perShareSeries).
+    // Split history as STORED, never fetched here; where none is held the two
+    // are absent rather than guessed.
+    ttmSeries: withPerShare(SecFacts.ttmSeries(
+      SecFacts.latestFilled(all).filter((r) => r.periodType === 'Q')), all, splitsHeld),
     // What the VERDICT read is deliberately not returned here. The stock page
     // already holds that row, so asking this route for it would mean reading
     // the ~1.3MB snapshot on a path that exists precisely to avoid it.

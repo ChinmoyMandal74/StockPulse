@@ -2256,10 +2256,17 @@
     // between rowcard.js's bands and this page's box heights. What it costs is
     // the adjacency to the price that a pane had — which is why it leads the
     // three rather than sitting under the rug.
+    // `ps`: a per-share figure, on today's share basis (2026-10-25, the
+    // owner) -- the trailing year over the diluted count at each quarter end,
+    // split history applied on the server. Drawn in dollars and cents.
     const FUND_METRICS = [
       { k: 'revenue', label: 'Revenue TTM' },
       { k: 'netIncome', label: 'Net income TTM' },
+      { k: 'revenuePerShare', label: 'Revenue per share TTM', ps: 1 },
+      { k: 'epsTtm', label: 'EPS TTM', ps: 1 },
     ];
+    const fundPs = () => !!(FUND_METRICS.find((m) => m.k === fundMetric) || {}).ps;
+    const fundFmt = (v) => (fundPs() ? (v < 0 ? '\u2212$' : '$') + Math.abs(v).toFixed(2) : RowCard.fmtMktCap(v));
     let showFund = false;
     let fundMetric = 'revenue';
     // `secTtm` is script scope for the reason `sintRows` is: paintChart cannot
@@ -2340,7 +2347,7 @@
         const w = Math.max(0.2, ((h.to - h.from) / (n || 1)) * 100);
         const pt = secTtm.filter((x) => x[fundMetric] === h.v).pop();
         return `<i style="left:${l.toFixed(3)}%;width:${w.toFixed(3)}%"` +
-          ` title="${esc(RowCard.fmtMktCap(h.v) + (pt ? ' — the four quarters to ' + pt.d : ''))}"></i>`;
+          ` title="${esc(fundFmt(h.v) + (pt ? ' — the four quarters to ' + pt.d : ''))}"></i>`;
       }).join('');
 
       const newest = seen[seen.length - 1];
@@ -2350,11 +2357,14 @@
         ? ` The filed record starts ${esc(earliest)}, so anything before that is missing rather than flat.`
         : '';
       return '<div class="frug">' + svg + area + '</div>' +
-        `<p class="frugnote"><b>${esc(fundLabel())}</b> — ${esc(RowCard.fmtMktCap(newest))} ` +
+        `<p class="frugnote"><b>${esc(fundLabel())}</b> — ${esc(fundFmt(newest))} ` +
         `at the newest filed quarter, four quarters summed from the company's own SEC ` +
-        `filings, as filed. Stepped because a figure stands until the next filing ` +
+        (fundPs() ? `filings, over the diluted share count at that quarter end, <b>restated to today's share basis</b> ` +
+          `(every count before a split or reverse split put on the count after it, so a split is not a step). `
+          : `filings, as filed. `) +
+        `Stepped because a figure stands until the next filing ` +
         `replaces it. <b>The baseline is its own range, not zero</b> ` +
-        `(${esc(RowCard.fmtMktCap(mn))} to ${esc(RowCard.fmtMktCap(mx))}), so read the shape ` +
+        `(${esc(fundFmt(mn))} to ${esc(fundFmt(mx))}), so read the shape ` +
         `rather than the height. <b>Each step is dated to the quarter END</b>, and the ` +
         `figure became public some weeks after that — so this cannot be read for lead or ` +
         `lag against the price.${gap}</p>`;

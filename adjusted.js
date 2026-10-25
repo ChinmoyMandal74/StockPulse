@@ -262,6 +262,94 @@
     return { at, filed: filedN, mended };
   }
 
+  // ---- PER SHARE, ON TODAY'S SHARE BASIS (2026-10-25, the owner: "I need
+  // good history of earning and revenue per share .. can you make the
+  // adjustments so that it's accurate") --------------------------------------
+  //
+  // A filed per-share figure is on whatever share basis its filing used, and
+  // the newest filing of a period may or may not have been restated for a
+  // split since (see splitAdjustedShares). So the counts are put on today's
+  // basis by splitAdjustedShares, and everything per share is worked out
+  // against them. The ANCHOR is the company's own newest filed count, carried
+  // across any split dated after that filing -- not the price provider's
+  // count, which for an ADR or a dual-class company is in a different unit.
+  //   splits  [{ d, f }] as stored, or null when the history is not held:
+  //           then nothing is adjusted and the caller withholds the figure
+  //           (a guess on a company that has split is the whole factor wrong).
+  const filedCount = (r) => {
+    let s = num(r && r.sharesDiluted);
+    if (!(s > 0)) {
+      const ni = num(r && r.netIncome), eps = num(r && r.epsDiluted);
+      s = (ni != null && eps != null && Math.abs(eps) >= 0.2 && ni / eps > 0) ? ni / eps : null;
+    }
+    return s != null && s > 0 ? s : null;
+  };
+  function todayShares(SecFacts, rows, dates, splits) {
+    const all = Array.isArray(rows) ? rows : [];
+    if (!all.length || !Array.isArray(splits) || !Array.isArray(dates) || !dates.length) return null;
+    const filled = SecFacts.latestFilled(all).filter((r) => (r.periodType === 'Q' || r.periodType === 'FY') && r.periodEnd && filedCount(r) != null)
+      .sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : a.periodEnd > b.periodEnd ? -1 : 0));
+    const top = filled[0];
+    if (!top) return null;
+    const since = String(top.filed || top.periodEnd);
+    let f = 1;
+    for (const x of splits) if (x && x.d && x.d > since && num(x.f) > 0) f *= Number(x.f);
+    const sorted = dates.slice().sort();
+    return splitAdjustedShares(SecFacts, all, sorted, splits, filedCount(top) * f);
+  }
+  // The trailing year at each quarter end, per share: revenue and net income
+  // over the diluted count at that quarter end, on today's basis, in
+  // ttmSeries' order (oldest first). Null where the counts cannot be put on
+  // one basis.
+  function perShareSeries(SecFacts, rows, splits) {
+    const all = Array.isArray(rows) ? rows : [];
+    const ttm = SecFacts.ttmSeries(all.length ? SecFacts.latestFilled(all).filter((r) => r.periodType === 'Q') : []);
+    if (!ttm.length) return null;
+    const adj = todayShares(SecFacts, all, ttm.map((t) => t.d), splits);
+    if (!adj) return null;
+    const r4 = (v) => Math.round(v * 10000) / 10000;
+    return ttm.map((t) => {
+      const sh = adj.at[t.d];
+      const rev = num(t.revenue), ni = num(t.netIncome);
+      return { d: t.d, shares: sh != null ? Math.round(sh) : null,
+        revenuePerShare: sh > 0 && rev != null && rev > 0 ? r4(rev / sh) : null,
+        epsTtm: sh > 0 && ni != null ? r4(ni / sh) : null };
+    });
+  }
+  // Each filed EPS (quarters and fiscal years) on today's share basis.
+  // { 'Q|YYYY-MM-DD' or 'FY|YYYY-MM-DD': factor to multiply by }, or null as
+  // above. THE FACTOR IS A SPLIT FACTOR, SNAPPED: the filing's own count over
+  // today's-basis count, moved to the nearest product of the last k splits
+  // since the period ended (1, 1/10, 1/40 ...), so a buyback does not nudge a
+  // figure that no split touched (Microsoft 2019 read 5.06 -> 5.09 unsnapped).
+  // A ratio more than 25% from every candidate is a count that cannot be
+  // reconciled (AMC 2020 at 1.54x, a second "2024" fiscal year at Amcor) and
+  // its EPS is left out rather than guessed.
+  const EPS_SNAP = Math.log(1.25);
+  function epsFactors(SecFacts, rows, splits) {
+    const all = Array.isArray(rows) ? rows : [];
+    const filled = SecFacts.latestFilled(all).filter((r) => (r.periodType === 'Q' || r.periodType === 'FY') && r.periodEnd);
+    const dates = [...new Set(filled.map((r) => r.periodEnd))];
+    const adj = todayShares(SecFacts, all, dates, splits);
+    if (!adj) return null;
+    const sp = (splits || []).filter((x) => x && x.d && num(x.f) > 0).slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+    const out = {};
+    for (const r of filled) {
+      const raw = filedCount(r), at = adj.at[r.periodEnd];
+      if (raw == null || !(at > 0)) continue;
+      const ratio = raw / at;
+      const after = sp.filter((x) => x.d > r.periodEnd);
+      let f = 1, best = 1, bd = Math.abs(Math.log(ratio));
+      for (let k = after.length - 1; k >= 0; k--) {
+        f /= Number(after[k].f);
+        const dd = Math.abs(Math.log(ratio / f));
+        if (dd < bd) { bd = dd; best = f; }
+      }
+      if (bd <= EPS_SNAP) out[r.periodType + '|' + r.periodEnd] = best;
+    }
+    return out;
+  }
+
   function evolutionSeries(SecFacts, rows, closes, sharesToday, splits) {
     const all = Array.isArray(rows) ? rows : [];
     const bars = Array.isArray(closes) ? closes : [];
@@ -642,7 +730,7 @@
     FIELDS, SOURCES, SHARES_BAD_RATIO, SHORT_LAG_DAYS,
     trailingPe, impliedShares, newestShares, fundamentalsFrom, fundamentalsAsOf,
     evolutionSeries,
-    splitAdjustedShares,
+    splitAdjustedShares, todayShares, perShareSeries, epsFactors,
     shortPctFloat, shortCutoff, overlayFrom, engineRow, verdict,
   };
 }));
