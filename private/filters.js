@@ -21,7 +21,7 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary', 'staleIssues']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange']);
+    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange', 'erVsEstWord']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:

@@ -564,6 +564,7 @@
     ['aier',  'EPS adjusted',   (s) => { const v = erEps(s.erEpsAdj, s.erCurrency); return v && s.erEpsAdjLabel ? Object.assign(v, { t: v.t + ' (' + s.erEpsAdjLabel + ')' }) : v; }],
     ['aier',  'Adj. EPS YoY',   (s) => V.smag(s.erEpsAdjYoY)],
     ['aier',  'EPS estimate',   (s) => erEps(s.erEst, s.erCurrency)],
+    ['aier',  'Result vs est.', (s) => (s.erVsEstWord ? { t: s.erVsEstWord, c: '' } : null)],
     ['aier',  'vs estimate',    (s) => { const v = erEps(s.erVsEst == null ? null : Math.abs(s.erVsEst), s.erCurrency); return v ? Object.assign(v, { t: (s.erVsEst > 0 ? '+' : s.erVsEst < 0 ? '−' : '') + v.t, n: s.erVsEst }) : null; }],
     // Was 'Guide vs quarter' until 2026-10-23 (server.js FIELD_KEY_MOVED reads the old key as this).
     ['aier',  'Rev guide vs Q', (s) => V.smag(s.erGuideVsQ)],

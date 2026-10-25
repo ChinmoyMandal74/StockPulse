@@ -1572,7 +1572,7 @@
         <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="9">Long run</th>
         <th class="group grp-own" data-group="own" colspan="12">Ownership</th>
-        <th class="group grp-aier" data-group="aier" colspan="20">Last Earning AI Extracted</th>
+        <th class="group grp-aier" data-group="aier" colspan="21">Last Earning AI Extracted</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1726,6 +1726,7 @@
         <th class="grp-aier" data-key="erEpsAdj" title="The company’s own adjusted EPS for the quarter (its non-GAAP figure, or an EPS it gives excluding an item), under its own name, which the cell’s note gives with what it leaves out. Adjusted EPS has no standard definition. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>adj.</th>
         <th class="grp-aier" data-key="erEpsAdjYoY" title="The adjusted EPS against the same quarter a year earlier, where the release prints both. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Adj. EPS<br>YoY</th>
         <th class="grp-aier" data-key="erEst" title="The price data provider’s EPS estimate for the report. It arrives when the provider’s earnings history is next updated, often days after the release. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>est.</th>
+        <th class="left grp-aier" data-key="erVsEstWord" title="The reported EPS against the price data provider&rsquo;s estimate, in a word: Above, In line (within 2% of the estimate, or a cent, whichever is wider) or Below. The adjusted figure where the provider reports that one, else GAAP; the same figure vs est. differences. Blank until the provider&rsquo;s estimate arrives, often days after the release. Members only; never an input to the Signal.">Result<br>vs est.</th>
         <th class="grp-aier" data-key="erVsEst" title="How far the figure the provider reports (the adjusted one, or GAAP where the company gives none) is above or below its estimate, per share. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">vs<br>est.</th>
         <th class="grp-aier" data-key="erGuideVsQ" title="The company’s revenue guidance for the coming quarter (the middle of its range, or its single figure) against this quarter’s revenue. Blank where it gives no quarterly revenue figure. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Rev guide<br>vs Q</th>
         <th class="grp-aier" data-key="erEpsGuideVsFy" title="The company’s full-year EPS guidance (the middle of its range) against the previous full year’s EPS on the same basis: the figure the release prints beside it, else, for GAAP guidance, the 10-K’s diluted EPS. Adjusted guidance with no prior figure printed is left blank, since no filing carries adjusted EPS. The cell’s note gives both figures. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS guide<br>vs FY</th>
@@ -3911,7 +3912,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="135">${s.error}</td>
+            <td class="na" colspan="136">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4078,7 +4079,7 @@
           ${signedPctCell(s.instChange, 'grp-own', s.instPeriod ? 'Shares held by 13F filers at ' + s.instPeriod + ' against the quarter before' : '')}
           ${lastHolderCell(s)}`}
           ${optPcrCell(s)}
-          ${isFund ? naRun(20, 'grp-aier') : aierCells(s)}
+          ${isFund ? naRun(21, 'grp-aier') : aierCells(s)}
           ${removeBtn}
         </tr>`;
     }
@@ -4093,7 +4094,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 160;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 161;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4278,7 +4279,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="137">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="138">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4319,6 +4320,8 @@
         : sortKey === 'lastEvent' ? (x.lastEventDate ? new Date(x.lastEventDate + 'T12:00:00').getTime() : null)
         : sortKey === 'lastHolder' ? (x.lastHolderDate ? new Date(x.lastHolderDate + 'T12:00:00').getTime() : null)
         // By how many issues; none sorts last, as a blank.
+        // Above, In line, Below: Above first on a first (descending) click.
+        : sortKey === 'erVsEstWord' ? (x.erVsEstWord ? ['Below', 'In line', 'Above'].indexOf(x.erVsEstWord) : null)
         : sortKey === 'staleIssues' ? ((RowCard.staleIssues(x) || []).length || null)
         : x[sortKey]);
       // Sorting by an advice column leaves whole tiers tied — five Very Strongs
@@ -4412,7 +4415,7 @@
     // move: no green or red; amber only where the 10-Q differs.
     function aierCells(s) {
       const RV = window.ReleaseView;
-      if (!RV || !s.erFiled) return naRun(20, 'grp-aier');
+      if (!RV || !s.erFiled) return naRun(21, 'grp-aier');
       const cur = s.erCurrency, inCur = cur && cur !== 'USD' ? ' In ' + cur + ', the reporting currency.' : '';
       const td = (html, title, cls) => `<td class="grp-aier${cls ? ' ' + cls : ''}"${attr(title)}>${html}</td>`;
       const days = Math.max(0, Math.round((Date.now() - new Date(s.erFiled + 'T12:00:00').getTime()) / 86400000));
@@ -4436,6 +4439,7 @@
         eps(s.erEpsAdj, (s.erEpsAdjLabel || 'Adjusted EPS') + (s.erEpsAdjExcludes ? ', leaving out ' + s.erEpsAdjExcludes : '') + '.'),
         signedPctCell(s.erEpsAdjYoY, 'grp-aier', 'Adjusted EPS against the same quarter a year earlier'),
         eps(s.erEst, 'The price data provider\u2019s estimate'),
+        s.erVsEstWord ? td(we(s.erVsEstWord), (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS ' + RV.eps(s.erEst + s.erVsEst, cur) + ' against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur) + '. In line is within 2% or a cent.', 'left') : `<td class="left grp-aier na">\u2014</td>`,
         s.erVsEst == null ? `<td class="na grp-aier">\u2014</td>`
           : td((s.erVsEst > 0 ? '+' : s.erVsEst < 0 ? '\u2212' : '') + we(RV.eps(Math.abs(s.erVsEst), cur)),
             (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur)),

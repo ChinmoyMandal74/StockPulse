@@ -64,7 +64,7 @@
   // change off a loss or a zero is no percentage, as everywhere.
   const yoy = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
   const FIELD_KEYS = ['erFiled', 'erPeriodEnd', 'erPeriodLabel', 'erCurrency', 'erUrl', 'erRevenue', 'erRevYoY', 'erOpIncome', 'erOpYoY', 'erNetIncome', 'erNiYoY',
-    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erGuideVsQ', 'erGuideVsQNote', 'erEpsGuideVsFy', 'erEpsGuideNote', 'erGuideChange', 'erGuideChangeQuote', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
+    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erVsEstWord', 'erGuideVsQ', 'erGuideVsQNote', 'erEpsGuideVsFy', 'erEpsGuideNote', 'erGuideChange', 'erGuideChangeQuote', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
   const TENQ_WORD = { match: 'Matches', differs: 'Differs', none: 'Not comparable' };
   function tenQText(r) {
     if (!r || !r.secCheck) return 'The quarter’s 10-Q is not filed yet, or not read yet.';
@@ -109,7 +109,7 @@
       erRevenue: r.revenue, erRevYoY: yoy(r.revenue, r.revenuePrior), erOpIncome: r.opIncome, erOpYoY: yoy(r.opIncome, r.opIncomePrior),
       erNetIncome: r.netIncome, erNiYoY: yoy(r.netIncome, r.netIncomePrior), erEps: r.epsGaap, erEpsYoY: yoy(r.epsGaap, r.epsGaapPrior),
       erEpsAdj: r.epsAdj, erEpsAdjYoY: yoy(r.epsAdj, r.epsAdjPrior), erEpsAdjLabel: r.epsAdj != null ? r.epsAdjLabel || null : null, erEpsAdjExcludes: r.epsAdj != null ? r.epsAdjExcludes || null : null,
-      erEst: pv && pv.estimate != null ? pv.estimate : null, erVsEst: vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100, erVsEstBasis: basis,
+      erEst: pv && pv.estimate != null ? pv.estimate : null, erVsEst: vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100, erVsEstBasis: basis, erVsEstWord: vs == null ? null : vsEstWord(vs, pv.estimate),
       erGuideVsQ: gr ? gr.revVsQ : mid != null && r.revenue > 0 ? (mid / r.revenue - 1) * 100 : null,
       erGuideVsQNote: gr && gr.revVsQ != null && gr.revQ ? 'Revenue guidance for ' + (gr.revQ.periodLabel || 'the coming quarter') + ': ' + guideRange(gr.revQ, r.currency, money) + ', against ' + money(r.revenue, r.currency) + ' this quarter.' : null,
       erEpsGuideVsFy: gr ? gr.epsVsFy : null,
@@ -121,6 +121,18 @@
     });
     return o;
   }
+  // THE RESULT AGAINST THE ESTIMATE IN A WORD (2026-10-25, the owner: "saying
+  // above, in line or below"). In line: within 2% of the estimate or within a
+  // cent, whichever is wider, so a $0.01 gap on a $0.05 estimate is not a
+  // 20% beat. The same per-share figure the vs est. column differences.
+  const VS_EST_BAND = 0.02;
+  function vsEstWord(actual, est) {
+    if (actual == null || est == null || !isFinite(actual) || !isFinite(est)) return null;
+    const d = Math.round((actual - est) * 100) / 100;
+    if (Math.abs(d) <= Math.max(0.01, Math.abs(est) * VS_EST_BAND)) return 'In line';
+    return d > 0 ? 'Above' : 'Below';
+  }
+
   // WHAT HELPED AND WHAT WEIGHED, two columns of the company's own reasons
   // (2026-10-23). One definition for the stock page and the results page;
   // styled once in app.css (.rv-drv). The email lays them out for itself.
@@ -192,5 +204,5 @@
       guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
       tenQ: r.secCheck || null };
   }
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, driversHtml, guideTable, guideCell, historyRow };
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);

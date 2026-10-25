@@ -905,3 +905,5 @@ The owner, after Stockanalysis.com's statistics page: "We need to think about gr
 - Verified in headless Chrome: the screener's 20 banners in order with their own colours, 138 cells a row, every cell's group equal to its header's (the cell helpers that wrote their own group class were moved with them); the stock page's sections in the same order with the same members; the 21 drill-down rows still marked and opening.
 
 - **2026-10-24: Reporting is 4 columns**: Figures to (was Period), Last results out (was Reported), Announced (SEC), **Out of date** (`staleIssues`). Keys unchanged. `PAD_SPAN` 160, error row 135, empty row 137. See `which-dates-the-fundamentals-actually-describe.md`.
+
+- **2026-10-25: Last Earning AI Extracted is 21 columns**: Result vs est. (`erVsEstWord`, Above / In line / Below) before vs est. `PAD_SPAN` 161, error row 136, empty row 138. See `earnings-releases.md`.
