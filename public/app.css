@@ -528,6 +528,12 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rc-v { margin-left: auto; font-family: var(--mono); font-size: 11px;
                  white-space: nowrap; font-variant-numeric: tabular-nums;
                  min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A long text value, stacked (rowcard.js RC_LONG): the label on its own
+   line, the text under it in the reading face, three lines at most. */
+.rc-row.rc-long { flex-wrap: wrap; row-gap: 0; padding-bottom: 5px; }
+.rc-row.rc-long .rc-k { flex: 1 0 100%; max-width: none; }
+.rc-row.rc-long .rc-v { margin-left: 0; flex: 1 1 100%; white-space: normal; font-family: var(--sans); font-size: 12px; line-height: 1.45;
+  letter-spacing: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; text-overflow: clip; }
 .rc-foot { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--hair);
                     color: var(--faint); font-size: 10.5px;
                     display: flex; align-items: center; gap: 12px; }

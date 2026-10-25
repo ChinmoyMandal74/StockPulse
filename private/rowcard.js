@@ -1352,6 +1352,8 @@
   // DISPLAY NAMES, where a label was renamed after its key was stored
   // (2026-10-24, the owner: Period and Reported read as one date). The key
   // stays `group|label`, since saved tiles and layouts hold it.
+  // Past this many characters a value is drawn stacked (.rc-long, app.css).
+  const RC_LONG = 24;
   const FIELD_NAME = { 'report|Period': 'Figures to', 'report|Reported': 'Last results out' };
   function fieldName(key) {
     return FIELD_NAME[key] || String(key).slice(String(key).indexOf('|') + 1);
@@ -1483,9 +1485,17 @@
           // only /stock passes it, and only a row with a value is marked.
           const dk = o.drill && r.t !== '—' ? o.drill[r.key || (g + '|' + r.k)] : null;
           const drill = dk ? ` data-drill="${esc(dk)}"` : '';
-          return `<div class="rc-row${tip ? ' has-tip' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}${drill}>` +
+          // A LONG TEXT VALUE (a holder, an outlook, a summary) is stacked:
+          // the label on its own line and the text wrapping under it, held to
+          // three lines with the whole of it on hover (2026-10-25, the owner:
+          // "None of these fields with big text look good"). Squeezed onto
+          // one line it cut both to an ellipsis -- "Outl...", "Increased 2026 r...".
+          const plain = parts && parts.length ? parts.map((p) => p.t).join(', ') : String(r.t == null ? '' : r.t);
+          const long = plain.length > RC_LONG;
+          const vt = long && !r.title ? ` title="${esc(plain)}"` : '';
+          return `<div class="rc-row${tip ? ' has-tip' : ''}${long ? ' rc-long' : ''}"${tip ? ` data-tip="${tip}"` : ''}${ttl}${drill}>` +
             `<span class="rc-k">${esc(r.k)}</span>` +
-            `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}>${val}</span></div>`;
+            `<span class="rc-v ${r.c || ''}"${r.b ? ' style="font-weight:600"' : ''}${vt}>${val}</span></div>`;
         }).join('');
         // A DATE THAT QUALIFIES EVERY FIGURE IN A SECTION BELONGS ON THE
         // SECTION, not on one row among ninety. `captions` is opt-in and
