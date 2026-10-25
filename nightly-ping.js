@@ -600,7 +600,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
-      for (const [name, fn] of [['sec', secRotate], ['sec daily', secDaily], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
+      for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
         try {
           await fn();
         } catch (e) {
@@ -609,9 +609,17 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       }
     }
 
+    // THE MORNING SEC READ GOES FIRST (2026-10-25): it records yesterday's
+    // results 8-Ks, and the rotation's start reads them to queue the companies
+    // that just reported (reportdue.js), so this run pulls their figures and
+    // the snapshot it writes carries them. SEC requests only, no Twelve Data
+    // credits, and non-fatal: a failure leaves the rotation as it was.
+    try { await secDaily(); } catch (e) { say(`sec daily  skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`); }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
+    if (resp.j && Array.isArray(resp.j.reportDue)) say(`reported   ${resp.j.reportDue.length ? resp.j.reportDue.length + ' just reported, pulled this run: ' + resp.j.reportDue.join(' ') : 'none waiting for fresh figures'}`);
 
     let last = -1;
     let stagnant = 0;

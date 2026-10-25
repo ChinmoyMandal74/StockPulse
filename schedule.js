@@ -27,8 +27,8 @@ const JOBS = [
     // SATURDAY 04:00 TOO (2026-10-24, the owner): Friday's 8-Ks and 13D/13G
     // filings were read only on Monday, so /filings showed Thursday all weekend.
     extra: [{ days: ['Sat'], times: ['04:00'] }],
-    spends: { kind: 'twelve', text: 'About 14,000 credits a run: ~171 profiles at 80, seven a minute, plus prices and up to five split calls' },
-    what: 'The profile rotation, then the filings phases: SEC rotation, the SEC daily index (yesterday\'s 8-Ks and 13D/13G), short interest, index holdings, insider filings, splits and options open interest.',
+    spends: { kind: 'twelve', text: 'About 14,000 credits a run: ~171 profiles at 80, seven a minute, plus prices and up to five split calls; in an earnings season up to 100 more profiles of companies that just reported (about 8,000 credits)' },
+    what: 'The SEC daily index first (yesterday\'s 8-Ks and 13D/13G), so the profile rotation can also pull the companies that just reported (reportdue.js); then the filings phases: SEC rotation, short interest, index holdings, insider filings, splits and options open interest.',
     log: '/refreshes',
   },
   {

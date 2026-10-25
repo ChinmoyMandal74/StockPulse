@@ -143,6 +143,10 @@ function dropSnapshotCache() { snapCache = { at: 0, snap: null }; }
 // the same work over seven nights for a seventh of the nightly bill. Set
 // FUND_ROTATION_DAYS=1 to go back to re-pulling everything every night.
 const FUND_ROTATION_DAYS = Math.max(1, Number(process.env.FUND_ROTATION_DAYS) || 7);
+// The report-triggered refresh (reportdue.js): at most this many companies
+// that just reported are added to a nightly run, about 80 credits each.
+const ReportDue = require('./reportdue.js');
+const REPORT_REFRESH_MAX = Math.max(0, Number(process.env.REPORT_REFRESH_MAX ?? 100));
 const PROFILE_TTL_MS = FUND_ROTATION_DAYS * 24 * 60 * 60 * 1000;
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
 // The public sees a cached snapshot; only an admin (logged in with this password)
@@ -13681,6 +13685,14 @@ async function secDailyOne(sym, cik) {
   if (!r.ok) return { status: r.status };
   const sj = await r.json();
   await secListReaders(sym, cik, (sj.filings && sj.filings.recent) || null);
+  // THE RESULTS DATE, A DAY AFTER THE FILING (2026-10-25): the weekly
+  // rotation was the only writer of last_results, so a company that reported
+  // waited up to a week to be seen. The report-triggered refresh
+  // (reportdue.js) and the Announced (SEC) column both read it.
+  try {
+    const best = SecFacts.newestResults((sj.filings && sj.filings.recent) || null);
+    if (best) await store.setSecLastResults(sym, best.d);
+  } catch (e) { /* rides along */ }
   return { ok: true };
 }
 app.post('/api/sec/daily', route(async (req, res) => {
@@ -20331,6 +20343,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   if (askedStatus === 'complete' || askedStatus === 'incomplete') {
     return res.json({ ok: true, done: true, runId: askedRun, already: askedStatus });
   }
+  let startInfo = null;
   if (starting) {
     // A RUN ALREADY IN FLIGHT MUST NOT BE HIJACKED.
     //
@@ -20369,12 +20382,27 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     // Gaps go first on a rotation night: a new ticker or a new field fills the
     // next night instead of waiting its turn. expireOldestProfiles() only picks
     // among fetched_at > 0, so these are not counted against the rotation.
-    let gapped = 0;
+    let gapped = 0, reportDue = [];
     if (!full) {
       const universe = (await readUniverse());
-      const gaps = profileGaps(universe, await readProfiles());
+      const profs = await readProfiles();
+      const gaps = profileGaps(universe, profs);
       gapped = await store.expireProfilesFor(gaps.filter((g) => g.hasRow).map((g) => g.symbol));
       if (gaps.length) console.log(`cron: ${gaps.length} stocks with missing company data queued first`);
+      // JUST REPORTED (2026-10-25, reportdue.js): a company whose results 8-K
+      // the morning SEC read has seen, and whose profile predates it or still
+      // shows the old quarter, is pulled tonight rather than in its turn.
+      // Expired here like the gaps, so the rotation's slice below is not
+      // shortened by them. Non-fatal: a fault leaves the rotation as it was.
+      try {
+        const gapSet = new Set(gaps.map((g) => g.symbol));
+        reportDue = ReportDue.due(universe, profs, await store.readSecFiled(), { max: REPORT_REFRESH_MAX })
+          .filter((x) => !gapSet.has(x.symbol));
+        if (reportDue.length) {
+          gapped += await store.expireProfilesFor(reportDue.map((x) => x.symbol));
+          console.log(`cron: ${reportDue.length} companies that just reported queued: ${reportDue.map((x) => x.symbol).join(' ')}`);
+        }
+      } catch (e) { console.log('cron: report-triggered refresh skipped — ' + (e && e.message)); reportDue = []; }
     }
     const expired = gapped + (full
       ? await expireProfiles()
@@ -20386,6 +20414,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
     cronRunId = await trackSafe(store.startRun({ kind: full ? 'nightly-full' : 'nightly', trigger, actor,
       total, targets: expired, link: /^https:\/\/github\.com\//.test(runUrl) ? runUrl.slice(0, 300) : null }));
     await beginRefresh(actor, total, null, cronRunId);
+    startInfo = { reportDue: reportDue.map((x) => x.symbol) };
     console.log(`cron: refresh all started — ${expired} profiles expired ` +
       `(${full ? 'full sweep' : `1/${FUND_ROTATION_DAYS} rotation`}), ${total} symbols`);
   }
@@ -20401,7 +20430,7 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   const fin = await finishLiveRefresh(r.payload);
   await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total,
     rows: r.payload.stocks.length, phases: r.payload.phaseSteps });
-  res.json({ ok: true, runId, ...fin });
+  res.json({ ok: true, runId, ...fin, ...(startInfo || {}) });
 }));
 
 // Lets the job clean up after itself when it gives up, and report what it got.

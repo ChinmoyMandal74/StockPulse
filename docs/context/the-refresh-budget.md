@@ -16,3 +16,5 @@
 - Verified by simulating whole runs against the real `liveRefreshOpts()` at nine universe sizes from 93 to 1,500: **no round anywhere exceeds 610 credits and every profile is still pulled**. The load-bearing half of that is the bottom — 93 and 270 reproduce today's 14 and 39 rounds exactly, because below 529 the slice is the whole universe and the new path is never taken. The rotation SQL is unit-checked against a throwaway in-memory SQLite: oldest-first, the limit respected, never-fetched rows not counted against it.
 - **What none of this fixes**, and what will bind next: the assistant's ~700-stock context wall, and `readBarsFor`'s 650-day window across the universe (3.5s at 85 symbols, so ~41s at 1,000) on every round.
 
+
+- **2026-10-25: companies that just reported are added to a run** (`reportdue.js`, up to `REPORT_REFRESH_MAX` = 100), on top of the 1/7 slice. See `the-nightly-job.md`.
