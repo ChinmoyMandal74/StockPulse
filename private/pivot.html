@@ -16,6 +16,7 @@
        module the server require()s to stamp them, so this page cannot disagree
        with the column the screener draws. -->
   <script src="/filters.js"></script>
+  <script src="/releaseview.js"></script>
   <!-- For the severity ladders. They are EXPORTED by the engine that emits the
        words, so the order and the vocabulary cannot drift from what the Trend
        and Entry columns actually say — see the ladder note in the script. -->
@@ -557,6 +558,15 @@
       // A stock with no previous verdict is a BLANK, not "Unchanged" — the two
       // are different facts and the page already buckets blanks rather than
       // dropping them.
+      // FROM THE NEWEST RESULTS RELEASE (2026-10-25, the owner): the screener's
+      // Result vs est. and Guidance change, from /api/releases/column merged
+      // through ReleaseView.fields after the grid paints (members; for anyone
+      // else they stay blank). No `tint`: neither is a price move, and green
+      // and red mean price. A company with no release, no estimate or no
+      // stated change is a blank, bucketed as every blank here is.
+      vsEst:       { label: 'Result vs est.', get: (s) => s.erVsEstWord || null, order: ['Above', 'In line', 'Below'] },
+      guideChange: { label: 'Guidance change', get: (s) => s.erGuideChange || null,
+                     order: ['Raised', 'Initiated', 'Reaffirmed', 'Mixed', 'Lowered', 'Withdrawn'] },
       advmove:  { label: 'Signal move', get: (s) => adviceMove(s),
                   order: ['Upgraded', 'Unchanged', 'Downgraded'], tint: 1 },
       // TIME AS A COLUMN AXIS (2026-09-27, owner: "one column per month...
@@ -2018,6 +2028,20 @@
       paintPresets();
     });
 
+    // The release figures behind Result vs est. and Guidance change, laid on
+    // the rows the way the screener does; repainted only when one of the two
+    // is on screen. A guest is refused and the two stay blank.
+    async function loadReleaseFields() {
+      if (!window.ReleaseView) return;
+      try {
+        const r = await fetch('/api/releases/column', { cache: 'no-store' });
+        if (!r.ok) return;
+        const rows = (await r.json()).rows || {};
+        for (const s of stocks) Object.assign(s, window.ReleaseView.fields(rows[s.symbol] || null));
+        render();
+      } catch (e) { /* left blank */ }
+    }
+
     fetch('/api/stocks')
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then((d) => {
@@ -2027,6 +2051,7 @@
         if (!stocks.length) { $('out').innerHTML = '<div class="msg">Nothing to pivot yet.</div>'; return; }
         fillPicks();
         render();
+        loadReleaseFields();
       })
       .catch((e) => {
         $('out').innerHTML = '<div class="msg err">Could not load the screen: ' + esc(e.message) + '</div>';
