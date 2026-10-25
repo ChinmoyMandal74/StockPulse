@@ -2576,14 +2576,12 @@
         return `<td class="name left grp-react nocard na" title="No 8-K filed in the last sixty days, or none on file yet.">\u2014</td>`;
       }
       const days = Math.max(0, Math.round((Date.now() - new Date(s.lastEventDate + 'T12:00:00').getTime()) / 86400000));
-      const ago = days === 0 ? 'today' : days + 'd';
-      // COMPACT (2026-10-25, the owner, as the 5% filing): the first item,
-      // how many more, the age and the mark; the whole line is the tooltip
-      // and a click lists every item (openEventPop).
-      const items = String(s.lastEvent).split(' \u00b7 ');
-      const more = items.length - 1;
+      // JUST "Filed 6d" (2026-10-25, the owner: "Why dont you just say Filed
+      // 6D"): the items are the tooltip and the panel a click opens
+      // (openEventPop). Bold still marks a notable item among them.
+      const filed = days === 0 ? 'Filed today' : 'Filed ' + days + 'd';
       return `<td class="name left grp-react nocard ev-c" data-ev="${we(s.symbol)}"${attr('8-K filed ' + s.lastEventDate + ': ' + s.lastEvent + '. Click for the items.')}>`
-        + `<span class="ev-first">${s.lastEventNotable ? '<b>' + we(items[0]) + '</b>' : we(items[0])}</span>${more ? ` <span class="ev-n">+${more}</span>` : ''} <span class="na">${ago}</span><span class="hd-more" aria-hidden="true">\u00b7\u00b7\u00b7</span></td>`;
+        + `<span class="ev-first">${s.lastEventNotable ? '<b>' + filed + '</b>' : filed}</span><span class="hd-more" aria-hidden="true">\u00b7\u00b7\u00b7</span></td>`;
     }
     // The newest 13D or 13G about the company in the last sixty days: the
     // form, the holder and the stake, then how long ago. A 13D is set bold
