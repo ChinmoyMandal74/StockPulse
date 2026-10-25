@@ -30,7 +30,9 @@ for (const j of S.JOBS.filter((x) => x.taskScript)) {
     const last = durVar ? S.hm(j.repeat.start) + Number(durVar[1]) * 60 : null;
     ok(last === S.hm(j.repeat.last), j.id + ': last run ' + j.repeat.last, last == null ? null : S.fmt(last));
   } else {
-    ok(JSON.stringify(times) === JSON.stringify([...j.times].sort()), j.id + ': times ' + j.times.join(', '), times);
+    // Extra runs (the Saturday ones) are in the script too, once each.
+    const want = [...new Set(j.times.concat(...(j.extra || []).map((x) => x.times)))].sort();
+    ok(JSON.stringify(times) === JSON.stringify(want), j.id + ': times ' + want.join(', '), times);
   }
   const weekdays = /Monday/.test(src) && !/-Daily/.test(src);
   const daily = /-Daily/.test(src);
@@ -56,6 +58,7 @@ ok(/intraday/.test(at('2026-10-22T14:15:00Z')) && /intraday/.test(at('2026-10-22
 ok(at('2026-10-22T14:12:00Z') === null && at('2026-10-22T14:21:00Z') === null, '10:12 and 10:21 ET: clear');
 ok(/nightly/.test(at('2026-10-24T08:00:00Z')) && at('2026-10-24T14:15:00Z') === null, 'Saturday: the 04:00 nightly window (2026-10-24), no intraday slots');
 ok(at('2026-10-25T08:00:00Z') === null && at('2026-10-24T20:30:00Z') === null, 'Sunday 04:00 and Saturday 16:30: clear');
+{ const rj = S.JOBS.find((j) => j.id === 'releases'); ok(S.runsOn(rj, 'Sat').join() === '300' && S.runsOn(rj, 'Fri').join() === '555,1095' && S.runsOn(rj, 'Sun').length === 0 && /05:00 Sat/.test(S.whenText(rj)), 'the earnings reader runs Saturday 05:00, after the nightly', [S.runsOn(rj, 'Sat'), S.whenText(rj)]); }
 { const nj = S.JOBS.find((j) => j.id === 'nightly'); ok(S.runsOn(nj, 'Sat').join() === '240' && S.runsOn(nj, 'Fri').join() === '240,960' && S.runsOn(nj, 'Sun').length === 0 && /Sat/.test(S.whenText(nj)), 'the nightly runs Saturday 04:00 as well', [S.runsOn(nj, 'Sat'), S.whenText(nj)]); }
 ok(at('2026-12-03T09:00:00Z') !== null && at('2026-12-03T08:00:00Z') === null, 'December (EST): 04:00 ET is 09:00 UTC');
 
@@ -75,7 +78,7 @@ const tr = (kind, time, days, interval, duration) => ({ kind, start: '2026-10-01
 const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62), tr('Weekly', '04:00', 64)] },
   { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')] },
-  { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)] },
+  { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62), tr('Weekly', '05:00', 64)] },
   { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
   { name: 'TickrLab news tone', state: 'Ready', triggers: ['00:30', '06:30', '12:30', '18:30'].map((t) => tr('Daily', t)) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
@@ -83,7 +86,10 @@ const good = () => ({ at: Date.now(), tasks: [
 let d = S.drift(good());
 ok(Object.values(d.jobs).every((v) => v.status === 'ok' || v.status === 'remote') && d.unknown.length === 0, 'the real schedule: every job matches', d);
 ok(d.jobs.watchdog.status === 'remote', 'the Vercel cron is not looked for on the laptop');
-let r = good(); r.tasks[2].triggers = [tr('Weekly', '09:30', 62), tr('Weekly', '18:00', 62)];
+{ const r = good(); r.tasks[2].triggers = [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)];
+const d = S.drift(r);
+ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyDeclared.join() === 'Sat 05:00', 'a missing Saturday trigger is named', d.jobs.releases); }
+let r = good(); r.tasks[2].triggers = [tr('Weekly', '09:30', 62), tr('Weekly', '18:00', 62), tr('Weekly', '05:00', 64)];
 d = S.drift(r);
 ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyLive.join() === 'weekdays 09:30,weekdays 18:00' && d.jobs.releases.onlyDeclared.join() === 'weekdays 09:15,weekdays 18:15', 'a moved time reads as the runs on each side', d.jobs.releases);
 r = good(); r.tasks[0].triggers[1] = tr('Weekly', '16:00', 30);   // Mon-Thu

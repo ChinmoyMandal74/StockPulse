@@ -41,8 +41,11 @@ const JOBS = [
   {
     id: 'releases', name: 'Earnings releases', task: 'TickrLab earnings releases', host: 'laptop', script: 'release-load.js', taskScript: 'release-task.ps1',
     days: WEEKDAYS, times: ['09:15', '18:15'], minutes: 10,
+    // SATURDAY 05:00 TOO (2026-10-25, the owner): Friday's 8-Ks, recorded by
+    // the Saturday 04:00 nightly, read the same morning rather than Monday.
+    extra: [{ days: ['Sat'], times: ['05:00'] }],
     spends: { kind: 'anthropic', text: 'About $0.002 a release, capped at $2 a run' },
-    what: 'Reads the press release of every results 8-K the nightly runs recorded (the morning run reads the previous business day), checks older ones against their 10-Q, and rebuilds the screener group and the S&P 500 recon. When it read new results, emails the owner a digest of them; after the morning run, sends the Earnings results mailing to its subscribers.',
+    what: 'Reads the press release of every results 8-K the nightly runs recorded (the morning run reads the previous business day; Saturday 05:00 reads Friday’s), checks older ones against their 10-Q, and rebuilds the screener group and the S&P 500 recon. When it read new results, emails the owner a digest of them; after a weekday morning run, sends the Earnings results mailing to its subscribers.',
     log: '/news-runs',
   },
   {

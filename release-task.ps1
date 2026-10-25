@@ -19,6 +19,12 @@
 # reads what the 04:00 nightly's 'sec daily' phase recorded (the previous
 # business day's 8-Ks; a Friday's on Monday); the evening run reads whatever
 # the 16:00 nightly recorded since. It uses no Twelve Data credits.
+#
+# AND SATURDAY 05:00 (2026-10-25, the owner: "Yes but can we run the Saturday
+# earlier .. may be 5am"). The Saturday 04:00 nightly records Friday's 8-Ks
+# and is done by 04:50; without this run Friday's results waited for Monday
+# 09:15. The subscriber mailing stays weekday mornings (release-load.js), so
+# Saturday's finds go out in Monday's; the owner's digest goes on Saturday.
 param([switch]$Remove, [switch]$WhatIf)
 
 $ErrorActionPreference = 'Stop'
@@ -50,7 +56,9 @@ $cmdLine = "`"$node`" --use-system-ca release-load.js --commit --mail --days 5 -
 $runCmd = Join-Path $Root 'release.run.cmd'
 Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
-$triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }
+$SatTime  = '05:00'
+$triggers = @($Times | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }) +
+  @(New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At $SatTime)
 
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
@@ -63,14 +71,14 @@ if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run   : $cmdLine (hidden, through run-hidden.vbs)"
   Write-Output "  in    : $Root"
-  Write-Output "  when  : weekdays at $($Times -join ', '), stopping each run at `$$MaxUsd or $MaxMin minutes"
+  Write-Output "  when  : weekdays at $($Times -join ', ') and Saturday at $SatTime, stopping each run at `$$MaxUsd or $MaxMin minutes"
   exit 0
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
   -Settings $settings -Description 'Reads new earnings releases (release-load.js): each results 8-K press release read by Claude Haiku into earnings_releases. Spends Anthropic API credit.' -Force | Out-Null
 
-Write-Output "Registered '$TaskName' -- weekdays at $($Times -join ', ') local time, at most `$$MaxUsd or $MaxMin minutes a run."
+Write-Output "Registered '$TaskName' -- weekdays at $($Times -join ', ') and Saturday at $SatTime local time, at most `$$MaxUsd or $MaxMin minutes a run."
 Write-Output "Log: $(Join-Path $Root 'release.log')"
 
 # Tell /schedule straight away (schedule-report.js); a failure here changes nothing.

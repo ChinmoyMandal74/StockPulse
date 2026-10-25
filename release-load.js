@@ -52,6 +52,10 @@ async function mailList() {
   if (!MAIL) return;
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(new Date())) % 24;
   if (hour >= 12) return;
+  // WEEKDAYS ONLY: the Saturday 05:00 run (2026-10-25) reads Friday's
+  // releases, and they go out in Monday's mailing, as before.
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(new Date());
+  if (wd === 'Sat' || wd === 'Sun') return;
   const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
   if (!secret) return;
   let sent = 0, failed = 0, total = 0, companies = 0;
