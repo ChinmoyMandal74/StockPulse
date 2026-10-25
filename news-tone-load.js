@@ -370,7 +370,8 @@ async function writeToneColumn(stocks) {
         a.summary = null;
       }
       await write(h, Object.assign({ status: 'scored', reason: chk.ok ? null : 'summary withheld: ' + chk.problems.join('; '),
-        about: a.about, kind: a.kind, tone: Math.round(a.tone * 100) / 100, summary: a.summary, complete: !!a.complete }, base));
+        about: a.about, kind: a.kind, tone: Math.round(a.tone * 100) / 100, summary: a.summary, complete: !!a.complete,
+        event: typeof a.event === 'boolean' ? a.event : null }, base));
       if (!COMMIT || shown < 3) {
         shown++;
         console.log(`  ${h.symbol} ${NewsTone.label(a.tone)} ${a.tone >= 0 ? '+' : ''}${Number(a.tone).toFixed(2)} [${a.kind}, ${a.about}${a.complete ? '' : ', partial'}] ${page.host}`

@@ -208,8 +208,9 @@
       tone: { type: 'number' },
       summary: { type: 'string' },
       complete: { type: 'boolean' },
+      event: { type: 'boolean' },
     },
-    required: ['readable', 'about', 'kind', 'tone', 'summary', 'complete'],
+    required: ['readable', 'about', 'kind', 'tone', 'summary', 'complete', 'event'],
     additionalProperties: false,
   };
 
@@ -223,6 +224,7 @@
     '- tone: how the CONTENT of the article leans towards the named company, from -1 (clearly unfavourable) to +1 (clearly favourable). 0 is neutral, purely factual, or evenly mixed. Judge the facts reported and the writer\'s framing in the body, not the headline alone. Routine notices (a fund adjusting a position, an automatic price recap, an earnings date) sit near 0 unless the body itself leans. Use the full range only when the article clearly does.',
     '- summary: at most two short sentences, in your own words, saying what the article reports about the company. Plain facts. Do not quote the article beyond a few words. Do not repeat ratings or price targets, and never use the words buy, sell, hold, bullish, bearish, outperform, underperform, overweight or underweight: write "an analyst raised its view" or "an analyst cut its estimate" instead. No forecasts or advice of your own.',
     '- complete: false when the text stops early, is a teaser behind a paywall, or was cut off.',
+    '- event: true when the article reports a new, dated event at the named company: results, guidance, a deal or merger, a contract, a product launch, a legal or regulatory decision, a leadership change, a dividend or buyback announcement, an insider or holdings filing. false for commentary, opinion, an analyst note, a price recap, a market roundup, a preview of something still to come, or background.',
   ].join('\n');
 
   function userPrompt(o) {
@@ -278,6 +280,68 @@
   // naming AMD in a list. Measured that day, 167 of 399 readings were
   // passing mentions, 8 of AMD's 13. They stay stored; `mentioned` says how
   // many were left out. Null when nothing is left, never zero.
+// ---- importance (2026-10-24, the owner: "add another field called importance
+  // to every news and show news feed by date and importance") ----------------
+  // A RULE, NOT A RATING: what the article is about, whether it is mainly about
+  // the company, whether it reports a new dated event (the model's yes/no,
+  // `event`; null on readings made before the question), and how many
+  // articles told the same story that day. Never a view of what matters for
+  // the price, and never an input to the Signal.
+  //   high    a company event: results, guidance, a deal, a legal or
+  //           regulatory decision, a leadership change
+  //   medium  an analyst action, a product or customer, a dividend or buyback,
+  //           an insider trade, a holdings filing
+  //   low     opinion, a price recap, an industry piece, anything else, and any
+  //           article that only mentions the company
+  // A high kind the model says reports no new event (a preview, commentary on
+  // a deal) drops to medium; an "other" article that does report one rises to
+  // medium; a story told by four or more articles that day rises one level.
+  const IMP_HIGH = ['results', 'guidance', 'deal', 'legal', 'leadership'];
+  const IMP_MED = ['analyst', 'product', 'capital_return', 'insider', 'holdings_filing'];
+  const IMPORTANCE = ['low', 'medium', 'high'];
+  function importance(r, coverage) {
+    if (!r || r.about !== 'primary') return 'low';
+    let lv = IMP_HIGH.includes(r.kind) ? 2 : IMP_MED.includes(r.kind) ? 1 : 0;
+    if (lv === 2 && r.event === false) lv = 1;
+    if (lv === 0 && r.kind === 'other' && r.event === true) lv = 1;
+    if ((coverage || 1) >= 4 && lv < 2) lv++;
+    return IMPORTANCE[lv];
+  }
+  // THE SAME STORY: one company's articles on one day whose headlines share
+  // most of their words (Jaccard 0.4 or more on words of four letters or
+  // more, a short stop list out). Returns a group key for each article, in
+  // order; a group's size is its coverage.
+  const STOP = new Set(['with', 'from', 'that', 'this', 'their', 'have', 'after', 'about', 'stock', 'shares', 'share', 'says', 'said', 'will', 'into', 'over', 'what', 'here', 'more', 'than', 'year', 'quarter', 'company', 'inc.', 'corp', 'corp.']);
+  const words = (h) => new Set(String(h || '').toLowerCase().replace(/[^a-z0-9.%$ ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 4 && !STOP.has(w)));
+  // Measured on October 23 (1,740 readings): headline words alone grouped 24
+  // stories, the company's own name doing most of the matching ("American
+  // Express ... " against "American Express ..."). So: a company's results and
+  // guidance articles on one day are one story (American Express had nine that
+  // day, all about its quarter), and other articles are compared with the
+  // company's name words taken out first. `nameOf(symbol)`: its name, if known.
+  const ONE_EVENT = ['results', 'guidance'];
+  function storyGroups(items, nameOf) {
+    const parent = items.map((_, i) => i);
+    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    const ws = items.map((x) => {
+      const w = words(x && x.headline);
+      const own = words((nameOf && x && nameOf(x.symbol)) || '');
+      for (const t of own) w.delete(t);
+      if (x && x.symbol) w.delete(String(x.symbol).toLowerCase());
+      return w;
+    });
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      const x = items[i], y = items[j];
+      if (!x || !y || x.symbol !== y.symbol) continue;
+      if (x.about === 'primary' && y.about === 'primary' && x.kind === y.kind && ONE_EVENT.includes(x.kind)) { parent[find(j)] = find(i); continue; }
+      const p = ws[i], q = ws[j];
+      if (!p.size || !q.size) continue;
+      let both = 0; for (const w of p) if (q.has(w)) both++;
+      if (both / (p.size + q.size - both) >= 0.4) parent[find(j)] = find(i);
+    }
+    return items.map((_, i) => find(i));
+  }
+
   function summarise(rows) {
     const scored = (rows || []).filter((r) => r && r.status === 'scored' && r.tone != null && isFinite(r.tone));
     const use = scored.filter((r) => r.about === 'primary');
@@ -293,5 +357,6 @@
     INDUSTRIES, inScope, MODEL, MAX_CHARS, MIN_CHARS, BAND, KINDS, KIND_LABEL, SCHEMA, SYSTEM,
     label, feedUrl, canonUrl, parseFeed, sourceOf, robotsRules, robotsAllows,
     articleText, namesCompany, userPrompt, request, check, summarise, BANNED,
+    importance, storyGroups, IMPORTANCE, IMP_HIGH, IMP_MED,
   };
 });

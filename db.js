@@ -908,6 +908,8 @@ const SCHEMA = [
      scored_at    integer not null
    )`,
   `create index if not exists idx_news_tone_symbol on news_tone (symbol, published_at)`,
+  // The news feed reads a day at a time across every company.
+  `create index if not exists idx_news_tone_published on news_tone (published_at)`,
   // The ticker asks for everything published in the last 12 hours across the
   // universe; without this it scanned the table (query-plan test, 2026-09-15).
   `create index if not exists idx_news_published on news (published_at)`,
@@ -1670,6 +1672,9 @@ const ADDED_COLUMNS = [
   "alter table news_tone add column shadow_model text",
   "alter table news_tone add column shadow_about text",
   "alter table news_tone add column shadow_kind text",
+  // The news feed (2026-10-24): whether the article reports a new dated
+  // company event (the model's yes/no; null on readings made before it was asked).
+  "alter table news_tone add column event integer",
   "alter table news_tone add column shadow_tone real",
   "alter table news_tone add column shadow_summary text",
   "alter table sec_facts add column dividends_per_share real",
@@ -8017,9 +8022,10 @@ async function readNewsToneKnown(symbol, sinceIso) {
 async function writeNewsTone(row) {
   await init();
   await db.execute({
-    sql: `insert into news_tone (id, symbol, published_at, headline, source, url, status, reason, about, kind, tone, summary, complete, chars, host, model, attempts, scored_at)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    sql: `insert into news_tone (id, symbol, published_at, headline, source, url, status, reason, about, kind, tone, summary, complete, chars, host, model, attempts, scored_at, event)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
           on conflict(id) do update set
+            event = excluded.event,
             status = excluded.status, reason = excluded.reason, about = excluded.about, kind = excluded.kind,
             tone = excluded.tone, summary = excluded.summary, complete = excluded.complete, chars = excluded.chars,
             host = excluded.host, model = excluded.model, attempts = news_tone.attempts + 1, scored_at = excluded.scored_at
@@ -8027,8 +8033,23 @@ async function writeNewsTone(row) {
     args: [row.id, row.symbol, row.published_at, row.headline || null, row.source || null, row.url,
       row.status, row.reason || null, row.about || null, row.kind || null,
       row.tone == null ? null : Number(row.tone), row.summary || null, row.complete == null ? null : (row.complete ? 1 : 0),
-      row.chars == null ? null : Number(row.chars), row.host || null, row.model || null, Date.now()],
+      row.chars == null ? null : Number(row.chars), row.host || null, row.model || null, Date.now(),
+      row.event == null ? null : (row.event ? 1 : 0)],
   });
+}
+// THE NEWS FEED (2026-10-24): every scored reading published in a window,
+// across every company, on idx_news_tone_published. The caller narrows it to
+// one Eastern day.
+async function readNewsToneWindow(fromIso, toIso) {
+  await init();
+  const r = await db.execute({
+    sql: `select id, symbol, published_at, headline, source, url, about, kind, tone, summary, complete, event from news_tone
+           where published_at >= ? and published_at < ? and status = 'scored' order by published_at desc limit 6000`,
+    args: [String(fromIso), String(toIso)],
+  });
+  return r.rows.map((x) => ({ id: x.id, symbol: x.symbol, published_at: x.published_at, headline: x.headline, source: x.source, url: x.url,
+    about: x.about, kind: x.kind, tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null,
+    complete: x.complete == null ? null : Number(x.complete) === 1, event: x.event == null ? null : Number(x.event) === 1 }));
 }
 
 // How many headlines are stored for one symbol, so a page can say "10 of 43"
@@ -8247,7 +8268,7 @@ module.exports = {
   // pressing Run again and a reader reporting a bug.
   isNetDrop,
   init,
-  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone, writeNewsToneShadow, readNewsToneUnshadowed,
+  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone, readNewsToneWindow, writeNewsToneShadow, readNewsToneUnshadowed,
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,

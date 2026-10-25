@@ -1329,6 +1329,11 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                   <span class="nm">SEC filings</span>
                 </a>
+                <!-- Members: the news feed, every AI-read article by day and importance (2026-10-24). -->
+                <a class="pick" href="/news" id="newsLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
+                  <span class="nm">News</span>
+                </a>
                 <!-- Everyone: the public page of recent results releases read by AI (2026-10-22). -->
                 <a class="pick" href="/results" id="resultsLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
@@ -5671,7 +5676,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink', 'filingsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

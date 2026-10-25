@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>News — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- The account watermark every data page carries: members and guests, never the admin. -->
+  <script src="/wmark.js" defer></script>
+  <style>
+    /* THE NEWS FEED (2026-10-24, members). The shell is the Filings page's;
+       everything this page adds is prefixed nw- . Tone is not a price move,
+       so it takes blue and orange, never green or red. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent); backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
+    .mark .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px; border-radius: 999px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3.5%, transparent); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 76ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .nw-days { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 4px 12px; }
+    .nw-day { font: 500 12px var(--sans); padding: 7px 13px; border-radius: 999px; border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
+    .nw-day:disabled { opacity: 0.4; cursor: default; }
+    .nw-when { font: 600 15px var(--sans); color: var(--text); margin: 0 6px; }
+    .nw-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; flex-wrap: wrap; }
+    .nw-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
+    .nw-tab.on { color: var(--text); border-color: var(--accent); }
+    .nw-bar select, .nw-bar input[type=search] { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
+    .nw-bar input[type=search] { flex: 1; min-width: 180px; }
+    .nw-bar input[type=search]::placeholder { color: var(--faint); }
+    .nw-count { font-size: 12px; color: var(--faint); font-family: var(--mono); margin: 0 6px 10px; }
+    .nw-sec { margin-top: 22px; }
+    .nw-sec h2 { display: flex; align-items: center; gap: 10px; margin: 0 6px 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .nw-sec h2 i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+    .nw-list { display: flex; flex-direction: column; }
+    .nw-it { padding: 16px 20px; border-bottom: 1px solid var(--hair); border-left: 4px solid var(--c); }
+    .nw-it:last-child { border-bottom: 0; }
+    .nw-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--faint); }
+    .nw-sym { font: 600 12.5px var(--mono); color: var(--text); text-decoration: none; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--hair-2); }
+    .nw-sym:hover { color: var(--accent); border-color: var(--accent); }
+    .nw-co { color: var(--muted); }
+    .nw-time { margin-left: auto; font-family: var(--mono); white-space: nowrap; }
+    .nw-hl { display: block; margin: 8px 0 0; font-size: 15.5px; font-weight: 600; line-height: 1.4; color: var(--text); text-decoration: none; }
+    .nw-hl:hover { color: var(--accent); }
+    .nw-src { font-size: 12px; color: var(--faint); margin-top: 3px; }
+    .nw-sum { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 86ch; }
+    .nw-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .nw-tag { font: 600 11px var(--sans); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .nw-tag.nw-imp { color: var(--c); border-color: color-mix(in srgb, var(--c) 50%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); }
+    .nw-tag.nw-pos { color: var(--azure); border-color: color-mix(in srgb, var(--azure) 45%, transparent); }
+    .nw-tag.nw-neg { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
+    .nw-more { margin-top: 10px; font-size: 12px; color: var(--faint); }
+    .nw-more summary { cursor: pointer; color: var(--accent); }
+    .nw-more ul { margin: 6px 0 0; padding-left: 18px; }
+    .nw-more li { margin: 4px 0; line-height: 1.45; }
+    .nw-more a { color: var(--text); text-decoration: none; }
+    .nw-more a:hover { color: var(--accent); }
+    .nw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .nw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
+    .nw-it.nw-high { --c: var(--accent); }
+    .nw-it.nw-medium { --c: var(--azure); }
+    .nw-it.nw-low { --c: var(--hair-2); }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .nw-time { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Article tone</span>
+      <h1>News</h1>
+      <p class="lede">Every article in Yahoo Finance's feed for the S&amp;P 500 and the semiconductor stocks, read by an AI model
+        that says what kind of article it is, how its content leans towards the company, whether it reports a new company
+        event, and sums it up in two sentences. A day at a time, the most important first. The same story told by several
+        outlets is shown once, with the others under it.</p>
+    </header>
+
+    <div class="nw-days">
+      <button class="nw-day" id="prev" type="button">&lsaquo; Earlier</button>
+      <span class="nw-when" id="when">&nbsp;</span>
+      <button class="nw-day" id="next" type="button">Later &rsaquo;</button>
+    </div>
+    <div class="nw-bar">
+      <button class="nw-tab" data-imp="high">High</button>
+      <button class="nw-tab" data-imp="medium">High and medium</button>
+      <button class="nw-tab" data-imp="low">All</button>
+      <select id="kind" aria-label="Kind of article"><option value="">Every kind</option></select>
+      <select id="sector" aria-label="Sector"><option value="">All sectors</option></select>
+      <select id="tone" aria-label="Tone">
+        <option value="">Any tone</option>
+        <option value="Positive">Positive</option>
+        <option value="Neutral">Neutral</option>
+        <option value="Negative">Negative</option>
+      </select>
+      <input type="search" id="q" placeholder="Ticker, company or words" aria-label="Find a ticker, company or words" />
+    </div>
+    <div class="nw-count" id="count"></div>
+    <div id="feed"><div class="bezel"><div class="core" style="padding:0"><div class="nw-empty">Reading the day&hellip;</div></div></div></div>
+
+    <p class="nw-foot"><b>Importance is a rule, not a rating.</b> High: the article is mainly about the company and reports a
+      company event, such as results, guidance, a deal, a legal or regulatory decision or a leadership change. Medium: an analyst
+      action, a product or customer, a dividend or buyback, an insider trade or a holdings filing. Low: opinion, a price recap,
+      an industry piece, and any article that only mentions the company. A high-kind article that reports no new event (a preview,
+      commentary on a deal) counts as medium; a story told by four or more outlets that day rises one level. Tone runs from
+      &minus;1 to +1 and describes the article's content, not the stock. Nothing here is a recommendation, and none of it feeds the
+      Signal. Headlines are the publishers' own; follow the link to read the article.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const RANK = { high: 2, medium: 1, low: 0 };
+    const LABEL = { high: 'High importance', medium: 'Medium importance', low: 'Low importance' };
+    let data = null, minImp = 'medium';
+    try { minImp = localStorage.getItem('nw-imp') || 'medium'; } catch (e) { /* a private window */ }
+    const dayLabel = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const timeOf = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET';
+    const toneTag = (x) => (x.tone == null ? '' : '<span class="nw-tag ' + (x.toneLabel === 'Positive' ? 'nw-pos' : x.toneLabel === 'Negative' ? 'nw-neg' : '') + '">'
+      + esc(x.toneLabel) + ' ' + (x.tone > 0 ? '+' : x.tone < 0 ? '−' : '') + Math.abs(x.tone).toFixed(2) + '</span>');
+
+    async function load(day) {
+      $('feed').innerHTML = '<div class="bezel"><div class="core" style="padding:0"><div class="nw-empty">Reading the day&hellip;</div></div></div>';
+      try {
+        const r = await fetch('/api/news/feed' + (day ? '?date=' + encodeURIComponent(day) : ''), { cache: 'no-store' });
+        if (r.status === 401 || r.status === 403) { $('feed').innerHTML = '<div class="nw-empty">The news feed is for members.</div>'; return; }
+        data = await r.json();
+      } catch (e) { $('feed').innerHTML = '<div class="nw-empty">The feed could not be read. Try again in a moment.</div>'; return; }
+      $('when').textContent = dayLabel(data.day);
+      $('prev').onclick = () => load(data.prev);
+      $('next').disabled = !data.next;
+      $('next').onclick = () => data.next && load(data.next);
+      const fill = (id, vals) => { const el = $(id), keep = el.value; el.innerHTML = el.options[0].outerHTML + vals.map((v) => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join(''); if ([...el.options].some((o) => o.value === keep)) el.value = keep; };
+      fill('kind', [...new Set(data.items.map((x) => x.kindLabel).filter(Boolean))].sort());
+      fill('sector', [...new Set(data.items.map((x) => x.sector).filter(Boolean))].sort());
+      draw();
+    }
+    function draw() {
+      if (!data) return;
+      for (const b of document.querySelectorAll('.nw-tab')) b.classList.toggle('on', b.dataset.imp === minImp);
+      const kind = $('kind').value, sector = $('sector').value, tone = $('tone').value, q = $('q').value.trim().toLowerCase();
+      const want = (x) => RANK[x.importance] >= RANK[minImp] && (!kind || x.kindLabel === kind) && (!sector || x.sector === sector) && (!tone || x.toneLabel === tone)
+        && (!q || x.symbol.toLowerCase() === q || String(x.name).toLowerCase().includes(q) || String(x.headline).toLowerCase().includes(q));
+      // A story once, under its lead; the rest of its articles listed under it.
+      const byStory = new Map();
+      for (const x of data.items) { if (!byStory.has(x.story)) byStory.set(x.story, []); byStory.get(x.story).push(x); }
+      const leads = data.items.filter((x) => x.lead && want(x));
+      $('count').textContent = leads.length + (leads.length === 1 ? ' story' : ' stories') + ' shown, ' + data.items.length + ' articles read on the day';
+      if (!leads.length) { $('feed').innerHTML = '<div class="bezel"><div class="core" style="padding:0"><div class="nw-empty">Nothing matches on this day. Try All, or an earlier day.</div></div></div>'; return; }
+      const sections = ['high', 'medium', 'low'].map((lv) => {
+        const list = leads.filter((x) => x.importance === lv);
+        if (!list.length) return '';
+        return '<section class="nw-sec"><h2 style="--c:' + (lv === 'high' ? 'var(--accent)' : lv === 'medium' ? 'var(--azure)' : 'var(--hair-2)') + '"><i></i>' + LABEL[lv] + ' · ' + list.length + '</h2>'
+          + '<div class="bezel"><div class="core" style="padding:0"><div class="nw-list">' + list.map((x) => {
+            const others = byStory.get(x.story).filter((o) => o !== x);
+            return '<article class="nw-it nw-' + x.importance + '">'
+              + '<div class="nw-top"><a class="nw-sym" href="/stock/' + encodeURIComponent(x.symbol) + '">' + esc(x.symbol) + '</a><span class="nw-co">' + esc(x.name) + (x.sector ? ' · ' + esc(x.sector) : '') + '</span>'
+              + '<span class="nw-time">' + esc(timeOf(x.publishedAt)) + '</span></div>'
+              + '<a class="nw-hl" href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.headline) + '</a>'
+              + '<div class="nw-src">' + esc(x.source || '') + '</div>'
+              + (x.summary ? '<p class="nw-sum">' + esc(x.summary) + '</p>' : '')
+              + '<div class="nw-tags"><span class="nw-tag nw-imp">' + esc(x.importance.charAt(0).toUpperCase() + x.importance.slice(1)) + '</span>'
+              + '<span class="nw-tag">' + esc(x.kindLabel) + '</span>' + toneTag(x)
+              + (x.event === true ? '<span class="nw-tag">Reports a company event</span>' : '')
+              + (x.about !== 'primary' ? '<span class="nw-tag">Mentions the company</span>' : '')
+              + (x.coverage > 1 ? '<span class="nw-tag">' + x.coverage + ' outlets</span>' : '') + '</div>'
+              + (others.length ? '<details class="nw-more"><summary>' + others.length + ' more on this story</summary><ul>'
+                + others.map((o) => '<li><a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.headline) + '</a> · ' + esc(o.source || '') + ' · ' + esc(timeOf(o.publishedAt)) + '</li>').join('') + '</ul></details>' : '')
+              + '</article>';
+          }).join('') + '</div></div></div></section>';
+      }).join('');
+      $('feed').innerHTML = sections;
+    }
+    for (const b of document.querySelectorAll('.nw-tab')) b.addEventListener('click', () => { minImp = b.dataset.imp; try { localStorage.setItem('nw-imp', minImp); } catch (e) { /* fine */ } draw(); });
+    for (const id of ['kind', 'sector', 'tone']) $(id).addEventListener('change', draw);
+    $('q').addEventListener('input', draw);
+    load(null);
+  </script>
+</body>
+</html>

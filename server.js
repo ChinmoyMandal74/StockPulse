@@ -829,7 +829,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -1981,6 +1981,13 @@ app.get('/filings', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'filings');
   res.sendFile(path.join(__dirname, 'private', 'filings.html'));
+}));
+// The news feed (2026-10-24): every AI-read article, by day and importance.
+app.get('/news', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'news');
+  res.sendFile(path.join(__dirname, 'private', 'news.html'));
 }));
 app.get('/holders', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
@@ -16535,6 +16542,55 @@ async function toneStockPayload(symbol, limit = 8, offset = 0, withShadow = fals
   });
   return { symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND };
 }
+// THE NEWS FEED (2026-10-24, the owner: "Should we have a just news page ..
+// especially the AI rated one that comes from yahoo .. add another field
+// called importance to every news and show news feed by date and
+// importance"). One Eastern day of scored readings across every company: the
+// same story told by several articles grouped (NewsTone.storyGroups, its
+// coverage the number of outlets), each article's importance by the rule
+// (NewsTone.importance), the company's name and sector from the snapshot.
+// Members only, as Article tone is. No date asked: today, else the newest of
+// the last six days with any. Ten minutes per instance a day (five for today).
+const newsFeedHeld = new Map();
+async function newsFeedDay(day) {
+  const today = SecDaily.todayET();
+  const held = newsFeedHeld.get(day);
+  if (held && Date.now() - held.at < (day === today ? 5 : 10) * 60000) return held.v;
+  const etDay = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  const rows = (await store.readNewsToneWindow(day + 'T03:00:00Z', SecDaily.addDays(day, 1) + 'T06:00:00Z'))   // the Eastern day, either side of a clock change
+    .filter((r) => r.published_at && etDay(r.published_at) === day);
+  const snap = await snapshotCached().catch(() => null);
+  const bySym = new Map(((snap && snap.stocks) || []).filter((x) => x && x.symbol).map((x) => [x.symbol, x]));
+  const groups = NewsTone.storyGroups(rows, (sym) => { const x = bySym.get(sym); return x ? x.shortName || x.name || '' : ''; });
+  const outlets = new Map();
+  rows.forEach((r, i) => { const g = groups[i]; if (!outlets.has(g)) outlets.set(g, new Set()); outlets.get(g).add(String(r.source || r.url)); });
+  const rank = { high: 2, medium: 1, low: 0 };
+  const items = rows.map((r, i) => {
+    const coverage = outlets.get(groups[i]).size;
+    const s = bySym.get(r.symbol) || {};
+    return { id: r.id, symbol: r.symbol, name: s.shortName || s.name || r.symbol, sector: s.sector || null, publishedAt: r.published_at,
+      headline: r.headline, source: r.source, url: r.url, kind: r.kind, kindLabel: NewsTone.KIND_LABEL[r.kind] || r.kind, about: r.about,
+      event: r.event, tone: r.tone, toneLabel: r.tone == null ? null : NewsTone.label(r.tone), summary: r.summary,
+      importance: NewsTone.importance(r, coverage), coverage, story: String(groups[i]) };
+  });
+  // A story's lead: its most important article, then the earliest.
+  const lead = new Map();
+  for (const x of items) { const cur = lead.get(x.story); if (!cur || rank[x.importance] > rank[cur.importance] || (rank[x.importance] === rank[cur.importance] && x.publishedAt < cur.publishedAt)) lead.set(x.story, x); }
+  for (const x of items) x.lead = lead.get(x.story) === x;
+  items.sort((a, b) => rank[b.importance] - rank[a.importance] || (a.publishedAt < b.publishedAt ? 1 : -1));
+  const v = { day, items };
+  newsFeedHeld.set(day, { at: Date.now(), v });
+  if (newsFeedHeld.size > 40) newsFeedHeld.delete(newsFeedHeld.keys().next().value);
+  return v;
+}
+app.get('/api/news/feed', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const today = SecDaily.todayET();
+  const asked = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) && String(req.query.date) <= today ? String(req.query.date) : null;
+  let v = await newsFeedDay(asked || today);
+  for (let back = 1; !asked && !v.items.length && back <= 6; back++) v = await newsFeedDay(SecDaily.addDays(today, -back));
+  res.json(Object.assign({ today, prev: SecDaily.addDays(v.day, -1), next: v.day < today ? SecDaily.addDays(v.day, 1) : null }, v));
+}));
 app.get('/api/news/tone', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();

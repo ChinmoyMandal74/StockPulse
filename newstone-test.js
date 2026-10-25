@@ -206,5 +206,38 @@ check('scope: no S&P file, the semiconductors still', NewsTone.inScope({ symbol:
 check('scope: no S&P file, nothing else', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, null), false);
 check('scope: no row', NewsTone.inScope(null, SP), false);
 
+
+// ---- importance and the same story (2026-10-24) ------------------------------
+{
+  const imp = NewsTone.importance;
+  check('importance: results about the company is high', imp({ about: 'primary', kind: 'results', event: true }), 'high');
+  check('importance: a results preview (no new event) drops to medium', imp({ about: 'primary', kind: 'results', event: false }), 'medium');
+  check('importance: an older reading with no answer keeps its kind', imp({ about: 'primary', kind: 'deal', event: null }), 'high');
+  check('importance: an analyst action is medium', imp({ about: 'primary', kind: 'analyst', event: false }), 'medium');
+  check('importance: opinion is low', imp({ about: 'primary', kind: 'opinion', event: false }), 'low');
+  check('importance: an "other" article reporting an event rises to medium', imp({ about: 'primary', kind: 'other', event: true }), 'medium');
+  check('importance: a passing mention is low whatever its kind', imp({ about: 'mentioned', kind: 'results', event: true }), 'low');
+  check('importance: four articles on one story raise it a level', imp({ about: 'primary', kind: 'analyst', event: false }, 4), 'high');
+  check('importance: three do not', imp({ about: 'primary', kind: 'analyst', event: false }, 3), 'medium');
+  check('importance: a price recap told four times rises only to medium', imp({ about: 'primary', kind: 'price_move', event: false }, 6), 'medium');
+  const g = NewsTone.storyGroups([
+    { symbol: 'META', headline: 'Meta Platforms beats third-quarter revenue estimates, raises capex forecast' },
+    { symbol: 'META', headline: 'Meta beats revenue estimates and raises capex forecast for 2026' },
+    { symbol: 'META', headline: 'Why Meta stock is a long-term winner' },
+    { symbol: 'AAPL', headline: 'Apple beats revenue estimates and raises capex forecast for 2026' },
+  ]);
+  check('story: two headlines on the same results are one story', g[0] === g[1], true);
+  check('story: an unrelated piece is its own', g[2] !== g[0], true);
+  check('story: another company is never the same story', g[3] !== g[1], true);
+  const g2 = NewsTone.storyGroups([
+    { symbol: 'AXP', about: 'primary', kind: 'results', headline: 'American Express Q3 Earnings Beat Estimates on Strong Card Fees' },
+    { symbol: 'AXP', about: 'primary', kind: 'results', headline: 'American Express To Cut 5% Of Global Workforce; Raises 2026 EPS Outlook' },
+    { symbol: 'AXP', about: 'primary', kind: 'opinion', headline: 'American Express: 3 Key Takeaways for Long-Term Investors' },
+    { symbol: 'AXP', about: 'primary', kind: 'analyst', headline: 'American Express stock trades down, here is why' },
+  ], () => 'American Express');
+  check('story: one company’s results articles on a day are one story', g2[0] === g2[1], true);
+  check('story: its name is not what makes two headlines alike', g2[2] !== g2[3] && g2[2] !== g2[0], true);
+}
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;
