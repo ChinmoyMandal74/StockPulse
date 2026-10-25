@@ -2391,6 +2391,40 @@ Earnings releases (`releases.js`, `earnings_releases`) read each results
   rule and must not be touched by this; only the history rows would be.
   An owner decision on credits.
 
+## 49. Twelve Data financial statements, only where the SEC has no quarters — 2026-10-25
+
+*Area: Data · Status: Open · Note: the owner asked for these on the backlog after the per-share history was restated to today's share basis (docs/context/charts-and-the-stock-page.md)*
+
+Question asked: now that revenue and EPS per share are worked out from the
+SEC filings, is storing Twelve Data's financial statements worth it? **Not
+across the universe.** On the Pro plan `/income_statement`, `/balance_sheet`
+and `/cash_flow` return **6 quarters** and refuse more ("Full access to
+historical data is available only in the Enterprise plan"), at **100
+credits per statement per company**: about 128,000 credits for one pass of
+the income statement, ~3.5 hours at 610 a minute, ~385,000 for all three,
+repeated each quarter to build history forward a quarter at a time. The SEC
+filings already give 10 to 17 years of quarterly revenue, net income and
+diluted counts for US filers, and the restated EPS TTM matches the
+provider's (NVDA 7.94 against 7.91, MSFT exact). Three narrow gaps remain:
+
+- **(a) Companies with no quarterly SEC figures.** A foreign filer on an
+  annual 20-F (and many ADRs) has no 10-Q, so its per-share history on the
+  stock chart is annual or empty. Twelve Data covers them, six quarters at a
+  time. **First step, no credits: count them** (companies with a profile but
+  no `sec_facts` quarter in the last two years); the guess is a few dozen.
+  Then a once-a-quarter `/income_statement` pull for that list only, a few
+  thousand credits, kept by quarter rather than replaced.
+- **(b) The reporting currency.** For an ADR the money figures are in the
+  reporting currency (ERIC: SEK) and the only place Twelve Data names it is
+  `/income_statement` meta (docs/context/column-groups.md). The same pull
+  as (a) would give it for those companies; a display decision of its own.
+- **(c) An explicit fourth quarter.** The filings leave Q4 to be worked out
+  as the year less three quarters. Already done for revenue and net income;
+  only a single quarter's per-share figure is affected, and the trailing
+  year avoids it. Lowest value of the three.
+
+An owner decision on credits; nothing here touches the Signal.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
@@ -2399,6 +2433,10 @@ Earnings releases (`releases.js`, `earnings_releases`) read each results
   [momentum-delta.md](momentum-delta.md) FIRST — twelve framings between them,
   every one flat — and start from `git show momentum-scoring:momentum.js`, not
   from memory.
+- **Storing Twelve Data's financial statements for every stock.** Six
+  quarters on the Pro plan at 100 credits a statement per company, against
+  10 to 17 years free from the SEC filings. Decided 2026-10-25; the narrow
+  exceptions are entry 49.
 - **Analyst ratings and price targets.** The endpoints need a Twelve Data Ultra
   plan and 403 on Pro for everything but the AAPL demo. The whole path was
   deleted 2026-09-23 rather than left behind a flag that cannot usefully be
