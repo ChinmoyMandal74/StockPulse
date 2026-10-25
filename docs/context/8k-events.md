@@ -34,3 +34,7 @@ Tests were a scratchpad Node suite (39 checks) plus a dry run of the loader agai
 
 ## Next-day freshness (2026-10-20)
 New 8-Ks no longer wait for the weekly rotation: each morning's `sec daily` phase reads the SEC's index of the previous business day and re-reads the filing list of every tracked company that filed an 8-K (or a 13D/13G about it). See `large-holder-filings.md`, "Next-day freshness", and `secdaily.js`.
+
+## The screener cell, compact (2026-10-25)
+
+As the 5% filing (the owner: "yes"). The **Last 8-K** cell (`lastEventCell`, `td.ev-c`) shows the first item (bold when notable, cut at 120px), `+N` for the rest, the age and the `···` mark. The whole line is the tooltip; a click opens the news panel (`openEventPop`): every item the filing reports, the filed date, and links to `/stock/<SYM>#ev` and `/filings`. The server names every item now (`Events8k.label(items, 9)`, was 2); the hover card and `/stock` read the same longer label, and the text filter reads all of it.

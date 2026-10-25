@@ -458,7 +458,13 @@
     #newsPop .np-foot a { color: var(--muted); text-decoration: none; }
     #newsPop .np-foot a:hover { color: var(--text); text-decoration: underline; }
     /* The 5% filing cell (2026-10-25): compact, the rest on a click. */
-    td.hd-c { cursor: pointer; }
+    td.hd-c, td.ev-c { cursor: pointer; }
+    td.ev-c .ev-first { display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    td.ev-c .ev-n { font-size: 11px; color: var(--muted); }
+    td.ev-c .hd-more { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--muted);
+                       background: color-mix(in srgb, var(--wash) 7%, transparent); border: 1px solid var(--hair); }
+    td.ev-c:hover .hd-more { color: var(--text); border-color: var(--hair-2); }
+    #newsPop .ev-list { margin: 2px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
     td.hd-c .hd-more { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--muted);
                        background: color-mix(in srgb, var(--wash) 7%, transparent); border: 1px solid var(--hair); }
     td.hd-c:hover .hd-more { color: var(--text); border-color: var(--hair-2); }
@@ -2571,8 +2577,13 @@
       }
       const days = Math.max(0, Math.round((Date.now() - new Date(s.lastEventDate + 'T12:00:00').getTime()) / 86400000));
       const ago = days === 0 ? 'today' : days + 'd';
-      return `<td class="name left grp-react nocard"${attr('8-K filed ' + s.lastEventDate + ': ' + s.lastEvent + '. Open the stock for the filing itself.')}>`
-        + `${s.lastEventNotable ? '<b>' + we(s.lastEvent) + '</b>' : we(s.lastEvent)} <span class="na">${ago}</span></td>`;
+      // COMPACT (2026-10-25, the owner, as the 5% filing): the first item,
+      // how many more, the age and the mark; the whole line is the tooltip
+      // and a click lists every item (openEventPop).
+      const items = String(s.lastEvent).split(' \u00b7 ');
+      const more = items.length - 1;
+      return `<td class="name left grp-react nocard ev-c" data-ev="${we(s.symbol)}"${attr('8-K filed ' + s.lastEventDate + ': ' + s.lastEvent + '. Click for the items.')}>`
+        + `<span class="ev-first">${s.lastEventNotable ? '<b>' + we(items[0]) + '</b>' : we(items[0])}</span>${more ? ` <span class="ev-n">+${more}</span>` : ''} <span class="na">${ago}</span><span class="hd-more" aria-hidden="true">\u00b7\u00b7\u00b7</span></td>`;
     }
     // The newest 13D or 13G about the company in the last sixty days: the
     // form, the holder and the stake, then how long ago. A 13D is set bold
@@ -6736,6 +6747,27 @@
       newsPopFor = 'hd:' + sym;
       placeNewsPop(cell);
     }
+    // The newest 8-K, in the news panel: every item it reports.
+    function openEventPop(cell, sym) {
+      const row = stocks.find((x) => x.symbol === sym);
+      if (!row || !row.lastEvent) return;
+      const items = String(row.lastEvent).split(' \u00b7 ');
+      const days = Math.max(0, Math.round((Date.now() - new Date(row.lastEventDate + 'T12:00:00').getTime()) / 86400000));
+      const pop = $('newsPop');
+      pop.innerHTML = `<h4>${we(row.shortName || row.name || sym)}</h4>`
+        + `<div class="np-sub">Newest 8-K \u00b7 filed ${we(row.lastEventDate)}, ${days === 0 ? 'today' : days + ' days ago'} \u00b7 ${items.length} item${items.length === 1 ? '' : 's'}</div>`
+        + `<ul class="ev-list">${items.map((t) => '<li>' + we(t) + '</li>').join('')}</ul>`
+        + `<div class="np-foot"><a href="/stock/${encodeURIComponent(sym)}#ev" target="_blank" rel="noopener">The filings for ${we(sym)} \u2192</a><a href="/filings" target="_blank" rel="noopener">Every filing by day \u2192</a></div>`;
+      newsPopFor = 'ev:' + sym;
+      placeNewsPop(cell);
+    }
+    $('tbody').addEventListener('click', (e) => {
+      const cell = e.target.closest('td.ev-c');
+      if (!cell) return;
+      e.stopPropagation();
+      if (newsPopFor === 'ev:' + cell.dataset.ev) return closeNewsPop();
+      openEventPop(cell, cell.dataset.ev);
+    });
     $('tbody').addEventListener('click', (e) => {
       const cell = e.target.closest('td.hd-c');
       if (!cell) return;
@@ -6751,7 +6783,7 @@
       openNewsPop(cell, cell.dataset.news);
     });
     document.addEventListener('click', (e) => {
-      if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news') && !e.target.closest('td.hd-c')) closeNewsPop();
+      if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news') && !e.target.closest('td.hd-c') && !e.target.closest('td.ev-c')) closeNewsPop();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNewsPop(); });
 

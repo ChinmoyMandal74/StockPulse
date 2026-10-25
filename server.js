@@ -6585,7 +6585,9 @@ function flowsOf(row, f) {
   const e8 = f.ev ? f.ev[String(row.symbol).toUpperCase()] : null;
   if (e8 && e8[0]) {
     out.lastEventDate = String(e8[0]);
-    out.lastEvent = Events8k.label(e8[1], 2);
+    // Every item named (9, was 2): the screener cell shows the first and a
+    // count, and the panel a click opens lists them all.
+    out.lastEvent = Events8k.label(e8[1], 9);
     out.lastEventNotable = Events8k.notable(e8[1]);
   }
   // Shares bought back over the latest twelve months on file, and that as a
