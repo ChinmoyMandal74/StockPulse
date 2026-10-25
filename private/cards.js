@@ -5347,11 +5347,16 @@
     // HTML LABELS OVER THE DRAWING, NEVER SVG TEXT -- the rule every chart in
     // this module follows, because the artboard is scaled to the window and
     // a glyph inside a stretched svg is distorted with it.
+    // THE CHART FILLS THE CARD (2026-10-25, the owner: "Can you fix the empty
+    // space after the chart"): drawn at H, then stretched to whatever height
+    // the card leaves it (.fl-wrap grows, the svg is preserveAspectRatio
+    // none), so the labels sit at a share of the height rather than a pixel.
+    const pc = (v) => (v / H * 100).toFixed(3);
     const lLabs = secs.map((s) =>
-      `<span class="fl-lab${s.pooledRow ? ' fl-rest' : ''}" style="top:${f1(s.y + s.h / 2)}px">` +
+      `<span class="fl-lab${s.pooledRow ? ' fl-rest' : ''}" style="top:${pc(s.y + s.h / 2)}%">` +
       `<b>${esc(s.name)}</b><i class="${s.ret >= 0 ? 'up' : 'dn'}">${pct(s.ret)}</i></span>`).join('');
     const rLabs = bands.map((b) =>
-      `<span class="fl-lab fl-blab" style="top:${f1(b.y + b.h / 2)}px">` +
+      `<span class="fl-lab fl-blab" style="top:${pc(b.y + b.h / 2)}%">` +
       `<b class="fl-${b.key}">${esc(b.label)}</b>` +
       `<i>${b.mine.length} ${b.mine.length === 1 ? partWord : partsWord} · ` +
       `${b.wt.toFixed(0)}% of value</i></span>`).join('');
@@ -5386,9 +5391,9 @@
       ` · ${live.length.toLocaleString()} companies · $${fmtMoney(total)}</span>` +
       '<h2 class="s-title">Where the value sits<br><span class="dim">' +
       esc('and how each ' + partWord + ' has done ' + phrase) + '</span></h2>' +
-      `<div class="fl-wrap${drillSec ? ' fl-drill' : ''}" style="height:${H}px">` +
+      `<div class="fl-wrap${drillSec ? ' fl-drill' : ''}" style="min-height:${H}px">` +
       `<div class="fl-side" style="width:${TR.lw}px">${lLabs}</div>` +
-      `<svg class="fl-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+      `<svg class="fl-svg" width="${W}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">` +
       paths + lNodes + rNodes + '</svg>' +
       `<div class="fl-side fl-r" style="width:${TR.rw}px">${rLabs}</div>` +
       '</div>' +
@@ -16428,9 +16433,9 @@
     .sz-square .fl-in .s-title .dim { font-size: 29px; }
     .sz-story .fl-in .s-title .dim { font-size: 40px; }
     .fl-in .s-sub { margin-top: auto; padding-top: 24px; }
-    .fl-wrap { display: flex; align-items: stretch; margin-top: 30px; flex: none; }
+    .fl-wrap { display: flex; align-items: stretch; margin-top: 30px; flex: 1 0 auto; }
     .fl-side { position: relative; flex: none; }
-    .fl-svg { flex: none; display: block; }
+    .fl-svg { flex: none; display: block; height: auto; align-self: stretch; }
     /* A label is positioned on its node's CENTRE and pulled back half its own
        height, so a node and its name cannot drift apart as the column is
        re-proportioned. Absolute, because the nodes are spaced by market value
