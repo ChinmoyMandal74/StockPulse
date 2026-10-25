@@ -1248,7 +1248,11 @@
             <!-- Shown only while a weighting other than Default is in force, so
                  the tinted score columns are never unexplained now that the
                  picker that used to say so has moved to the console. -->
-            <a class="btn admin-only" href="/chat" style="display:none" title="Ask questions about this data">
+            <!-- HIDDEN FOR EVERYONE, the admin too (2026-10-24, the owner: "Hide the
+                 Ask menu for everyone including admin from screener"). Not
+                 admin-only any more, so applyAdminUI never shows it; /chat
+                 itself still opens for the admin by its address. -->
+            <a class="btn" href="/chat" hidden style="display:none" title="Ask questions about this data">
               <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chat" /></svg>Ask
             </a>
             <!-- The alert badge. A BADGE YOU CAN IGNORE, never an interstitial:
