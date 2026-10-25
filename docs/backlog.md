@@ -2425,6 +2425,43 @@ provider's (NVDA 7.94 against 7.91, MSFT exact). Three narrow gaps remain:
 
 An owner decision on credits; nothing here touches the Signal.
 
+## 50. How stocks trade around major events (elections, Fed decisions) — 2026-10-25
+
+*Area: Pages · Status: Open · Note: the owner asked "How stocks trade around major events like elections …. What is the best way to show these", and for the answer on the backlog*
+
+**An event study, shown three ways.** Every past instance of an event lined
+up on the same day 0, and what followed:
+
+- **(a) Aligned paths, the main view.** Trading days from about -20 to +60
+  across, return against the equal-weight average stock (the research page's
+  benchmark) up the side; one thin line per past instance (presidential
+  elections 2008, 2012, 2016, 2020, 2024) and a bold average. The spread of
+  the thin lines is the reading as much as the average: with five instances
+  it shows at once whether there is a pattern or five different stories.
+- **(b) Who moved: a sector (or theme, or index) table.** Rows the groups,
+  columns each instance and the average, each cell day 0 to +20 against the
+  market. Elections show here more than in the market's own path (banks and
+  small caps after 2016, clean energy around 2020 and 2024).
+- **(c) One stock's record**, a panel on the stock page: its own path against
+  its sector's around each past instance.
+
+**Calendars**: one small hand-kept table of dated events (US presidential and
+midterm elections, Fed rate decisions, CPI release days, quarter-ends, index
+rebalances). Earnings already have their own history on the stock page.
+Prices from the bar archive (back to 1998 for older names), built nightly and
+stored like `groupmonths.js`, so no Twelve Data credits and nothing computed
+per request.
+
+**Where**: a members' page `/events` (an event picker and a group picker),
+then a promo card ("Around the last five elections") from the same stored
+figures. First calendars: elections and Fed decisions.
+
+**Said on the view itself, not only here**: the number of instances on every
+chart ("5 elections") with every line drawn, never just an average; the list
+of stocks is today's, so the early paths leave out companies that failed
+since; a record of what happened, not a forecast, and no buy, sell or hold
+wording. Nothing here reaches the Signal.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
