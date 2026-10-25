@@ -4079,7 +4079,7 @@
           ${signedPctCell(s.instChange, 'grp-own', s.instPeriod ? 'Shares held by 13F filers at ' + s.instPeriod + ' against the quarter before' : '')}
           ${lastHolderCell(s)}`}
           ${optPcrCell(s)}
-          ${isFund ? naRun(21, 'grp-aier') : aierCells(s)}
+          ${isFund ? aierNa() : aierCells(s)}
           ${removeBtn}
         </tr>`;
     }
@@ -4413,9 +4413,18 @@
     // formatting is the shared module's (releaseview.js), so a figure reads
     // the same here, on /filings and on the stock page. Growth is not a price
     // move: no green or red; amber only where the 10-Q differs.
+    // The group's NA run, each cell set as its header is: the text columns
+    // (Reported, Result vs est., Guidance change, Outlook, 10-Q, Summary)
+    // are left-set, and a right-set NA under them read as misplaced.
+    const AIER_LEFT = new Set([0, 13, 17, 18, 19, 20]);
+    function aierNa() {
+      let h = '';
+      for (let i = 0; i < 21; i++) h += `<td class="na grp-aier${AIER_LEFT.has(i) ? ' left' : ''}" title="${NA_TIP}">NA</td>`;
+      return h;
+    }
     function aierCells(s) {
       const RV = window.ReleaseView;
-      if (!RV || !s.erFiled) return naRun(21, 'grp-aier');
+      if (!RV || !s.erFiled) return aierNa();
       const cur = s.erCurrency, inCur = cur && cur !== 'USD' ? ' In ' + cur + ', the reporting currency.' : '';
       const td = (html, title, cls) => `<td class="grp-aier${cls ? ' ' + cls : ''}"${attr(title)}>${html}</td>`;
       const days = Math.max(0, Math.round((Date.now() - new Date(s.erFiled + 'T12:00:00').getTime()) / 86400000));
@@ -4439,7 +4448,7 @@
         eps(s.erEpsAdj, (s.erEpsAdjLabel || 'Adjusted EPS') + (s.erEpsAdjExcludes ? ', leaving out ' + s.erEpsAdjExcludes : '') + '.'),
         signedPctCell(s.erEpsAdjYoY, 'grp-aier', 'Adjusted EPS against the same quarter a year earlier'),
         eps(s.erEst, 'The price data provider\u2019s estimate'),
-        s.erVsEstWord ? td(we(s.erVsEstWord), (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS ' + RV.eps(s.erEst + s.erVsEst, cur) + ' against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur) + '. In line is within 2% or a cent.', 'left') : `<td class="left grp-aier na">\u2014</td>`,
+        s.erVsEstWord ? td(RV.vsEstTag(s.erVsEstWord), (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS ' + RV.eps(s.erEst + s.erVsEst, cur) + ' against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur) + '. In line is within 2% or a cent.', 'left') : `<td class="left grp-aier na">\u2014</td>`,
         s.erVsEst == null ? `<td class="na grp-aier">\u2014</td>`
           : td((s.erVsEst > 0 ? '+' : s.erVsEst < 0 ? '\u2212' : '') + we(RV.eps(Math.abs(s.erVsEst), cur)),
             (s.erVsEstBasis === 'adjusted' ? 'Adjusted' : 'GAAP') + ' EPS against the provider\u2019s estimate of ' + RV.eps(s.erEst, cur)),

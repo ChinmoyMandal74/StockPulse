@@ -700,6 +700,14 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 /* ---- the guidance change label (ReleaseView.changeTag) ---------------- */
 .gch { display: inline-block; padding: 1px 8px; border-radius: 999px; font: 600 10.5px/1.6 var(--sans); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; color: var(--gch-ink); background: var(--gch-reaffirmed); }
 .gch.gch-raised { background: var(--gch-raised); } .gch.gch-lowered { background: var(--gch-lowered); } .gch.gch-withdrawn { background: var(--gch-withdrawn); }
+/* Result vs est. (2026-10-25): the guidance tag's shape in the text colour
+   only, never green or red -- an arrow and the fill tell the three apart:
+   Above filled, In line a dashed outline, Below a plain outline. */
+.vst { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 999px; font: 600 10.5px/1.7 var(--sans); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 45%, transparent); }
+.vst i { font-style: normal; font-size: 8px; line-height: 1; }
+.vst.vst-above { background: color-mix(in srgb, var(--text) 14%, transparent); }
+.vst.vst-inline { border-style: dashed; color: var(--muted); border-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.vst.vst-below { background: transparent; }
 .gch.gch-mixed { background: var(--gch-mixed); } .gch.gch-initiated { background: var(--gch-initiated); } .gch.gch-reaffirmed { background: var(--gch-reaffirmed); }
 
 /* ---- what helped and what weighed (ReleaseView.driversHtml) ------------ */

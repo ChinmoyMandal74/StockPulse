@@ -126,6 +126,12 @@
   // cent, whichever is wider, so a $0.01 gap on a $0.05 estimate is not a
   // 20% beat. The same per-share figure the vs est. column differences.
   const VS_EST_BAND = 0.02;
+  // The tag (app.css .vst): an arrow and the word, no colour.
+  const VS_EST_GLYPH = { Above: '\u25B2', 'In line': '\u2248', Below: '\u25BC' };
+  function vsEstTag(word, title) {
+    if (!VS_EST_GLYPH[word]) return '';
+    return '<span class="vst vst-' + word.toLowerCase().replace(/\s+/g, '') + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><i aria-hidden="true">' + VS_EST_GLYPH[word] + '</i>' + word + '</span>';
+  }
   function vsEstWord(actual, est) {
     if (actual == null || est == null || !isFinite(actual) || !isFinite(est)) return null;
     const d = Math.round((actual - est) * 100) / 100;
@@ -204,5 +210,5 @@
       guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
       tenQ: r.secCheck || null };
   }
-  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
+  root.ReleaseView = { esc, money, eps, chg, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);
