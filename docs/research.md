@@ -228,19 +228,22 @@ The archive lacks most of the high fliers that fell and never recovered, which f
 
 ## 15. Drift after an earnings surprise
 
-*Family: Earnings · Verdict: Not yet tested · Horizon: 1 to 2 months · Data: Earnings history and daily prices · Sample: 27,421 reported surprises since 2017*
+*Family: Earnings · Verdict: No edge · Horizon: 1 to 2 months · Data: Earnings history, results releases and daily prices · Sample: 27,196 reports with a surprise in 1,141 stocks, 2017–2026*
 
 ### The idea
-After a company beats or misses expectations, its price keeps drifting the same way for weeks. This is one of the most studied effects in finance, and its timescale matches a holding period of one to two months.
+After a company beats or misses expectations, its price keeps drifting the same way for weeks. This is one of the most studied effects in finance, and its timescale matches one to two months.
 
 ### What was done
-Not yet run. The data is in hand: 27,421 reports with a surprise since 2017, and the daily prices after each.
+Run on 2026-10-25 with the guidance study (entry 18): each results release since 2017 matched to the data provider's earnings-per-share surprise for the same report (within three days), 27,196 matches. A surprise over +2% of the estimate is a beat, under −2% a miss, between them in line. The announcement move was measured from the close before the filing day to the close after it, so a release before the open and one after the close both fall inside it. The drift was measured from there over the next 21 and 42 sessions, against the average stock over the same sessions, before and from 2020.
 
 ### Outcome
-None yet.
+No drift. The announcement move goes the expected way (a median +0.9% for a beat, −1.8% for a miss), but after it, beats did no better than misses: over 21 sessions the gap was −0.03 points before 2020 and −0.19 from 2020, over 42 sessions −0.14 and −0.43, and every interval includes zero. Beats themselves were slightly behind the average stock afterwards (−0.30% over 21 sessions).
 
 ### What follows
-The next study worth running. Almost every report lands after the close, so the window has to start the following day, or it measures the announcement jump rather than the drift.
+In this archive the price takes in an earnings surprise on the announcement itself, and nothing is left for the following one to two months. The starter screen built on the idea ("Drifting after a beat") shows stocks that beat, as a description; this result says it should not be read as a sign of what comes next.
+
+### Caveats
+The archive is today's list of stocks, and these are large, closely followed companies, where an effect like this would be the first to disappear. The surprise is the data provider's figure, and whether its estimate is the consensus as it stood before the report or a later revision has not been checked. The 2017–2019 sample is thin (2,654 beats and misses).
 
 ## 16. Distance from the 200-day average, and the 200-day z-score — 2026-10-16
 
@@ -342,3 +345,43 @@ The archive is today's list of stocks, without most of those that fell and were 
 | Every stock-month, for scale | 0.74 | 37% |
 
 The medians sit below zero throughout because a few large winners lift the average stock's mean. A mean with a small positive sign beside a negative t is a month-weighting effect: a few crowded months carry many events.
+
+## 18. Guidance: raised, lowered, reaffirmed — and what followed — 2026-10-25
+
+*Family: Earnings · Verdict: Weak lead · Horizon: 1 to 2 months · Data: Results releases read by AI, and daily prices · Sample: 35,072 results releases in 1,141 stocks, 2017–2026*
+
+### The idea
+When a company raises its outlook the price jumps, and when it cuts it the price falls. If the market takes in the news only gradually, the move should carry on for weeks afterwards, and the guidance change would say something about the next one to two months, not just the day.
+
+### What was done
+Every results press release since 2017 (35,072, from each 8-K's Exhibit 99.1, read by an AI model), grouped by what it did to the company's outlook: raised (7,125), first given for a year (4,832), reaffirmed (4,039), mixed (849), lowered (1,721), withdrawn (337), an outlook with no stated change (5,683), or no outlook (10,486). The announcement move was measured from the close before the filing day to the close after it, which takes in a release before the open and one after the close alike. Then the move over the next 21 and 42 sessions, against the equal-weight average stock over the same sessions, before and from 2020, with 95% intervals from resampling whole months (so a busy earnings season counts as the one period it is). The test decided in advance was the pair: raised against lowered. If guidance carries information past the announcement, those two should keep moving apart.
+
+### Outcome
+The announcement move is large and immediate: a median +1.2% (against the average stock) for a raise and −2.4% for a cut, a gap of 5.2 points between the two groups' averages. After that, little is left. Over 21 sessions raised and lowered drifted apart by a further 0.42 points, an interval that includes zero. Over 42 sessions the gap was 0.86 points, just clear of zero for the whole period (from +0.05 to +1.61), and the same direction in both periods, though neither period on its own clears zero. The gap comes from the lowered side: a raise was followed by about the average stock's return (−0.45% over 42 sessions), while a cut was followed by −1.31%, and a withdrawn outlook by −2.05%.
+
+Two things not decided in advance, worth a test of their own. Reaffirmed outlooks were followed by below-average returns: −1.14% over 42 sessions, an interval clear of zero (from −1.88% to −0.59%), and from 2020 −1.60%. And the gap between raised and lowered held only where the company stated the change in its own words (+1.45 points over 42 sessions); where the change was worked out by comparing with the previous release's figures, there was none.
+
+### What follows
+Guidance is mostly priced on the day it is given. What remains is small and one-sided: a cut or a withdrawn outlook has tended to be followed by a further shortfall over two months, of about one to two points against the average stock, and a raise by nothing special. That is a lead, not a rule: it is just clear of zero over the whole period and not within either period alone. The guidance change is shown on the screener, the stock page and the pivot view as a description of what the company said. Nothing here is an input to the Signal.
+
+### Caveats
+The archive is today's list of stocks, without most of those that fell and were delisted, and a company whose cut was followed by a collapse is the kind most likely to be missing. Most releases are recent: 75% are from 2020 on. The guidance change is an AI model's reading of the release (or worked out from the previous release's figures), and some readings are wrong. Averages are compared with the average stock; the typical stock trails the average slightly (a median −0.46% over 21 sessions from random dates), so medians here run below zero for every group.
+
+### Numbers
+| Guidance | Releases | Announcement move (median) | Next 21 sessions (average) | Next 42 sessions (average) |
+|---|---|---|---|---|
+| Raised | 7,125 | +1.17% | −0.19% | −0.45% |
+| First given for a year | 4,832 | +0.39% | +0.11% | +0.01% |
+| Reaffirmed | 4,039 | −0.31% | −0.67% | −1.14% |
+| Mixed | 849 | −0.50% | −0.43% | −0.73% |
+| Lowered | 1,721 | −2.44% | −0.61% | −1.31% |
+| Withdrawn | 337 | −0.59% | −0.46% | −2.05% |
+| Outlook, no stated change | 5,683 | +0.03% | −0.04% | +0.33% |
+| No outlook | 10,486 | +0.09% | −0.36% | −0.62% |
+| Random stock-days (the base) | 50,395 | | −0.01% | −0.02% |
+
+| Raised minus lowered | Announcement | Next 21 sessions | Next 42 sessions |
+|---|---|---|---|
+| 2017–2026 | +5.24 pts [+4.61, +5.85] | +0.42 [−0.29, +0.97] | +0.86 [+0.05, +1.61] |
+| Before 2020 | +4.37 [+3.33, +5.50] | +0.46 [−0.54, +1.51] | +0.72 [−0.49, +2.12] |
+| From 2020 | +5.58 [+4.77, +6.25] | +0.42 [−0.35, +1.25] | +0.93 [−0.01, +1.86] |

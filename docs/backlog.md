@@ -25,7 +25,9 @@ shows, as Open and unfiled.
 
 ## 1. The PEAD study — the best untested idea this project has
 
-*Area: Research · Status: Open*
+*Area: Research · Status: Done*
+
+**Run 2026-10-25, with the guidance study: no drift.** Beat minus miss over 21 sessions -0.03pt before 2020 and -0.19pt from 2020, over 42 sessions -0.14 and -0.43, every interval through zero (27,196 reports matched to a surprise; window from the close after the filing day, so the announcement jump is outside it). research.md entries 15 and 18. The two checks below were not needed to reach a null and remain unchecked.
 
 **Post-earnings announcement drift**: a company reports, the number beats or
 misses what was expected, the price jumps that day — and then keeps drifting in
