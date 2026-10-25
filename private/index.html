@@ -457,6 +457,13 @@
                         display: flex; gap: 12px; font-size: 11.5px; }
     #newsPop .np-foot a { color: var(--muted); text-decoration: none; }
     #newsPop .np-foot a:hover { color: var(--text); text-decoration: underline; }
+    /* The 5% filing cell (2026-10-25): compact, the rest on a click. */
+    td.hd-c { cursor: pointer; }
+    td.hd-c .hd-more { margin-left: 6px; padding: 0 5px; border-radius: 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--muted);
+                       background: color-mix(in srgb, var(--wash) 7%, transparent); border: 1px solid var(--hair); }
+    td.hd-c:hover .hd-more { color: var(--text); border-color: var(--hair-2); }
+    #newsPop .hd-who { font-size: 13px; color: var(--text); line-height: 1.45; }
+    #newsPop .hd-meta { margin-top: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
 
     .tl-spark { margin: 12px 0 2px; }
     .tl-spark svg { width: 100%; display: block; color: var(--muted); height: var(--tl-h, 72px); }
@@ -2575,8 +2582,12 @@
         return `<td class="name left grp-own nocard na" title="No 13D or 13G filed about this company in the last sixty days, or none on file yet.">\u2014</td>`;
       }
       const days = Math.max(0, Math.round((Date.now() - new Date(s.lastHolderDate + 'T12:00:00').getTime()) / 86400000));
-      return `<td class="name left grp-own nocard"${attr('Filed ' + s.lastHolderDate + ': ' + s.lastHolder + '. Open the stock for every filing and the link to each.')}>`
-        + `${s.lastHolderActive ? '<b>' + we(s.lastHolder) + '</b>' : we(s.lastHolder)} <span class="na">${days === 0 ? 'today' : days + 'd'}</span></td>`;
+      // COMPACT (2026-10-25, the owner): the form and the age, and a mark
+      // that there is more. The whole line is the tooltip, and a click opens
+      // it in the news panel (openHolderPop) with a link to the filings.
+      const form = String(s.lastHolder).split(' \u00b7 ')[0];
+      return `<td class="name left grp-own nocard hd-c" data-hd="${we(s.symbol)}"${attr('Filed ' + s.lastHolderDate + ': ' + s.lastHolder + '. Click for the filing.')}>`
+        + `${s.lastHolderActive ? '<b>' + we(form) + '</b>' : we(form)} <span class="na">${days === 0 ? 'today' : days + 'd'}</span><span class="hd-more" aria-hidden="true">\u00b7\u00b7\u00b7</span></td>`;
     }
     function capBandCell(s) {
       if (!s.capBand) {
@@ -6709,6 +6720,29 @@
       placeNewsPop(cell);
     }
 
+    // The 5% filing, in the news panel: who, the stake, the form and when.
+    function openHolderPop(cell, sym) {
+      const row = stocks.find((x) => x.symbol === sym);
+      if (!row || !row.lastHolder) return;
+      const parts = String(row.lastHolder).split(' \u00b7 ');
+      const form = parts[0], who = parts.length > 2 ? parts.slice(1, -1).join(' \u00b7 ') : parts[1] || '', pct = parts.length > 2 ? parts[parts.length - 1] : '';
+      const days = Math.max(0, Math.round((Date.now() - new Date(row.lastHolderDate + 'T12:00:00').getTime()) / 86400000));
+      const pop = $('newsPop');
+      pop.innerHTML = `<h4>${we(row.shortName || row.name || sym)}</h4>`
+        + `<div class="np-sub">Newest 5% filing \u00b7 Schedule ${we(form)} \u00b7 filed ${we(row.lastHolderDate)}, ${days === 0 ? 'today' : days + ' days ago'}</div>`
+        + `<div class="hd-who">${we(who || 'Holder not named')}</div>`
+        + `<div class="hd-meta">${pct ? we(pct) + ' of the shares reported. ' : ''}${form === '13D' ? 'A 13D is filed by a holder who may seek to influence the company.' : 'A 13G is the short form for a passive holder.'}</div>`
+        + `<div class="np-foot"><a href="/stock/${encodeURIComponent(sym)}#hold" target="_blank" rel="noopener">Every filing for ${we(sym)} \u2192</a></div>`;
+      newsPopFor = 'hd:' + sym;
+      placeNewsPop(cell);
+    }
+    $('tbody').addEventListener('click', (e) => {
+      const cell = e.target.closest('td.hd-c');
+      if (!cell) return;
+      e.stopPropagation();
+      if (newsPopFor === 'hd:' + cell.dataset.hd) return closeNewsPop();
+      openHolderPop(cell, cell.dataset.hd);
+    });
     $('tbody').addEventListener('click', (e) => {
       const cell = e.target.closest('td.news');
       if (!cell) return;
@@ -6717,7 +6751,7 @@
       openNewsPop(cell, cell.dataset.news);
     });
     document.addEventListener('click', (e) => {
-      if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news')) closeNewsPop();
+      if (!$('newsPop').hidden && !e.target.closest('#newsPop') && !e.target.closest('td.news') && !e.target.closest('td.hd-c')) closeNewsPop();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNewsPop(); });
 

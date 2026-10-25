@@ -6576,7 +6576,9 @@ function flowsOf(row, f) {
   const h13 = f.hd ? f.hd[String(row.symbol).toUpperCase()] : null;
   if (h13 && h13[0]) {
     out.lastHolderDate = String(h13[0]);
-    out.lastHolder = Holders13.label(h13[1], h13[2], h13[3] == null ? null : Number(h13[3]), 20);
+    // The holder's name nearly whole (80, was 20): the screener cell shows
+    // only the form and the age now, and the panel a click opens shows this.
+    out.lastHolder = Holders13.label(h13[1], h13[2], h13[3] == null ? null : Number(h13[3]), 80);
     out.lastHolderActive = h13[1] === 'D';
   }
   // The newest 8-K in the window: what it was about, and when.
