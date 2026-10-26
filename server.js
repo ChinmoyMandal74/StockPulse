@@ -6512,6 +6512,20 @@ async function flowsNow() {
   flowsMem = f; flowsMemAt = Date.now();
   return f;
 }
+// REBUILD THE STORED FLOWS NOW (2026-10-26). A deploy that bumps FLOWS_V has
+// its first request rebuild them, which is often BEFORE a first fill of the
+// data they fold in (the long-run slice twice in two days), and the stale copy
+// then stands for FLOWS_TTL_MS. The cron secret or an admin; reads only what
+// buildFlows reads. Other instances pick the new copy up within FLOWS_MEM_MS.
+app.post('/api/flows/rebuild', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const t0 = Date.now();
+  flowsMem = null; flowsMemAt = 0;
+  const prev = await store.readFlows().catch(() => null);
+  if (prev) { prev.at = 0; await store.writeFlows(prev).catch(() => {}); }
+  const f = await flowsNow();
+  res.json({ ok: true, v: f.v, ms: Date.now() - t0 });
+}));
 // PURE, so the arithmetic is testable with no database: one row, one stored
 // value. Null, never zero: a company with no trade on file has no reading,
 // which is a different statement from "its insiders netted to nothing".
