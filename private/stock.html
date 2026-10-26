@@ -3227,10 +3227,34 @@
     // So a card opts in with `data-jump` (its chip's label, which is allowed
     // to be shorter than its heading) and `data-icon`, and the bar is whatever
     // is on screen at the time.
+    // THE PAGE'S ORDER (2026-10-26, the owner: "Reorder the stock page menu and
+    // the at a glace section logically, Reorder the whole page infact"): a
+    // stock report's arc -- the summary, the price, the business, its results,
+    // against its peers, who owns it, news and filings, and every field last.
+    // The sections are rendered in one template and some are revealed later,
+    // so the order is declared here and applied to whatever is in the page;
+    // the menu is built from the page, so it follows. A section not listed
+    // keeps its place. Nothing moves once the order holds, so the observer that
+    // calls this cannot feed itself.
+    const SECTION_ORDER = ['glance', 'price', 'dd', 'months', 'about', 'seg', 'perf', 'stmt', 'capret', 'earn', 'rels',
+      'ptrend', 'peers', 'inst', 'fundh', 'hold', 'ins', 'sint', 'opt', 'news', 'tone', 'ev', 'sec', 'allfields'];
+    function orderSections() {
+      const bar = document.getElementById('jumps');
+      const host = bar && bar.parentNode;
+      if (!host) return;
+      const els = SECTION_ORDER.map((id) => document.getElementById(id)).filter((el) => el && el.parentNode === host);
+      for (let i = 1; i < els.length; i++) {
+        // Already after the one before it (nothing listed in between): leave it.
+        let n = els[i - 1].nextElementSibling;
+        while (n && n !== els[i] && !els.includes(n)) n = n.nextElementSibling;
+        if (n !== els[i]) els[i - 1].after(els[i]);
+      }
+    }
     let jumpSig = null;
     function paintJumps() {
       const bar = document.getElementById('jumps');
       if (!bar) return;
+      orderSections();
       const cards = [...document.querySelectorAll('section.card[data-jump][id]')]
         .filter((el) => !el.hidden);
       // REWRITTEN ONLY WHEN THE SET CHANGES, and this is NOT an optimisation:

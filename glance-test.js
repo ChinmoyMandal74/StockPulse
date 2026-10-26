@@ -116,14 +116,14 @@ check('no trading words', !/\b(buy|sell|hold|cheap|expensive|bullish|bearish|goo
   (html.replace(/<[^>]+>/g, ' ').match(/\b(buy|sell|hold|cheap|expensive|bullish|bearish|good|bad)\b/gi) || []).join(','));
 check('text is escaped', !G.render({ cards: [{ id: 'x', title: '<b>', text: '<script>', jump: 'p' }] }).includes('<script>'));
 
-// Article tone, the 13th card (2026-10-26).
+// Article tone (2026-10-26; with owners and sentiment since the reorder the same day).
 {
   const peers = [];
   for (let i = 0; i < 8; i++) peers.push({ symbol: 'P' + i, industry: 'Toolmaking', toneAvg: -0.2 + i * 0.1, toneN: 4, tonePos: 1, toneNeg: 1 });
   const me = { symbol: 'ME', industry: 'Toolmaking', toneAvg: 0.42, toneN: 7, tonePos: 5, toneNeg: 0, action: 'Neutral' };
   const g = G.build(me, peers.concat([me]));
   const t = g.cards.find((c) => c.id === 'tone');
-  check('tone: the card is last, after the Signal', g.cards[g.cards.length - 1].id === 'tone' && g.cards[g.cards.length - 2].id === 'signal');
+  check('tone: after the short position and before the Signal (owners and sentiment)', g.cards.map((c) => c.id).join().endsWith('tone,signal'), g.cards.map((c) => c.id));
   check('tone: the counts, the average and the lean in words', t && /7 articles read in the last seven days: 5 positive, 0 negative\. Average \+0\.42 .* leaning positive/.test(t.text), t && t.text);
   check('tone: against its industry, and its arrow is its own lean', t && /than three quarters of Toolmaking/.test(t.text) && t.arrow === 'up', t);
   check('tone: the headline figure', t && t.key && t.key.v === '+0.42' && /7 articles, 7 days/.test(t.key.k), t && t.key);
@@ -144,7 +144,8 @@ check('text is escaped', !G.render({ cards: [{ id: 'x', title: '<b>', text: '<sc
   const g = G.build(me, peers.concat([spy, me]));
   const byId = (id) => g.cards.find((c) => c.id === id);
   const cr = byId('capret'), mx = byId('mix'), mk = byId('mkt');
-  check('the three new cards come last, in order', g.cards.slice(-3).map((c) => c.id).join() === 'capret,mix,mkt', g.cards.map((c) => c.id));
+  const ids = g.cards.map((c) => c.id);
+  check('the page order: How it trades, then Revenue mix, then Capital returns', ids.indexOf('mkt') < ids.indexOf('mix') && ids.indexOf('mix') < ids.indexOf('capret'), ids);
   check('capital returns: dividend and record, buybacks, share count', cr && /Dividend yield 3\.1%, 55% of earnings paid out; raised 12 years in a row since 2014\./.test(cr.text)
     && /Buybacks worth 2\.4% of its market value/.test(cr.text) && /Share count down 2\.1% on a year earlier\./.test(cr.text), cr && cr.text);
   check('capital returns: shareholder yield against the industry, headline 5.5%, arrow down for a shrinking count', cr && /Shareholder yield is higher than three quarters of Tins/.test(cr.text) && cr.key.v === '5.5%' && cr.arrow === 'down', cr);
@@ -156,6 +157,13 @@ check('text is escaped', !G.render({ cards: [{ id: 'x', title: '<b>', text: '<sc
   check('how it trades: held up better, standing worded for a fall (shallower)', mk && /held up better than the index/.test(mk.text) && /shallower than three quarters of Tins/.test(mk.text) && !/shalde/.test(mk.text), mk && mk.text);
   check('how it trades: no arrow, and no chip line outside semiconductors', mk && mk.arrow === null && !/chip/i.test(mk.text));
   check('no mix data, no mix card', !G.build(Object.assign({}, me, { segMix: null }), peers).cards.some((c) => c.id === 'mix'));
+}
+
+// The whole order on a row with every topic (2026-10-26).
+{
+  const full = { symbol: 'F', industry: 'Tins', todayPct: 1, oneWeekPct: 2, oneMonthPct: 3, oneYearPct: 10, relStrength: 2, actionTrend: 'Above 200D', revenueGrowthYoY: 5, profitMargin: 12, forwardPe: 20, vol1y: 30, netCash: 5e8, currentRatio: 2, shortPctFloat: 3, institutionPct: 70, erFiled: '2026-10-01', erGuideChange: 'Raised', action: 'Neutral', toneAvg: 0.3, toneN: 5, tonePos: 3, toneNeg: 0, divYield: 2, buybackYield: 1, sharesChg: -1, marketSelloff: -1, marketRally: 1, segMix: { title: 'By product or service', top: [{ name: 'A', pct: 60 }, { name: 'B', pct: 40 }], more: 0 } };
+  const ids = G.build(full, [full]).cards.map((c) => c.id);
+  check('the arc: price, business, results, owners and sentiment, Signal last', ids.join() === 'short,long,trend,vol,mkt,growth,profit,mix,value,balance,capret,earn,guide,owners,shortpos,tone,signal', ids.join());
 }
 
 console.log(ran + ' checks, ' + failed + ' failed');

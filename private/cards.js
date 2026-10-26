@@ -12936,9 +12936,9 @@
   // line names, and nothing adds the arrows up. Green and red only on the two
   // price topics; amber only for a stale figure. The Signal travels with the
   // rule that fired, in its own colour.
-  const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['trend', 'Momentum and trend'], ['growth', 'Growth'],
-    ['profit', 'Profitability'], ['value', 'Valuation'], ['vol', 'Volatility'], ['balance', 'Balance sheet'],
-    ['shortpos', 'Short position'], ['owners', 'Insiders and owners'], ['earn', 'Earnings'], ['guide', 'Guidance'], ['signal', 'Signal']];
+  const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['trend', 'Momentum and trend'], ['vol', 'Volatility'],
+    ['growth', 'Growth'], ['profit', 'Profitability'], ['value', 'Valuation'], ['balance', 'Balance sheet'],
+    ['earn', 'Earnings'], ['guide', 'Guidance'], ['owners', 'Insiders and owners'], ['shortpos', 'Short position'], ['signal', 'Signal']];
   const GLC_DEFAULT = ['long', 'growth', 'profit', 'value', 'earn', 'guide'];
   // Measured with every topic at its longest wording.
   const GLC_MAX = { square: 6, portrait: 8, story: 10 };

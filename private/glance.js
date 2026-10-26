@@ -24,6 +24,8 @@
   const STALE_DAYS = 30;          // a short-interest settlement older than this is flagged
   const TONE_BAND = 0.25;         // Tone 7D's own band (newstone.js BAND)
   const TONE_MIN = 3;             // articles a company needs to count in the comparison
+  const CARD_ORDER = ['short', 'long', 'trend', 'vol', 'mkt', 'growth', 'profit', 'mix', 'value', 'balance', 'capret',
+    'earn', 'guide', 'owners', 'shortpos', 'tone', 'signal'];
 
   const ok = (v) => v != null && v !== '' && isFinite(Number(v));
   const num = (v) => (ok(v) ? Number(v) : null);
@@ -402,6 +404,11 @@
     // sentence beside it, so the two cannot disagree. `dir` is the sign, for a
     // price topic's green or red only; every other topic is a category colour.
     for (const c of cards) c.key = keyOf(c.id, s);
+    // THE ORDER (2026-10-26, the owner: "Reorder ... the at a glace section
+    // logically"): the price, the business, its results, owners and sentiment;
+    // the Signal (promo card only) last. An id not listed goes after.
+    const rank = (id) => { const i = CARD_ORDER.indexOf(id); return i < 0 ? CARD_ORDER.length : i; };
+    cards.sort((a, b) => rank(a.id) - rank(b.id));
     return { symbol: s.symbol, cards };
   }
   function keyOf(id, s) {
