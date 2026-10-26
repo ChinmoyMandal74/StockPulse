@@ -59,7 +59,7 @@ const JOBS = [
     id: 'tone', name: 'Article tone', task: 'TickrLab news tone', host: 'laptop', script: 'news-tone-load.js', taskScript: 'news-tone-task.ps1',
     days: ALL_DAYS, times: ['00:30', '06:30', '12:30', '18:30'], minutes: 15,
     spends: { kind: 'anthropic', text: 'Claude Haiku, capped at $3 a run' },
-    what: 'Reads each new article in the Yahoo Finance feed of the S&P 500 and the semiconductor stocks and stores its kind, tone and a two-sentence summary.',
+    what: 'Reads each new article in the Yahoo Finance feed of every company on the screener (since 2026-10-26; the S&P 500 and the semiconductors before) and stores its kind, tone and a two-sentence summary.',
     log: '/news-runs',
   },
   {

@@ -9743,7 +9743,7 @@
     const mine = new Set(members.map((r) => r.symbol));
     const read = (data.rows || []).filter((r) => mine.has(r.symbol) && r.count > 0);
     const T = toneSum(read);
-    if (!T.n) return toneShell(kick, name, 'nothing read yet', 'Article tone is read for the S&P 500 and the semiconductor stocks, and no article about these companies has been read in the ' + wLabel + '.');
+    if (!T.n) return toneShell(kick, name, 'nothing read yet', 'Article tone is read for every company on the screener, and no article about these companies has been read in the ' + wLabel + '.');
     const rowOf = new Map(members.map((r) => [r.symbol, r]));
     let items, more = 0;
     if (C.G === 'sector') {
@@ -9794,7 +9794,7 @@
     const negShown = items.filter(isNeg).length;
     const W = data.week;
     if (!items.length) {
-      return toneShell(n, 'Article tone', 'nothing read yet', 'Article tone is read for the S&P 500 and the semiconductor stocks, and no article about ' + sym + ' has been read yet.');
+      return toneShell(n, 'Article tone', 'nothing read yet', 'Article tone is read for every company on the screener, and no article about ' + sym + ' has been read yet.');
     }
     const POS = pal.ink('#60a5fa'), NEG = pal.ink('#fb923c');
     const colorOf = (t) => (t >= TONE_BAND ? POS : t <= -TONE_BAND ? NEG : null);

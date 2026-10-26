@@ -201,9 +201,11 @@ const SP = new Set(['AAPL', 'JPM', 'NVDA']);
 check('scope: a semiconductor stock outside the S&P 500', NewsTone.inScope({ symbol: 'ACLS', industry: 'Semiconductor Equipment & Materials' }, SP), true);
 check('scope: an S&P 500 member in any industry', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, SP), true);
 check('scope: lower-case symbols match', NewsTone.inScope({ symbol: 'aapl', industry: 'Consumer Electronics' }, SP), true);
-check('scope: neither, not read', NewsTone.inScope({ symbol: 'ROKU', industry: 'Entertainment' }, SP), false);
+check('scope: every company now, outside the S&P 500 and the semiconductors too', NewsTone.inScope({ symbol: 'ROKU', industry: 'Entertainment' }, SP), true);
+check('scope: a fund is not read', NewsTone.inScope({ symbol: 'QQQ', instrumentType: 'ETF', industry: 'Exchange Traded Fund' }, SP), false);
+check('scope: a row with an error is not read', NewsTone.inScope({ symbol: 'XX', error: 'no data' }, SP), false);
 check('scope: no S&P file, the semiconductors still', NewsTone.inScope({ symbol: 'MU', industry: 'Semiconductors' }, null), true);
-check('scope: no S&P file, nothing else', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, null), false);
+check('scope: no S&P file, every company still', NewsTone.inScope({ symbol: 'JPM', industry: 'Banks - Diversified' }, null), true);
 check('scope: no row', NewsTone.inScope(null, SP), false);
 
 

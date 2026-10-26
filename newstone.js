@@ -29,8 +29,12 @@
   // since 2026-10-20 every S&P 500 member too (the owner: "Lets remove Sonnet
   // but extend to all s&p 500 stocks"). The S&P list is the stored SPY
   // holdings file, the screener's own; inScope says whether a row is covered.
+  // EVERY COMPANY since 2026-10-26 (the owner: "Can we expand the yahoo news
+  // and Article tone for all stocks"): any row that is not a fund. `spSet` is
+  // kept in the signature for the callers and no longer decides anything.
   const INDUSTRIES = ['Semiconductors', 'Semiconductor Equipment & Materials'];
-  const inScope = (row, spSet) => !!row && (INDUSTRIES.includes(row.industry) || !!(spSet && spSet.has(String(row.symbol).toUpperCase())));
+  // eslint-disable-next-line no-unused-vars
+  const inScope = (row, spSet) => !!row && !row.error && row.instrumentType !== 'ETF' && !!row.symbol;
   // THE MODEL: Claude Haiku 5.5 since 2026-10-20, after a shadow comparison
   // with Sonnet 5.5 over 882 articles (shown-or-not agreed 94.6%, the tone's
   // word 82.0%, about a twentieth of the cost). Readings made before then

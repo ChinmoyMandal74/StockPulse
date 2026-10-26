@@ -281,7 +281,7 @@ async function writeToneColumn(stocks) {
     const st = await store.fundNewest('spy');
     if (st && st.asOf) spSet = new Set(((await store.readFundHoldings('spy', st.asOf)).holdings || []).map((r) => String(r.symbol).toUpperCase()));
   } catch (e) { spSet = null; }
-  if (!spSet) console.log('  no S&P 500 holdings file could be read: the semiconductor stocks only this run');
+  // Every company is read since 2026-10-26; the S&P file no longer narrows the list.
   const stocks = ((snap && snap.stocks) || []).filter((s) => NewsTone.inScope(s, spSet))
     .filter((s) => !ONLY || ONLY.has(String(s.symbol).toUpperCase()));
   // --column-only: write the screener's tone column and stop (no feeds, no model).
