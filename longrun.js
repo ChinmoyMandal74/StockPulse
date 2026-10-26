@@ -424,6 +424,94 @@ const PIOTROSKI_TESTS = ['Net income above zero', 'Operating cash flow above zer
 // fail. A lender has no operating margin or free cash flow that means the
 // same thing, so it gets neither, and so no count. No split history held:
 // no per-share or share-count reading (guessing a split is the whole factor).
+// ---- Now: is it still compounding? (2026-10-26, the owner, on Lululemon
+// reading 5 of 5 while its quarters had turned down and the share had halved:
+// "Not very useful ... thats a broken stock") -------------------------------
+//
+// The ten-year record reads whole fiscal years and so cannot see a turn that
+// began after the newest annual report. This reads the QUARTERS, like with
+// like: the newest quarters on file (up to four in an unbroken chain), each
+// against the quarter that ended about a year before it, summed on both sides.
+// Matched by date rather than by calendar quarter, because some fiscal
+// calendars defeat the calendar: Costco's 16-week fourth quarter is never filed
+// on its own and its other quarters end mid-month, so a four-quarter trailing
+// year never forms; its three quarters this fiscal year against last year's
+// three are the same comparison. Dollar filers only (a foreign filer's derived
+// quarters carry no rate; growth() has the same line). A bank, with no revenue
+// line, is read on earnings per share alone.
+//   'grow'    revenue and EPS both up (more than 1% and 2%), and the operating
+//             margin down no more than 2 points
+//   'decline' EPS down more than 5% (or into a loss), or revenue and EPS both
+//             down -- Lululemon, revenue +1.7% with EPS -16% and the margin
+//             down 5 points, read 'slow' without it
+//   'slow'    anything between
+// EPS is net income over the newest quarter's diluted count in today's shares
+// (a fourth quarter is the year less three, and a count cannot be differenced,
+// so there the annual report's count stands in). EPS up from a loss is up;
+// into a loss is down. Null where the newest quarter is more than 230 days
+// old or fewer than two quarters can be matched.
+const NOW_REV = 1, NOW_EPS = 2, NOW_MARGIN = 2, NOW_EPS_DOWN = 5;
+function nowState(filled, splitList, today, isLender) {
+  const all = filled || [];
+  const list = all.filter((r) => r && r.periodType === 'Q' && r.periodEnd);
+  if (!list.length || list.some((r) => r.currency)) return null;
+  const t = today || new Date().toISOString().slice(0, 10);
+  const sp = Array.isArray(splitList) ? realSplits(splitList) : null;
+  const count = (r, minEps) => {
+    let s = num(r.sharesDiluted), src = 'sharesDiluted';
+    if (!(s > 0)) { const ni = num(r.netIncome), eps = num(r.epsDiluted); s = ni != null && eps != null && Math.abs(eps) >= minEps && ni / eps > 0 ? ni / eps : null; src = 'epsDiluted'; }
+    return sp && s != null && s > 0 ? s * splitsSince(sourceFiled(r, src), sp) : null;
+  };
+  const fyBy = new Map();
+  for (const r of all) if (r && r.periodType === 'FY' && r.periodEnd && !/^10-Q/.test(String(r.form || ''))) { const c = count(r, 0.2); if (c) fyBy.set(String(r.periodEnd), c); }
+  const shOf = (r) => count(r, 0.05) || fyBy.get(String(r.periodEnd)) || null;
+  // One row a period end, newest first.
+  const byEnd = new Map();
+  for (const r of list) if (!byEnd.has(String(r.periodEnd))) byEnd.set(String(r.periodEnd), r);
+  const qs = [...byEnd.values()].sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : -1));
+  const newest = qs[0];
+  if (!(daysBetween(newest.periodEnd, t) <= Q_STALE_DAYS)) return null;
+  // The unbroken chain of newest quarters, and each one's match a year back.
+  const chain = [newest];
+  for (const r of qs.slice(1)) {
+    if (chain.length >= 4) break;
+    const g = daysBetween(r.periodEnd, chain[chain.length - 1].periodEnd);
+    if (g < 70) continue;                                // a duplicate period
+    if (g > 115) break;                                  // a missing quarter ends the chain
+    chain.push(r);
+  }
+  const yearAgo = (r) => qs.find((x) => { const g = daysBetween(x.periodEnd, r.periodEnd); return g >= 352 && g <= 378; }) || null;
+  const pairs = chain.map((r) => [r, yearAgo(r)]);
+  if (pairs.length < 2 || pairs.some(([, b]) => !b)) return null;
+  const sum = (side, k) => { let s = 0; for (const p of pairs) { const v = num(p[side][k]); if (v == null) return null; s += v; } return s; };
+  const pct = (a, b) => (a != null && b != null && b > 0 ? (a / b - 1) * 100 : null);
+  const r1 = (v) => (v == null || !isFinite(v) ? null : Math.round(v * 10) / 10);
+  const revNow = sum(0, 'revenue'), revThen = sum(1, 'revenue');
+  const revG = !isLender && revNow != null && revNow > 0 ? pct(revNow, revThen) : null;
+  const niNow = sum(0, 'netIncome'), niThen = sum(1, 'netIncome');
+  const shNow = shOf(pairs[0][0]), shThen = shOf(pairs[0][1]);
+  if (niNow == null || niThen == null || !shNow || !shThen) return null;
+  const eNow = niNow / shNow, eThen = niThen / shThen;
+  let epsDir, epsG = null, epsBad = false;
+  if (eThen > 0) { epsG = (eNow / eThen - 1) * 100; epsDir = epsG > NOW_EPS ? 1 : epsG < -NOW_EPS ? -1 : 0; epsBad = epsG < -NOW_EPS_DOWN || eNow <= 0; }
+  else { epsDir = eNow > eThen ? (eNow > 0 ? 1 : 0) : -1; epsBad = eNow <= eThen; }
+  let marginChg = null;
+  if (!isLender && revNow > 0 && revThen > 0) {
+    const oNow = sum(0, 'operatingIncome'), oThen = sum(1, 'operatingIncome');
+    if (oNow != null && oThen != null) marginChg = (oNow / revNow - oThen / revThen) * 100;
+  }
+  let state;
+  if (isLender) state = epsDir > 0 ? 'grow' : epsBad ? 'decline' : 'slow';
+  else if (revG == null) return null;                    // no revenue sum: not read
+  else {
+    const revDir = revG > NOW_REV ? 1 : revG < -NOW_REV ? -1 : 0;
+    if (epsBad || (revDir < 0 && epsDir < 0)) state = 'decline';
+    else if (revDir > 0 && epsDir > 0 && !(marginChg != null && marginChg < -NOW_MARGIN)) state = 'grow';
+    else state = 'slow';
+  }
+  return { state, revG: r1(revG), epsG: r1(epsG), marginChg: r1(marginChg), quarters: pairs.length, end: newest.periodEnd };
+}
+
 const CR_MIN_REPORTS = 7;
 const CR_MAX_REPORTS = 11;
 const CR_PASS = { revUp: 0.8, epsG: 10, marginLow: 70, fcfConv: 0.8, shares: 0.5 };
@@ -513,4 +601,4 @@ function compounding(filled, splitList, today, isLender) {
 
 module.exports = { growth, cagr, quarters, ttmAt, own, ownI, GROWTH_YEARS, GROWTH_MAX, Q_STALE_DAYS, FY_STALE_DAYS,
   peVsHistory, dividends, coverage, piotroski, realSplits, splitsSince, sourceFiled, median,
-  MIN_PE_POINTS, PE_MAX, COVER_MAX, PIOTROSKI_TESTS, compounding, CR_TESTS, CR_PASS, CR_MIN_REPORTS };
+  MIN_PE_POINTS, PE_MAX, COVER_MAX, PIOTROSKI_TESTS, compounding, CR_TESTS, CR_PASS, CR_MIN_REPORTS, nowState };

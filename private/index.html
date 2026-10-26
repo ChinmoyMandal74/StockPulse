@@ -1583,7 +1583,7 @@
         <th class="group grp-finpos" data-group="finpos" colspan="7">Financial position</th>
         <th class="group grp-divs" data-group="divs" colspan="4">Dividends and returns</th>
         <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
-        <th class="group grp-lrun" data-group="lrun" colspan="15">Long run</th>
+        <th class="group grp-lrun" data-group="lrun" colspan="16">Long run</th>
         <th class="group grp-own" data-group="own" colspan="12">Ownership</th>
         <th class="group grp-aier" data-group="aier" colspan="21">Last Earning AI Extracted</th>
         <th rowspan="2"></th>
@@ -1715,6 +1715,7 @@
         <th class="grp-lrun" data-key="intCover" title="Interest coverage: operating income over interest expense, the latest four quarters (or the latest annual report for a company filing in another currency), from the company's own SEC filings. 8.0× means the year's operating profit would pay the year's interest eight times over; below 1× it would not. Negative is an operating loss. Blank for a lender (banks, brokers, card and mortgage lenders), whose interest expense is the cost of its product, and where no interest expense is filed. Rebuilt about weekly.">Int<br>cover</th>
         <th class="grp-lrun" data-key="fScore" title="The Piotroski F-score: how many of nine yes-or-no tests the latest annual report passes against the one before, from the company's own SEC filings. Profitability: net income above zero, operating cash flow above zero, return on assets up, cash flow above net income. Balance sheet: long-term debt to assets down, current ratio up, no new shares (in today's shares, so a split is not counted). Efficiency: gross margin up, asset turnover up. A count of tests passed, not a rating; hover a figure for which. Blank unless all nine can be scored, and for a lender. Rebuilt about weekly.">F-<br>score</th>
         <th class="grp-lrun" data-key="crChecks" title="How many of five checks the last ten years of annual reports pass: revenue rose in at least 80% of years; earnings per share grew at least 10% a year; the worst year kept at least 70% of the typical operating margin; free cash flow was at least 80% of net income; the share count grew no more than 0.5% a year. A count of checks passed, not a rating; hover a figure for which. Blank unless all five can be scored (a lender has no operating margin or free cash flow that means the same thing). From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Comp.<br>record</th>
+        <th class="left grp-lrun" data-key="crNow" title="Is it still compounding: the latest quarters in the company's filings (up to four) against the same quarters a year earlier. Still growing: revenue and earnings per share both up, and the operating margin down no more than 2 points. Declining: earnings per share down more than 5% (or into a loss), or revenue and EPS both down. Slowing: anything between. Read beside Comp. record, which describes the ten years of annual reports and cannot see a turn that began after the newest one. A bank, with no revenue line, is read on EPS alone; a company filing in another currency is not read. A description, not a forecast. Rebuilt about weekly.">Now</th>
         <th class="grp-lrun" data-key="crRevUp" title="In how many of the years revenue rose against the year before, in the company's own currency (e.g. 9 of 10). Sorts by the share of years. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Rev up<br>years</th>
         <th class="grp-lrun" data-key="crEpsG" title="Net income per share, growth a year from the oldest to the newest annual report of the run, over the diluted share count in today's shares (a split is not a fall). Blank from a loss at either end. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">EPS /yr<br>10Y</th>
         <th class="grp-lrun" data-key="crMarginLow" title="The worst year's operating margin as a percent of the median year's: 100% means it never fell below typical, 50% that the worst year earned half the usual margin, below zero a loss year. Blank for a lender, or where the typical year is a loss. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Worst<br>margin</th>
@@ -2575,7 +2576,12 @@
         : cell(s.crFcfConv.toFixed(2), `Free cash flow was ${s.crFcfConv.toFixed(2)} times net income, summed${span}`);
       const g = s.crShares == null ? na('No split history held, or fewer than five years with a share count.')
         : signedPctCell(s.crShares, 'grp-lrun', `Diluted share count, change a year in today's shares${span}`);
-      return a + b + c + d + e + g;
+      const NW = RowCard.NOW_WORD || {};
+      const sg = (v, unit) => (v == null ? null : (v > 0 ? '+' : '') + v.toFixed(1) + unit);
+      const nowParts = [s.crNowRevG != null ? 'revenue ' + sg(s.crNowRevG, '%') : null, s.crNowEpsG != null ? 'EPS ' + sg(s.crNowEpsG, '%') : null, s.crNowMarginChg != null ? 'operating margin ' + sg(s.crNowMarginChg, ' points') : null].filter(Boolean);
+      const w = !s.crNow ? na('Not read: the newest quarter is more than 230 days old, the year-ago quarters are not on file, the company files in another currency, or not yet built.')
+        : `<td class="left grp-lrun"${attr(`${NW[s.crNow] || s.crNow}: the latest ${s.crNowQ || ''} quarters to ${s.crNowEnd || ''} against the same quarters a year earlier` + (nowParts.length ? ': ' + nowParts.join(', ') : '') + '. A description, not a forecast.')}>${we(NW[s.crNow] || s.crNow)}</td>`;
+      return a + w + b + c + d + e + g;
     }
     // A year's volatility, uncoloured: how much it moves, not which way.
     function vol1yCell(s) {
@@ -3966,7 +3972,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="142">${s.error}</td>
+            <td class="na" colspan="143">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4110,7 +4116,7 @@
           ${isFund ? naRun(1, 'grp-report') : reportedCell(s)}
           ${resultsCell(s)}
           ${isFund ? naRun(1, 'grp-report') : staleCell(s)}
-          ${isFund ? naRun(15, 'grp-lrun') : `
+          ${isFund ? naRun(16, 'grp-lrun') : `
           ${growthCell(s, 'revGrowth3y')}
           ${growthCell(s, 'revGrowth5y')}
           ${growthCell(s, 'niGrowth3y')}
@@ -4149,7 +4155,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 167;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 168;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4334,7 +4340,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="144">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="145">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4377,6 +4383,8 @@
         // By how many issues; none sorts last, as a blank.
         // Above, In line, Below: Above first on a first (descending) click.
         : sortKey === 'erVsEstWord' ? (x.erVsEstWord ? ['Below', 'In line', 'Above'].indexOf(x.erVsEstWord) : null)
+        // Still growing first on a descending click.
+        : sortKey === 'crNow' ? (x.crNow ? ['decline', 'slow', 'grow'].indexOf(x.crNow) : null)
         : sortKey === 'crRevUp' ? (x.crRevUp != null && x.crRevN ? x.crRevUp / x.crRevN + x.crRevN / 1e6 : null)
         : sortKey === 'staleIssues' ? ((RowCard.staleIssues(x) || []).length || null)
         : x[sortKey]);

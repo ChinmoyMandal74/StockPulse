@@ -290,5 +290,46 @@ const steady = () => {
   check('a typical year at a loss: no margin reading', LR.compounding(neg, [], TODAY).marginLow, null);
 }
 
+console.log('now: is it still compounding');
+// Eight calendar quarters to 2026-06-30; `f` scales the newest four against
+// the four a year earlier.
+const qtrs = (o) => {
+  const ends = ['2026-06-30', '2026-03-31', '2025-12-31', '2025-09-30', '2025-06-30', '2025-03-31', '2024-12-31', '2024-09-30'];
+  return ends.map((e, i) => {
+    const recent = i < 4;
+    return { periodType: 'Q', periodEnd: e, filed: e, revenue: 100 * (recent ? o.rev : 1), operatingIncome: 20 * (recent ? o.rev * o.opm : 1),
+      netIncome: 10 * (recent ? o.ni : 1), sharesDiluted: 100 * (recent ? (o.sh || 1) : 1) };
+  });
+};
+{
+  const NOWDAY = '2026-10-20';
+  check('both up, margin steady: still growing', LR.nowState(qtrs({ rev: 1.10, ni: 1.15, opm: 1 }), [], NOWDAY).state, 'grow');
+  // Lululemon's shape: revenue +1.7%, earnings -16%, margin down ~5 points.
+  const lulu = LR.nowState(qtrs({ rev: 1.017, ni: 0.84, opm: 0.79 }), [], NOWDAY);
+  check('revenue up a little, EPS down 16%: declining', [lulu.state, Math.round(lulu.epsG)], ['decline', -16]);
+  check('revenue down, EPS up: slowing', LR.nowState(qtrs({ rev: 0.98, ni: 1.06, opm: 1 }), [], NOWDAY).state, 'slow');
+  check('both up but the margin down 3 points: slowing', LR.nowState(qtrs({ rev: 1.10, ni: 1.05, opm: 0.85 }), [], NOWDAY).state, 'slow');
+  check('both down a little: declining', LR.nowState(qtrs({ rev: 0.97, ni: 0.97, opm: 1 }), [], NOWDAY).state, 'decline');
+  // Buybacks lift EPS above net income: 10% fewer shares, flat net income.
+  const bb = LR.nowState(qtrs({ rev: 1.05, ni: 1.0, opm: 1, sh: 0.9 }), [], NOWDAY);
+  check('EPS is per share: flat net income on 10% fewer shares is EPS up 11%', [bb.state, Math.round(bb.epsG)], ['grow', 11]);
+  // A bank: no revenue line; read on EPS.
+  const bank = qtrs({ rev: 1, ni: 1.2, opm: 1 }).map((r) => Object.assign({}, r, { revenue: null, operatingIncome: null }));
+  check('a lender with no revenue: EPS alone', [LR.nowState(bank, [], NOWDAY, true).state, LR.nowState(bank, [], NOWDAY, false)], ['grow', null]);
+  // Costco's shape: three quarters this year on file, the fourth never filed alone.
+  const cost = qtrs({ rev: 1.1, ni: 1.13, opm: 1 }).filter((r) => r.periodEnd !== '2025-09-30' && r.periodEnd !== '2024-09-30');
+  const c = LR.nowState(cost, [], NOWDAY);
+  check('a missing fourth quarter: the three on file against their year-ago three', [c.state, c.quarters], ['grow', 3]);
+  // A fourth quarter derived (no share count): the annual report's count stands in.
+  const q4 = qtrs({ rev: 1.1, ni: 1.2, opm: 1 }); q4[0].sharesDiluted = null; q4[4].sharesDiluted = null;
+  q4.push({ periodType: 'FY', periodEnd: '2026-06-30', filed: '2026-08-01', form: '10-K', sharesDiluted: 100 }, { periodType: 'FY', periodEnd: '2025-06-30', filed: '2025-08-01', form: '10-K', sharesDiluted: 100 });
+  check('a derived fourth quarter takes the annual count', LR.nowState(q4, [], NOWDAY).state, 'grow');
+  check('the newest quarter more than 230 days old: nothing', LR.nowState(qtrs({ rev: 1.1, ni: 1.1, opm: 1 }), [], '2027-03-01'), null);
+  check('a foreign filer: not read from quarters', LR.nowState(qtrs({ rev: 1.1, ni: 1.1, opm: 1 }).map((r) => Object.assign({}, r, { currency: 'EUR', fxAvg: 1.1 })), [], NOWDAY), null);
+  check('no year-ago quarters: nothing', LR.nowState(qtrs({ rev: 1.1, ni: 1.1, opm: 1 }).slice(0, 4), [], NOWDAY), null);
+  const loss = qtrs({ rev: 1.05, ni: -0.5, opm: 1 });
+  check('into a loss: declining', LR.nowState(loss, [], NOWDAY).state, 'decline');
+}
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

@@ -6368,7 +6368,7 @@ function filerLabel(st) {
   if (st.status === 'ok' && (st.taxonomy === 'us-gaap' || !st.taxonomy)) return 'US GAAP';
   return null;
 }
-const FLOWS_V = 13;         // bumped when the stored value gains a part
+const FLOWS_V = 14;         // bumped when the stored value gains a part
 const EVENT_RECENT_DAYS = 60;     // how far back the screener's 8-K column looks
 
 // ---- Drawdown history: corrections in five years, and the way back -------
@@ -6529,7 +6529,7 @@ function flowsOf(row, f) {
     divStreak: null, divSince: null, divYears: null, divGrowth5y: null, divEnd: null,
     intCover: null, intCoverEnd: null, intCoverBasis: null, fScore: null, fScoreBits: null, fScoreEnd: null,
     crChecks: null, crBits: null, crRevUp: null, crRevN: null, crEpsG: null, crMarginLow: null, crFcfConv: null, crShares: null,
-    crYears: null, crFrom: null, crEnd: null };
+    crYears: null, crFrom: null, crEnd: null, crNow: null, crNowRevG: null, crNowEpsG: null, crNowMarginChg: null, crNowQ: null, crNowEnd: null };
   if (!row || !f) return out;
   // The Long run slice: each part on its own, and a part the slice could not
   // read is null, never zero. A streak of 0 is a real reading (it paid and did
@@ -6546,6 +6546,10 @@ function flowsOf(row, f) {
       out.crChecks = n(c[0]); out.crBits = /^[01]{5}$/.test(String(c[1])) ? String(c[1]) : null; out.crRevUp = n(c[2]); out.crRevN = n(c[3]);
       out.crEpsG = n(c[4]); out.crMarginLow = n(c[5]); out.crFcfConv = n(c[6]); out.crShares = n(c[7]); out.crYears = n(c[8]);
       out.crFrom = c[9] || null; out.crEnd = c[10] || null;
+    }
+    if (Array.isArray(ls.nw) && ['grow', 'slow', 'decline'].includes(ls.nw[0])) {
+      const w = ls.nw;
+      out.crNow = w[0]; out.crNowRevG = n(w[1]); out.crNowEpsG = n(w[2]); out.crNowMarginChg = n(w[3]); out.crNowQ = n(w[4]); out.crNowEnd = w[5] || null;
     }
   }
   // Growth over three and five years from the filings, each figure on its
@@ -6700,7 +6704,8 @@ async function stampFlows(rows) {
     r.fScore = v.fScore;
     r.fScoreBits = v.fScoreBits;
     r.fScoreEnd = v.fScoreEnd;
-    for (const k of ['crChecks', 'crBits', 'crRevUp', 'crRevN', 'crEpsG', 'crMarginLow', 'crFcfConv', 'crShares', 'crYears', 'crFrom', 'crEnd']) r[k] = v[k];
+    for (const k of ['crChecks', 'crBits', 'crRevUp', 'crRevN', 'crEpsG', 'crMarginLow', 'crFcfConv', 'crShares', 'crYears', 'crFrom', 'crEnd',
+      'crNow', 'crNowRevG', 'crNowEpsG', 'crNowMarginChg', 'crNowQ', 'crNowEnd']) r[k] = v[k];
   }
 }
 
@@ -14471,7 +14476,7 @@ async function longRunSlice(opts = {}) {
       if (!ok[k]) return;
       const row = rowsBy[sym];
       const lender = row.sector === 'Financial Services' && LENDER_INDUSTRY.test(String(row.industry || ''));
-      const out = { t: Date.now(), pe: null, dv: null, cv: null, f: null, cr: null };
+      const out = { t: Date.now(), pe: null, dv: null, cv: null, f: null, cr: null, nw: null };
       try {
         const filled = SecFacts.latestFilled(facts[k]);
         const ttm = SecFacts.ttmSeries(filled.filter((r) => r.periodType === 'Q'));
@@ -14488,6 +14493,9 @@ async function longRunSlice(opts = {}) {
         // The compounding record (2026-10-25, longrun.js compounding).
         const cr = LongRun.compounding(filled, splits, today, lender);
         if (cr) out.cr = [cr.checks, cr.bits, cr.revUp, cr.revN, cr.epsG, cr.marginLow, cr.fcfConv, cr.shares, cr.years, cr.from, cr.end];
+        // Now: is it still compounding (the latest quarters against a year before).
+        const nw = LongRun.nowState(filled, splits, today, lender);
+        if (nw) out.nw = [nw.state, nw.revG, nw.epsG, nw.marginChg, nw.quarters, nw.end];
       } catch (e) { /* one company's figures never stop the slice */ }
       s[sym] = out;
       done++;

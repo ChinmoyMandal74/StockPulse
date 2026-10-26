@@ -550,6 +550,8 @@
     // The compounding record (2026-10-25): ten years of annual reports,
     // described, uncoloured. The count is checks passed, not a rating.
     ['lrun',  'Compounding record', (s) => (ok(s.crChecks) ? { t: s.crChecks + ' of 5 checks', c: '', n: Number(s.crChecks), u: 'num' } : null)],
+    // Now (2026-10-26): the latest quarters against a year before, in words.
+    ['lrun',  'Compounding now', (s) => (s.crNow ? { t: NOW_WORD[s.crNow] || s.crNow, c: '' } : null)],
     ['lrun',  'Revenue up years', (s) => (ok(s.crRevUp) && ok(s.crRevN) ? { t: s.crRevUp + ' of ' + s.crRevN, c: '', n: s.crRevN ? s.crRevUp / s.crRevN * 100 : null, u: 'pct' } : null)],
     ['lrun',  'EPS /yr 10Y',    (s) => V.smag(s.crEpsG)],
     ['lrun',  'Worst margin vs typical', (s) => (ok(s.crMarginLow) ? { t: Math.round(s.crMarginLow) + '%', c: '', n: Number(s.crMarginLow), u: 'pct' } : null)],
@@ -1360,6 +1362,8 @@
   // DISPLAY NAMES, where a label was renamed after its key was stored
   // (2026-10-24, the owner: Period and Reported read as one date). The key
   // stays `group|label`, since saved tiles and layouts hold it.
+  // The compounding record's Now, in words (longrun.js nowState).
+  const NOW_WORD = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
   // Past this many characters a value is drawn stacked (.rc-long, app.css).
   const RC_LONG = 24;
   const FIELD_NAME = { 'report|Period': 'Figures to', 'report|Reported': 'Last results out' };
@@ -1749,7 +1753,7 @@
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
-    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, fieldName,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, fieldName, NOW_WORD,
     fieldCatalogue, fieldValues, fieldProps, isFund,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

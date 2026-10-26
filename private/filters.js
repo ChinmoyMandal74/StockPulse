@@ -21,7 +21,7 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary', 'staleIssues']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange', 'erVsEstWord']);
+    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange', 'erVsEstWord', 'crNow']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:
@@ -190,6 +190,8 @@
     // Out of date: the issues as the cell words them, so a text filter
     // ("predate", "missed") finds them. rowcard.js owns the rule; on the
     // server it is loaded before any screen runs. None is blank, not ''.
+    // The compounding record's Now filters on its words, as the cell shows them.
+    if (key === 'crNow') return x.crNow ? ({ grow: 'Still growing', slow: 'Slowing', decline: 'Declining' })[x.crNow] || null : null;
     if (key === 'staleIssues') {
       const RC = (typeof globalThis !== 'undefined' ? globalThis : window).RowCard;
       const l = RC && RC.staleIssues ? RC.staleIssues(x, c.now) : null;
