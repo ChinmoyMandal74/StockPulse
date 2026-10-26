@@ -198,3 +198,5 @@ The owner asked for three more cards, picked from six ideas: *"Lets do Capital r
 - `/api/stock` builds the comparison rows as **copies** stamped with the folded filings figures (`stampFlows` writes into what it is given, so never the snapshot's objects), and the tone for a member; one `segmentsPayload` read for the mix. The stock row itself is untouched.
 - Colours are tokens only; lime was dropped for steel (it reads as green, which is price only).
 - `glance-test.js` 54 checks (9 new; the wording check proved by restoring the bug). End to end with production's snapshot and segment reports: NVDA 16 cards (Compute 75%, Networking 15%, Gaming 7.4%; Compute 64% two years earlier; −3.5% on the index's worst days against its −1.6%, chip sell-off −1.4%), KO "held up better" (+0.5%), a guest without the tone card.
+
+- **The headline figure at body size** (same day, the owner: "Reduce the font size ... same as the rest of the text, Just bold it"): `.gl-k b` is now 700 13px in the sans face (was 700 20px mono), the size of the card's sentence, keeping its topic or price colour.
