@@ -124,5 +124,30 @@ check('text is escaped', !G.render({ cards: [{ id: 'x', title: '<b>', text: '<sc
   check('tone: no trading words', t && !/\b(buy|sell|hold|bullish|bearish|good|bad)\b/i.test(t.text));
 }
 
+// Capital returns, Revenue mix, How it trades with the market (2026-10-26).
+{
+  const peers = [];
+  for (let i = 0; i < 8; i++) peers.push({ symbol: 'Q' + i, industry: 'Tins', divYield: 1 + i * 0.2, buybackYield: 0.5, marketSelloff: -2 - i * 0.3, marketRally: 1.5 });
+  const spy = { symbol: 'SPY', instrumentType: 'ETF', marketSelloff: -1.6, marketRally: 1.7 };
+  const me = { symbol: 'ME', industry: 'Tins', divYield: 3.1, payoutRatio: 55, divStreak: 12, divSince: 2014, buybackYield: 2.4, sharesChg: -2.1,
+    marketSelloff: -0.8, marketRally: 0.9, chipSelloff: -3,
+    segMix: { title: 'By business segment', period: 'the fiscal year to Dec 2025', top: [{ name: 'Cans', pct: 61, change: 4.2, was: 52 }, { name: 'Lids', pct: 30, change: -1 }], more: 1, wasYears: 3 } };
+  const g = G.build(me, peers.concat([spy, me]));
+  const byId = (id) => g.cards.find((c) => c.id === id);
+  const cr = byId('capret'), mx = byId('mix'), mk = byId('mkt');
+  check('the three new cards come last, in order', g.cards.slice(-3).map((c) => c.id).join() === 'capret,mix,mkt', g.cards.map((c) => c.id));
+  check('capital returns: dividend and record, buybacks, share count', cr && /Dividend yield 3\.1%, 55% of earnings paid out; raised 12 years in a row since 2014\./.test(cr.text)
+    && /Buybacks worth 2\.4% of its market value/.test(cr.text) && /Share count down 2\.1% on a year earlier\./.test(cr.text), cr && cr.text);
+  check('capital returns: shareholder yield against the industry, headline 5.5%, arrow down for a shrinking count', cr && /Shareholder yield is higher than three quarters of Tins/.test(cr.text) && cr.key.v === '5.5%' && cr.arrow === 'down', cr);
+  const dil = G.build(Object.assign({}, me, { sharesChg: 3.4 }), peers.concat([spy])).cards.find((c) => c.id === 'capret');
+  check('capital returns: a growing count is named dilution, arrow up', dil && /up 3\.4% on a year earlier \(dilution\)/.test(dil.text) && dil.arrow === 'up', dil && dil.text);
+  check('revenue mix: the parts, the largest one years before, its change', mx && /By business segment, the fiscal year to Dec 2025: Cans 61%, Lids 30%, and 1 more\./.test(mx.text)
+    && /Cans was 52% of revenue 3 years earlier\./.test(mx.text) && /Cans revenue up 4\.2%/.test(mx.text) && mx.key.v === '61%' && mx.arrow === null, mx && mx.text);
+  check('how it trades: its move and the index’s on worst and best days', mk && /typically moved −0\.8% \(the index −1\.6%\), and on its best \+0\.9% \(the index \+1\.7%\)\./.test(mk.text), mk && mk.text);
+  check('how it trades: held up better, standing worded for a fall (shallower)', mk && /held up better than the index/.test(mk.text) && /shallower than three quarters of Tins/.test(mk.text) && !/shalde/.test(mk.text), mk && mk.text);
+  check('how it trades: no arrow, and no chip line outside semiconductors', mk && mk.arrow === null && !/chip/i.test(mk.text));
+  check('no mix data, no mix card', !G.build(Object.assign({}, me, { segMix: null }), peers).cards.some((c) => c.id === 'mix'));
+}
+
 console.log(ran + ' checks, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

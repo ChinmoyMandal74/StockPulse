@@ -11227,16 +11227,31 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // ARTICLE TONE for the 13th card (2026-10-26): the stored Tone 7D figure on
   // copies of the rows, for a member only (every tone surface is members-only);
   // the stock row itself and the snapshot are not touched. Never fails the page.
+  // COPIES OF EVERY ROW for the cards' comparisons, never the snapshot's own
+  // objects (stampFlows writes into what it is given): the folded filings
+  // figures (buyback yield, share count change, the dividend record) for
+  // Capital returns (2026-10-26), and the tone for a member.
   let glanceRows = stocks;
+  try {
+    glanceRows = stocks.map((r) => Object.assign({}, r));
+    await stampFlows(glanceRows);
+  } catch (e) { glanceRows = stocks; }
   if (!guest) {
     try {
       const tf = await toneColumnFig();
       const tr = (tf && tf.rows) || {};
       const withTone = (r) => { const t = r && tr[r.symbol]; return t ? Object.assign({}, r, { toneAvg: t[0], toneN: t[1], tonePos: t[2], toneNeg: t[3] }) : r; };
       glanceRow = withTone(glanceRow);
-      glanceRows = stocks.map(withTone);
-    } catch (e) { glanceRows = stocks; }
+      glanceRows = glanceRows.map(withTone);
+    } catch (e) { /* the tone card is left out */ }
   }
+  // REVENUE MIX for its card (2026-10-26): the company's own segment report,
+  // one compact view on the glance row only (segMixOf). Never fails the page.
+  try {
+    const sp = await segmentsPayload(stock.symbol);
+    const mix = segMixOf(sp && sp.segments);
+    if (mix) glanceRow = Object.assign({}, glanceRow, { segMix: mix });
+  } catch (e) { /* the mix card is left out */ }
 
   res.json({
     stock,
@@ -15301,6 +15316,33 @@ app.get('/api/fund-holders', requireAuth, route(async (req, res) => {
 //
 // DISPLAY ONLY. Each list is a company's own description of itself and is
 // not comparable across companies; nothing here ranks one.
+// The At a glance card's Revenue mix (2026-10-26): one breakdown from the
+// segment report (the annual view where there is one, as the steadier
+// grouping; by business segment, else product, else region), its three largest
+// parts with their share and change on a year earlier, and the largest part's
+// share in the oldest earlier report where the same grouping is complete.
+function segMixOf(seg) {
+  if (!seg) return null;
+  const v = (seg.views && (seg.views.FY || seg.views.Q)) || seg;
+  if (!v || !Array.isArray(v.kinds) || !v.kinds.length) return null;
+  const K = ['segment', 'product', 'geo'].map((k) => v.kinds.find((x) => x.kind === k)).find(Boolean);
+  if (!K) return null;
+  const parts = (K.members || []).filter((m) => !m.subtotal && m.v > 0 && m.pct != null).sort((a, b) => b.v - a.v);
+  if (parts.length < 2) return null;
+  const ends = v.ends || [], totals = v.totals || [];
+  const top = parts.slice(0, 3).map((m) => ({ name: String(m.name), pct: Math.round(m.pct * 10) / 10, change: m.change == null ? null : Math.round(m.change * 10) / 10, was: null }));
+  let wasYears = null;
+  if (K.complete && Array.isArray(parts[0].past)) {
+    for (let i = parts[0].past.length - 1; i >= 1; i--) {
+      const pv = parts[0].past[i], tv = totals[i];
+      const yrs = ends[i] && v.end ? Math.round((Date.parse(v.end) - Date.parse(ends[i])) / (365.25 * 864e5)) : null;
+      if (pv != null && tv > 0 && yrs >= 2) { top[0].was = Math.round(pv / tv * 1000) / 10; wasYears = yrs; break; }
+    }
+  }
+  const mon = v.end ? new Date(v.end + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+  return { title: K.title, period: (v.ptype === 'Q' ? 'the quarter to ' : 'the fiscal year to ') + mon, top, more: Math.max(0, parts.length - 3), wasYears };
+}
+
 async function segmentsPayload(symbol) {
   const rows = await store.readSegPeriods(symbol);
   const view = (ptype) => {

@@ -320,6 +320,67 @@
       }
     }
 
+    // Capital returns (2026-10-26): what goes back to shareholders. Dividend
+    // yield and its record, the buyback yield, the share count's change on a
+    // year earlier, and shareholder yield (dividend plus buyback, worked out
+    // here from the two so the comparison rows need nothing else) against the
+    // industry. The arrow is the share count: shrinking down, growing up.
+    {
+      const dy = num(s.divYield), by = num(s.buybackYield), sc = num(s.sharesChg), po = num(s.payoutRatio);
+      const sy = dy != null && by != null ? dy + by : null;
+      const bits = [];
+      if (dy != null && dy > 0) bits.push('Dividend yield ' + pct(dy) + (po != null && po > 0 ? ', ' + pct(po, 0) + ' of earnings paid out' : '')
+        + (num(s.divStreak) > 0 ? '; raised ' + s.divStreak + ' year' + (s.divStreak === 1 ? '' : 's') + ' in a row' + (s.divSince ? ' since ' + s.divSince : '') : num(s.divStreak) === 0 ? '; not raised in the latest year' : '') + '.');
+      else if (dy != null) bits.push('No dividend.');
+      if (by != null) bits.push(by > 0.05 ? 'Buybacks worth ' + pct(by) + ' of its market value over the latest year.' : 'No buybacks to speak of over the latest year.');
+      if (sc != null) bits.push('Share count ' + (Math.abs(sc) < 0.5 ? 'about level' : (sc < 0 ? 'down ' : 'up ') + pct(sc)) + ' on a year earlier' + (sc >= 0.5 ? ' (dilution).' : '.'));
+      const pool = all.map((r) => (num(r.divYield) != null && num(r.buybackYield) != null ? Object.assign({}, r, { _sy: num(r.divYield) + num(r.buybackYield) }) : r));
+      const st = sy != null ? standing(Object.assign({}, s, { _sy: sy }), pool, '_sy') : null;
+      if (st) bits.push('Shareholder yield is ' + st.words + '.');
+      add({ id: 'capret', title: 'Capital returns', jump: 'capret', tone: 'neutral', arrow: sc == null ? null : signArrow(sc, 0.5), text: join(bits),
+        basis: st && st.group, keyRaw: sy });
+    }
+
+    // Revenue mix (2026-10-26): where the revenue comes from, from the
+    // company's own reports (segments.js), the host laying one compact view on
+    // the row as segMix: the breakdown named, its largest parts, and the
+    // largest part's share a few years before where the grouping held.
+    {
+      const m = s.segMix;
+      if (m && Array.isArray(m.top) && m.top.length) {
+        const bits = [];
+        bits.push(m.title + (m.period ? ', ' + m.period : '') + ': ' + m.top.map((x) => x.name + ' ' + pct(x.pct, x.pct >= 10 ? 0 : 1)).join(', ') + (m.more ? ', and ' + m.more + ' more.' : '.'));
+        const t0 = m.top[0];
+        if (t0.was != null && m.wasYears) bits.push(t0.name + ' was ' + pct(t0.was, 0) + ' of revenue ' + m.wasYears + ' year' + (m.wasYears === 1 ? '' : 's') + ' earlier.');
+        if (t0.change != null) bits.push(t0.name + ' revenue ' + move(t0.change) + ' on a year earlier.');
+        add({ id: 'mix', title: 'Revenue mix', jump: 'seg', tone: 'neutral', arrow: null, text: join(bits) });
+      }
+    }
+
+    // How it trades with the market (2026-10-26): its typical move on the S&P
+    // 500's worst and best 5% of days in the past year (about thirteen each;
+    // the Reactions group's fields), beside the index's own on those days (the
+    // SPY row's), and where that sits in its industry; semiconductors also on
+    // chip sell-off days. No arrow: how far it moves is not up or down.
+    {
+      const dn = num(s.marketSelloff), upm = num(s.marketRally);
+      const spy = all.find((r) => r && r.symbol === 'SPY') || {};
+      const sdn = num(spy.marketSelloff), sup = num(spy.marketRally);
+      const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + pct(v);
+      const bits = [];
+      if (dn != null) bits.push('On the S&P 500’s worst days of the past year it typically moved ' + signed(dn) + (sdn != null ? ' (the index ' + signed(sdn) + ')' : '') + (upm != null ? ', and on its best ' + signed(upm) + (sup != null ? ' (the index ' + signed(sup) + ')' : '') : '') + '.');
+      else if (upm != null) bits.push('On the S&P 500’s best days of the past year it typically moved ' + signed(upm) + '.');
+      if (dn != null && sdn != null && sdn < 0) {
+        const r = dn / sdn;
+        bits.push(r >= 1.25 ? 'It fell further than the index on those days.' : r <= 0.75 ? 'It held up better than the index on those days.' : 'It fell about as far as the index on those days.');
+      }
+      const st = dn != null ? standing(s, all, 'marketSelloff') : null;
+      // A higher value on a down day is a shallower fall; worded for that.
+      if (st) bits.push('Its move on the worst days is ' + (st.where === 'top' ? 'shallower than three quarters of ' : st.where === 'bottom' ? 'deeper than three quarters of ' : 'in the middle half of ') + st.group + '.');
+      if (/Semiconductor/.test(String(s.industry || '')) && num(s.chipSelloff) != null) bits.push('On chip sell-off days ' + signed(num(s.chipSelloff)) + '.');
+      add({ id: 'mkt', title: 'How it trades with the market', jump: 'price', tone: 'neutral', arrow: null, text: join(bits), basis: st && st.group });
+    }
+
     // THE HEADLINE FIGURE (2026-10-21, the owner on the At a glance card: "make
     // it bit more eye catching"). One number a topic, set large on the card,
     // taken from the same field and formatted by the same helpers as the
@@ -358,6 +419,12 @@
         if (s.erFiled) return s.erGuideChange ? k(String(s.erGuideChange), 'guidance, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
         if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
         const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
+      case 'capret': { const dy = n('divYield'), by = n('buybackYield');
+        return dy != null && by != null ? k(pct(dy + by), 'shareholder yield') : dy != null ? k(pct(dy), 'dividend yield') : null; }
+      case 'mix': { const m = s.segMix; const t = m && m.top && m.top[0];
+        return t ? k(pct(t.pct, 0), (t.name.length > 28 ? t.name.slice(0, 27) + '…' : t.name) + ', largest') : null; }
+      case 'mkt': { const d = n('marketSelloff');
+        return d != null ? k((d > 0 ? '+' : d < 0 ? '−' : '') + pct(d), 'on the S&P’s worst days') : null; }
       case 'tone': { const a = n('toneAvg');
         return a != null ? k((a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(2), 'tone, ' + n('toneN') + ' article' + (n('toneN') === 1 ? '' : 's') + ', 7 days') : null; }
       default: return null;
