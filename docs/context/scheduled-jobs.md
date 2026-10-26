@@ -38,3 +38,5 @@ The owner, after /filings showed Thursday as the newest day on a Saturday: "can 
 ## Saturday 05:00 run (2026-10-25)
 
 The owner: *"Yes but can we run the Saturday earlier .. may be 5am"*. The earnings reader also runs **Saturday 05:00**, after the Saturday 04:00 nightly (done by 04:50) has recorded Friday's 8-Ks; before, Friday's results waited for Monday 09:15. `release-task.ps1` adds the trigger, `schedule.js` declares it as `extra`, `schedule-test.js` checks both. **The subscriber mailing stays weekday mornings**: `mailList()` in `release-load.js` returns on a Saturday or Sunday, so Saturday's finds go out in Monday's mailing as before; the owner's digest is sent on Saturday. No Twelve Data credits; AI credit as any run, capped at $2.
+
+- **2026-10-26: Article tone hourly on weekdays** at :26 past, 07:26 to 18:26 except 16:26, capped at 30 minutes; 00:30 nightly; weekends three times. See `news-tone.md`.

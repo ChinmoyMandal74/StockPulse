@@ -57,8 +57,11 @@ const JOBS = [
   },
   {
     id: 'tone', name: 'Article tone', task: 'TickrLab news tone', host: 'laptop', script: 'news-tone-load.js', taskScript: 'news-tone-task.ps1',
-    days: ALL_DAYS, times: ['00:30', '06:30', '12:30', '18:30'], minutes: 15,
-    spends: { kind: 'anthropic', text: 'Claude Haiku, capped at $3 a run' },
+    // HOURLY ON WEEKDAYS (2026-10-26, the owner): :26 past, 07:26 to 18:26,
+    // not 16:26 (the nightly's hour); 00:30 every night; weekends three times.
+    days: ALL_DAYS, times: ['00:30'], minutes: 30,
+    extra: [{ days: WEEKDAYS, times: ['07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26'] }, { days: ['Sat', 'Sun'], times: ['06:30', '12:30', '18:30'] }],
+    spends: { kind: 'anthropic', text: 'Claude Haiku, capped at $3 a run; charged per article read once, so more runs read the same articles sooner, not more of them' },
     what: 'Reads each new article in the Yahoo Finance feed of every company on the screener (since 2026-10-26; the S&P 500 and the semiconductors before) and stores its kind, tone and a two-sentence summary.',
     log: '/news-runs',
   },

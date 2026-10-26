@@ -80,7 +80,7 @@ const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')] },
   { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62), tr('Weekly', '05:00', 64)] },
   { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
-  { name: 'TickrLab news tone', state: 'Ready', triggers: ['00:30', '06:30', '12:30', '18:30'].map((t) => tr('Daily', t)) },
+  { name: 'TickrLab news tone', state: 'Ready', triggers: [tr('Daily', '00:30')].concat(['07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26'].map((t) => tr('Weekly', t, 62)), ['06:30', '12:30', '18:30'].map((t) => tr('Weekly', t, 65))) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
 ] });
 let d = S.drift(good());

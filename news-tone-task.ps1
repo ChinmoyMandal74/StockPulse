@@ -38,9 +38,20 @@ $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab news tone'
 $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'news-tone-load.js'
-$Times    = @('00:30', '06:30', '12:30', '18:30')
+# HOURLY ON WEEKDAYS SINCE 2026-10-26 (the owner: "once every hour during
+# weekdays starting from 7am to 7pm .. find a good slot when nothing else is
+# running"). At :26 past: clear of the headlines (:00), the schedule report
+# (:05) and the earnings reader (09:15 and 18:15, about 10 minutes), and
+# capped at 30 minutes so it is done before the next hour's :00. The 16:00
+# hour is the nightly's, so there is no 16:26. Every night at 00:30, and at
+# weekends 06:30, 12:30 and 18:30 as before. The only job a run can meet is
+# the 3-minute intraday price ping at :45 (09:45 to 15:45), which uses
+# Twelve Data on the server while this uses Yahoo and Anthropic from here.
+$Times    = @('00:30')
+$Weekday  = @('07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26')
+$Weekend  = @('06:30', '12:30', '18:30')
 $MaxUsd   = '3'
-$MaxMin   = '45'
+$MaxMin   = '30'
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -64,7 +75,9 @@ $cmdLine = "`"$node`" news-tone-load.js --commit --max-usd $MaxUsd --max-minutes
 $runCmd = Join-Path $Root 'news-tone.run.cmd'
 Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
-$triggers = $Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }
+$triggers = @($Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ }) +
+  @($Weekday | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }) +
+  @($Weekend | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday, Sunday -At $_ })
 
 # Six hours of articles take minutes; the limit stops a run that has hung, and
 # IgnoreNew stops a slow run being doubled by the next slot's.
@@ -73,21 +86,21 @@ $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -MultipleInstances IgnoreNew `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 50)
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 35)
 
 if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run   : $cmdLine (hidden, through run-hidden.vbs)"
   Write-Output "  in    : $Root"
-  Write-Output "  daily : $($Times -join ', '), stopping each run at `$$MaxUsd or $MaxMin minutes"
+  Write-Output "  when  : every day $($Times -join ', '); weekdays $($Weekday -join ', '); weekends $($Weekend -join ', '); stopping each run at `$$MaxUsd or $MaxMin minutes"
   Write-Output "  shadow: $(if ($Shadow) { $Shadow + ', local file only, at most $1 a run' } else { 'none' })"
   exit 0
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers `
-  -Settings $settings -Description 'Reads new articles for their tone (news-tone-load.js): the semiconductor stocks and the S&P 500, every six hours. Spends Anthropic API credit.' -Force | Out-Null
+  -Settings $settings -Description 'Reads new articles for their tone (news-tone-load.js): every company on the screener, hourly on weekdays 07:26 to 18:26 (not 16:26), nightly at 00:30, and three times a day at weekends. Spends Anthropic API credit.' -Force | Out-Null
 
-Write-Output "Registered '$TaskName' -- daily at $($Times -join ', ') local time, at most `$$MaxUsd or $MaxMin minutes a run."
+Write-Output "Registered '$TaskName' -- daily $($Times -join ', '); weekdays $($Weekday -join ', '); weekends $($Weekend -join ', '); at most `$$MaxUsd or $MaxMin minutes a run."
 Write-Output "Log: $(Join-Path $Root 'news-tone.log')"
 
 # Tell /schedule straight away (schedule-report.js); a failure here changes nothing.
