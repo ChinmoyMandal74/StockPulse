@@ -110,6 +110,40 @@
     .qual td .dim { color: var(--faint); }
     .qual td.off { color: var(--amber); }
     .qual .more { margin: 10px 0 0; font-size: 11.5px; color: var(--faint); }
+    /* ---- how the filings figures are adjusted (2026-10-26, the owner: "highlight
+       all these findings very clearly there so it's clear and can be referred back
+       when needed"). Static, so it reads even when the status call fails. Scoped
+       under .adj. Amber marks what is NOT corrected ("notice this"); nothing here
+       is green or red, which mean a price rose or fell. */
+    .adj > .core { padding: 22px 24px 22px; }
+    .adj .top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .adj h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.015em; }
+    .adj .stamp { margin-left: auto; font-size: 11px; color: var(--faint); font-family: var(--mono); }
+    .adj .intro { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 90ch; }
+    .adj .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0 0; align-items: start; }
+    .adj .col { min-width: 0; border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px 6px;
+                background: color-mix(in srgb, var(--text) 2.5%, transparent); }
+    .adj .col.gap { border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+                    background: color-mix(in srgb, var(--amber) 4%, transparent); }
+    .adj .col h3 { margin: 0 0 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+                   letter-spacing: 0.16em; color: var(--accent); }
+    .adj .col.gap h3 { color: var(--amber); }
+    .adj ol { margin: 0; padding: 0; list-style: none; counter-reset: adj; }
+    .adj li { counter-increment: adj; position: relative; padding: 11px 0 11px 30px; border-top: 1px solid var(--hair); }
+    .adj li:first-child { border-top: 0; }
+    .adj li::before { content: counter(adj); position: absolute; left: 0; top: 11px; width: 20px; height: 20px;
+                      border-radius: 50%; font: 600 11px/20px var(--mono); text-align: center;
+                      color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
+    .adj .col.gap li::before { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+    .adj li b { display: block; font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .adj li p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+    .adj li .eg { display: block; margin-top: 4px; font-size: 11.5px; color: var(--faint); }
+    .adj li code { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+    .adj .worst { margin: 16px 0 0; padding: 12px 16px; border-radius: 12px; font-size: 12.5px; line-height: 1.6;
+                  color: var(--text); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+                  background: color-mix(in srgb, var(--amber) 8%, transparent); }
+    .adj .worst b { color: var(--amber); }
+    @media (max-width: 860px) { .adj .cols { grid-template-columns: 1fr; } .adj .stamp { margin-left: 0; } }
     .btn.sm { font-size: 11.5px; padding: 5px 11px; }
     .loading, .error { padding: 26px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
@@ -137,6 +171,7 @@
       </span>
       <span class="divider"></span>
       <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn" href="#adjustments">Adjustments</a>
       <button class="btn" id="reload" type="button"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh" /></svg>Re-read status</button>
     </nav>
   </div>
@@ -149,6 +184,81 @@
         what keeps it up to date, and what you can do when it falls behind. None of it feeds the
         Signal or the screener's selection — it is shown on the stock pages and the cards.</p>
     </header>
+
+    <section class="bezel adj" id="adjustments"><div class="core">
+      <div class="top"><h2>How the filings figures are adjusted</h2><span class="stamp">checked against the code 2026-10-26</span></div>
+      <p class="intro">What the filings reader corrects for and what it does not. Read the Not handled list before
+        trusting a long series (Long run, compounding, ten-year charts): those gaps are where a figure can be
+        right as filed and still mislead.</p>
+      <div class="cols">
+        <div class="col">
+          <h3>Handled</h3>
+          <ol>
+            <li><b>Restatements and amendments</b>
+              <p>Every filed version of a period is kept, 10-K/A and 10-Q/A included, with its filing date. The newest
+                10-K, 10-Q, 20-F or 40-F speaks for the period, so a restated figure replaces the original. A proxy
+                or other form that mentions one number cannot displace the report.</p>
+              <code>secfacts.js: outranks, latestPerPeriod</code></li>
+            <li><b>Thin comparatives do not blank a period</b>
+              <p>A later report often repeats one figure for an old quarter. Its blanks are filled from the earlier
+                filing; a figure it does state is never overwritten.</p>
+              <span class="eg">Measured: a full trailing year went from 65% to 90% of companies (Broadcom, GM, KLA).</span>
+              <code>secfacts.js: latestFilled</code></li>
+            <li><b>Mistakes in the filings</b>
+              <p>A figure about 1,000 times off another version of the same period is settled by the company's own
+                neighbouring periods; a zero beside a version that states real money is taken as a value that failed to carry.</p>
+              <span class="eg">51 figures at 25 companies, FactSet's 2018 revenue among them.</span>
+              <code>secfacts.js: reconcile</code></li>
+            <li><b>The fourth quarter</b>
+              <p>The 10-K covers the year, so Q4 is the year less nine months, from the restated figures. Balance
+                sheet items, share counts and per-share figures are never subtracted.</p>
+              <code>secfacts.js: deriveQuarters</code></li>
+            <li><b>What was knowable on a date</b>
+              <p>Research reads only what was filed by that date, and rebuilds fourth quarters from the reports public
+                then, never from a later restatement.</p>
+              <code>secfacts.js: visibleAsOf</code></li>
+            <li><b>Stock splits</b>
+              <p>Share counts and EPS history are put on today's share basis. A factor is used only when it matches a
+                recorded split; spin-off price factors are ignored; a count no split explains is left blank.</p>
+              <code>adjusted.js: epsFactors, perShareSeries</code></li>
+            <li><b>Foreign currency</b>
+              <p>Converted to dollars when read: flows at the period's average rate, balance sheet at the period-end
+                rate, the rate kept on the row. Long run growth divides the rate back out, so a currency move is not
+                growth. A period with no rate is dropped, not converted at a nearby one.</p>
+              <code>secfacts.js, longrun.js</code></li>
+            <li><b>Earnings releases checked against the filing</b>
+              <p>Revenue, net income and diluted EPS read from a press release are compared with the newest filed
+                version of that quarter; a difference is shown in amber and the release figure is left as printed.</p>
+              <code>releases.js: tenQCheck</code></li>
+          </ol>
+        </div>
+        <div class="col gap">
+          <h3>Not handled</h3>
+          <ol>
+            <li><b>Restatements older than the comparatives</b>
+              <p>A report restates two or three years back, never ten. After an accounting change, the older years
+                stay as first filed, so a long series can break where the method changed.</p></li>
+            <li><b>Discontinued operations and divestitures</b>
+              <p>When a division is sold, recent years are restated without it and older years are not. Ten-year
+                growth then compares two different businesses.</p></li>
+            <li><b>Acquisitions</b>
+              <p>No pro forma figures: growth bought with a large acquisition counts as growth.</p></li>
+            <li><b>Company-adjusted (non-GAAP) figures</b>
+              <p>The filings are GAAP only. The company's adjusted EPS exists only where the release reader takes it
+                from the press release, under the company's own label.</p></li>
+            <li><b>A whole run of periods wrong together</b>
+              <p>When several periods carry the same fault, the neighbours agree with it and the mistake check has
+                nothing to settle against.</p>
+              <span class="eg">Adtran's 2011 quarters.</span></li>
+            <li><b>Per-share history where no split fits</b>
+              <p>Withheld rather than adjusted, so those charts have gaps.</p>
+              <span class="eg">AMC, Amcor.</span></li>
+          </ol>
+        </div>
+      </div>
+      <p class="worst"><b>Most likely to mislead:</b> discontinued operations (Not handled, 2). They move the Long run growth
+        and compounding columns for any company that sold a large division, and nothing on the page flags it.</p>
+    </div></section>
 
     <div id="body"><p class="loading">Reading the status…</p></div>
     <p class="foot" id="foot" hidden></p>
