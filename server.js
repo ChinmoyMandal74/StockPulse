@@ -11307,7 +11307,10 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     peers: guest ? null : peersFor(stock, stocks, peerLinks),
     // At a glance (2026-10-15): the topic cards, compared against the whole
     // snapshot. Never fails the page; a null simply draws no section.
-    glance: (() => { try { return Glance.build(glanceRow, glanceRows); } catch (e) { return null; } })(),
+    // NO SIGNAL CARD ON THE STOCK PAGE (2026-10-26, the owner: "Remove
+    // signal"); the page shows the Signal in its own place. Glance.build still
+    // makes it for the promo card's Signal topic.
+    glance: (() => { try { const g = Glance.build(glanceRow, glanceRows); if (g && g.cards) g.cards = g.cards.filter((c) => c.id !== 'signal'); return g; } catch (e) { return null; } })(),
     updatedAt: snap.updatedAt || null,
   });
 }));

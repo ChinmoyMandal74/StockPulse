@@ -77,27 +77,36 @@ check('no trades is said only when the file was read', /since Jul 17/.test(quiet
   check('no volatility figures, no card', !G.build(mu, all).cards.some((x) => x.id === 'vol'));
 }
 
-// Earnings and guidance (2026-10-23): the newest release's er- fields, as /api/stock adds them.
+// Earnings, and Guidance beside it (2026-10-23 as one card; split 2026-10-26):
+// the newest release's er- fields, as /api/stock adds them.
 let relHtml = '';
 {
   const base = Object.assign({}, mu, { nextEarningsDate: '2026-10-20', nextEarningsEstimated: true, lastSurprise: 10.3 });
-  const withRel = Object.assign({}, base, { erFiled: '2026-10-22', erPeriodLabel: 'Third Quarter 2026', erRevYoY: 11.3, erEpsYoY: 14.7,
+  const withRel = Object.assign({}, base, { erFiled: '2026-10-22', erPeriodLabel: 'Third Quarter 2026', erRevYoY: 11.3, erEpsYoY: 14.7, erVsEstWord: 'Above',
     erGuideChange: 'Raised', erGuideChangeQuote: 'The company raised its 2026 outlook for sales, diluted EPS and free cash flow', erGuide: '2026 Financial Outlook: Sales ~$80,000 - $82,000', erEpsGuideVsFy: 26.4 });
-  const c = G.build(withRel, all).cards.find((x) => x.id === 'earn');
-  check('earn: called Earnings and guidance', c && c.title === 'Earnings and guidance', c && c.title);
-  check('earn: reported, revenue and EPS on a year ago', /Reported Third Quarter 2026 on Oct 22: revenue up 11\.3%, EPS up 14\.7% on a year ago\./.test(c.text), c.text);
-  check('earn: the stated change in the company’s words, and the guide reading', /Guidance raised: “The company raised its 2026 outlook/.test(c.text) && /Full-year EPS guide up 26\.4% on the year before\./.test(c.text), c.text);
+  const cards = G.build(withRel, all).cards;
+  const c = cards.find((x) => x.id === 'earn'), g = cards.find((x) => x.id === 'guide');
+  check('earn: called Earnings, Guidance a card of its own right after it', c && c.title === 'Earnings' && g && g.title === 'Guidance' && cards.indexOf(g) === cards.indexOf(c) + 1, cards.map((x) => x.id));
+  check('earn: reported, revenue and EPS on a year ago, and against the estimate', /Reported Third Quarter 2026 on Oct 22: revenue up 11\.3%, EPS up 14\.7% on a year ago\./.test(c.text) && /EPS came in above the estimate\./.test(c.text), c.text);
+  check('earn: no guidance words on the Earnings card', !/Guidance|guide/.test(c.text), c.text);
   check('earn: a next date already past the report is left out', !/Next report Oct 20/.test(c.text), c.text);
-  check('earn: raised is an up arrow, the headline is the change, the card opens the releases', c.arrow === 'up' && c.key.v === 'Raised' && /guidance, Oct 22/.test(c.key.k) && c.jump === 'rels', JSON.stringify([c.arrow, c.key, c.jump]));
+  check('earn: Above is an up arrow and the headline, the card opens the releases', c.arrow === 'up' && c.key.v === 'Above' && /vs the estimate, Oct 22/.test(c.key.k) && c.jump === 'rels', JSON.stringify([c.arrow, c.key, c.jump]));
+  check('guide: the stated change in the company’s words, and the guide reading', /Guidance raised: “The company raised its 2026 outlook/.test(g.text) && /Full-year EPS guide up 26\.4% on the year before\./.test(g.text), g.text);
+  check('guide: raised is an up arrow and the headline, opening the releases', g.arrow === 'up' && g.key.v === 'Raised' && g.jump === 'rels', JSON.stringify([g.arrow, g.key]));
   const later = G.build(Object.assign({}, withRel, { nextEarningsDate: '2027-01-27' }), all).cards.find((x) => x.id === 'earn');
   check('earn: a next date after the report is kept', /Next report Jan 27 \(estimated\)\./.test(later.text), later.text);
-  const low = G.build(Object.assign({}, withRel, { erGuideChange: 'Lowered' }), all).cards.find((x) => x.id === 'earn');
-  check('earn: lowered is a down arrow', low.arrow === 'down');
-  const plain = G.build(Object.assign({}, withRel, { erGuideChange: null, erGuideChangeQuote: null, erEpsGuideVsFy: null }), all).cards.find((x) => x.id === 'earn');
-  check('earn: guidance with no stated change says so, no arrow, the report day as headline', /Guidance given, no change stated\./.test(plain.text) && plain.arrow === null && plain.key.v === 'Oct 22', JSON.stringify([plain.text, plain.arrow, plain.key]));
-  const none = G.build(base, all).cards.find((x) => x.id === 'earn');
-  check('earn: no release, the old wording and the surprise arrow', /Next report Oct 20 \(estimated\)\./.test(none.text) && /beat the estimate by 10\.3%/.test(none.text) && none.arrow === 'up' && none.jump === 'earn', none.text);
-  relHtml = G.render({ cards: [c, low, plain] });
+  const low = G.build(Object.assign({}, withRel, { erGuideChange: 'Lowered', erVsEstWord: 'Below' }), all).cards;
+  check('lowered guidance and a result below: both down arrows', low.find((x) => x.id === 'guide').arrow === 'down' && low.find((x) => x.id === 'earn').arrow === 'down');
+  const plain = G.build(Object.assign({}, withRel, { erGuideChange: null, erGuideChangeQuote: null, erEpsGuideVsFy: null, erVsEstWord: null }), all).cards;
+  const pg = plain.find((x) => x.id === 'guide'), pe = plain.find((x) => x.id === 'earn');
+  check('guide: given with no stated change says so, no arrow, headline Given', /Guidance given, no change stated\./.test(pg.text) && pg.arrow === null && pg.key.v === 'Given', JSON.stringify([pg.text, pg.arrow, pg.key]));
+  check('earn: no estimate word, the report day as headline', pe.key.v === 'Oct 22' && pe.arrow === null, pe.key);
+  const noGuide = G.build(Object.assign({}, withRel, { erGuideChange: null, erGuide: null, erEpsGuideVsFy: null }), all).cards.find((x) => x.id === 'guide');
+  check('guide: none in the release says so', noGuide && /No guidance in the latest results release\./.test(noGuide.text) && noGuide.key.v === 'None', noGuide && noGuide.text);
+  const noneCards = G.build(base, all).cards;
+  const none = noneCards.find((x) => x.id === 'earn');
+  check('earn: no release, the old wording and the surprise arrow; no Guidance card', /Next report Oct 20 \(estimated\)\./.test(none.text) && /beat the estimate by 10\.3%/.test(none.text) && none.arrow === 'up' && none.jump === 'earn' && !noneCards.some((x) => x.id === 'guide'), none.text);
+  relHtml = G.render({ cards: [c, g, pg] });
 }
 
 // The words never advise.

@@ -257,15 +257,19 @@
         arrow: net == null ? null : net > 0 ? 'up' : net < 0 ? 'down' : 'flat', text: join(bits) });
     }
 
-    // Earnings and guidance (2026-10-23, the owner: "At a glance needs to show
-    // the result release section, call it earning and guidance"). With the
-    // newest results release (the er- fields /api/stock adds from
-    // ReleaseView.fields): when it reported, revenue and EPS on a year ago, the
-    // guidance change the company states, in its words, and the guide's
-    // reading; the next date only when it falls after that report (the
-    // provider's estimate can be a date already past). Without one, as before:
-    // the next date and the last surprise. The arrow is the stated change:
-    // raised up, lowered or withdrawn down, reaffirmed level.
+    // EARNINGS and GUIDANCE, two cards (2026-10-26, the owner: "Remove signal
+    // and seperate Earning and guidance"; one card "Earnings and guidance"
+    // from 2026-10-23 before that). From the newest results release (the er-
+    // fields /api/stock adds from ReleaseView.fields).
+    //   Earnings  when it reported, revenue and EPS on a year ago, the reported
+    //             EPS against the estimate in a word (erVsEstWord), the next
+    //             date only when it falls after that report. Without a
+    //             release, the next date and the last surprise. Arrow: Above
+    //             up, Below down, In line level (else the surprise's sign).
+    //   Guidance  the change the company states, in its words; the guide's
+    //             reading (full-year EPS against the year before, else next
+    //             quarter's revenue against this one). Only with a release.
+    //             Arrow: raised up, lowered or withdrawn down, reaffirmed level.
     {
       const sur = num(s.lastSurprise);
       const bits = [];
@@ -276,21 +280,30 @@
         const ey = num(rel.erEpsYoY) != null ? num(rel.erEpsYoY) : num(rel.erEpsAdjYoY);
         if (ey != null) ch.push((num(rel.erEpsYoY) != null ? 'EPS ' : 'adjusted EPS ') + move(ey));
         bits.push('Reported ' + (rel.erPeriodLabel ? rel.erPeriodLabel + ' ' : '') + 'on ' + shortDay(rel.erFiled) + (ch.length ? ': ' + ch.join(', ') + ' on a year ago.' : '.'));
-        if (rel.erGuideChange) {
-          const q = String(rel.erGuideChangeQuote || '');
-          bits.push('Guidance ' + rel.erGuideChange.toLowerCase() + (q ? ': “' + (q.length > 110 ? q.slice(0, 107).replace(/\s+\S*$/, '') + '…' : q) + '”' : '') + '.');
-        } else if (rel.erGuide) bits.push('Guidance given, no change stated.');
-        if (num(rel.erEpsGuideVsFy) != null) bits.push('Full-year EPS guide ' + move(num(rel.erEpsGuideVsFy)) + ' on the year before.');
-        else if (num(rel.erGuideVsQ) != null) bits.push('Next quarter’s revenue guide ' + move(num(rel.erGuideVsQ)) + ' on this quarter.');
+        if (rel.erVsEstWord) bits.push('EPS came in ' + (rel.erVsEstWord === 'In line' ? 'in line with' : rel.erVsEstWord.toLowerCase()) + ' the estimate.');
         if (s.nextEarningsDate && s.nextEarningsDate > rel.erFiled) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
       } else {
         if (s.nextEarningsDate) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
         if (sur != null) bits.push('Last report ' + (sur > 0 ? 'beat' : sur < 0 ? 'missed' : 'met') + ' the estimate' + (sur ? ' by ' + pct(sur) : '') + '.');
       }
-      const gc = rel && rel.erGuideChange ? String(rel.erGuideChange).toLowerCase() : null;
-      const arrow = gc ? (gc === 'raised' ? 'up' : gc === 'lowered' || gc === 'withdrawn' ? 'down' : gc === 'reaffirmed' ? 'flat' : null)
+      const vw = rel && rel.erVsEstWord;
+      const arrow = vw ? (vw === 'Above' ? 'up' : vw === 'Below' ? 'down' : 'flat')
         : rel ? null : sur == null ? null : sur > 0 ? 'up' : sur < 0 ? 'down' : 'flat';
-      add({ id: 'earn', title: 'Earnings and guidance', jump: rel ? 'rels' : 'earn', tone: 'neutral', arrow, text: join(bits) });
+      add({ id: 'earn', title: 'Earnings', jump: rel ? 'rels' : 'earn', tone: 'neutral', arrow, text: join(bits) });
+
+      if (rel) {
+        const gb = [];
+        if (rel.erGuideChange) {
+          const q = String(rel.erGuideChangeQuote || '');
+          gb.push('Guidance ' + rel.erGuideChange.toLowerCase() + (q ? ': “' + (q.length > 140 ? q.slice(0, 137).replace(/\s+\S*$/, '') + '…' : q) + '”' : '') + '.');
+        } else if (rel.erGuide) gb.push('Guidance given, no change stated.');
+        else gb.push('No guidance in the latest results release.');
+        if (num(rel.erEpsGuideVsFy) != null) gb.push('Full-year EPS guide ' + move(num(rel.erEpsGuideVsFy)) + ' on the year before.');
+        else if (num(rel.erGuideVsQ) != null) gb.push('Next quarter’s revenue guide ' + move(num(rel.erGuideVsQ)) + ' on this quarter.');
+        const gc = rel.erGuideChange ? String(rel.erGuideChange).toLowerCase() : null;
+        add({ id: 'guide', title: 'Guidance', jump: 'rels', tone: 'neutral',
+          arrow: gc ? (gc === 'raised' ? 'up' : gc === 'lowered' || gc === 'withdrawn' ? 'down' : gc === 'reaffirmed' ? 'flat' : null) : null, text: join(gb) });
+      }
     }
 
     // The Signal, as it stands, with the rule that fired. Shown, not judged.
@@ -414,9 +427,10 @@
         return sp != null ? k(pct(sp), 'of the float short') : null; }
       case 'owners': { const i = n('institutionPct');
         return i != null ? k(pct(i), 'held by institutions') : null; }
+      case 'guide': return s.erGuideChange ? k(String(s.erGuideChange), 'guidance, ' + shortDay(s.erFiled)) : s.erGuide ? k('Given', 'no change stated') : k('None', 'in the latest release');
       case 'earn': {
-        // With a release: the stated change, else the day it reported.
-        if (s.erFiled) return s.erGuideChange ? k(String(s.erGuideChange), 'guidance, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
+        // With a release: the EPS against the estimate in a word, else the day it reported.
+        if (s.erFiled) return s.erVsEstWord ? k(String(s.erVsEstWord), 'vs the estimate, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
         if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
         const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
       case 'capret': { const dy = n('divYield'), by = n('buybackYield');

@@ -12938,8 +12938,8 @@
   // rule that fired, in its own colour.
   const GLC_TOPICS = [['short', 'Short-term price'], ['long', 'Long-term price'], ['trend', 'Momentum and trend'], ['growth', 'Growth'],
     ['profit', 'Profitability'], ['value', 'Valuation'], ['vol', 'Volatility'], ['balance', 'Balance sheet'],
-    ['shortpos', 'Short position'], ['owners', 'Insiders and owners'], ['earn', 'Earnings and guidance'], ['signal', 'Signal']];
-  const GLC_DEFAULT = ['long', 'growth', 'profit', 'value', 'balance', 'earn'];
+    ['shortpos', 'Short position'], ['owners', 'Insiders and owners'], ['earn', 'Earnings'], ['guide', 'Guidance'], ['signal', 'Signal']];
+  const GLC_DEFAULT = ['long', 'growth', 'profit', 'value', 'earn', 'guide'];
   // Measured with every topic at its longest wording.
   const GLC_MAX = { square: 6, portrait: 8, story: 10 };
   // The topics to draw: the ones ticked ('|'-joined in glcPick), in the page's
