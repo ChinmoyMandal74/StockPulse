@@ -241,5 +241,23 @@ check('scope: no row', NewsTone.inScope(null, SP), false);
   check('story: its name is not what makes two headlines alike', g2[2] !== g2[3] && g2[2] !== g2[0], true);
 }
 
+// The daily history (2026-10-26): the articles summarise() counts, a New York day each.
+{
+  const r = (iso, tone, o) => Object.assign({ status: 'scored', about: 'primary', tone, published_at: iso }, o || {});
+  const rows = [
+    r('2026-10-24T14:00:00Z', 0.6), r('2026-10-24T18:00:00Z', -0.4), r('2026-10-24T20:00:00Z', 0.1),
+    // 01:30 UTC on the 26th is 21:30 on the 25th in New York.
+    r('2026-10-26T01:30:00Z', 0.5),
+    r('2026-10-26T15:00:00Z', -0.3), r('2026-10-26T16:00:00Z', 0.2, { about: 'mentioned' }), r('2026-10-26T17:00:00Z', null, { status: 'unreadable' }),
+  ];
+  const d = NewsTone.daily(rows);
+  check('daily: one entry a New York day, oldest first', d.map((x) => x.d), ['2026-10-24', '2026-10-25', '2026-10-26']);
+  check('daily: the counts by the tone word', [d[0].n, d[0].pos, d[0].neu, d[0].neg], [3, 1, 1, 1]);
+  check('daily: the average', d[0].avg, 0.1);
+  check('daily: a late evening article belongs to its New York day', [d[1].d, d[1].n, d[1].avg], ['2026-10-25', 1, 0.5]);
+  check('daily: a passing mention and an unreadable article are not counted (as the 7-day line)', [d[2].n, d[2].neg], [1, 1]);
+  check('daily: nothing read, nothing', NewsTone.daily([]), []);
+}
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

@@ -16660,16 +16660,21 @@ app.get('/api/news/recent', requireAuth, route(async (req, res) => {
 // and every promo card, gets the main reading only.
 async function toneStockPayload(symbol, limit = 8, offset = 0, withShadow = false) {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-  const [rows, week] = await Promise.all([
+  // The daily history for the section's chart (2026-10-26): the first page of
+  // the list only, 180 days of this stock's readings, one indexed read.
+  const histFrom = new Date(Date.now() - 180 * 86400000).toISOString();
+  const [rows, week, hist] = await Promise.all([
     store.readNewsToneList(symbol, limit + 1, offset),
     store.readNewsToneSince(symbol, weekAgo),
+    offset ? Promise.resolve(null) : store.readNewsToneSince(symbol, histFrom).catch(() => null),
   ]);
   const items = rows.slice(0, limit).map((x) => {
     const sh = withShadow && x.shadow ? Object.assign({}, x.shadow, { label: NewsTone.label(x.shadow.tone), kindLabel: NewsTone.KIND_LABEL[x.shadow.kind] || null }) : null;
     delete x.shadow;
     return Object.assign(x, { label: NewsTone.label(x.tone), kindLabel: NewsTone.KIND_LABEL[x.kind] || null }, sh ? { shadow: sh } : {});
   });
-  return { symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND };
+  return { symbol, items, more: rows.length > limit, offset, limit, week: NewsTone.summarise(week), band: NewsTone.BAND,
+    history: hist ? NewsTone.daily(hist) : null };
 }
 // THE NEWS FEED (2026-10-24, the owner: "Should we have a just news page ..
 // especially the AI rated one that comes from yahoo .. add another field

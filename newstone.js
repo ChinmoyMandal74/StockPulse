@@ -357,7 +357,30 @@
     return { count: use.length, avg: sum / use.length, positive: n.Positive, neutral: n.Neutral, negative: n.Negative, mentioned };
   }
 
+  // THE DAILY HISTORY (2026-10-26, the owner: "show history of yahoo news
+  // count and scores on a daily basis on the individual stock page"): the
+  // same articles summarise() counts (scored, mainly about the company), one
+  // entry a New York day they were published on, oldest first; days with none
+  // are left out (the page draws them as gaps).
+  //   [{ d: 'YYYY-MM-DD', n, pos, neu, neg, avg }]
+  const etDay = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  function daily(rows) {
+    const by = new Map();
+    for (const r of rows || []) {
+      if (!r || r.status !== 'scored' || r.about !== 'primary' || r.tone == null || !isFinite(r.tone) || !r.published_at) continue;
+      const t = Date.parse(r.published_at);
+      if (!isFinite(t)) continue;
+      const d = etDay(t);
+      let x = by.get(d); if (!x) { x = { d, n: 0, pos: 0, neu: 0, neg: 0, sum: 0 }; by.set(d, x); }
+      const w = label(r.tone);
+      x.n++; x.sum += Number(r.tone);
+      if (w === 'Positive') x.pos++; else if (w === 'Negative') x.neg++; else x.neu++;
+    }
+    return [...by.values()].sort((a, b) => (a.d < b.d ? -1 : 1)).map((x) => ({ d: x.d, n: x.n, pos: x.pos, neu: x.neu, neg: x.neg, avg: Math.round(x.sum / x.n * 1000) / 1000 }));
+  }
+
   return {
+    daily,
     INDUSTRIES, inScope, MODEL, MAX_CHARS, MIN_CHARS, BAND, KINDS, KIND_LABEL, SCHEMA, SYSTEM,
     label, feedUrl, canonUrl, parseFeed, sourceOf, robotsRules, robotsAllows,
     articleText, namesCompany, userPrompt, request, check, summarise, BANNED,

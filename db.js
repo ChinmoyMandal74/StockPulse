@@ -7997,10 +7997,10 @@ async function readNewsToneUnshadowed(symbol, sinceIso) {
 async function readNewsToneSince(symbol, sinceIso) {
   await init();
   const r = await db.execute({
-    sql: 'select status, about, tone from news_tone where symbol = ? and published_at >= ?',
+    sql: 'select status, about, tone, published_at from news_tone where symbol = ? and published_at >= ?',
     args: [symbol, sinceIso],
   });
-  return r.rows.map((x) => ({ status: x.status, about: x.about, tone: x.tone == null ? null : Number(x.tone) }));
+  return r.rows.map((x) => ({ status: x.status, about: x.about, tone: x.tone == null ? null : Number(x.tone), published_at: x.published_at || null }));
 }
 
 // What the loader already holds for one stock since a date: id -> status,

@@ -759,6 +759,43 @@
     #tone .tone-week b { font: 600 22px var(--mono); color: var(--text); letter-spacing: -0.02em; }
     #tone .tone-week .tw-n { font-family: var(--mono); font-size: 12px; }
     #tone .tone-week .tw-x { font-size: 12px; color: var(--faint); }
+    /* The daily history (2026-10-26): diverging article counts above, the
+       average tone below. Tone colours only (blue, orange), never green/red. */
+    #tone .th { margin: 6px 0 16px; padding: 14px 16px 10px; border: 1px solid var(--hair); border-radius: 12px;
+                background: color-mix(in srgb, var(--wash) 2.5%, transparent); }
+    #tone .th-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    #tone .th-top h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    #tone .th-tabs { display: inline-flex; gap: 4px; margin-left: auto; }
+    #tone .th-tabs button { font: 500 11.5px var(--sans); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--hair-2);
+                            background: transparent; color: var(--muted); cursor: pointer; }
+    #tone .th-tabs button.on { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    #tone .th-leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); }
+    #tone .th-leg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    #tone .th-lab { font-size: 10.5px; color: var(--faint); font-family: var(--mono); margin: 2px 0 4px; display: flex; justify-content: space-between; gap: 10px; }
+    #tone .th-bars { display: flex; align-items: stretch; gap: 2px; height: 128px; position: relative; }
+    #tone .th-bars::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--hair-2); pointer-events: none; }
+    #tone .th-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; cursor: default; border-radius: 3px; }
+    #tone .th-col:hover { background: color-mix(in srgb, var(--wash) 6%, transparent); }
+    #tone .th-up, #tone .th-dn { height: 50%; display: flex; flex-direction: column; align-items: stretch; }
+    #tone .th-up { justify-content: flex-end; }
+    #tone .th-up b, #tone .th-dn b { display: block; margin: 0 14%; }
+    #tone .th-pos { background: var(--blue); }
+    #tone .th-neu { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 3px 3px 0 0; }
+    #tone .th-up b:only-child, #tone .th-up b:first-child { border-radius: 3px 3px 0 0; }
+    #tone .th-neg { background: var(--orange); border-radius: 0 0 3px 3px; }
+    #tone .th-line { position: relative; height: 84px; margin-top: 10px; }
+    #tone .th-band { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--muted) 10%, transparent); border-radius: 3px; }
+    #tone .th-zero { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--hair-2); }
+    #tone .th-line svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    #tone .th-line polyline { fill: none; stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    #tone .th-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--muted);
+                    box-shadow: 0 0 0 2px var(--surface); }
+    #tone .th-dot.pos { background: var(--blue); } #tone .th-dot.neg { background: var(--orange); }
+    #tone .th-y { position: absolute; left: 0; font: 10px var(--mono); color: var(--faint); transform: translateY(-50%); }
+    #tone .th-x { position: relative; height: 16px; margin-top: 6px; font: 10.5px var(--mono); color: var(--faint); }
+    #tone .th-x span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+    #tone .th-empty { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+
     /* Two columns (owner, 2026-10-18: across the whole card the summaries
        ran too wide to read). A grid rather than CSS columns, so the list
        still reads newest first, left to right, row by row, and Show more
@@ -2832,7 +2869,89 @@
     // the bands live in one place. The chip carries the number as well as
     // the word, because "Positive" alone hides whether it is +0.3 or +0.9.
     const toneNum = (t) => (t == null || !isFinite(t) ? '' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
+    // ---- the daily history (2026-10-26, the owner: "show history of yahoo news
+    // count and scores on a daily basis ... in future once we have more data we
+    // can make it weekly ... make it nice graphically"). The articles the Last 7
+    // days line counts (NewsTone.daily, the server's), one column a New York
+    // day (the last 90; a day with none is an empty column) or a week (Monday
+    // to Sunday, the average weighted by articles). Diverging bars, positive
+    // and neutral up and negative down, over the average tone's line.
+    let toneHist = null;
+    let toneHistMode = 'day';
+    try { if (localStorage.getItem('stock.tonehist') === 'week') toneHistMode = 'week'; } catch (e) { /* private window */ }
+    function toneSeries(hist, mode) {
+      if (!hist || !hist.length) return [];
+      const by = new Map(hist.map((x) => [x.d, x]));
+      const iso = (t) => new Date(t).toISOString().slice(0, 10);
+      const noon = (d) => Date.parse(d + 'T12:00:00Z');
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const start = Math.max(noon(hist[0].d), noon(today) - 89 * 864e5);
+      const days = [];
+      for (let t = start; t <= noon(today); t += 864e5) { const d = iso(t); days.push(by.get(d) || { d, n: 0, pos: 0, neu: 0, neg: 0, avg: null }); }
+      if (mode !== 'week') return days;
+      const weeks = new Map();
+      for (const x of days) {
+        const t = noon(x.d), dow = (new Date(t).getUTCDay() + 6) % 7;     // Monday is 0
+        const k = iso(t - dow * 864e5);
+        let w = weeks.get(k);
+        if (!w) { w = { d: k, n: 0, pos: 0, neu: 0, neg: 0, sum: 0, week: true }; weeks.set(k, w); }
+        w.n += x.n; w.pos += x.pos; w.neu += x.neu; w.neg += x.neg;
+        if (x.avg != null) w.sum += x.avg * x.n;
+      }
+      return [...weeks.values()].map((w) => Object.assign(w, { avg: w.n ? w.sum / w.n : null }));
+    }
+    function renderToneHistory() {
+      const box = document.getElementById('toneHist');
+      if (!box) return;
+      const hist = toneHist || [];
+      if (!hist.length) { box.innerHTML = ''; return; }
+      const S = toneSeries(hist, toneHistMode);
+      const fmtD = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const sg = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2));
+      const top = Math.max(1, ...S.map((x) => Math.max(x.pos + x.neu, x.neg)));
+      const hp = (v) => (v / top * 100).toFixed(2) + '%';
+      const cols = S.map((x) => {
+        const tip = (x.week ? 'Week of ' : '') + fmtD(x.d) + ': ' + (x.n ? x.n + ' article' + (x.n === 1 ? '' : 's') + ' (' + x.pos + ' positive, ' + x.neu + ' neutral, ' + x.neg + ' negative), average ' + sg(x.avg) : 'no article read');
+        return '<div class="th-col" title="' + esc(tip) + '"><div class="th-up">'
+          + (x.neu ? '<b class="th-neu" style="height:' + hp(x.neu) + '"></b>' : '') + (x.pos ? '<b class="th-pos" style="height:' + hp(x.pos) + '"></b>' : '')
+          + '</div><div class="th-dn">' + (x.neg ? '<b class="th-neg" style="height:' + hp(x.neg) + '"></b>' : '') + '</div></div>';
+      }).join('');
+      // The average tone: -1 at the bottom, +1 at the top, a point only where
+      // there were articles. The dots are HTML so they stay round in a
+      // stretched drawing; the line keeps its width (non-scaling stroke).
+      const n = S.length;
+      const X = (i) => (n === 1 ? 50 : (i + 0.5) / n * 100);
+      const Y = (v) => (1 - (v + 1) / 2) * 100;
+      const pts = S.map((x, i) => (x.avg == null ? null : [X(i), Y(x.avg), x])).filter(Boolean);
+      const line = pts.length > 1 ? '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + pts.map((p) => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ') + '"/></svg>' : '';
+      const dots = pts.map(([px, py, x]) => '<span class="th-dot ' + (x.avg >= 0.25 ? 'pos' : x.avg <= -0.25 ? 'neg' : '') + '" style="left:' + px.toFixed(2) + '%;top:' + py.toFixed(2) + '%" title="'
+        + esc((x.week ? 'Week of ' : '') + fmtD(x.d) + ': average ' + sg(x.avg) + ' over ' + x.n + ' article' + (x.n === 1 ? '' : 's')) + '"></span>').join('');
+      // Dates under the columns: about six, the first and the last always.
+      const step = Math.max(1, Math.ceil(n / 6));
+      const ticks = S.map((x, i) => ((i === n - 1 || (i % step === 0 && n - 1 - i >= step / 2)) ? '<span style="left:' + X(i).toFixed(2) + '%">' + esc(fmtD(x.d)) + '</span>' : '')).join('');
+      const thin = hist.length < 2 ? '<p class="th-empty">The history builds as articles are read: one day so far.</p>' : '';
+      const wk = toneHistMode === 'week';
+      box.innerHTML = '<div class="th"><div class="th-top"><h3>Article history</h3>'
+        + '<span class="th-leg"><span><i style="background:var(--blue)"></i>Positive</span><span><i style="background:color-mix(in srgb, var(--muted) 45%, transparent)"></i>Neutral</span>'
+        + '<span><i style="background:var(--orange)"></i>Negative</span><span><i style="background:color-mix(in srgb, var(--text) 55%, transparent);height:2px;vertical-align:3px"></i>Average tone</span></span>'
+        + '<span class="th-tabs"><button type="button" data-thm="day" class="' + (wk ? '' : 'on') + '">Daily</button><button type="button" data-thm="week" class="' + (wk ? 'on' : '') + '">Weekly</button></span></div>'
+        + thin
+        + '<div class="th-lab"><span>Articles ' + (wk ? 'a week' : 'a day') + ': positive and neutral up, negative down</span><span>bar scale: ' + top + ' article' + (top === 1 ? '' : 's') + ' each way</span></div>'
+        + '<div class="th-bars">' + cols + '</div>'
+        + '<div class="th-lab" style="margin-top:14px"><span>Average tone, −1 to +1 (shaded: about neutral, ±0.25)</span></div>'
+        + '<div class="th-line"><div class="th-band" style="top:' + Y(0.25) + '%;bottom:' + (100 - Y(-0.25)) + '%"></div><div class="th-zero" style="top:50%"></div>'
+        + '<span class="th-y" style="top:0%">+1</span><span class="th-y" style="top:50%">0</span><span class="th-y" style="top:100%">−1</span>'
+        + line + dots + '</div>'
+        + '<div class="th-x">' + ticks + '</div></div>';
+      box.querySelectorAll('[data-thm]').forEach((b) => b.addEventListener('click', () => {
+        toneHistMode = b.getAttribute('data-thm');
+        try { localStorage.setItem('stock.tonehist', toneHistMode); } catch (e) { /* private window */ }
+        renderToneHistory();
+      }));
+    }
+
     function renderToneWeek(w) {
+
       if (!w) return '<div class="tone-week">No article mainly about the company read in the last seven days.</div>';
       return '<div class="tone-week"><span>Last 7 days</span>'
         + `<b>${esc(toneNum(w.avg))}</b><span>average tone over ${w.count} article${w.count === 1 ? '' : 's'} about the company</span>`
@@ -3428,6 +3547,8 @@
         if (!toneHave.length && !data.week) return;
         if (!more) {
           document.getElementById('toneWeek').innerHTML = renderToneWeek(data.week);
+          toneHist = Array.isArray(data.history) ? data.history : null;
+          renderToneHistory();
           const w = data.week;
           if (stock && w && w.count) { stock.toneAvg = w.avg; stock.toneN = w.count; stock.tonePos = w.positive; stock.toneNeg = w.negative; refillField('Tone 7D'); }
         }
@@ -4070,6 +4191,7 @@
         <section class="bezel card" id="tone" data-jump="Article tone" data-icon="i-pulse" hidden><div class="core">
           <div class="sec-h"><h2>Article tone</h2></div>
           <div id="toneWeek"></div>
+          <div id="toneHist"></div>
           <div id="toneList"></div>
           <p class="tone-note">Each article in the stock's Yahoo Finance feed is read in full by an AI model
             (<span id="toneModel">Claude Haiku 5.5; Claude Sonnet 5.5 before 20 October 2026</span>), which says how its content leans towards the company and sums it up
