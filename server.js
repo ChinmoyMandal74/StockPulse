@@ -15325,7 +15325,10 @@ function segMixOf(seg) {
   if (!seg) return null;
   const v = (seg.views && (seg.views.FY || seg.views.Q)) || seg;
   if (!v || !Array.isArray(v.kinds) || !v.kinds.length) return null;
-  const K = ['segment', 'product', 'geo'].map((k) => v.kinds.find((x) => x.kind === k)).find(Boolean);
+  // A breakdown whose parts add up to more than the total (PNC's bank
+  // segments, 120%, measured on a broader line) is not drawn as a mix.
+  const sums = (x) => (x.members || []).filter((m) => !m.subtotal && m.pct != null).reduce((s, m) => s + m.pct, 0);
+  const K = ['segment', 'product', 'geo'].map((k) => v.kinds.find((x) => x.kind === k && sums(x) <= 103)).find(Boolean);
   if (!K) return null;
   const parts = (K.members || []).filter((m) => !m.subtotal && m.v > 0 && m.pct != null).sort((a, b) => b.v - a.v);
   if (parts.length < 2) return null;
@@ -15366,12 +15369,14 @@ async function segmentsPayload(symbol) {
     const kinds = Object.keys(Segments.KIND_NAME).filter((k) => d.kinds && d.kinds[k]).map((k) => {
       const K = d.kinds[k];
       const at = hist.map((h) => new Map((((h.data.kinds || {})[k] || {}).members || []).map((m) => [m.key, m.v])));
-      return { kind: k, title: Segments.KIND_NAME[k], complete: !!K.complete, total: K.total || d.total,
+      // fromShare (2026-10-26): the report gave shares of revenue, not amounts
+      // (segments.js shareKind), so no change between years is made from them.
+      return { kind: k, title: Segments.KIND_NAME[k], complete: !!K.complete, total: K.total || d.total, fromShare: !!K.fromShare,
         members: (K.members || []).map((m) => ({ name: m.name, v: m.v, subtotal: !!m.subtotal,
           // Against this breakdown's own total, which is the company's except
           // where the report measures the breakdown on a narrower revenue line.
           pct: (K.total || d.total) > 0 ? m.v / (K.total || d.total) * 100 : null,
-          change: m.prev > 0 ? (m.v / m.prev - 1) * 100 : null,
+          change: !K.fromShare && m.prev > 0 ? (m.v / m.prev - 1) * 100 : null,
           // The same member in each earlier period, null where it was not reported.
           past: at.map((mp) => (mp.has(m.key) ? mp.get(m.key) : null)) })),
         // How the proportions moved, period by period; null where there are too

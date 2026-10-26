@@ -100,6 +100,9 @@
     const frag = String(q).replace(':', '_');
     const t = lab[frag];
     let n = (t ? t.replace(/\s*\[Member\]\s*$/i, '').replace(/\s+Member$/i, '') : fallbackName(q)).slice(0, 80);
+    // A label escaped twice in its own file (Ulta's "Haircare Products &amp;amp;
+    // Styling Tools") is unescaped until it stops changing.
+    for (let i = 0; i < 3 && /&(amp|lt|gt|quot|apos|#\d+);/.test(n); i++) n = unesc(n);
     // The standard country members are labelled in capitals (UNITED STATES);
     // set them as a name. A short all-capitals label is left alone: it is
     // an abbreviation (EMEA, APAC, US).
@@ -154,16 +157,72 @@
     const xml = String(instanceXml || '');
     if (!/<(?:\w+:)?context\s/.test(xml)) return null;
     const ctx = contexts(xml);
-    const facts = [];
-    const re = /<((?:us-gaap|ifrs-full):[A-Za-z]+)\s([^>]*)>\s*(-?[\d.]+(?:[eE][-+]?\d+)?)\s*<\//g;
+    const facts = [], shares = [];
+    const re = /<((?:us-gaap|ifrs-full):[A-Za-z0-9]+)\s([^>]*)>\s*(-?[\d.]+(?:[eE][-+]?\d+)?)\s*<\//g;
     for (const m of xml.matchAll(re)) {
-      if (!REVENUE.includes(m[1])) continue;
       const c = ctx[attr(m[2], 'contextRef')];
       const v = Number(m[3]);
       if (!c || !isFinite(v)) continue;
-      facts.push({ concept: m[1], c, v, unit: attr(m[2], 'unitRef') });
+      if (REVENUE.includes(m[1])) { facts.push({ concept: m[1], c, v, unit: attr(m[2], 'unitRef') }); continue; }
+      // A SHARE OF REVENUE, NOT AN AMOUNT (2026-10-26): Ross Stores, TJX, Ulta
+      // and others tag their mix only as a concentration percentage of revenue
+      // by product or region (us-gaap ConcentrationRiskPercentage1, with a
+      // revenue benchmark). Kept apart; used only where a breakdown has no
+      // dollar facts at all (shareKind, below).
+      if (/^us-gaap:ConcentrationRiskPercentage/.test(m[1]) && c.dims.some((d) => /Benchmark/.test(d[0]) && /Revenue|Sales/i.test(d[1]))) shares.push({ c, v });
     }
-    return facts.length ? { xml, facts, lab: labels(String(labelXml || '')) } : null;
+    return facts.length ? { xml, facts, shares, lab: labels(String(labelXml || '')) } : null;
+  }
+
+  // A BREAKDOWN TAGGED ON TWO AXES (2026-10-26): 41 companies with no mix
+  // tagged their segment revenue as segment x "operating segments"
+  // (srt:ConsolidationItemsAxis, the newer segment disclosure), and Netflix
+  // its regions as region x "streaming". Taken only where the second axis
+  // holds ONE member throughout the breakdown: the operating segments member
+  // of ConsolidationItemsAxis (never eliminations or corporate), or a single
+  // member of another breakdown's axis. The facts come back as if tagged on
+  // the one axis, so everything after reads them unchanged.
+  function twoAxis(facts, kind, inP) {
+    const groups = new Map();
+    for (const f of facts) {
+      if (f.c.dims.length !== 2 || !inP(f.c)) continue;
+      const mineDim = f.c.dims.filter((d) => KIND_OF[d[0]] === kind);
+      if (mineDim.length !== 1) continue;
+      const other = f.c.dims.find((d) => d !== mineDim[0]);
+      const ok = (other[0] === 'srt:ConsolidationItemsAxis' && /OperatingSegmentsMember$/.test(other[1])) || (KIND_OF[other[0]] && KIND_OF[other[0]] !== kind);
+      if (!ok) continue;
+      const key = other[0] + '|' + other[1];
+      if (!groups.has(key)) groups.set(key, { cons: other[0] === 'srt:ConsolidationItemsAxis', list: [] });
+      groups.get(key).list.push({ concept: f.concept, v: f.v, unit: f.unit, c: { dims: [mineDim[0]], s: f.c.s, e: f.c.e } });
+    }
+    let best = null;
+    for (const g of groups.values()) {
+      const n = new Set(g.list.map((f) => f.c.dims[0][1])).size;
+      if (n < 2) continue;
+      if (!best || (g.cons && !best.cons) || (g.cons === best.cons && n > best.n)) best = { cons: g.cons, n, list: g.list };
+    }
+    return best ? best.list : [];
+  }
+  // A BREAKDOWN TAGGED ONLY AS SHARES OF REVENUE (2026-10-26; Ross Stores:
+  // Home Accents and Bed and Bath 26%, Ladies 22% ...): the members as amounts
+  // worked out from the shares and the total, marked `fromShare` so no surface
+  // shows them as reported amounts or a change between years made from
+  // rounded percentages. Only the breakdown's axis and the concentration
+  // axes may be on the fact. A share above 1.5 is a percent and divided.
+  function shareKind(shares, kind, inP, total, lab) {
+    if (!(total > 0)) return null;
+    const cur = new Map();
+    for (const s of shares) {
+      if (!inP(s.c)) continue;
+      const mineDim = s.c.dims.filter((d) => KIND_OF[d[0]] === kind);
+      if (mineDim.length !== 1) continue;
+      if (s.c.dims.some((d) => d !== mineDim[0] && !/ConcentrationRiskBy(Benchmark|Type)Axis$/.test(d[0]))) continue;
+      cur.set(mineDim[0][1], s.v > 1.5 ? s.v / 100 : s.v);
+    }
+    if (cur.size < 2) return null;
+    const members = [...cur].map(([k, f]) => ({ key: k, name: nameOf(k, lab), v: f * total, share: f, subtotal: false })).sort((a, b) => b.v - a.v);
+    const sumF = members.reduce((s, m) => s + m.share, 0);
+    return { concept: 'share', total, members, sum: sumF * total, complete: sumF >= 0.97 && sumF <= 1.03, fromShare: true };
   }
 
   // One period of one length: { ptype, end, currency, total, concept, kinds }
@@ -180,8 +239,16 @@
     const currency = um ? um[1] : null;
     const kinds = {};
     for (const kind of Object.keys(AXES)) {
-      const mine = facts.filter((f) => f.c.dims.length === 1 && KIND_OF[f.c.dims[0][0]] === kind && inP(f.c));
-      if (!mine.length) continue;
+      let mine = facts.filter((f) => f.c.dims.length === 1 && KIND_OF[f.c.dims[0][0]] === kind && inP(f.c));
+      // Nothing on the axis alone: the same amounts tagged on two axes, where
+      // the second holds one member throughout (twoAxis); else a breakdown
+      // tagged only as shares of revenue (shareKind).
+      // A LONE MEMBER ON THE AXIS IS NO BREAKDOWN (Netflix tags one region
+      // alone beside its four region x streaming facts; Ulta one product), so
+      // fewer than two members falls through to the other two shapes too.
+      const nMembers = (list) => new Set(list.map((f) => f.c.dims[0][1])).size;
+      if (nMembers(mine) < 2) { const two = twoAxis(facts, kind, inP); if (nMembers(two) >= 2) mine = two; }
+      if (nMembers(mine) < 2) { const sk = shareKind(R.shares || [], kind, inP, total, lab); if (sk) kinds[kind] = sk; continue; }
       // ONE CONCEPT PER BREAKDOWN: WHICHEVER THE COMPANY USED MOST ON THIS AXIS,
       // the total's own on a tie. Pfizer tags two small lines with the
       // contract-revenue concept and its whole drug list with plain Revenues;

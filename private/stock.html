@@ -5800,11 +5800,14 @@
           document.getElementById('segWin').textContent = (isQ ? 'quarter to ' : 'year to ') + day(S.end || S.fyEnd) + ' \u00b7 ' + money(S.total) + (S.derived ? ' \u00b7 worked out' : '');
           document.getElementById('segBody').innerHTML = S.kinds.map((K) => {
             const top = Math.max(1e-9, ...K.members.filter((m) => !m.subtotal).map((m) => Math.max(0, m.v)));
-            return '<div class="sg-k">' + esc(K.title) + '<span>' + (K.complete ? 'adds up to the total' : 'does not add up to the total') + '</span></div>'
+            // SHARES ONLY (2026-10-26): the report gave each part as a share of
+            // revenue, not an amount, so no amount or change is shown for it.
+            const share = !!K.fromShare;
+            return '<div class="sg-k">' + esc(K.title) + '<span>' + (share ? 'shares of revenue as reported; the report gives no amounts' : K.complete ? 'adds up to the total' : 'does not add up to the total') + '</span></div>'
               + '<table><thead><tr><th>As reported</th><th></th><th class="n">Revenue</th><th class="n">Share</th><th class="n">vs yr ago</th></tr></thead><tbody>'
               + K.members.map((m) => '<tr' + (m.subtotal ? ' class="sub"' : '') + '><td>' + esc(m.name) + (m.subtotal ? ' (subtotal)' : '') + '</td>'
                 + '<td class="b"><i style="width:' + Math.max(0, Math.min(100, m.v / top * 100)).toFixed(1) + '%"></i></td>'
-                + '<td class="n">' + esc(money(m.v)) + '</td><td class="n">' + esc(pc(m.pct)) + '</td><td class="n">' + esc(ch(m.change)) + '</td></tr>').join('')
+                + '<td class="n">' + esc(share ? '—' : money(m.v)) + '</td><td class="n">' + esc(pc(m.pct)) + '</td><td class="n">' + esc(ch(m.change)) + '</td></tr>').join('')
               + '</tbody></table>'
               // The periods before it, oldest on the left. Shown only where
               // there is more than the one period already in the table above.
@@ -5812,7 +5815,7 @@
                 ? '<p class="sg-hl">' + (isQ ? 'Quarter by quarter' : 'Year by year') + '</p><div class="sg-hist"><table><thead><tr><th>' + (isQ ? 'Quarter to' : 'Year to') + '</th>'
                   + S.ends.map((e, i) => '<th class="n">' + esc(short(e)) + ((S.derivedAt || [])[i] ? '*' : '') + '</th>').reverse().join('') + '</tr></thead><tbody>'
                   + K.members.filter((m) => !m.subtotal).map((m) => '<tr><td>' + esc(m.name) + '</td>'
-                    + (m.past || []).slice().reverse().map((v) => '<td class="n">' + esc(money(v)) + '</td>').join('') + '</tr>').join('')
+                    + (m.past || []).map((v, i) => '<td class="n">' + esc(share ? (v != null && (S.totals || [])[i] > 0 ? pc(v / S.totals[i] * 100) : '—') : money(v)) + '</td>').reverse().join('') + '</tr>').join('')
                   + '<tr class="tot"><td>All revenue</td>' + (S.totals || []).slice().reverse().map((v) => '<td class="n">' + esc(money(v)) + '</td>').join('') + '</tr>'
                   + '</tbody></table></div>'
                 : '')

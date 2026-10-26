@@ -81,3 +81,28 @@ The owner, of the mix-over-time card: "you are showing the %, can you also show 
 - Promo only. The stock page already has the amounts in the period-by-period table beside its share chart.
 - Seen on real data: Micron by quarter, $8.7B to $54.2B over eight quarters, where the share view shows DRAM at 73% at both ends.
 - Scratchpad suite, 21 checks including Micron's real payload. Not rendered in a browser by the build.
+
+## Two more shapes, and the companies still without a mix (2026-10-26)
+
+The owner, on Ross Stores' empty Revenue mix card: *"Why Ross Stores does not have revenue mix"*, then *"yes, also see which other companies has missing revenue mix data and if there is a way to fix it"*.
+
+**Survey (before the change): 174 of 1,259 companies had no mix**: 150 read with nothing found, 16 foreign IFRS filers, 4 never read, 4 with no SEC filer. Each of the 150's newest annual data file, read from the SEC (scratch `seg-survey.js`):
+
+| shape | companies | |
+|---|---|---|
+| dollar revenue on two axes (segment x `srt:ConsolidationItemsAxis` OperatingSegmentsMember, the newer disclosure; Netflix region x Streaming) | 41 | **read now** |
+| another revenue concept on the axis (rental income for REITs, premiums for insurers, regulated revenue for utilities, interest income for banks) | 35 | not yet: each needs its own total to measure against |
+| no breakdown tagged (single segment, mortgage REITs, BDCs) | 28 | nothing to read |
+| shares of revenue only (`us-gaap:ConcentrationRiskPercentage1` with a revenue benchmark): Ross, TJX, Ulta, Zscaler, Palantir, Chubb, Roblox | 24 | **read now** |
+| revenue only on other axes (one segment, legal entities, related parties; O'Reilly, Casey's) | 17 | nothing to read |
+| no data file or no annual report read | 5 | |
+
+**`segments.js`**:
+- `read()` also keeps concentration percentages whose benchmark member names revenue or sales (`shares`), and reads concept names with digits.
+- `twoAxis(facts, kind, inP)`: facts on two axes where the second holds ONE member throughout (the operating segments member of ConsolidationItemsAxis, never eliminations or corporate; or one member of another breakdown's axis), returned as if on the one axis.
+- `shareKind(shares, kind, inP, total, lab)`: a breakdown from shares alone, members worked out as share x total for ordering, marked `fromShare`; only the breakdown's axis and the concentration axes may be on the fact; a share above 1.5 is a percent.
+- Order in `periodOf`: the axis alone; if it has fewer than two members (Netflix tags one region alone, Ulta one product), `twoAxis`; if still fewer, `shareKind`. Amounts always win over shares.
+- `nameOf` unescapes a label escaped twice in its file (Ulta's "&amp;amp;").
+- `segmentsPayload` passes `fromShare` and gives such a breakdown no change between years; the stock page shows a share-only breakdown's shares (no amount, no change, the year-by-year table in shares) and says "shares of revenue as reported; the report gives no amounts". The At a glance card skips a breakdown whose parts add up to more than 103% of revenue (PNC's bank segments read 120%).
+- Checked on real filings: Ross (Home Accents and Bed and Bath 26%, Ladies 22% ...), TJX (Marmaxx 61% ...), Ulta (Cosmetics 38% ...), Netflix (US and Canada 44%, EMEA 32% ...), Fox; Apple and Microsoft unchanged.
+- **`segments-test.js`** (new, 13 checks on made-up instances): the plain shape, segment x operating segments, eliminations refused, Netflix's lone region, a customer axis refused, Ross's shares, a percent written as 26, amounts over shares, a receivables share refused, a share on two breakdowns refused, the doubled escape. The operating-segments rule and the lone-member fallback each proved by reverting.
