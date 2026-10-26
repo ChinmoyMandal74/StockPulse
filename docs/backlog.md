@@ -2462,6 +2462,30 @@ of stocks is today's, so the early paths leave out companies that failed
 since; a record of what happened, not a forecast, and no buy, sell or hold
 wording. Nothing here reaches the Signal.
 
+## 51. Relative performance against the S&P 500: two tests not yet run — 2026-10-26
+
+*Area: Research · Status: Open · Note: the owner: "a stocks own performance in future cannot be predicted but its relative performance compared to s&p 500 somewhat predicted .. what do you think", then "Add to backlog and then run the first one"*
+
+Every backtest on `/research` already measures against the average stock, so
+the eleven framings tried were tests of relative performance, and ten were
+flat. Two framings with the best case in the literature have not been run
+cleanly here:
+
+- **(a) A long, intact compounding record.** Comp. record 4 or 5 with Now
+  "Still growing" (entry built 2026-10-25/26), POINT IN TIME: each company's
+  record and Now as its filings stood on each past month's first session
+  (`SecFacts.visibleAsOf`, filed dates; splits known by then), never today's
+  values carried back. Forward one and two months against SPY and against
+  the equal-weight average, before and from 2020, monthly block bootstrap.
+- **(b) Classic 12-1 momentum**: the return over the past twelve months
+  skipping the latest one, deciles each month, the top against the bottom
+  and each against SPY, at one and two months. The retired price-strength
+  score blended eight factors, so this one alone has not been tested.
+
+Both offline against the local copy, written up on `/research` as relative
+tendencies, never as buy or sell calls. Survivorship applies to both (the
+list is today's).
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
