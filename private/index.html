@@ -618,7 +618,26 @@
       margin-top: 10px; flex: 1 1 auto; min-height: 0;
       display: flex; flex-direction: column;
     }
-    .table-bezel > .core { flex: 1 1 auto; min-height: 0; display: flex; }
+    .table-bezel > .core { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    /* The group map (2026-10-26, the owner: "some option to scroll right to a
+       specific column group with one click"). One segment a shown group, as
+       wide as the group is in the table, in the banner's colour; a click lands
+       that group beside Name. The frame is what is on screen now. Scoped under
+       #grpMap. */
+    #grpMap { flex: none; position: relative; height: 18px; margin: 6px 8px 4px; display: flex; gap: 2px;
+      cursor: pointer; user-select: none; }
+    #grpMap[hidden] { display: none; }
+    #grpMap .gm-seg { position: relative; min-width: 3px; height: 100%; border-radius: 4px; overflow: hidden;
+      background: color-mix(in srgb, var(--gm) 22%, transparent); color: var(--muted);
+      font: 500 10px/18px var(--sans); letter-spacing: 0.02em; text-align: center; white-space: nowrap;
+      transition: background 0.15s; }
+    #grpMap .gm-seg.in { background: color-mix(in srgb, var(--gm) 42%, transparent); color: var(--text); }
+    #grpMap .gm-seg:hover { background: color-mix(in srgb, var(--gm) 60%, transparent); color: var(--text); }
+    #grpMap .gm-seg span { display: block; padding: 0 4px; overflow: hidden; text-overflow: clip; }
+    #grpMap .gm-seg span.gm-hide { visibility: hidden; }
+    #grpMap .gm-win { position: absolute; top: -2px; bottom: -2px; border-radius: 5px; pointer-events: none;
+      border: 1.5px solid color-mix(in srgb, var(--text) 75%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 80%, transparent); transition: left 0.08s, width 0.08s; }
     .table-wrap { flex: 1 1 auto; min-height: 0; width: 100%;
       scrollbar-color: color-mix(in srgb, var(--wash) 16%, transparent) transparent; scrollbar-width: thin; }
     .table-wrap::-webkit-scrollbar { width: 11px; height: 11px; }
@@ -1559,6 +1578,7 @@
       <span id="ldgSub"></span>
     </span>
   </div>
+  <div id="grpMap" role="navigation" aria-label="Column groups: click one to scroll to it" hidden></div>
   <div class="table-wrap">
   <table>
     <thead>
@@ -4810,6 +4830,112 @@
       const delta = th.getBoundingClientRect().left - wrapLeft;
       wrap.scrollTo({ left: Math.max(0, wrap.scrollLeft + delta - gutter - 10), behavior: 'smooth' });
     }
+
+    // ---- the group map above the table ---------------------------------------
+    // Read from the banner cells as drawn, so a collapsed group, a view's
+    // narrower spans and the widths the data gives every column are all simply
+    // what is measured. Positions are in "scroll space": 0 is the first group's
+    // left edge with the table scrolled home, and the frame is the stretch of
+    // that space visible beside the frozen Symbol and Name.
+    let gmSegs = [];
+    // A shorter name for a segment too narrow for the banner's word; one too
+    // narrow for this as well goes blank and keeps its tooltip.
+    const GM_SHORT = { info: 'Info', rank: 'Scores', act: 'Signal', chart: 'Chart', short: 'Short %', long: 'Long %',
+      fwd: 'Fwd', rel: 'Range', risk: 'Risk', react: 'React', trend: 'Trend', size: 'Scale', value: 'Value',
+      profit: 'Profit', growth: 'Growth', finpos: 'Fin pos', divs: 'Divs', report: 'Reports', lrun: 'Long run',
+      own: 'Owners', aier: 'AI earnings' };
+    function gmMeasure() {
+      const wrap = tableWrap();
+      if (!wrap) return null;
+      const frz = document.querySelector('thead th.frz1');
+      const wrapLeft = wrap.getBoundingClientRect().left;
+      const gutter = frz ? frz.getBoundingClientRect().right - wrapLeft : 0;
+      const segs = [];
+      document.querySelectorAll('thead th.group[data-group]').forEach((th) => {
+        const r = th.getBoundingClientRect();
+        if (r.width < 1) return;
+        segs.push({ id: th.dataset.group, x: r.left - wrapLeft + wrap.scrollLeft - gutter, w: r.width });
+      });
+      return { wrap, gutter, segs };
+    }
+    function buildGroupMap() {
+      const map = $('grpMap');
+      if (!map) return;
+      const m = gmMeasure();
+      const total = m ? m.segs.reduce((a, g) => a + g.w, 0) : 0;
+      // Nothing to get around: the table fits, or there is one group.
+      if (!m || m.segs.length < 2 || m.wrap.scrollWidth <= m.wrap.clientWidth + 4) {
+        const was = !map.hidden; map.hidden = true; gmSegs = [];
+        if (was) paintWindow(true);
+        return;
+      }
+      const was = map.hidden;
+      map.hidden = false;
+      gmSegs = m.segs;
+      map.innerHTML = m.segs.map((g) => {
+        const name = GROUP_LABELS[g.id] || g.id;
+        return '<div class="gm-seg" data-gm="' + we(g.id) + '" style="flex:' + (g.w / total).toFixed(5) + ' 1 0;--gm:'
+          + (GROUP_COLORS[g.id] || 'var(--accent)') + '" title="' + we(name) + '"><span>' + we(name) + '</span></div>';
+      }).join('') + '<div class="gm-win"></div>';
+      // A name that does not fit its segment is hidden rather than cut to a
+      // stub; the tooltip still says it.
+      map.querySelectorAll('.gm-seg').forEach((seg) => {
+        const sp = seg.firstChild;
+        const short = GM_SHORT[seg.dataset.gm];
+        if (sp.scrollWidth > sp.clientWidth + 1 && short) sp.textContent = short;
+        sp.classList.toggle('gm-hide', sp.scrollWidth > sp.clientWidth + 1);
+      });
+      if (was) paintWindow(true);   // the table just lost the bar's height
+      paintGroupMapWindow();
+    }
+    function paintGroupMapWindow() {
+      const map = $('grpMap'), wrap = tableWrap();
+      if (!map || map.hidden || !wrap || !gmSegs.length) return;
+      const frz = document.querySelector('thead th.frz1');
+      const gutter = frz ? frz.getBoundingClientRect().right - wrap.getBoundingClientRect().left : 0;
+      const from = wrap.scrollLeft, to = wrap.scrollLeft + wrap.clientWidth - gutter;
+      // Map scroll space onto the drawn segments, one by one: the gaps between
+      // segments make a single scale factor drift.
+      const els = map.querySelectorAll('.gm-seg');
+      const mapLeft = map.getBoundingClientRect().left;
+      const at = (x) => {
+        for (let i = 0; i < gmSegs.length; i++) {
+          const g = gmSegs[i], r = els[i].getBoundingClientRect();
+          if (x <= g.x + g.w || i === gmSegs.length - 1) return r.left - mapLeft + Math.max(0, Math.min(1, (x - g.x) / g.w)) * r.width;
+        }
+        return 0;
+      };
+      const l = at(from), r = at(to);
+      const win = map.querySelector('.gm-win');
+      win.style.left = l.toFixed(1) + 'px';
+      win.style.width = Math.max(6, r - l).toFixed(1) + 'px';
+      gmSegs.forEach((g, i) => els[i].classList.toggle('in', g.x < to - 4 && g.x + g.w > from + 4));
+    }
+    (() => {
+      const map = $('grpMap'), wrap = tableWrap();
+      if (!map || !wrap) return;
+      map.addEventListener('click', (e) => {
+        const seg = e.target.closest('.gm-seg');
+        if (!seg) return;
+        window.track && track('picker', 'groupmap:' + seg.dataset.gm);
+        scrollToGroup(seg.dataset.gm);
+      });
+      let q = false;
+      wrap.addEventListener('scroll', () => {
+        if (q) return; q = true;
+        requestAnimationFrame(() => { q = false; paintGroupMapWindow(); });
+      }, { passive: true });
+      // Column widths settle when the rows arrive and move with every group
+      // shown or hidden; watching the table catches all of it in one place.
+      let b = false;
+      const again = () => { if (b) return; b = true; requestAnimationFrame(() => { b = false; buildGroupMap(); }); };
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(again);
+        const t = wrap.querySelector('table');
+        if (t) ro.observe(t);
+        ro.observe(wrap);
+      } else window.addEventListener('resize', again);
+    })();
 
     // Shift+wheel already scrolls horizontally in every browser, but nobody
     // knows that. Arrow keys are the discoverable equivalent; the hint in the
