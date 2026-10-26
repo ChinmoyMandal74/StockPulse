@@ -41,6 +41,12 @@ const TABLES = [
   { name: 'names', dated: false, bySymbol: false },
   { name: 'themes', dated: false, bySymbol: false },
   { name: 'theme_tickers', dated: false, bySymbol: false },
+  // OPT-IN (2026-10-26, for point-in-time research on the filings): copied only
+  // with --sec, since a non-dated table is replaced whole on every sync and
+  // sec_facts is ~270,000 rows. Its symbols come from sec_state (one row a
+  // company), never a distinct over sec_facts, which would scan it.
+  { name: 'sec_facts', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state' },
+  { name: 'splits', dated: false, bySymbol: false, optIn: '--sec' },
 ];
 
 // Re-pull this many days on top of what is already local. The archive rewrites
@@ -95,6 +101,7 @@ function showStats(local) {
 
   let grand = 0;
   for (const t of TABLES) {
+    if (t.optIn && !process.argv.includes(t.optIn)) continue;
     const ddl = sqlFor.get(t.name);
     if (!ddl) { console.log(`  ${t.name.padEnd(22)} not present upstream, skipped`); continue; }
     if (FULL) local.exec(`drop table if exists "${t.name}"`);
@@ -127,7 +134,7 @@ function showStats(local) {
     // response wall, and by-symbol keeps every request small and restartable.
     let groups = [[null]];
     if (t.bySymbol) {
-      const syms = (await remote.execute(`select distinct symbol from "${t.name}"`)).rows.map((r) => r.symbol);
+      const syms = (await remote.execute(t.symbolsSql || `select distinct symbol from "${t.name}"`)).rows.map((r) => r.symbol);
       groups = [];
       for (let i = 0; i < syms.length; i += SYMBOL_CHUNK) groups.push(syms.slice(i, i + SYMBOL_CHUNK));
     }

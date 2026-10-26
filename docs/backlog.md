@@ -2464,7 +2464,7 @@ wording. Nothing here reaches the Signal.
 
 ## 51. Relative performance against the S&P 500: two tests not yet run — 2026-10-26
 
-*Area: Research · Status: Open · Note: the owner: "a stocks own performance in future cannot be predicted but its relative performance compared to s&p 500 somewhat predicted .. what do you think", then "Add to backlog and then run the first one"*
+*Area: Research · Status: Partly done · Note: the owner: "a stocks own performance in future cannot be predicted but its relative performance compared to s&p 500 somewhat predicted .. what do you think", then "Add to backlog and then run the first one"*
 
 Every backtest on `/research` already measures against the average stock, so
 the eleven framings tried were tests of relative performance, and ten were
@@ -2481,6 +2481,8 @@ cleanly here:
   skipping the latest one, deciles each month, the top against the bottom
   and each against SPY, at one and two months. The retired price-strength
   score blended eight factors, so this one alone has not been tested.
+
+**(a) run 2026-10-26: no edge** (research.md entry 19): the intact group tracked SPY (+0.01% a month over 21 sessions, +0.11% over 42) and matched every company with a record. (b) is still to run.
 
 Both offline against the local copy, written up on `/research` as relative
 tendencies, never as buy or sell calls. Survivorship applies to both (the

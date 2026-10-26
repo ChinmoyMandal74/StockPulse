@@ -385,3 +385,36 @@ The archive is today's list of stocks, without most of those that fell and were 
 | 2017–2026 | +5.24 pts [+4.61, +5.85] | +0.42 [−0.29, +0.97] | +0.86 [+0.05, +1.61] |
 | Before 2020 | +4.37 [+3.33, +5.50] | +0.46 [−0.54, +1.51] | +0.72 [−0.49, +2.12] |
 | From 2020 | +5.58 [+4.77, +6.25] | +0.42 [−0.35, +1.25] | +0.93 [−0.01, +1.86] |
+
+## 19. A long, intact compounding record, against the S&P 500 — 2026-10-26
+
+*Family: Quality · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC annual and quarterly reports as filed, daily prices · Sample: 128 monthly readings, 2016–2026, about 64 companies a month in the group tested*
+
+### The idea
+A company's own future return cannot be foreseen, but its return against the S&P 500 might be. The candidate: companies whose last ten years of annual reports pass most of the compounding record's five checks (revenue up most years, earnings per share up 10% a year, margins holding through the worst year, profits arriving as cash, no dilution) and whose latest quarters are still growing. If such a record says anything, these companies should beat the index over the following month or two.
+
+### What was done
+On the first trading day of every month from January 2016 to August 2026, each company's compounding record and its Now reading were worked out from its filings **as they stood that day**: only reports filed by then, and only splits already known (never today's figures carried back). The companies were grouped: an intact record (4 or 5 checks and Still growing), a record of 4 or 5 that was no longer growing, a record of 0 to 2, every company with a record, and every stock. Each group's average return over the next 21 and 42 trading sessions was set against SPY, and against the equal-weight average stock, before 2020 and from 2020, with 95% intervals from resampling months. The test decided in advance: the intact group against every company with a record, and against SPY.
+
+### Outcome
+No edge. The intact group did almost exactly what the S&P 500 did: +0.01% a month over 21 sessions and +0.11% over 42, intervals from −0.3% to +0.5%, ahead in 52% and 59% of months. Against every company with a record it was −0.06 and −0.01 points, both intervals through zero, and the same in each period. Before 2020 the intact group was ahead of SPY over two months (+0.44%), but the companies whose record had stopped growing did better still (+1.05%), so the record was not what separated them. From 2020 the intact group was −0.06% and −0.09%.
+
+### What follows
+A long, intact compounding record describes a business, and over one to two months its share has done what the index did. That is itself worth knowing: these companies did not lag either. The record and Now stay on the screener as descriptions. Nothing here is an input to the Signal.
+
+### Caveats
+The list of stocks is today's, so companies that failed and were dropped are missing; this flatters every group, the "all stocks" one most (it reads +0.67% a month against SPY, carried by a few large winners: its median is +0.18%). Companies with no stored split history were treated as never having split. A company counts in a month only if its filings that day gave seven consecutive annual reports, so the group grew from about 45 companies a month before 2020 to 75 after. Monthly readings of a 42-session return overlap, so the two-month intervals are somewhat narrower than they should be.
+
+### Numbers
+| Group, against SPY | Companies a month | Next 21 sessions | Next 42 sessions |
+|---|---|---|---|
+| Intact record (4–5, still growing) | 64 | +0.01% [−0.33, +0.29] | +0.11% [−0.31, +0.49] |
+| Record 4–5, not growing | 44 | −0.04% [−0.38, +0.36] | −0.04% [−0.52, +0.53] |
+| Record 0–2 | 131 | +0.06% [−0.31, +0.43] | +0.09% [−0.45, +0.71] |
+| Every company with a record | 358 | +0.06% [−0.21, +0.35] | +0.12% [−0.24, +0.56] |
+
+| Intact minus every company with a record | Next 21 sessions | Next 42 sessions |
+|---|---|---|
+| 2016–2026 | −0.06 pts [−0.31, +0.20] | −0.01 [−0.40, +0.39] |
+| 2016–2019 | −0.11 [−0.38, +0.10] | −0.06 [−0.48, +0.24] |
+| 2020–2026 | −0.02 [−0.41, +0.32] | +0.02 [−0.57, +0.61] |
