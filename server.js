@@ -11224,6 +11224,19 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     const rel = (await store.readEarningsReleases(stock.symbol, 2)).filter((r) => r.isResults)[0];
     if (rel) glanceRow = Object.assign({}, stock, globalThis.ReleaseView.fields(Releases.forReader(rel, [])));
   } catch (e) { glanceRow = stock; }
+  // ARTICLE TONE for the 13th card (2026-10-26): the stored Tone 7D figure on
+  // copies of the rows, for a member only (every tone surface is members-only);
+  // the stock row itself and the snapshot are not touched. Never fails the page.
+  let glanceRows = stocks;
+  if (!guest) {
+    try {
+      const tf = await toneColumnFig();
+      const tr = (tf && tf.rows) || {};
+      const withTone = (r) => { const t = r && tr[r.symbol]; return t ? Object.assign({}, r, { toneAvg: t[0], toneN: t[1], tonePos: t[2], toneNeg: t[3] }) : r; };
+      glanceRow = withTone(glanceRow);
+      glanceRows = stocks.map(withTone);
+    } catch (e) { glanceRows = stocks; }
+  }
 
   res.json({
     stock,
@@ -11279,7 +11292,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     peers: guest ? null : peersFor(stock, stocks, peerLinks),
     // At a glance (2026-10-15): the topic cards, compared against the whole
     // snapshot. Never fails the page; a null simply draws no section.
-    glance: (() => { try { return Glance.build(glanceRow, stocks); } catch (e) { return null; } })(),
+    glance: (() => { try { return Glance.build(glanceRow, glanceRows); } catch (e) { return null; } })(),
     updatedAt: snap.updatedAt || null,
   });
 }));
@@ -16671,12 +16684,15 @@ app.get('/api/news/tone', requireMember, route(async (req, res) => {
 // tone surface is; a guest's screener draws the column blank. Held two minutes
 // per instance: the figure changes four times a day.
 let toneColHeld = null;
-app.get('/api/news/tone-column', requireMember, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
+async function toneColumnFig() {
   if (!toneColHeld || Date.now() - toneColHeld.at > 2 * 60 * 1000) {
     toneColHeld = { at: Date.now(), fig: await store.readFigure('toneColumn').catch(() => null) };
   }
-  const f = toneColHeld.fig;
+  return toneColHeld.fig;
+}
+app.get('/api/news/tone-column', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const f = await toneColumnFig();
   res.json(f ? { at: f.at || null, days: f.days || 7, band: f.band || NewsTone.BAND, rows: f.rows || {} } : { at: null, days: 7, band: NewsTone.BAND, rows: {} });
 }));
 

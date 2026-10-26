@@ -22,6 +22,8 @@
 
   const MIN_GROUP = 5;
   const STALE_DAYS = 30;          // a short-interest settlement older than this is flagged
+  const TONE_BAND = 0.25;         // Tone 7D's own band (newstone.js BAND)
+  const TONE_MIN = 3;             // articles a company needs to count in the comparison
 
   const ok = (v) => v != null && v !== '' && isFinite(Number(v));
   const num = (v) => (ok(v) ? Number(v) : null);
@@ -297,6 +299,27 @@
         text: s.action + (s.actionFlag && s.actionFlag !== s.action ? ': ' + String(s.actionFlag).replace(/^[^:]*:\s*/, '') : '') + '.' });
     }
 
+    // Article tone (2026-10-26, the owner: the 13th card). The seven-day
+    // average of an AI model's reading of each article mainly about the
+    // company (Tone 7D), from the stored figure the host lays on the rows; for
+    // members only, so a guest's row carries none and the card is not drawn.
+    // The arrow is the reading's own lean (+/-0.25, the band Tone 7D colours
+    // by), never good or bad; the comparison is against the industry's
+    // companies with at least TONE_MIN articles read.
+    {
+      const a = num(s.toneAvg), nArt = num(s.toneN);
+      if (a != null && nArt != null && nArt > 0) {
+        const lean = a >= TONE_BAND ? 'leaning positive' : a <= -TONE_BAND ? 'leaning negative' : 'about neutral';
+        const bits = [nArt + ' article' + (nArt === 1 ? '' : 's') + ' read in the last seven days'
+          + (num(s.tonePos) != null && num(s.toneNeg) != null ? ': ' + s.tonePos + ' positive, ' + s.toneNeg + ' negative.' : '.')];
+        bits.push('Average ' + (a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(2) + ' on a scale of −1 to +1, ' + lean + '.');
+        const st = nArt >= TONE_MIN ? standing(s, all.filter((r) => num(r.toneN) != null && num(r.toneN) >= TONE_MIN), 'toneAvg') : null;
+        if (st) bits.push('The tone is ' + st.words + '.');
+        bits.push('What was written, not a forecast.');
+        add({ id: 'tone', title: 'Article tone', jump: 'tone', tone: 'neutral', arrow: signArrow(a, TONE_BAND - 1e-9), text: join(bits), basis: st && st.group });
+      }
+    }
+
     // THE HEADLINE FIGURE (2026-10-21, the owner on the At a glance card: "make
     // it bit more eye catching"). One number a topic, set large on the card,
     // taken from the same field and formatted by the same helpers as the
@@ -335,6 +358,8 @@
         if (s.erFiled) return s.erGuideChange ? k(String(s.erGuideChange), 'guidance, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
         if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
         const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
+      case 'tone': { const a = n('toneAvg');
+        return a != null ? k((a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(2), 'tone, ' + n('toneN') + ' article' + (n('toneN') === 1 ? '' : 's') + ', 7 days') : null; }
       default: return null;
     }
   }

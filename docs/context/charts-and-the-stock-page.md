@@ -181,3 +181,10 @@ The owner: *"I need good history of earning and revenue per share .. can you mak
 - **The stock chart's FUND dropdown** adds **Revenue per share TTM** and **EPS TTM** (`FUND_METRICS`, `ps: 1`), drawn in dollars and cents, its note saying it is restated. `/api/sec` lays the two onto its `ttmSeries` points (`withPerShare`, one `readSplits`).
 - **The EPS history panel** (`drillhist.js eps()`, the EPS TTM cell's drill-down) is restated the same way (`epsFactors`); its basis line and note say so.
 - Display only; nothing reaches the Signal.
+
+## At a glance: Article tone, the 13th card (2026-10-26)
+
+The owner: *"On stock page, Stock at a glance, Can you include Article tone pane as the 13th pane"*. `glance.js` builds an `Article tone` card (id `tone`, after the Signal) from `toneAvg`, `toneN`, `tonePos`, `toneNeg`: the articles read in seven days with the positive and negative counts, the average on −1 to +1 with its lean in words (±0.25, Tone 7D's band), and where it stands in its industry among companies with at least three articles read (`standing`). The arrow is the reading's own lean, not good or bad; the headline figure is the average. Jumps to the page's `#tone` section; topic colour `--sky`.
+- `/api/stock` lays the stored Tone 7D figure (`toneColumnFig()`, the two-minute holder the tone-column route now shares) onto **copies** of the glance row and the comparison rows, **for a member only**; a guest's rows carry none, so no card. The stock row and the snapshot are untouched.
+- The promo studio's At a glance card picks its topics from its own list (`GLC_TOPICS`), so it is unchanged.
+- `glance-test.js` 45 checks (7 new). End to end on an in-memory database: a member gets 13 cards with the stored figure and the industry comparison, a guest 12; the page draws it last at the grid's width, linked to `#tone`.
