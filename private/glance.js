@@ -295,7 +295,9 @@
         const gb = [];
         if (rel.erGuideChange) {
           const q = String(rel.erGuideChangeQuote || '');
-          gb.push('Guidance ' + rel.erGuideChange.toLowerCase() + (q ? ': “' + (q.length > 140 ? q.slice(0, 137).replace(/\s+\S*$/, '') + '…' : q) + '”' : '') + '.');
+          const qq = q.length > 140 ? q.slice(0, 137).replace(/\s+\S*$/, '') + '…' : q;
+          // No second full stop after a quote that already ends in one.
+          gb.push('Guidance ' + rel.erGuideChange.toLowerCase() + (qq ? ': “' + qq + '”' + (/[.!?…]$/.test(qq) ? '' : '.') : '.'));
         } else if (rel.erGuide) gb.push('Guidance given, no change stated.');
         else gb.push('No guidance in the latest results release.');
         if (num(rel.erEpsGuideVsFy) != null) gb.push('Full-year EPS guide ' + move(num(rel.erEpsGuideVsFy)) + ' on the year before.');
