@@ -12299,7 +12299,7 @@ function mobileRow(x, fields) {
     action: x.action || null,
     fields: fields.map((k) => {
       const v = vals[k];
-      return { k: k.slice(k.indexOf('|') + 1), t: v ? v.t : '\u2014', c: v ? v.c : 'na' };
+      return { k: RowCard.fieldName(k), t: v ? v.t : '\u2014', c: v ? v.c : 'na' };
     }),
   };
 }
@@ -12348,8 +12348,15 @@ async function mobileRows(req) {
 
 app.get('/api/m/config', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
+  const mcfg = await mobileConfig();
+  // The label each stored key shows (RowCard.fieldName): a label can move
+  // while its key may not (own|Short ratio reads Short days to cover). The
+  // phone does not load rowcard.js, so it is told.
+  const names = {};
+  for (const v of mcfg.views || []) for (const k of v.fields || []) names[k] = RowCard.fieldName(k);
   res.json({
-    ...(await mobileConfig()),
+    ...mcfg,
+    names,
     max: MOBILE_VIEWS_MAX,
     fieldsMax: MOBILE_FIELDS_MAX,
     // The chart ranges, so the page can paint its strip before the first list
@@ -12420,7 +12427,7 @@ app.get('/api/m/screen', requireAuth, route(async (req, res) => {
     id: id || 'all',
     name: screen ? screen.name : 'Every stock',
     description: screen ? screen.description : null,
-    view: { id: view.id, name: view.name, fields: view.fields.map((k) => k.slice(k.indexOf('|') + 1)) },
+    view: { id: view.id, name: view.name, fields: view.fields.map((k) => RowCard.fieldName(k)) },
     range: range.id,
     ranges: CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label })),
     total: picked.length,

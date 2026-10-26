@@ -67,7 +67,7 @@ const FIELDS = {
   priceToBook:          { src: 'value', series: 'pb', kind: 'ratio', title: 'Price to book' },
   shortPctFloat:        { src: 'short', key: 'shares', kind: 'shares', title: 'Shares sold short' },
   shortPctOutstanding:  { src: 'short', key: 'shares', kind: 'shares', title: 'Shares sold short' },
-  shortRatio:           { src: 'short', key: 'dtc', kind: 'days', title: 'Days to cover' },
+  shortRatio:           { src: 'short', key: 'dtc', kind: 'days', title: 'Short days to cover' },
   lastEarningsDate:     { src: 'earnings', kind: 'pct', title: 'Earnings against the estimate' },
 };
 

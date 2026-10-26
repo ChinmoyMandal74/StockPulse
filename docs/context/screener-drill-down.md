@@ -17,7 +17,7 @@ The owner: "drill down on numbers on the screener wherever possible ... only whe
 | Gross / Operating / Profit / FCF margin, Margin chg | `sec_facts` | the trailing-year margin | the quarter's, the trailing year's |
 | EPS TTM | `sec_facts` | each fiscal year as filed | the quarters as filed, the year where one ends |
 | P/E, Live P/E, P/S, P/B | `trendSeries` for a list of one (the peer chart's builder) | at each of 20 calendar quarter ends | the multiple, market value, what it is over |
-| Short ratio, Short % Fl, Short % Out | `short_interest` | about two years of settlements | shares, change, days to cover |
+| Short days to cover, Short % Fl, Short % Out | `short_interest` | about two years of settlements | shares, change, days to cover |
 | Reported (last earnings date) | `earnings_history` | surprise per announcement, as bars | estimate, reported, against it |
 
 - **Left out on purpose**: every price, return, trend and volume column; the provider-only ratios (Forward P/E, PEG, ROE, ROA, EV/EBITDA, debt to equity, current ratio, dividend yield, payout, insiders, the growth rates), which have a recorded history only since 2026-08-30; Put/Call OI (days of history); Institutions (the table keeps two quarters a stock); Cash and Debt (the filings' cash and debt are defined differently from the provider's, 63% and 25% within 5%). **Revisit the provider-only ones once six months are recorded.**

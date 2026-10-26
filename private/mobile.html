@@ -251,6 +251,7 @@
       rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)', vol: 'var(--pink, #f472b6)', size: 'var(--steel, #94a3b8)', risk: 'var(--peach, #fdba74)', value: 'var(--red, #fb7185)', profit: 'var(--indigo, #818cf8)', growth: 'var(--sky, #38bdf8)', finpos: 'var(--lilac, #c4b5fd)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)', aier: 'var(--azure, #93c5fd)' };
 
     let views = [];
+    let fieldNames = {};   // stored field key -> the label it shows (server's RowCard.fieldName)
     let viewId = null;
     let tab = 'screens';
     let screens = [];
@@ -602,7 +603,7 @@
         views.map((v) => `<button class="vopt ${v.id === viewId ? 'on' : ''}" data-view="${we(v.id)}">` +
           `<span><span class="nm">${we(v.name)}</span>` +
           // The stored keys are group-prefixed (short|Today); only the label is for reading.
-          `<span class="fl">${we(v.fields.map((k) => k.slice(k.indexOf('|') + 1)).join(' · '))}</span>` +
+          `<span class="fl">${we(v.fields.map((k) => fieldNames[k] || k.slice(k.indexOf('|') + 1)).join(' · '))}</span>` +
           '</span></button>').join(''));
       sheet.querySelectorAll('[data-view]').forEach((b) =>
         b.addEventListener('click', () => {
@@ -655,6 +656,7 @@
         $('postsTab').hidden = !canPost;
         const cfg = await get('/api/m/config');
         views = cfg.views || [];
+        fieldNames = cfg.names || {};
         ranges = cfg.ranges || [];
         if (rangeId && !ranges.some((r) => r.id === rangeId)) rangeId = null;
         const want = remembered();

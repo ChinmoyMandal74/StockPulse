@@ -1366,7 +1366,10 @@
   const NOW_WORD = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
   // Past this many characters a value is drawn stacked (.rc-long, app.css).
   const RC_LONG = 24;
-  const FIELD_NAME = { 'report|Period': 'Figures to', 'report|Reported': 'Last results out' };
+  // The label a key shows, where the label has moved since the key was saved
+  // (keys are never renamed). 'own|Short ratio' reads Short days to cover since
+  // 2026-10-26 (the owner: rename it across the entire app).
+  const FIELD_NAME = { 'report|Period': 'Figures to', 'report|Reported': 'Last results out', 'own|Short ratio': 'Short days to cover' };
   function fieldName(key) {
     return FIELD_NAME[key] || String(key).slice(String(key).indexOf('|') + 1);
   }
