@@ -616,3 +616,6 @@ Six were real and are now card rows, so they reach the stock page, the hover car
 
 ### The SEC EDGAR card shows four periods, the rest behind Show more (2026-10-26)
 The owner: "Only show top 4 lines, and rest put under a Show more button". `paintSec()` in `private/stock.html` draws the newest `SEC_PAGE` (4) periods. The button under the table says how many earlier quarters or years are hidden, and turns into Show fewer once clicked. One `secAll` state covers both views and both period switches. In the Ratios view the "Last 4 quarters" row stays on top, and the comparison strip still reads `rows[0]`, which is the newest period either way.
+
+### The insider card's two tables do the same (2026-10-26)
+The "By person, last 12 months" and "Every trade, newest first" tables in `loadInsider()` each show four rows. The rest are drawn with `hidden`, and a Show more button under each table (naming how many people or earlier trades it holds) unhides them without re-rendering the card. The "Added up" table and the month bars are not paged.

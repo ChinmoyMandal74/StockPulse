@@ -1176,6 +1176,7 @@
                  text-underline-offset: 3px; cursor: help; }
     #sec td.per { font-family: var(--sans); font-weight: 600; }
     #sec .secmore { margin-top: 10px; }
+    #ins .insmore { margin: 10px 0 4px; }
     #sec td.per .fp { color: var(--faint); font-weight: 400; margin-left: 7px;
                       font-family: var(--mono); font-size: 11px; }
     /* The filing link is the whole argument for this source, so it reads as
@@ -5655,6 +5656,16 @@
           const s = j.summary || { bought: {}, sold: {} };
           const months = Math.round((j.windowDays || 180) / 30);
           document.getElementById('insWin').textContent = 'last ' + months + ' months';
+          // FOUR ROWS, THE REST BEHIND SHOW MORE, in both tables (owner,
+          // 2026-10-26, after the same on the SEC EDGAR card). Rows past the
+          // fourth are drawn hidden and the button only flips them, so a
+          // click never re-reads or re-renders the card.
+          const INS_PAGE = 4;
+          const xtr = (i) => (i >= INS_PAGE ? '<tr class="insx" hidden>' : '<tr>');
+          const insMore = (n, what) => (n > INS_PAGE
+            ? '<button type="button" class="rng insmore" data-more="' + esc('Show more — ' + (n - INS_PAGE) + ' ' + what) + '">' +
+              esc('Show more — ' + (n - INS_PAGE) + ' ' + what) + '</button>'
+            : '');
 
           // COUNT PEOPLE, NOT JUST TRADES. One director topping up three
           // times is one person's opinion; three directors buying is the
@@ -5698,11 +5709,11 @@
             const Y = D.windows.find((w) => w.days === 365);
             if (Y && Y.people && Y.people.length) {
               g += '<p class="dgl">By person, last 12 months' + (Y.peopleCount > Y.people.length ? ' \u2014 the ' + Y.people.length + ' largest of ' + Y.peopleCount : '') + '</p><div class="stab"><table><thead><tr><th class="l">Insider</th><th>Bought</th><th>Sold</th><th>Net</th><th>Trades</th><th>Last filed</th><th>Held after</th></tr></thead><tbody>'
-                + Y.people.map((p) => '<tr><td class="l">' + esc(p.name) + (p.role ? '<span class="role">' + esc(p.role) + '</span>' : '') + '</td>'
+                + Y.people.map((p, i) => xtr(i) + '<td class="l">' + esc(p.name) + (p.role ? '<span class="role">' + esc(p.role) + '</span>' : '') + '</td>'
                   + '<td>' + (p.bought > 0 ? esc(mny(p.bought)) : '\u2014') + '</td><td>' + (p.sold > 0 ? esc(mny(p.sold)) : '\u2014') + (p.allPlanned && p.sold > 0 ? '<span class="plan" title="Every one of this person\u2019s trades was under a 10b5-1 plan">plan</span>' : '') + '</td>'
                   + '<td>' + (p.net > 0 ? '+' : '') + esc(mny(p.net)) + '</td><td>' + p.trades + '</td><td>' + esc(p.last) + '</td>'
                   + '<td>' + (p.after == null ? '\u2014' : Number(p.after).toLocaleString('en-US', { maximumFractionDigits: 0 })) + '</td></tr>').join('')
-                + '</tbody></table></div>';
+                + '</tbody></table></div>' + insMore(Y.people.length, Y.people.length - INS_PAGE === 1 ? 'person' : 'people');
             }
             g += '</div><p class="dgl" style="margin:0 0 6px;font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:0.06em;color:var(--faint)">Every trade, newest first</p>';
             h = g;
@@ -5711,10 +5722,10 @@
           h += '<div class="stab"><table><thead><tr><th>Filed</th><th>Insider</th>' +
             '<th>Action</th><th>Shares</th><th>Price</th><th>Value</th><th>Held after</th>' +
             '<th>Traded</th></tr></thead><tbody>';
-          for (const t of j.rows) {
+          for (const [i, t] of j.rows.entries()) {
             const n = (v, d) => (v == null ? '—' : Number(v).toLocaleString(undefined,
               { maximumFractionDigits: d == null ? 0 : d }));
-            h += '<tr>' +
+            h += xtr(i) +
               '<td class="filed">' + (t.url
                 ? '<a href="' + esc(t.url) + '" target="_blank" rel="noopener" title="' +
                   esc((t.form || 'Form 4') + ' filed ' + t.filed + ' — open it on sec.gov') +
@@ -5731,7 +5742,7 @@
               '<td>' + n(t.sharesAfter) + '</td>' +
               '<td>' + esc(t.transDate) + '</td></tr>';
           }
-          h += '</tbody></table></div>';
+          h += '</tbody></table></div>' + insMore(j.rows.length, j.rows.length - INS_PAGE === 1 ? 'earlier trade' : 'earlier trades');
           h += '<p class="note"><b>Open-market purchases and sales only.</b> Grants, option ' +
             'exercises and shares withheld to pay tax are left out — they are compensation ' +
             'machinery rather than a decision, and they are about 93% of what gets filed. ' +
@@ -5741,7 +5752,15 @@
             'Marked <span class="plan">plan</span> means a 10b5-1 schedule set up months in ' +
             'advance. Straight from the filer’s own Form 4 at SEC EDGAR, and read by ' +
             'nothing else in this app — not the Signal, not the screener.</p>';
-          document.getElementById('insBody').innerHTML = h;
+          const body = document.getElementById('insBody');
+          body.innerHTML = h;
+          // Each button opens the table just above it.
+          body.querySelectorAll('.insmore').forEach((b) => b.addEventListener('click', () => {
+            const tab = b.previousElementSibling;
+            const open = b.textContent !== 'Show fewer';
+            if (tab) tab.querySelectorAll('tr.insx').forEach((tr) => { tr.hidden = !open; });
+            b.textContent = open ? 'Show fewer' : b.dataset.more;
+          }));
           card.hidden = false;
         } catch (e) { card.remove(); }
       }
