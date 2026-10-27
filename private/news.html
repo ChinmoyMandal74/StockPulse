@@ -78,6 +78,30 @@
     .nw-more a:hover { color: var(--accent); }
     .nw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .nw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
+    /* The day's mix (2026-10-27): stories by kind and importance, above the filters. */
+    .nw-mix { margin: 0 0 16px; }
+    .nw-mix .core { padding: 14px 18px 10px; }
+    .nw-mix summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .nw-mix summary::-webkit-details-marker { display: none; }
+    .nw-mix summary h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .nw-mix summary .nw-mix-sub { font-size: 12px; color: var(--faint); }
+    .nw-mix summary .nw-mix-tog { margin-left: auto; font-size: 12px; color: var(--accent); }
+    .nw-mix details[open] summary .nw-mix-tog::after { content: 'Hide'; }
+    .nw-mix details:not([open]) summary .nw-mix-tog::after { content: 'Show'; }
+    .nw-mix-wrap { overflow-x: auto; margin-top: 10px; }
+    .nw-mix table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .nw-mix th, .nw-mix td { padding: 6px 10px; border-bottom: 1px solid var(--hair); text-align: right; white-space: nowrap; }
+    .nw-mix th:first-child, .nw-mix td:first-child { text-align: left; }
+    .nw-mix thead th { font-weight: 500; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); }
+    .nw-mix thead th i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; background: var(--c); }
+    .nw-mix td { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+    .nw-mix td.nw-mix-k { font-family: var(--sans); }
+    .nw-mix td.nw-mix-k button { font: inherit; color: var(--text); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+    .nw-mix td.nw-mix-k button:hover, .nw-mix tr.on td.nw-mix-k button { color: var(--accent); }
+    .nw-mix td.nw-mix-c { background: color-mix(in srgb, var(--c) calc(var(--a) * 30%), transparent); }
+    .nw-mix td.nw-mix-z { color: var(--faint); }
+    .nw-mix tr.nw-mix-tot td { font-weight: 600; border-bottom: 0; }
+    .nw-mix-note { margin: 8px 2px 0; font-size: 11.5px; color: var(--faint); }
     .nw-it.nw-high { --c: var(--accent); }
     .nw-it.nw-medium { --c: var(--azure); }
     .nw-it.nw-low { --c: var(--hair-2); }
@@ -118,6 +142,7 @@
       <span class="nw-when" id="when">&nbsp;</span>
       <button class="nw-day" id="next" type="button">Later &rsaquo;</button>
     </div>
+    <div id="mix"></div>
     <div class="nw-bar">
       <button class="nw-tab" data-imp="high">High</button>
       <button class="nw-tab" data-imp="medium">High and medium</button>
@@ -182,6 +207,7 @@
       const byStory = new Map();
       for (const x of data.items) { if (!byStory.has(x.story)) byStory.set(x.story, []); byStory.get(x.story).push(x); }
       const leads = data.items.filter((x) => x.lead && want(x));
+      drawMix();
       $('count').textContent = leads.length + (leads.length === 1 ? ' story' : ' stories') + ' shown, ' + data.items.length + ' articles read on the day';
       if (!leads.length) { $('feed').innerHTML = '<div class="bezel"><div class="core" style="padding:0"><div class="nw-empty">Nothing matches on this day. Try All, or an earlier day.</div></div></div>'; return; }
       const sections = ['high', 'medium', 'low'].map((lv) => {
@@ -208,6 +234,51 @@
       }).join('');
       $('feed').innerHTML = sections;
     }
+    // THE DAY'S MIX (2026-10-27, the owner: "a summary of count of news by Type
+    // and Priority on top"). Stories, not articles: a story told by several
+    // outlets is one, as in the feed. Its own two axes (kind and importance) are
+    // never narrowed by the kind select or the importance tabs, so it stays the
+    // whole picture; the sector, tone and search filters do narrow it, and the
+    // note says so. A kind's name sets the kind filter, and again clears it.
+    let mixOpen = true;
+    try { mixOpen = localStorage.getItem('nw-mix') !== 'closed'; } catch (e) { /* a private window */ }
+    const MIX_C = { high: 'var(--accent)', medium: 'var(--azure)', low: 'var(--hair-2)' };
+    function drawMix() {
+      const sector = $('sector').value, tone = $('tone').value, q = $('q').value.trim().toLowerCase(), kind = $('kind').value;
+      const rows = data.items.filter((x) => x.lead && (!sector || x.sector === sector) && (!tone || x.toneLabel === tone)
+        && (!q || x.symbol.toLowerCase() === q || String(x.name).toLowerCase().includes(q) || String(x.headline).toLowerCase().includes(q)));
+      const by = new Map(), tot = { high: 0, medium: 0, low: 0 };
+      for (const x of rows) {
+        const k = x.kindLabel || 'Other';
+        if (!by.has(k)) by.set(k, { high: 0, medium: 0, low: 0 });
+        if (by.get(k)[x.importance] != null) { by.get(k)[x.importance]++; tot[x.importance]++; }
+      }
+      const sum = (c) => c.high + c.medium + c.low;
+      const kinds = [...by.keys()].sort((a, b) => sum(by.get(b)) - sum(by.get(a)) || a.localeCompare(b));
+      const max = Math.max(1, ...kinds.flatMap((k) => ['high', 'medium', 'low'].map((lv) => by.get(k)[lv])));
+      const cell = (n, lv) => (n ? '<td class="nw-mix-c" style="--c:' + MIX_C[lv] + ';--a:' + (0.15 + 0.85 * n / max).toFixed(2) + '">' + n + '</td>' : '<td class="nw-mix-z">–</td>');
+      const narrowed = [sector, tone && tone + ' tone', q && '“' + q + '”'].filter(Boolean);
+      $('mix').innerHTML = '<div class="bezel nw-mix"><div class="core"><details' + (mixOpen ? ' open' : '') + '><summary><h2>The day by kind and importance</h2>'
+        + '<span class="nw-mix-sub">' + sum(tot) + (sum(tot) === 1 ? ' story' : ' stories') + '</span><span class="nw-mix-tog"></span></summary>'
+        + (!kinds.length ? '<p class="nw-mix-note">No stories' + (narrowed.length ? ' for ' + esc(narrowed.join(', ')) : '') + ' on this day.</p>' :
+          '<div class="nw-mix-wrap"><table><thead><tr><th>Kind</th>'
+          + ['high', 'medium', 'low'].map((lv) => '<th style="--c:' + MIX_C[lv] + '"><i></i>' + lv.charAt(0).toUpperCase() + lv.slice(1) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>'
+          + kinds.map((k) => { const c = by.get(k);
+            return '<tr' + (k === kind ? ' class="on"' : '') + '><td class="nw-mix-k"><button type="button" data-kind="' + esc(k) + '" title="' + (k === kind ? 'Show every kind' : 'Show only ' + esc(k)) + '">' + esc(k) + '</button></td>'
+              + cell(c.high, 'high') + cell(c.medium, 'medium') + cell(c.low, 'low') + '<td>' + sum(c) + '</td></tr>'; }).join('')
+          + '<tr class="nw-mix-tot"><td class="nw-mix-k">Total</td><td>' + tot.high + '</td><td>' + tot.medium + '</td><td>' + tot.low + '</td><td>' + sum(tot) + '</td></tr></tbody></table></div>'
+          + '<p class="nw-mix-note">Stories, with a story told by several outlets counted once. Every kind and every importance'
+          + (narrowed.length ? ', for ' + esc(narrowed.join(', ')) : '') + '. Click a kind to show only it.</p>')
+        + '</details></div></div>';
+      const det = $('mix').querySelector('details');
+      det.addEventListener('toggle', () => { mixOpen = det.open; try { localStorage.setItem('nw-mix', mixOpen ? 'open' : 'closed'); } catch (e) { /* fine */ } });
+    }
+    $('mix').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-kind]'); if (!b) return;
+      const k = b.dataset.kind, el = $('kind');
+      el.value = el.value === k ? '' : ([...el.options].some((o) => o.value === k) ? k : '');
+      draw();
+    });
     for (const b of document.querySelectorAll('.nw-tab')) b.addEventListener('click', () => { minImp = b.dataset.imp; try { localStorage.setItem('nw-imp', minImp); } catch (e) { /* fine */ } draw(); });
     for (const id of ['kind', 'sector', 'tone']) $(id).addEventListener('change', draw);
     $('q').addEventListener('input', draw);
