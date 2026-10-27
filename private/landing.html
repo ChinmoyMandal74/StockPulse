@@ -130,6 +130,27 @@
     .lp .rows th.sg, .lp .rows td.sg { text-align: left; font-family: var(--sans); font-size: 12.5px; color: var(--muted); white-space: normal; min-width: 200px; }
     .lp .rows td.sg b { color: var(--text); font-weight: 600; }
 
+    /* ---- the card grid (#p-visuals) ---- */
+    .lp .pane.cards { grid-template-columns: 1fr; gap: 26px; }
+    .lp .cg-head { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 36px; align-items: end; }
+    .lp .cg-head ul { margin: 0; }
+    .lp .cg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+    .lp .cg figure { margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+    .lp .cg figcaption { font-size: 13.5px; color: var(--muted); text-align: center; }
+    .lp .cg-a { display: block; border-radius: 12px; overflow: hidden; border: 1px solid var(--hair-2); background: var(--surface-2);
+                transition: transform 0.18s ease, border-color 0.18s ease; }
+    .lp .cg-a:hover, .lp .cg-a:focus-visible { border-color: var(--accent); transform: translateY(-3px); }
+    .lp .cg-a img { display: block; width: 100%; height: auto; aspect-ratio: 1; }
+    #cardBox { border: 0; padding: 0; background: transparent; max-width: min(92vw, 84vh); width: 100%; overflow: visible; }
+    #cardBox::backdrop { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px); }
+    #cardBox img { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 14px; border: 1px solid var(--hair-2); }
+    #cardBox .cb-bar { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    #cardBox .cb-cap { flex: 1; color: var(--text); font-size: 14.5px; font-weight: 500; }
+    #cardBox button { font: 500 14px var(--sans); color: var(--text); background: var(--surface); border: 1px solid var(--hair-2);
+                      border-radius: 999px; padding: 7px 15px; cursor: pointer; }
+    #cardBox button:hover { border-color: var(--accent); }
+    @media (prefers-reduced-motion: reduce) { .lp .cg-a { transition: none; } .lp .cg-a:hover, .lp .cg-a:focus-visible { transform: none; } }
+
     /* ---- themes ---- */
     .lp .themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 34px; }
     .lp .themes figure { margin: 0; min-width: 0; }
@@ -245,6 +266,8 @@
       .lp .grid, .lp .depth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .lp .pane.flip > div:first-child { order: 0; }
       .lp .themes { grid-template-columns: 1fr; }
+      .lp .cg-head { grid-template-columns: 1fr; gap: 4px; }
+      .lp .cg { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
       .lp footer .cols { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 480px) {
@@ -381,13 +404,27 @@
         <div class="shot"><img src="/img/landing/pivot-navy.jpg" width="1440" height="860" alt="The pivot: sectors by company size, middle forward P/E, Technology opened into its industries" loading="lazy" /></div>
       </div>
 
-      <div class="pane flip" id="p-visuals">
-        <div>
-          <h3 class="h3">Cards for social posts.</h3>
-          <p>Market snapshots, sector and industry bars, single-stock spotlights, the day's filings, article tone. Made from the latest close, every time.</p>
+      <!-- Eight real cards as posted, a grid of four by two (owner, 2026-10-26).
+           Tiles are 600px JPEGs; a click opens the 1080px one in #cardBox.
+           Without script the link still opens the full image. -->
+      <div class="pane cards" id="p-visuals">
+        <div class="cg-head">
+          <div>
+            <h3 class="h3">Cards for social posts.</h3>
+            <p>Market snapshots, sector and industry bars, single-stock spotlights, earnings and guidance, the day's filings, article tone. Made from the latest close, every time. Eight of them, as posted:</p>
+          </div>
           <ul><li>Feed, square and story sizes</li><li>Dark, Navy or Light</li><li>Each card dated, with a not-advice line</li></ul>
         </div>
-        <div class="shot" style="max-width:420px;justify-self:center"><img src="/img/landing/card-secbars.jpg" width="1080" height="1350" alt="Sector bars card" loading="lazy" /></div>
+        <div class="cg">
+          <figure><a class="cg-a" href="/img/landing/cards/spotlight-full.jpg" data-cap="Stock spotlight"><img src="/img/landing/cards/spotlight.jpg" width="600" height="600" alt="Stock spotlight card for IBM: six months of price, twelve readings and the signal with the rule that fired" loading="lazy" /></a><figcaption>Stock spotlight</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/beat-full.jpg" data-cap="Beating the index"><img src="/img/landing/cards/beat.jpg" width="600" height="600" alt="Beating the index card: 217 of 497 S&amp;P 500 companies did better than the index this year, one square per company" loading="lazy" /></a><figcaption>Beating the index</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/track-full.jpg" data-cap="Earnings track record"><img src="/img/landing/cards/track.jpg" width="600" height="600" alt="Earnings track record card for Ross Stores: 18 of 39 results releases since 2017 raised the outlook" loading="lazy" /></a><figcaption>Earnings track record</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/margins-full.jpg" data-cap="Net margin"><img src="/img/landing/cards/margins.jpg" width="600" height="600" alt="Net margin card: the S&amp;P 500&rsquo;s combined net margin from Q2 2022 to Q2 2026, and by sector" loading="lazy" /></a><figcaption>Net margin</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/drawdown-full.jpg" data-cap="Drawdowns"><img src="/img/landing/cards/drawdown.jpg" width="600" height="600" alt="Drawdown card for IBM: how far the close sat below its own high over five years, with the four deepest" loading="lazy" /></a><figcaption>Drawdowns</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/waterfall-full.jpg" data-cap="What moved the index"><img src="/img/landing/cards/waterfall.jpg" width="600" height="600" alt="What moved the S&amp;P 500 card: each company&rsquo;s contribution to the index this year, as a waterfall" loading="lazy" /></a><figcaption>What moved the index</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/perf-full.jpg" data-cap="Growth and profitability"><img src="/img/landing/cards/perf.jpg" width="600" height="600" alt="Growth and profitability card for IBM: quarterly revenue, net income and net margin from its SEC filings" loading="lazy" /></a><figcaption>Growth and profitability</figcaption></figure>
+          <figure><a class="cg-a" href="/img/landing/cards/guidance-full.jpg" data-cap="Guidance summary"><img src="/img/landing/cards/guidance.jpg" width="600" height="600" alt="Guidance summary card: Q3 2026 S&amp;P 500 results releases that raised, reaffirmed or lowered guidance, by sector" loading="lazy" /></a><figcaption>Guidance summary</figcaption></figure>
+        </div>
       </div>
 
       <div class="pane" id="p-filings">
@@ -721,6 +758,39 @@
 </footer>
 </div>
 
+<dialog id="cardBox" aria-label="Card, full size">
+  <img alt="" />
+  <div class="cb-bar"><span class="cb-cap"></span>
+    <button type="button" data-step="-1" aria-label="Previous card">&larr;</button>
+    <button type="button" data-step="1" aria-label="Next card">&rarr;</button>
+    <button type="button" data-close>Close</button></div>
+</dialog>
+<script>
+  // The card grid: a tile opens its full-size card; the arrows step, and
+  // Escape (the dialog's own) or a click outside the card closes it.
+  (function () {
+    const box = document.getElementById('cardBox');
+    const tiles = [...document.querySelectorAll('#p-visuals .cg-a')];
+    if (!box || !box.showModal || !tiles.length) return;
+    const img = box.querySelector('img'), cap = box.querySelector('.cb-cap');
+    let at = 0;
+    const show = (i) => {
+      at = (i + tiles.length) % tiles.length;
+      const t = tiles[at];
+      img.src = t.getAttribute('href'); img.alt = t.querySelector('img').alt; cap.textContent = t.dataset.cap;
+    };
+    tiles.forEach((t, i) => t.addEventListener('click', (e) => { e.preventDefault(); show(i); box.showModal(); }));
+    box.addEventListener('click', (e) => {
+      const st = e.target.closest('[data-step]');
+      if (st) { show(at + Number(st.dataset.step)); return; }
+      if (e.target.closest('[data-close]') || e.target === box) box.close();
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') show(at + 1);
+      else if (e.key === 'ArrowLeft') show(at - 1);
+    });
+  })();
+</script>
 <script>
   // The figures are claims about the product, so they come from the product.
   // The route has already written them in (from its cache, or last-known
