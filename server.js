@@ -49,6 +49,7 @@ const store = require('./db');
 // browser would: the mobile page gets the twenty matching rows, formatted,
 // instead of the 1.3MB table. Both are the same modules the pages load.
 const Filters = require('./private/filters.js');
+const ListingTypes = require('./listingtypes.js');
 // The stock page's At a glance cards: built here, where every company's
 // figures are in memory for the comparisons; drawn by the page.
 const Glance = require('./private/glance.js');
@@ -7717,12 +7718,20 @@ app.post('/api/nasdaq/refresh', requireAdmin, route(async (req, res) => {
   }
   const n = await store.writeNasdaqExchange(exchange, rows);
   logAct(req, 'refresh', 'nasdaq:' + exchange);
+  // The Instrument column's types, once a run, with the last exchange: one
+  // free call (listingtypes.js). Bookkeeping that never fails the refresh;
+  // a failed pull leaves the stored types as they were.
+  let types = null;
+  if (req.body?.last === true || idx === NASDAQ_EXCHANGES.length - 1) {
+    try { types = await store.writeListingTypes(await ListingTypes.fetchListingTypes(process.env.TWELVE_DATA_API_KEY)); }
+    catch (err) { console.error('listing types failed:', err.message); }
+  }
   await trackSafe(store.noteRound(runId, { ms: Date.now() - t0,
     priceSource: `${exchange} \u00b7 ${n.toLocaleString()} rows`, loaded: idx + 1, total: NASDAQ_EXCHANGES.length }));
   if (req.body?.last === true || idx === NASDAQ_EXCHANGES.length - 1) {
     await trackSafe(store.finishRun(runId, { status: 'complete', loaded: idx + 1, total: NASDAQ_EXCHANGES.length }));
   }
-  res.json({ exchange, rows: n, ms: Date.now() - t0, runId, meta: await store.nasdaqMeta() });
+  res.json({ exchange, rows: n, types, ms: Date.now() - t0, runId, meta: await store.nasdaqMeta() });
 }));
 
 // Maintain one display name. An empty value clears the override and hands

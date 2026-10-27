@@ -157,6 +157,7 @@
         <option value="10000000000">$10B and up</option>
         <option value="50000000000">$50B and up</option>
       </select>
+      <select id="fInst" aria-label="Instrument"><option value="">All instruments</option></select>
       <select id="fSec" aria-label="Sector"><option value="">All sectors</option></select>
       <select id="fInd" aria-label="Industry"><option value="">All industries</option></select>
       <select id="fIpo" aria-label="Listed before">
@@ -256,6 +257,9 @@
       ['symbol', 'Symbol', 'l'],
       ['name', 'Name', 'l nm'],
       ['exchange', 'Exch', 'l'],
+      // What the security IS, from Twelve Data's free reference list
+      // (listingtypes.js), the screener's Instrument column's source.
+      ['instrument_type', 'Instrument', 'l tx'],
       ['market_cap', 'Market cap', ''],
       ['last_sale', 'Last', ''],
       ['pct_change', 'Chg', ''],
@@ -287,7 +291,7 @@
           // A new column starts on the end people actually want first: biggest
           // for a number, A-Z for a word.
           if (sortKey === k) sortDir = -sortDir;
-          else { sortKey = k; sortDir = ['symbol', 'name', 'exchange', 'sector', 'industry', 'country'].includes(k) ? 1 : -1; }
+          else { sortKey = k; sortDir = ['symbol', 'name', 'exchange', 'instrument_type', 'sector', 'industry', 'country'].includes(k) ? 1 : -1; }
           shown = 500;
           paint();
         }));
@@ -307,6 +311,7 @@
       const ex = $('fEx').value;
       const cap = Number($('fCap').value) || 0;
       const sec = $('fSec').value;
+      const inst = $('fInst').value;
       const ind = $('fInd').value;
       const ipo = Number($('fIpo').value) || 0;
       const onlyNew = $('fNew').classList.contains('on');
@@ -314,6 +319,7 @@
         if (cap && !(r.market_cap >= cap)) return false;
         if (ex && r.exchange !== ex) return false;
         if (sec && r.sector !== sec) return false;
+        if (inst && r.instrument_type !== inst) return false;
         if (ind && r.industry !== ind) return false;
         if (ipo && !(r.ipo_year && r.ipo_year <= ipo)) return false;
         if (onlyNew && held(r)) return false;
@@ -349,6 +355,7 @@
           (held(r) ? '<span class="held">held</span>' : '') + '</td>' +
           `<td class="l nm" title="${we(r.name || '')}">${we(r.name || '—')}</td>` +
           `<td class="l">${we(r.exchange || '—')}</td>` +
+          `<td class="l tx" title="${we(r.instrument_type || 'Not in the reference list')}">${we(r.instrument_type || '—')}</td>` +
           `<td>${money(r.market_cap)}</td>` +
           `<td>${price(r.last_sale)}</td>` +
           `<td class="${chg == null ? '' : chg < 0 ? 'neg' : 'pos'}">${pct(chg)}</td>` +
@@ -435,6 +442,7 @@
       };
       const uniq = (f) => [...new Set(rows.map(f).filter(Boolean))].sort();
       fill('fEx', uniq((r) => r.exchange), 'All exchanges');
+      fill('fInst', uniq((r) => r.instrument_type), 'All instruments');
       fill('fSec', uniq((r) => r.sector), 'All sectors');
       fill('fInd', uniq((r) => r.industry), 'All industries');
     }
@@ -521,10 +529,10 @@
     // the cost preview and the add all work on either with no second path.
     const src = () => $('src').value;
 
-    // The live list carries no sector, industry or listing year -- Yahoo's
+    // The live list carries no instrument type, sector, industry or listing year -- Yahoo's
     // screener does not return them. A control that silently matches nothing
     // is worse than one that is visibly off, so they are disabled and say why.
-    const LIVE_BLIND = ['fSec', 'fInd', 'fIpo'];
+    const LIVE_BLIND = ['fInst', 'fSec', 'fInd', 'fIpo'];
     function applySource() {
       const live = src() === 'active';
       for (const id of LIVE_BLIND) {
@@ -563,7 +571,7 @@
     }
 
     (async function boot() {
-      ['q', 'fEx', 'fCap', 'fSec', 'fInd', 'fIpo'].forEach((id) =>
+      ['q', 'fEx', 'fCap', 'fInst', 'fSec', 'fInd', 'fIpo'].forEach((id) =>
         $(id).addEventListener('input', () => { shown = 500; paint(); }));
       $('fNew').addEventListener('click', () => {
         const on = !$('fNew').classList.contains('on');

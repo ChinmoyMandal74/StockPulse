@@ -1301,6 +1301,16 @@ const SCHEMA = [
    )`,
   // The one question this table is for — "what is above N" — is a range scan.
   'create index if not exists idx_nasdaq_cap on nasdaq_listings(market_cap)',
+  // What each US listing IS (Common Stock, American Depositary Receipt,
+  // Preferred Stock...), from Twelve Data's free /stocks list (listingtypes.js),
+  // for the Instrument column on /nasdaq. Its own table because a NASDAQ
+  // refresh replaces an exchange's rows wholesale. Keyed on Twelve Data's own
+  // spelling (BRK.A); readNasdaqListings joins NASDAQ's BRK/A to it.
+  `create table if not exists listing_types (
+     symbol     text primary key,
+     type       text,
+     fetched_at integer not null
+   )`,
 
   // ---- SEC EDGAR filings (2026-09-27, owner's request) --------------------
   // One row per (filing, period). Every concept on a row therefore comes from
@@ -5289,9 +5299,12 @@ async function readNasdaqListings() {
   // /market-activity/stocks/<lowercase symbol>, checked, so shipping it is
   // 277 KB of something the page can derive.
   const r = await db.execute(
-    `select symbol, exchange, name, last_sale, net_change, pct_change, market_cap,
-            country, ipo_year, volume, sector, industry
-       from nasdaq_listings order by market_cap desc`);
+    // The type is a primary-key seek per listing, on NASDAQ's slash spelled
+    // the reference list's way (BRK/A -> BRK.A).
+    `select n.symbol, n.exchange, n.name, n.last_sale, n.net_change, n.pct_change, n.market_cap,
+            n.country, n.ipo_year, n.volume, n.sector, n.industry, t.type as instrument_type
+       from nasdaq_listings n left join listing_types t on t.symbol = replace(n.symbol, '/', '.')
+      order by n.market_cap desc`);
   // Named, not spread: a libSQL Row answers to its column names but spreads
   // to POSITIONAL keys, so `{ ...row }` hands the client {0: 'AAPL', 1: ...}
   // and every field on the page reads undefined.
@@ -5299,8 +5312,28 @@ async function readNasdaqListings() {
     symbol: x.symbol, exchange: x.exchange, name: x.name,
     last_sale: x.last_sale, net_change: x.net_change, pct_change: x.pct_change,
     market_cap: x.market_cap, country: x.country, ipo_year: x.ipo_year,
-    volume: x.volume, sector: x.sector, industry: x.industry,
+    volume: x.volume, sector: x.sector, industry: x.industry, instrument_type: x.instrument_type || null,
   }));
+}
+
+// The reference list's types, upserted: a symbol keeps its row when it
+// leaves the list (a type is not history worth deleting), and a changed type
+// takes the new value. Rows of [{ symbol, type }].
+async function writeListingTypes(rows) {
+  await init();
+  if (!rows || !rows.length) return 0;
+  const at = Date.now();
+  const stmts = [];
+  for (let i = 0; i < rows.length; i += 300) {
+    const slice = rows.slice(i, i + 300);
+    stmts.push({
+      sql: `insert into listing_types (symbol, type, fetched_at) values ${slice.map(() => '(?, ?, ?)').join(', ')}
+            on conflict(symbol) do update set type = excluded.type, fetched_at = excluded.fetched_at`,
+      args: slice.flatMap((r) => [r.symbol, r.type, at]),
+    });
+  }
+  for (let i = 0; i < stmts.length; i += 40) await db.batch(stmts.slice(i, i + 40), 'write');
+  return rows.length;
 }
 
 // Counts and the clock, for a page that has to say how stale it is before it
@@ -8435,7 +8468,7 @@ module.exports = {
   readRuns,
   readRun,
   pruneRuns,
-  writeNasdaqExchange,
+  writeNasdaqExchange, writeListingTypes,
   readNasdaqListings,
   nasdaqMeta,
   readProfile,
