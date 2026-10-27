@@ -178,6 +178,6 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Promo studio** — `the-promo-studio` (also seven refresh post-mortems) · `cards-and-the-module-behind-them` · `the-promo-studio-cards` (180 KB) · `the-promo-studio-cards-2` (105 KB) · `the-industries-card` (also the Sector cards) · `sector-snapshot-card` · `evolution-two-stocks` · `short-build-card` · `brand-slides-review` · `earnings-ahead-card` · `signal-pyramid-view` · `post-to-instagram` · `coverage-cards` · `group-months` · `saved-posts` · `race-chart` (admin-only video) · `reel` (one stock as an Instagram Reel, admin-only video) · `filed-yesterday-card` (one day's 13D/13G and 8-K filings, Market) · `group-lines` (Sector, Industry and Theme lines, the Lines card a line a group) · `glance-card` (the stock page's At a glance cards as a post)
 
-**Admin pages and the public side** — `the-admin-console` · `scheduled-jobs` (`/schedule`) · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
+**Admin pages and the public side** — `the-admin-console` · `scheduled-jobs` (`/schedule`) · `ai-spend` (`/ai-spend`, the Anthropic API in dollars) · `the-architecture-diagram` · `the-build-log` · `the-data-quality-page` · `the-database-page` · `the-help-page` · `the-backlog-page` · `the-research-page` · `the-public-side` · `chatbot` · `company-summary`
 
 Also in `docs/`: `backlog.md`, `momentum-scoring.md`, `momentum-delta.md`.

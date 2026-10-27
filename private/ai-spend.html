@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AI spend — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The admin pages' shell. Everything this page adds is prefixed aw- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island { pointer-events: auto; display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent); backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset); }
+    .mark .glyph { width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent)); border: 1px solid color-mix(in srgb, var(--green) 24%, transparent); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px; border-radius: 999px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 3.5%, transparent); font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted); }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(34px, 4.4vw, 52px); font-weight: 600; line-height: 0.96; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 92ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .aw-status { margin: 0 4px 16px; font-size: 13px; color: var(--muted); }
+    .aw-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+    .aw-tile .core { padding: 18px 20px; height: 100%; box-sizing: border-box; }
+    .aw-k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--faint); }
+    .aw-big { margin-top: 10px; font-family: var(--mono); font-size: 28px; font-weight: 500; letter-spacing: -0.03em; color: var(--text); }
+    .aw-split { margin-top: 8px; font-size: 11.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+    .aw-split i, .aw-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    .aw-tone { background: var(--accent); }
+    .aw-rel { background: var(--orange); }
+
+    .aw-card { margin-bottom: 16px; }
+    .aw-card .core { padding: 18px 20px; }
+    .aw-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .aw-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .aw-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted); margin-left: auto; }
+    .aw-chip { font: 500 12px var(--sans); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hair); background: none; color: var(--muted); cursor: pointer; }
+    .aw-chip.on { color: var(--text); border-color: var(--accent); }
+
+    .aw-chart { position: relative; height: 190px; display: flex; align-items: flex-end; gap: 2px; padding-left: 52px; border-bottom: 1px solid var(--hair); }
+    .aw-grid { position: absolute; left: 52px; right: 0; border-top: 1px dashed color-mix(in srgb, var(--hair) 80%, transparent); }
+    .aw-gl { position: absolute; left: 0; width: 46px; text-align: right; transform: translateY(-50%); font: 500 10.5px var(--mono); color: var(--faint); }
+    .aw-col { flex: 1 1 0; min-width: 2px; display: flex; flex-direction: column-reverse; height: 100%; justify-content: flex-start; position: relative; z-index: 1; }
+    .aw-col span { display: block; width: 100%; }
+    .aw-col:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    .aw-axis { display: flex; justify-content: space-between; padding-left: 52px; margin-top: 6px; font: 500 10.5px var(--mono); color: var(--faint); }
+
+    .aw-wrap { overflow-x: auto; }
+    .aw-wrap table { width: 100%; border-collapse: collapse; }
+    .aw-wrap th, .aw-wrap td { padding: 9px 10px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; white-space: nowrap; }
+    .aw-wrap thead th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; }
+    .aw-wrap td.n, .aw-wrap th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .aw-wrap td.aw-sub { color: var(--muted); }
+    .aw-wrap tr.aw-total td { font-weight: 600; color: var(--text); }
+    .aw-warn { color: var(--amber); }
+    .aw-foot { margin: 6px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
+    .aw-foot b { color: var(--muted); }
+    .aw-foot a { color: var(--accent); text-decoration: none; }
+    @media (max-width: 900px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .aw-tiles { grid-template-columns: repeat(2, 1fr); } .aw-legend { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark"><span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span><span class="wordmark hide-sm">Tickr Lab</span></span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Operations · admin</span>
+      <h1>AI spend</h1>
+      <p class="lede">What the Anthropic API has cost, in dollars, for the two jobs that call it on a schedule:
+        <b>Article tone</b> (each news article read and scored) and <b>Earnings releases</b> (each results press release read).
+        Each run records what it spent, worked out from the tokens the API reported and the model's price. Days are Eastern time.</p>
+    </header>
+
+    <div class="aw-status" id="status">Loading…</div>
+    <div id="body" hidden>
+      <div class="aw-tiles" id="tiles"></div>
+
+      <section class="bezel aw-card"><div class="core">
+        <div class="aw-head"><h2>Dollars a day</h2>
+          <span id="ranges"></span>
+          <span class="aw-legend"><span><i class="aw-tone"></i>Article tone</span><span><i class="aw-rel"></i>Earnings releases</span></span>
+        </div>
+        <div class="aw-chart" id="chart"></div>
+        <div class="aw-axis" id="axis"></div>
+      </div></section>
+
+      <section class="bezel aw-card"><div class="core">
+        <div class="aw-head"><h2>By month</h2></div>
+        <div class="aw-wrap" id="months"></div>
+      </div></section>
+
+      <section class="bezel aw-card"><div class="core">
+        <div class="aw-head"><h2>Recent runs</h2><span class="aw-legend">the details of each run are on <a href="/news-runs" style="color:var(--accent);text-decoration:none">News runs</a></span></div>
+        <div class="aw-wrap" id="runs"></div>
+      </div></section>
+
+      <p class="aw-foot"><b>Not counted here:</b> the one-off backfill of past earnings releases (<code>release-history-load.js</code>, which
+        prints its spend but keeps no run record), the Company summary writer and the chatbot on this site, and a second "shadow"
+        model when the tone job is set to run one (off since 2026-10-20). The figures are this app's own arithmetic; the bill itself
+        is on the Anthropic Console.</p>
+    </div>
+  </main>
+
+  <script>
+    const JOBS = { tone: 'Article tone', releases: 'Earnings releases' };
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const usd = (v) => (v == null ? "—" : "$" + (v > 0 && v < 0.1 ? v.toFixed(3) : v.toFixed(2)));
+    // Eastern calendar day and month of a timestamp, whatever the browser's zone.
+    const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+    const whenFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const dayOf = (ms) => dayFmt.format(new Date(ms));
+    const monthName = (ym) => new Date(ym + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const shortDay = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    let RUNS = [], NOW = Date.now(), range = 30;
+
+    // The calendar days ending today (Eastern), oldest first.
+    function lastDays(n) {
+      const out = [], seen = new Set();
+      for (let i = 0; out.length < n && i < n + 3; i++) {
+        const d = dayOf(NOW - i * 86400000);
+        if (!seen.has(d)) { seen.add(d); out.unshift(d); }
+      }
+      return out;
+    }
+    function sumBy(keyOf) {
+      const m = {};
+      for (const r of RUNS) {
+        if (!(r.spent > 0)) continue;
+        const k = keyOf(r); if (k == null) continue;
+        const e = m[k] || (m[k] = { tone: 0, releases: 0 });
+        e[r.job] += r.spent;
+      }
+      return m;
+    }
+
+    function tiles() {
+      const today = dayOf(NOW), days7 = new Set(lastDays(7)), days30 = new Set(lastDays(30)), month = today.slice(0, 7);
+      const T = [['Today', (d) => d === today], ['Last 7 days', (d) => days7.has(d)], ['This month', (d) => d.slice(0, 7) === month], ['Last 30 days', (d) => days30.has(d)]];
+      const byDay = sumBy((r) => dayOf(r.startedAt));
+      document.getElementById('tiles').innerHTML = T.map(([label, f]) => {
+        let tone = 0, rel = 0;
+        for (const [d, e] of Object.entries(byDay)) if (f(d)) { tone += e.tone; rel += e.releases; }
+        return `<section class="bezel aw-tile"><div class="core"><div class="aw-k">${label}</div>
+          <div class="aw-big">${usd(tone + rel)}</div>
+          <div class="aw-split"><span><i class="aw-tone"></i>${usd(tone)}</span><span><i class="aw-rel"></i>${usd(rel)}</span></div></div></section>`;
+      }).join('');
+    }
+
+    function chart() {
+      document.getElementById('ranges').innerHTML = [30, 90, 365].map((n) =>
+        `<button class="aw-chip${n === range ? ' on' : ''}" data-r="${n}">${n === 365 ? 'Year' : n + ' days'}</button>`).join(' ');
+      const days = lastDays(range), byDay = sumBy((r) => dayOf(r.startedAt));
+      const tot = (d) => (byDay[d] ? byDay[d].tone + byDay[d].releases : 0);
+      const max = Math.max(0.01, ...days.map(tot));
+      // A round top for the gridlines: 1, 2 or 5 times a power of ten.
+      const p = Math.pow(10, Math.floor(Math.log10(max))), top = [1, 2, 5, 10].map((m) => m * p).find((v) => v >= max);
+      let h = [0.5, 1].map((f) => `<div class="aw-grid" style="bottom:${f * 100}%"></div><span class="aw-gl" style="bottom:${f * 100}%;transform:translateY(50%)">${usd(top * f)}</span>`).join('');
+      h += days.map((d) => {
+        const e = byDay[d] || { tone: 0, releases: 0 };
+        const tip = `${shortDay(d)}: ${usd(e.tone + e.releases)} (tone ${usd(e.tone)}, releases ${usd(e.releases)})`;
+        return `<div class="aw-col" title="${esc(tip)}"><span class="aw-tone" style="height:${(e.tone / top) * 100}%"></span><span class="aw-rel" style="height:${(e.releases / top) * 100}%"></span></div>`;
+      }).join('');
+      document.getElementById('chart').innerHTML = h;
+      document.getElementById('axis').innerHTML = `<span>${shortDay(days[0])}</span><span>${shortDay(days[Math.floor(days.length / 2)])}</span><span>${shortDay(days[days.length - 1])}</span>`;
+    }
+
+    function months() {
+      const byMonth = sumBy((r) => dayOf(r.startedAt).slice(0, 7));
+      const keys = Object.keys(byMonth).sort().reverse();
+      if (!keys.length) { document.getElementById('months').innerHTML = '<p class="aw-foot">No spend recorded yet.</p>'; return; }
+      let all = { tone: 0, releases: 0 };
+      const rows = keys.map((k) => { const e = byMonth[k]; all.tone += e.tone; all.releases += e.releases;
+        return `<tr><td>${esc(monthName(k))}</td><td class="n">${usd(e.tone)}</td><td class="n">${usd(e.releases)}</td><td class="n"><b>${usd(e.tone + e.releases)}</b></td></tr>`; }).join('');
+      document.getElementById('months').innerHTML = `<table><thead><tr><th>Month</th><th class="n">Article tone</th><th class="n">Earnings releases</th><th class="n">Total</th></tr></thead><tbody>${rows}
+        <tr class="aw-total"><td>All on record</td><td class="n">${usd(all.tone)}</td><td class="n">${usd(all.releases)}</td><td class="n">${usd(all.tone + all.releases)}</td></tr></tbody></table>`;
+    }
+
+    function runs() {
+      const list = RUNS.slice(0, 60);
+      document.getElementById('runs').innerHTML = !list.length ? '<p class="aw-foot">No runs recorded yet.</p>' :
+        `<table><thead><tr><th>Started (Eastern)</th><th>Job</th><th class="hide-sm">Model</th><th class="n">Read</th><th class="n">Spent</th><th></th></tr></thead><tbody>` +
+        list.map((r) => `<tr><td>${esc(whenFmt.format(new Date(r.startedAt)))}</td><td>${esc(JOBS[r.job] || r.job)}</td>
+          <td class="aw-sub hide-sm">${esc(r.model || '—')}</td><td class="n">${r.n == null ? '—' : r.n.toLocaleString()}</td>
+          <td class="n">${usd(r.spent)}</td><td class="aw-sub">${r.failed ? '<span class="aw-warn">failed</span>' : r.stop === 'budget' ? '<span class="aw-warn">reached its cost cap</span>' : r.endedAt ? '' : 'running or cut short'}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-r]'); if (!b) return;
+      range = Number(b.dataset.r); chart();
+    });
+
+    (async () => {
+      const st = document.getElementById('status');
+      try {
+        const r = await fetch('/api/ai-spend', { cache: 'no-store' });
+        if (r.status === 401 || r.status === 403) { location.href = '/'; return; }
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Could not load.');
+        RUNS = j.runs || []; NOW = j.now || Date.now();
+        const first = RUNS.length ? RUNS[RUNS.length - 1].startedAt : null;
+        st.textContent = RUNS.length ? `${RUNS.length.toLocaleString()} runs on record since ${whenFmt.format(new Date(first))}.` : 'No runs on record yet.';
+        tiles(); chart(); months(); runs();
+        document.getElementById('body').hidden = false;
+      } catch (err) { st.textContent = err.message; }
+    })();
+  </script>
+</body>
+</html>

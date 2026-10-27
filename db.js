@@ -3074,6 +3074,22 @@ async function readScheduleReport() {
   try { tasks = JSON.parse(r.rows[0].body); } catch (e) { tasks = []; }
   return { at: Number(r.rows[0].at), host: r.rows[0].host || null, tasks };
 }
+// The Anthropic API spend of both laptop jobs that call it, for /ai-spend: the
+// article-tone runs and the earnings-release runs, the dollar figure each run
+// recorded and little else. Seeks on each table's started_at index; the cap
+// is well above a year of hourly runs.
+async function readAiSpendRuns(sinceMs) {
+  await init();
+  const since = Number(sinceMs) || 0;
+  const [t, e] = await Promise.all([
+    db.execute({ sql: 'select started_at, ended_at, model, scored as n, spent, stop, error from news_tone_runs where started_at >= ? order by started_at desc limit 8000', args: [since] }),
+    db.execute({ sql: 'select started_at, ended_at, model, read_n as n, spent, stop, error from earnings_release_runs where started_at >= ? order by started_at desc limit 8000', args: [since] }),
+  ]);
+  const n = (v) => (v == null ? null : Number(v));
+  const map = (job) => (x) => ({ job, startedAt: n(x.started_at), endedAt: n(x.ended_at), model: x.model || null, n: n(x.n), spent: n(x.spent), stop: x.stop || null, failed: !!x.error });
+  return t.rows.map(map('tone')).concat(e.rows.map(map('releases'))).sort((a, b) => b.startedAt - a.startedAt);
+}
+
 async function readReleaseRuns(sinceMs) {
   await init();
   const r = await db.execute({ sql: 'select * from earnings_release_runs where started_at >= ? order by started_at desc limit 500', args: [Number(sinceMs) || 0] });
@@ -8345,7 +8361,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

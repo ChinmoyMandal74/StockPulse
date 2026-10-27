@@ -872,7 +872,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
                       '/consolidated.html': '/consolidated',
-                      '/news-runs.html': '/news-runs', '/columns.html': '/columns',
+                      '/news-runs.html': '/news-runs', '/ai-spend.html': '/ai-spend', '/columns.html': '/columns',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
                       '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar', '/onboarding.html': '/onboarding',
                       // The public pages have canonical addresses of their own.
@@ -8639,6 +8639,20 @@ app.get('/api/schedule', requireAdmin, route(async (req, res) => {
   }));
   res.json({ now: Schedule.eastern(now), at: now.getTime(), jobs, reserved: Schedule.RESERVED, slot: Schedule.SLOT, busy: Schedule.busyAt(now), report, drift: Schedule.drift(report) });
 }));
+// What the Anthropic API has cost (2026-10-27, the owner: "only the $
+// amount"): the article-tone and earnings-release runs, from the dollar figure
+// each run records. Admin only, like /news-runs where the runs themselves are.
+app.get('/ai-spend', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'ai-spend');
+  res.sendFile(path.join(__dirname, 'private', 'ai-spend.html'));
+}));
+app.get('/api/ai-spend', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const days = Math.min(400, Math.max(1, Number(req.query.days) || 400));
+  res.json({ now: Date.now(), days, runs: await store.readAiSpendRuns(Date.now() - days * 86400000) });
+}));
+
 app.get('/schedule', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'schedule');
