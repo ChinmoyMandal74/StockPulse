@@ -2488,6 +2488,49 @@ Both offline against the local copy, written up on `/research` as relative
 tendencies, never as buy or sell calls. Survivorship applies to both (the
 list is today's).
 
+## 52. Stock page speed: what is left after the first round — 2026-10-27
+
+*Area: Infrastructure · Status: Open · Note: the owner asked for ideas to make the stock page load faster and said yes to the first five (built 2026-10-27, docs/context/page-load-speed.md), then asked for the rest on the backlog*
+
+Built on the day: cards.js loaded only for the Drawdowns card, that card's
+history shared with the volatility pane, `/api/news` off the snapshot, the
+fifteen section loaders six at a time, and the private scripts cached by
+the browser until the next deploy (`versionedPage`, stock page only).
+Measured with `/api/diag/serve-timing` the same day: the snapshot read is
+**4.5 s on a cold instance, 70 ms warm**. That cold read is what `/api/stock` still pays.
+
+- **(a) Move the stock page's inline script into `private/stock.js`.** About
+  400 of the page's 412 KB is one inline script, sent on every visit. As a
+  file it gets the same `?v=` caching as the other scripts. The move itself is
+  mechanical, but the file is 6,000 lines: check after it that the page draws in
+  full, with the quick first draw, the jump menu and every card, and nothing
+  that relied on running inline.
+- **(b) The other pages through `versionedPage`.** The screener,
+  `/compare`, the theme page, `/m` and the rest still send their private
+  scripts revalidated on every visit (`private, no-cache`). Each page's route
+  needs to serve its HTML through `versionedPage` instead of `sendFile`. Any
+  script a page adds at runtime should read the version the way `needCards`
+  does.
+- **(c) A `?symbol=` mode for `/api/diag/serve-timing`.** It would time each
+  read `/api/stock` makes (snapshot, profile, earnings, peer links, the
+  2,600-bar study read, releases, flows, segments) on the server, so the next
+  change is chosen from numbers. Optionally, record the browser's own
+  load timings (the Navigation Timing figures) on a sample of visits, as facts
+  only.
+- **(d) A cheaper cold `/api/stock` — the owner's call.** It reads the whole
+  5.3 MB snapshot to serve one company. There are two routes:
+  - store the snapshot compressed (about 1.2 MB gzipped, so the transfer
+    should fall by roughly three-quarters);
+  - or store the rows one per symbol and read the one row plus whatever the
+    peer readings need.
+
+  Both change how the one table every page reads is written (`writeSnapshot`
+  and both refresh writers), so each needs the owner's decision and a check
+  of every reader: twenty-four routes and functions read it
+  (page-load-speed.md). The quick first draw already hides most of the wait.
+
+Nothing here touches the Signal.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
