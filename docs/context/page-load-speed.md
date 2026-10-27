@@ -32,3 +32,22 @@ So `/api/stocks`, which every page starts with, cost about 4.3 s of which 3.9 s 
 - **What is left.** A new instance, or any instance after the snapshot is rewritten (every intraday refresh, and each nightly round), still pays the 4 s once. Halving that means storing the payload compressed (it is 1.2 MB gzipped) or splitting it by row, which changes the write path of the one table everything reads; not done, and the owner's call.
 - The first tiny read of one run took 6.4 s. Seen once, while the nightly job was running; not explained.
 - The drill-down route was fixed separately by not reading the snapshot at all (`screener-drill-down.md`).
+
+## The stock page, lighter (2026-10-27)
+
+The owner: "Look at the individual stock page and give me ideas of how make it load faster", then "Yes" to the first five. Measured first with `/api/diag/serve-timing`: the snapshot read was 4.5 s on a cold instance, 70 ms warm.
+
+- **`cards.js` (1.1 MB) is no longer a blocking script in the stock page's head.** Only the Drawdowns card uses it (four `Cards.drawdown*` helpers), so `loadDrawdowns` asks for it through `needCards()`: a script tag added once, versioned like the rest, fetched beside the card's history.
+- **The Drawdowns history shares the volatility pane's request.** `RowCard.loadHistory(SYMBOL, VOL_MED_DAYS)` (1290 sessions) is cut to the last 1265, the window the card always measured. That is identical to `days=1265`, since `readBars` takes the newest N. It was a separate uncached `/api/history` call.
+- **`/api/news` reads one name, not the snapshot.** On a stale feed it read the whole snapshot for `row.name`; it now uses `store.readNameOf`, a seek on the names table, which is where the snapshot's names come from (`computeStocks`).
+- **The fifteen section loaders run in page order, six at a time** (`SECTION_LOADS`), rather than all at once. They don't wait for a scroll: every card starts hidden and the jump menu lists drawn cards, so a scroll-triggered section could not be jumped to.
+- **Private scripts are cached by the browser.** `/stock/:symbol` is served through `versionedPage()`, which names each private script `/x.js?v=<ASSET_V>`. `ASSET_V` is the Vercel commit, or the boot time locally. `express.static` for `private/` takes `setHeaders: privateCacheHeaders`: a request carrying the current `v` gets `private, max-age=31536000, immutable`, anything else `private, no-cache`. "private" keeps the CDN from storing gated files. A deploy changes `v`, so the page names new URLs. The page HTML itself is `private, no-cache`. Only the stock page is served this way so far; other pages can take `versionedPage` the same way.
+- Tests: a scratchpad browser suite (13 checks) on the in-memory server. It checked:
+  - no cards.js tag, and cards.js asked once, after the data request;
+  - the Drawdowns card draws from a single 1290-day history request;
+  - section requests peak at six at once, and every section still asks;
+  - the header for the current, missing and old `v`;
+  - a second visit takes every versioned script from the browser's cache.
+
+  The news change was checked by reading it, not run (news is off in the test harness).
+- **Not done yet**, from the same list: moving the 412 KB inline script into a cacheable `stock.js`; storing the snapshot compressed or reading one row for `/api/stock` (the owner's call: it changes how the one shared table is written); a `?symbol=` mode for the timing route.

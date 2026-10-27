@@ -444,8 +444,36 @@ app.get('/stock/:symbol', route(async (req, res) => {
     return res.redirect('/');
   }
   logAct(req, 'page', 'stock:' + String(req.params.symbol || '').toUpperCase().slice(0, 12));
-  res.sendFile(path.join(__dirname, 'private', 'stock.html'));
+  // The page itself is asked again every visit (it is small next to its
+  // scripts); the scripts it names carry the build's version (versionedPage).
+  res.set('Cache-Control', 'private, no-cache');
+  res.type('html').send(versionedPage('stock.html'));
 }));
+
+// SCRIPTS CACHED BY THE BROWSER (2026-10-27, the owner asked for a faster
+// stock page). Every private file passes the session gate, a function call
+// and a session read each, and express.static sent them with max-age=0, so
+// each visit asked for every script again. A page served through
+// versionedPage names its private scripts as /x.js?v=<build>, and a request
+// carrying the CURRENT build's v is answered `private, immutable` for a year
+// (private: never kept by the CDN, which must not serve gated files). A
+// deploy changes the build, so the page names new URLs and nothing stale is
+// used. Any other request gets `private, no-cache`: revalidated each time,
+// as before. The version is the commit on Vercel, the boot time locally.
+const ASSET_V = String(process.env.VERCEL_GIT_COMMIT_SHA || Date.now().toString(36)).slice(0, 12);
+const versionedPages = new Map();
+function versionedPage(file) {
+  if (versionedPages.has(file)) return versionedPages.get(file);
+  const html = fs.readFileSync(path.join(__dirname, 'private', file), 'utf8')
+    .replace(/(<script\b[^>]*\bsrc=")\/([A-Za-z0-9._-]+\.js)(")/g,
+      (m, a, name, b) => (PRIVATE_FILES.has(name) ? a + '/' + name + '?v=' + ASSET_V + b : m));
+  versionedPages.set(file, html);
+  return html;
+}
+const privateCacheHeaders = (res) => {
+  const v = res.req && res.req.query ? res.req.query.v : null;
+  res.setHeader('Cache-Control', v === ASSET_V ? 'private, max-age=31536000, immutable' : 'private, no-cache');
+};
 
 // Open to any signed-in user, like /analysis and /chat — it explains the app to
 // whoever is using it, so gating it behind admin would defeat the point.
@@ -911,7 +939,7 @@ const gateAssets = route(async (req, res, next) => {
   if (isPage) return res.redirect('/login');
   res.status(401).json({ error: 'Sign in required' });
 });
-app.use(gateAssets, express.static(path.join(__dirname, 'private')));
+app.use(gateAssets, express.static(path.join(__dirname, 'private'), { setHeaders: privateCacheHeaders }));
 
 // The NASDAQ reference list. Admin only, and deliberately a page of its own:
 // it is a different vendor's view of a different universe, and the whole point
@@ -16660,10 +16688,12 @@ app.get('/api/news', requireAuth, route(async (req, res) => {
   if (forced) newsForcedAt.set(symbol, Date.now());
   if (forced || !state[symbol] || Date.now() - state[symbol] > NEWS_TTL_MS) {
     try {
-      const snap = await readSnapshot();
-      const row = ((snap && snap.stocks) || []).find((x) => x.symbol === symbol);
+      // ONE NAME, ONE ROW (2026-10-27): this read the whole 5 MB snapshot for
+      // the company's name, a 4.5 s wait on a cold instance; the names table
+      // is where the snapshot's names come from.
+      const name = await store.readNameOf(symbol).catch(() => null);
       const who = await currentUser(req);
-      const out = await runNewsBatch([{ symbol, name: row && row.name }], {
+      const out = await runNewsBatch([{ symbol, name }], {
         trigger: 'page', actor: who ? who.email : ((await isGuest(req)) ? 'guest' : 'admin'),
       });
       const r = out && out.results[0];

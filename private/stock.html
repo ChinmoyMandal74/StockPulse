@@ -13,10 +13,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/app.css" />
   <script src="/wmark.js" defer></script>
-  <!-- cards.js is here for the drawdown block, which the stock page and the
-       promo card draw from one function. (It also fed a "Save chart" export
-       until 2026-10-12; see the note where that was.) -->
-  <script src="/cards.js"></script>
+  <!-- cards.js (1.1 MB) is NOT loaded here: only the Drawdowns card uses it,
+       so loadDrawdowns asks for it (needCards) when that card draws
+       (2026-10-27; it used to hold up the first paint). -->
   <style>
     body { min-height: 100dvh; padding: 0 0 60px; overflow-x: clip; }
     /* Full width: the chart is the page, and an 18-year ribbon deserves
@@ -5803,13 +5802,34 @@
       // its stylesheet are brought in -- the artboard's are not wanted here.
       // The card stays hidden until there is a year of closes to read, and
       // goes away on any failure: a decoration must not leave an empty box.
+      // cards.js on demand, once: a script tag added the first time it is
+      // needed, and the same promise for every later ask.
+      let cardsP = null;
+      function needCards() {
+        if (window.Cards) return Promise.resolve(window.Cards);
+        if (!cardsP) cardsP = new Promise((res, rej) => {
+          const el = document.createElement('script');
+          // The build's version, read off a script the server already versioned
+          // (versionedPage), so the browser's cached copy is used when it can be.
+          const vs = document.querySelector('script[src*="/rowcard.js?v="]');
+          el.src = '/cards.js' + (vs ? vs.getAttribute('src').slice(vs.getAttribute('src').indexOf('?')) : '');
+          el.onload = () => (window.Cards ? res(window.Cards) : rej(new Error('cards.js loaded without Cards')));
+          el.onerror = () => { cardsP = null; rej(new Error('cards.js did not load')); };
+          document.head.appendChild(el);
+        });
+        return cardsP;
+      }
       async function loadDrawdowns() {
         const card = document.getElementById('dd');
         if (!card) return;
         try {
-          const r = await fetch('/api/history?symbol=' + encodeURIComponent(stock.symbol) + '&days=1265', { cache: 'no-store' });
-          if (!r.ok) { card.remove(); return; }
-          const h = await r.json();
+          // Five years of closes through RowCard's cache, the same request the
+          // volatility pane makes (VOL_MED_DAYS), cut to the last 1265 sessions
+          // this card has always measured; and cards.js, fetched beside it.
+          const [full] = await Promise.all([RowCard.loadHistory(SYMBOL, VOL_MED_DAYS), needCards()]);
+          if (!full || !Array.isArray(full.closes) || !full.closes.length) { card.remove(); return; }
+          const cut = Math.max(0, full.closes.length - 1265);
+          const h = { dates: full.dates.slice(cut), closes: full.closes.slice(cut) };
           const an = Cards.drawdownAnalyse(h.dates, h.closes, 10);
           if (!an || an.under.length < 250) { card.remove(); return; }
           if (!document.getElementById('dd-style')) {
@@ -6287,21 +6307,26 @@
       // The markup is already in the page (it ships with the earnings card);
       // this only attaches the toggle and applies the remembered choice.
       wireAround();
-      loadNews();          // after the chart: a decoration must not make the data wait
-      loadTone();
-      loadReleases();
-      loadSec();           // and the filings after that, for the same reason
-      loadInsider();
-      loadShortInt();
-      loadPeerTrend();
-      loadDrawdowns();
-      loadEvents();
-      loadHolders();
-      loadInstitutions();
-      loadOptions();
-      loadCapReturns();
-      loadSegments();
-      loadFundHolders();
+      // THE SECTIONS IN PAGE ORDER, SIX AT A TIME (2026-10-27, the owner
+      // asked for a faster page). All fifteen used to start at once, so the
+      // cards at the top competed with the bottom ones for the server, and a
+      // burst of fifteen could wake as many cold instances. Not "load when
+      // scrolled to": every card starts hidden and the jump menu lists the
+      // drawn ones, so a section that waited for a scroll could not be
+      // jumped to. Each still starts once a slot frees, whatever is on screen.
+      // After the chart: a decoration must not make the data wait.
+      const SECTION_LOADS = [loadNews, loadTone, loadDrawdowns, loadReleases, loadPeerTrend, loadSec,
+        loadInsider, loadOptions, loadCapReturns, loadSegments, loadInstitutions, loadFundHolders,
+        loadHolders, loadEvents, loadShortInt];
+      (function runSections(slots) {
+        let next = 0;
+        const one = () => {
+          if (next >= SECTION_LOADS.length) return Promise.resolve();
+          const f = SECTION_LOADS[next++];
+          return Promise.resolve().then(() => f()).catch(() => {}).then(one);
+        };
+        for (let i = 0; i < slots; i++) one();
+      })(6);
       const nb = document.getElementById('newsBtn');
       if (nb) nb.addEventListener('click', () => loadNews(true));
     })();
