@@ -165,6 +165,41 @@ function rig(opts) {
     eq(r.calls.one, ['AAPL'], 'no request for a symbol with no CIK');
     ok(a.done, 'done');
   }
+  // SAME-DAY RESULTS 8-Ks: the live feed, as the SEC printed it on 2026-10-27.
+  {
+    const entry = (title, cik, filed, accn, items, form) => `<entry>
+<title>${form || '8-K'} - ${title} (${cik}) (Filer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/1/x-index.htm"/>
+<summary type="html">
+ &lt;b&gt;Filed:&lt;/b&gt; ${filed} &lt;b&gt;AccNo:&lt;/b&gt; ${accn} &lt;b&gt;Size:&lt;/b&gt; 2 MB
+${items.map((i) => '&lt;br&gt;Item ' + i + ': Something').join('\n')}
+</summary>
+<updated>${filed}T07:03:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="${form || '8-K'}"/>
+<id>urn:tag:sec.gov,2008:accession-number=${accn}</id>
+</entry>`;
+    const FEED = '<?xml version="1.0"?><feed><title>Latest Filings</title>'
+      + entry('SoFi Technologies, Inc.', '0001818874', '2026-10-27', '0001818874-26-000065', ['2.02', '9.01'])
+      + entry('Federal Home Loan Bank of Indianapolis', '0001331754', '2026-10-27', '0001331754-26-000209', ['2.02', '9.01'])
+      + entry('Alphabet Inc.', '0001652044', '2026-10-27', '0001652044-26-000099', ['5.02'])
+      + entry('Travel &amp; Leisure Co.', '0001361658', '2026-10-26', '0001361658-26-000050', ['2.02', '7.01', '9.01'], '8-K/A')
+      + entry('Alphabet Inc.', '0001652044', '2026-10-24', '0001652044-26-000090', ['2.02', '9.01'])
+      + '</feed>';
+    const es = D.parseCurrent(FEED);
+    eq(es.length, 5, 'feed: five entries read');
+    eq(es[0], { cik: 1818874, form: '8-K', filed: '2026-10-27', accn: '0001818874-26-000065', items: '2.02,9.01' }, 'feed: SoFi read whole');
+    eq(es[3].form, '8-K/A', 'feed: an amendment keeps its form');
+    const ciks = new Map([[1818874, ['SOFI']], [1652044, ['GOOGL', 'GOOG']], [1361658, ['TNL']]]);
+    const hits = D.resultsFiled(es, ciks, '2026-10-26');
+    eq(hits.map((h) => h.symbol), ['SOFI', 'TNL'], 'results since the day before: tracked, item 2.02 only (Alphabet 5.02 out, the untracked bank out)');
+    eq(hits[0].accns, ['0001818874-26-000065'], 'the accession number travels with it');
+    eq(D.resultsFiled(es, ciks, '2026-10-24').map((h) => h.symbol), ['SOFI', 'TNL', 'GOOGL', 'GOOG'], 'further back: both share classes, each once');
+    eq(D.prevBusinessDay('2026-10-27'), '2026-10-26', 'previous business day: Tuesday -> Monday');
+    eq(D.prevBusinessDay('2026-10-26'), '2026-10-23', 'Monday -> Friday');
+    eq(D.prevBusinessDay('2026-10-31'), '2026-10-30', 'Saturday -> Friday');
+    eq(D.parseCurrent('<feed><entry><title>garbage</title></entry></feed>'), [], 'an entry without the fields is dropped');
+    ok(/getcurrent&type=8-K.*start=200&count=100&output=atom/.test(D.currentUrl(200)), 'feed url pages by a hundred');
+  }
   console.log(n + ' checks, ' + bad + ' failed');
   process.exit(bad ? 1 : 0);
 })();

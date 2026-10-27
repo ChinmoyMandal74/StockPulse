@@ -13797,6 +13797,59 @@ app.post('/api/sec/daily', route(async (req, res) => {
   res.json(out);
 }));
 
+// SAME-DAY RESULTS 8-Ks (2026-10-27; secdaily.js). The release run
+// (release-load.js) calls this before it looks for filings, so a results 8-K
+// filed this morning is in sec_events for the 09:15 run, not the next day's.
+// First call (no body): read the SEC's live 8-K feed back to the previous
+// business day (a page a hundred filings, SEC_TODAY_PAGES at most), keep the
+// item 2.02 filings of tracked companies not already stored, and re-read up
+// to SEC_TODAY_N of them through secDailyOne. What is left comes back as
+// `pending`; the caller hands it back ({ pending }) until it is empty, so the
+// feed is read once a run. A pending pair is honoured only if the symbol is
+// tracked and the CIK is its own. A 429 stops with the rest still pending.
+const SEC_TODAY_PAGES = 8, SEC_TODAY_N = 8;
+app.post('/api/sec/today', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!SEC_READY) return res.status(400).json({ error: 'No contact address configured for the SEC.' });
+  const [universe, state] = await Promise.all([store.readUniverse(), store.readSecState()]);
+  const ciks = SecDaily.cikMap(state, universe);
+  const own = (s, c) => (ciks.get(Number(c)) || []).includes(String(s).toUpperCase());
+  let pending, found = null, pages = 0;
+  if (Array.isArray(req.body && req.body.pending)) {
+    pending = req.body.pending.slice(0, 500).filter((p) => Array.isArray(p) && own(p[0], p[1])).map((p) => [String(p[0]).toUpperCase(), Number(p[1])]);
+  } else {
+    const since = SecDaily.prevBusinessDay(SecDaily.todayET());
+    const entries = [];
+    for (; pages < SEC_TODAY_PAGES; pages++) {
+      const r = await fetch(SecDaily.currentUrl(pages * 100), { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000) });
+      if (r.status === 429) return res.json({ throttled: true, done: true, pages, found: 0, read: [], pending: [] });
+      if (!r.ok) break;
+      const got = SecDaily.parseCurrent(await r.text());
+      entries.push(...got);
+      if (got.length < 90 || got.some((e) => e.filed < since)) { pages++; break; }
+    }
+    const hits = SecDaily.resultsFiled(entries, ciks, since);
+    pending = [];
+    for (const h of hits) {
+      // A company whose every such filing is already stored is not re-read.
+      const have = new Set((await store.readSecEvents(h.symbol, 10).catch(() => [])).map((e) => e.accn));
+      if (h.accns.some((a) => !have.has(a))) pending.push([h.symbol, h.cik]);
+    }
+    found = { results: hits.length, new: pending.length, since };
+  }
+  const read = [];
+  let throttled = false;
+  while (read.length < SEC_TODAY_N && pending.length) {
+    const [sym, cik] = pending[0];
+    let r;
+    try { r = await secDailyOne(sym, cik); } catch (e) { r = { status: 'error' }; }
+    if (r && r.throttled) { throttled = true; break; }
+    pending.shift();
+    if (r && r.ok) read.push(sym);
+  }
+  res.json({ found, pages, read, pending, throttled, done: throttled || !pending.length });
+}));
+
 // WHY IS ONE COMPANY'S NEWEST QUARTER MISSING (2026-10-13; secprobe.js).
 //
 // Asks the SEC about ONE company and says where its newest report stops: at

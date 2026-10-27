@@ -113,6 +113,33 @@ async function mailDigest() {
     console.log('  email: ' + (r.ok && d.sent ? 'sent, ' + d.companies + ' companies' : 'not sent (' + (d.error || r.status) + ')'));
   } catch (e) { console.log('  email: not sent (' + String(e.message).slice(0, 80) + ')'); }
 }
+// SAME-DAY RESULTS 8-Ks (2026-10-27, the owner, after SoFi's 07:03 filing
+// waited for the next day): before looking, ask the deployed app to read the
+// SEC's live 8-K feed and record the results 8-Ks filed since the previous
+// business day (POST /api/sec/today), looping while any company is left. The
+// daily SEC read only sees a day once its index is published that night.
+// Committed runs only (it writes sec_events); never fails the run.
+async function secToday() {
+  if (!COMMIT) return;
+  const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
+  if (!secret) { console.log('  same-day 8-Ks: CRON_SECRET is not set, skipped'); return; }
+  let body = {}, read = 0, found = null;
+  try {
+    for (let i = 0; i < 40; i++) {
+      const r = await fetch(base + '/api/sec/today', { method: 'POST', signal: AbortSignal.timeout(240000),
+        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + secret }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { console.log('  same-day 8-Ks: stopped (' + (d.error || r.status) + ')'); break; }
+      if (d.found) found = d.found;
+      read += (d.read || []).length;
+      if (d.throttled) { console.log('  same-day 8-Ks: the SEC asked us to slow down; the rest wait for the daily read'); break; }
+      if (d.done || !(d.pending || []).length) break;
+      if (!(d.read || []).length && body.pending && body.pending.length === d.pending.length) { console.log('  same-day 8-Ks: no progress, stopping'); break; }
+      body = { pending: d.pending };
+    }
+    console.log('  same-day 8-Ks: ' + (found ? found.results + ' tracked results filings since ' + found.since + ', ' + found.new + ' new, ' + read + ' companies recorded' : read + ' companies recorded'));
+  } catch (e) { console.log('  same-day 8-Ks: not read (' + String(e.message).slice(0, 80) + ')'); }
+}
 // The window the column covers: a quarter and a month, so a company that
 // reported early last season still shows until it reports again.
 const COLUMN_DAYS = 130;
@@ -269,6 +296,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   if (DRIVERS) { await driversPass(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
+  await secToday();
   const since = etDay(Date.now() - DAYS * 86400000);
   const [events, snap, ids] = await Promise.all([store.readSecEventsSince(since), store.readSnapshot(), store.readFilerIds()]);
   const tracked = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol && r.instrumentType !== 'ETF').map((r) => [r.symbol, r]));

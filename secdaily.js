@@ -172,4 +172,61 @@ async function step(o) {
     done: blocked || (!st.pending.length && !more), notes };
 }
 
-module.exports = { step, FORMS, todayET, datesToRead, startThrough, indexUrl, missingMeans, parseIndex, match, cikMap, addDays };
+// ---- SAME-DAY RESULTS 8-Ks (2026-10-27) ------------------------------------
+//
+// The owner, after SoFi filed its results at 07:03 and the 09:15 release run
+// did not read it: the index above is published the night of the day it
+// lists, so a results 8-K reached the release run the next morning. The SEC's
+// live feed of recent 8-Ks (EDGAR "current events", Atom, a hundred a page,
+// about five days deep) names each filing's CIK, accession number, day and
+// items as it is accepted. The release run asks the app to read it first
+// (/api/sec/today), keeps the item 2.02 filings of companies we track, and
+// re-reads just those companies through the daily check's own reader, so the
+// 8-K is in sec_events when the run looks. The daily index stays the record.
+function currentUrl(start) {
+  return 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&company=&dateb=&owner=include&start='
+    + (Number(start) || 0) + '&count=100&output=atom';
+}
+// One feed page -> [{ cik, form, filed, accn, items }]; items as '2.02,9.01'.
+// The summary is HTML escaped inside the XML, so the item lines are read
+// after unescaping the angle brackets.
+function parseCurrent(atom) {
+  const out = [];
+  for (const e of String(atom || '').split('<entry>').slice(1)) {
+    const title = (e.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
+    const cik = Number((title.match(/\((\d{4,10})\)\s*\((?:Filer|Subject)\)/) || [])[1]);
+    const form = ((e.match(/term="([^"]+)"/) || [])[1] || (title.split(' - ')[0] || '')).trim();
+    const sum = ((e.match(/<summary[^>]*>([\s\S]*?)<\/summary>/) || [])[1] || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const filed = (sum.match(/Filed:<\/b>\s*(\d{4}-\d{2}-\d{2})/) || [])[1];
+    const accn = (sum.match(/AccNo:<\/b>\s*([0-9-]{18,22})/) || [])[1];
+    const items = [...sum.matchAll(/Item\s+(\d+\.\d+)/g)].map((m) => m[1]);
+    if (!(cik > 0) || !filed || !accn || !/^8-K/.test(form)) continue;
+    out.push({ cik, form, filed, accn, items: items.join(',') });
+  }
+  return out;
+}
+// The tracked companies with a results 8-K (item 2.02) filed on or after
+// `since`: [{ symbol, cik, accns }], each symbol once, in feed order (newest
+// first), with every such filing's accession number so the caller can skip a
+// company whose filings are already stored.
+function resultsFiled(entries, ciks, since) {
+  const out = [], by = new Map();
+  for (const e of entries || []) {
+    if (e.filed < since || !/(^|,)2\.02(,|$)/.test(e.items)) continue;
+    for (const s of ciks.get(e.cik) || []) {
+      if (!by.has(s)) { const row = { symbol: s, cik: e.cik, accns: [] }; by.set(s, row); out.push(row); }
+      if (!by.get(s).accns.includes(e.accn)) by.get(s).accns.push(e.accn);
+    }
+  }
+  return out;
+}
+// The day the feed is read back to: the previous business day, so the
+// Saturday run and a morning run still catch the evening before.
+function prevBusinessDay(today) {
+  let d = addDays(today, -1);
+  while (!weekday(d)) d = addDays(d, -1);
+  return d;
+}
+
+module.exports = { step, FORMS, todayET, datesToRead, startThrough, indexUrl, missingMeans, parseIndex, match, cikMap, addDays,
+  currentUrl, parseCurrent, resultsFiled, prevBusinessDay };
