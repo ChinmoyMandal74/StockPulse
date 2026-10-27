@@ -3540,7 +3540,7 @@
       const card = document.getElementById('tone');
       if (!card) return;
       try {
-        const res = await fetch(`/api/news/tone?symbol=${encodeURIComponent(SYMBOL)}&limit=8&offset=${more ? toneHave.length : 0}`, { cache: 'no-store' });
+        const res = await sectionFetch(`/api/news/tone?symbol=${encodeURIComponent(SYMBOL)}&limit=8&offset=${more ? toneHave.length : 0}`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const seen = new Set(more ? toneHave.map((x) => x.url) : []);
@@ -3568,7 +3568,7 @@
       const card = document.getElementById('rels');
       if (!card || !window.ReleaseView) return;
       try {
-        const res = await fetch(`/api/releases?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
+        const res = await sectionFetch(`/api/releases?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
         if (!res.ok) return;
         const list = ((await res.json()).releases || []).slice(0, 1);
         if (!list.length) return;
@@ -3635,7 +3635,7 @@
         // results like this", then the table and the strip): every results
         // release on file, a line a quarter, and above it a strip of the stated
         // guidance changes, oldest to newest. A row opens its release in full.
-        const hist = await fetch(`/api/releases/history?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        const hist = await sectionFetch(`/api/releases/history?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
         const rows = (hist && hist.rows) || [];
         const box = document.getElementById('relsHist');
         if (!box || rows.length < 2) return;
@@ -3704,7 +3704,7 @@
       const btn = document.getElementById('newsBtn');
       if (btn) { btn.disabled = true; if (force) btn.textContent = 'Checking…'; }
       try {
-        const res = await fetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}&limit=${NEWS_PAGE}${force ? '&force=1' : ''}`, { cache: 'no-store' });
+        const res = await sectionFetch(`/api/news?symbol=${encodeURIComponent(SYMBOL)}&limit=${NEWS_PAGE}${force ? '&force=1' : ''}`, { cache: 'no-store' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'news unavailable');
         newsHave = data.items || [];
@@ -3994,6 +3994,32 @@
     fetch(`/api/stock/quick?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null)).then(drawQuick).catch(() => {});
     try { RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD); } catch (e) { /* the chart asks again */ }
+    // THE SECTIONS' DATA IS ASKED FOR NOW, BESIDE /api/stock (2026-10-27, the
+    // owner: "still not fast" in a fresh browser). None of these requests needs
+    // the page's payload, only the symbol, yet each loader below starts after
+    // /api/stock has landed -- seconds on an instance that has to fetch the
+    // snapshot first. The loaders take their first answer from here through
+    // sectionFetch (once each; a later call, the news button or the tone's
+    // "more", asks afresh); a card the page does not draw leaves its answer
+    // unread, which is one wasted request and nothing else.
+    const SECTION_PRE = new Map();
+    function sectionFetch(url, opts) {
+      const p = SECTION_PRE.get(url);
+      if (p) { SECTION_PRE.delete(url); return p; }
+      return fetch(url, opts);
+    }
+    {
+      const q = encodeURIComponent(SYMBOL);
+      [`/api/news?symbol=${q}&limit=${NEWS_PAGE}`, `/api/news/tone?symbol=${q}&limit=8&offset=0`,
+        `/api/releases?symbol=${q}`, `/api/releases/history?symbol=${q}`, '/api/peer-trend?symbol=' + q,
+        '/api/sec?symbol=' + q, '/api/insider?symbol=' + q, '/api/options?symbol=' + q,
+        '/api/capital-returns?symbol=' + q, '/api/segments?symbol=' + q, '/api/institutions?symbol=' + q,
+        '/api/institutions/history?symbol=' + q, '/api/fund-holders?symbol=' + q, '/api/holders?symbol=' + q,
+        '/api/events?symbol=' + q, '/api/shortint?symbol=' + q]
+        .forEach((u) => SECTION_PRE.set(u, fetch(u, { cache: 'no-store' })));
+      // The Drawdowns card's history, the volatility pane's key; RowCard keeps it.
+      try { RowCard.loadHistory(SYMBOL, VOL_MED_DAYS); } catch (e) { /* the card asks again */ }
+    }
 
     (async () => {
       let payload;
@@ -5538,7 +5564,7 @@
           if (pf) pf.remove();
         };
         try {
-          const r = await fetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
+          const r = await sectionFetch('/api/sec?symbol=' + encodeURIComponent(stock.symbol));
           // A refusal has to settle the row too, or it reads "still reading
           // the filings" for the rest of the session.
           if (!r.ok) { paintAnnRow(); drop(); return; }
@@ -5648,7 +5674,7 @@
         const card = document.getElementById('ins');
         if (!card) return;
         try {
-          const r = await fetch('/api/insider?symbol=' + encodeURIComponent(stock.symbol));
+          const r = await sectionFetch('/api/insider?symbol=' + encodeURIComponent(stock.symbol));
           if (!r.ok) { card.remove(); return; }
           const j = await r.json();
           if (!j.rows || !j.rows.length) { card.remove(); return; }
@@ -5780,7 +5806,7 @@
         const card = document.getElementById('ptrend');
         if (!card) return;
         try {
-          const r = await fetch('/api/peer-trend?symbol=' + encodeURIComponent(stock.symbol));
+          const r = await sectionFetch('/api/peer-trend?symbol=' + encodeURIComponent(stock.symbol));
           if (!r.ok) { card.remove(); return; }
           const d = await r.json();
           const usable = PeerTrend.METRICS.some(([k]) => PeerTrend.build(d, k, 'value').lines.length >= 3
@@ -5858,7 +5884,7 @@
         const card = document.getElementById('opt');
         if (!card) return;
         try {
-          const r = await fetch('/api/options?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/options?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const P = (await r.json()).options;
           if (!P || !(P.total > 0)) { card.remove(); return; }
@@ -5896,7 +5922,7 @@
         const card = document.getElementById('capret');
         if (!card) return;
         try {
-          const r = await fetch('/api/capital-returns?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/capital-returns?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const R = (await r.json()).returns;
           if (!R || !R.last || !(R.years || []).some((y) => y.buybacks != null || y.dividends != null || y.stockComp != null)) { card.remove(); return; }
@@ -5944,7 +5970,7 @@
         if (!card) return;
         await holderReady;
         try {
-          const r = await fetch('/api/fund-holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/fund-holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const F = (await r.json()).funds;
           if (!F || !F.count) { card.remove(); return; }
@@ -5980,7 +6006,7 @@
         const card = document.getElementById('seg');
         if (!card) return;
         try {
-          const r = await fetch('/api/segments?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/segments?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const S0 = (await r.json()).segments;
           if (!S0 || !S0.kinds || !S0.kinds.length) { card.remove(); return; }
@@ -6061,7 +6087,7 @@
         if (!card) return;
         await holderReady;
         try {
-          const r = await fetch('/api/institutions?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/institutions?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const h = (await r.json()).holding;
           if (!h || !h.managers) { card.remove(); return; }
@@ -6116,7 +6142,7 @@
         } catch { card.remove(); }
       }
       async function loadInstQuarters(h) {
-        const r = await fetch('/api/institutions/history?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+        const r = await sectionFetch('/api/institutions/history?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
         if (!r.ok) return;
         const qs = ((await r.json()).quarters || []).filter((q) => q.change != null);
         if (qs.length < 2) return;
@@ -6153,7 +6179,7 @@
         if (!card) return;
         await holderReady;
         try {
-          const r = await fetch('/api/holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/holders?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const j = await r.json();
           const list = Array.isArray(j.filings) ? j.filings : [];
@@ -6184,7 +6210,7 @@
         const card = document.getElementById('ev');
         if (!card) return;
         try {
-          const r = await fetch('/api/events?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
+          const r = await sectionFetch('/api/events?symbol=' + encodeURIComponent(stock.symbol), { cache: 'no-store' });
           if (!r.ok) { card.remove(); return; }
           const j = await r.json();
           const list = Array.isArray(j.events) ? j.events : [];
@@ -6212,7 +6238,7 @@
         const card = document.getElementById('sint');
         if (!card) return;
         try {
-          const r = await fetch('/api/shortint?symbol=' + encodeURIComponent(stock.symbol));
+          const r = await sectionFetch('/api/shortint?symbol=' + encodeURIComponent(stock.symbol));
           if (!r.ok) { card.remove(); return; }
           const j = await r.json();
           const st = j.study;
@@ -6308,7 +6334,8 @@
       // this only attaches the toggle and applies the remembered choice.
       wireAround();
       // THE SECTIONS IN PAGE ORDER, SIX AT A TIME (2026-10-27, the owner
-      // asked for a faster page). All fifteen used to start at once, so the
+      // asked for a faster page). Their requests went out with /api/stock
+      // (SECTION_PRE above); this orders the drawing. All fifteen used to start at once, so the
       // cards at the top competed with the bottom ones for the server, and a
       // burst of fifteen could wake as many cold instances. Not "load when
       // scrolled to": every card starts hidden and the jump menu lists the

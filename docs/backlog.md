@@ -2529,6 +2529,12 @@ Measured with `/api/diag/serve-timing` the same day: the snapshot read is
   of every reader: twenty-four routes and functions read it
   (page-load-speed.md). The quick first draw already hides most of the wait.
 
+  **The first route is built (2026-10-27, after the owner found the page still
+  slow in a fresh browser):** a gzipped copy in `snapshot_gz`, written after
+  the plain row and read only when its stamp is the version, so every reader
+  is unchanged. The per-symbol rows remain open, if the cold read is still
+  too slow once measured.
+
 Nothing here touches the Signal.
 
 ## What is deliberately NOT on this list

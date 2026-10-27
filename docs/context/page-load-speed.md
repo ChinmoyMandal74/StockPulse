@@ -51,3 +51,26 @@ The owner: "Look at the individual stock page and give me ideas of how make it l
 
   The news change was checked by reading it, not run (news is off in the test harness).
 - **Not done yet**, from the same list: moving the 412 KB inline script into a cacheable `stock.js`; storing the snapshot compressed or reading one row for `/api/stock` (the owner's call: it changes how the one shared table is written); a `?symbol=` mode for the timing route.
+
+## The cold stock page (2026-10-27, second round)
+
+The owner, the same day: "I opened the app in incognito mode, individual stock page is still not fast". A fresh browser has an empty cache, so the caching above does nothing for it; what is left is the first load.
+
+**Measured on production first**, signed in as a guest (a cookie, no database write) in headless Chrome with the cache off (scratchpad `prodprobe.js`). On a warm instance every request was done in about 2 s, and the browser's own work was small: about 0.7 s of main-thread time, one 87 ms long task. `/api/stock` took 1.0 s warm, and the fifteen section requests started only after it answered (at 1.27 s). The time goes on a **cold instance**, after a deploy or a quiet spell: the 5.3 MB snapshot read, 4.5 s, with every section queued behind it. From the laptop the read grows faster than its size: 0.1 MB 40 ms, 0.7 MB 88 ms, 2 MB 0.3 s, 5.4 MB 1.9 s. Gzipped it is 1.24 MB (100 ms to zip, 17 ms to unzip).
+
+**Three changes.**
+
+1. **A gzipped copy of the snapshot** (`snapshot_gz`, one row, base64 text). `writeSnapshot` writes the plain row as before, then the copy, in its own try: a copy that does not land is never used. `readSnapshot` reads the copy only when its `updated_at` is the version it has just read; a stale copy, a corrupt one or none falls back to the plain row, so it can cost time but never serve old prices. Every reader is unchanged. The first refresh after the deploy writes the first copy.
+2. **`/api/stock` runs its four trailing reads together**: the newest release, the flows on copies of every row, the tone figure and the segments were four round trips one after another. They now start with the row stamps. **And it now applies `stampShortNames`**, which it never did: its picker and peer-table short names were whatever another route had stamped on the shared cached snapshot within its 20 seconds ("Gap Inc. (The)" one visit, "Gap Inc" the next). Found because moving the section requests earlier changed which route got there first.
+3. **The page asks for every section's data at the start, beside `/api/stock`** (`SECTION_PRE`, `sectionFetch` in `stock.html`). None needs the payload, only the symbol. Each loader takes its first answer from there, once; a later call (the news button, the tone's "more") asks afresh. A card the page does not draw leaves its answer unread: for a guest, peer-trend and tone answer 403 at once; for a company with no releases or 13F managers, the two history requests are spare. `runSections(6)` still orders the drawing. That gives up the "six at a time" limit of the first round. The burst of sixteen that limit avoided is accepted because none of these routes reads the whole snapshot (segments reads it through the cache).
+
+- Tests (scratchpad `coldload-test.js`, 16 checks, in-memory server, the gz read slowed to 2.5 s to stand in for a cold instance):
+  - the copy is the plain payload under a quarter of its size;
+  - a cold read takes the copy, a warm one memory;
+  - a stale decoy copy, a corrupt copy and no copy each give the plain row (the stamp check proved by removing it);
+  - every section is asked before `/api/stock` answers, each exactly once, most answered before it;
+  - the Drawdowns history is asked once, early;
+  - the news button asks the server again;
+  - no script errors.
+- The same suite run against the previous commit in a worktree draws the same cards. Its `/api/stock` output is field-for-field identical to the new code's.
+- This morning's `speed-test.js` now fails its "six at once" check, as designed.

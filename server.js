@@ -11252,20 +11252,41 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // IN PARALLEL, each with its own catch, which is the screener's own rule:
   // they are independent single-row reads, and a slow auxiliary read should
   // cost one row rather than 500 the page.
+  //
+  // AND THE GLANCE CARDS' FOUR READS BESIDE THEM (2026-10-27, the owner: the
+  // page still slow). They were awaited one after another below, four round
+  // trips in a row on every visit; none reads another's result. Each keeps
+  // its own catch, as before.
+  //
+  // THE DISPLAY NAMES, ON EVERY ROW (2026-10-27). This route never applied
+  // stampShortNames, so the picker's and the peer table's short names were
+  // whatever another route had stamped on the shared cached snapshot within
+  // its 20 seconds -- "Gap Inc. (The)" on one visit, "Gap Inc" on the next.
+  // Found when the section requests moved earlier and changed which route got
+  // there first. The glance copies wait for it, so they carry the names too.
+  const namesDone = stampShortNames(stocks).catch(() => {});
+  const glanceReads = Promise.all([
+    store.readEarningsReleases(stock.symbol, 2).catch(() => null),
+    (async () => { await namesDone; const rows = stocks.map((r) => Object.assign({}, r)); await stampFlows(rows); return rows; })().catch(() => null),
+    guest ? Promise.resolve(null) : toneColumnFig().catch(() => null),
+    segmentsPayload(stock.symbol).catch(() => null),
+  ]);
   await Promise.all([
+    namesDone,
     stampPricedAt([stock]).catch(() => {}),
     stampAdviceAge([stock]).catch(() => {}),
     stampAthDistance([stock]).catch(() => {}),
     stampSpMember([stock]).catch(() => {}),
     stampFlows([stock]).catch(() => {}),
   ]);
+  const [relRows, flowRows, toneFig, segPayload] = await glanceReads;
   // THE NEWEST RESULTS RELEASE for the At a glance card "Earnings and
   // guidance" (2026-10-23, the owner): its figures (ReleaseView.fields, the
   // er- fields the screener reads) on a copy of the row for Glance.build only;
   // the stock row itself is not touched. One indexed read; never fails the page.
   let glanceRow = stock;
   try {
-    const rel = (await store.readEarningsReleases(stock.symbol, 2)).filter((r) => r.isResults)[0];
+    const rel = (relRows || []).filter((r) => r.isResults)[0];
     if (rel) glanceRow = Object.assign({}, stock, globalThis.ReleaseView.fields(Releases.forReader(rel, [])));
   } catch (e) { glanceRow = stock; }
   // ARTICLE TONE for the 13th card (2026-10-26): the stored Tone 7D figure on
@@ -11275,15 +11296,13 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // objects (stampFlows writes into what it is given): the folded filings
   // figures (buyback yield, share count change, the dividend record) for
   // Capital returns (2026-10-26), and the tone for a member.
-  let glanceRows = stocks;
-  try {
-    glanceRows = stocks.map((r) => Object.assign({}, r));
-    await stampFlows(glanceRows);
-  } catch (e) { glanceRows = stocks; }
+  let glanceRows = flowRows || stocks;
+  // The copies were taken before this row's own stamps landed: its copy is
+  // replaced by the stamped row, as the sequential version had it.
+  if (flowRows) { const i = stocks.indexOf(stock); if (i >= 0) glanceRows[i] = Object.assign({}, stock); }
   if (!guest) {
     try {
-      const tf = await toneColumnFig();
-      const tr = (tf && tf.rows) || {};
+      const tr = (toneFig && toneFig.rows) || {};
       const withTone = (r) => { const t = r && tr[r.symbol]; return t ? Object.assign({}, r, { toneAvg: t[0], toneN: t[1], tonePos: t[2], toneNeg: t[3] }) : r; };
       glanceRow = withTone(glanceRow);
       glanceRows = glanceRows.map(withTone);
@@ -11292,8 +11311,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // REVENUE MIX for its card (2026-10-26): the company's own segment report,
   // one compact view on the glance row only (segMixOf). Never fails the page.
   try {
-    const sp = await segmentsPayload(stock.symbol);
-    const mix = segMixOf(sp && sp.segments);
+    const mix = segMixOf(segPayload && segPayload.segments);
     if (mix) glanceRow = Object.assign({}, glanceRow, { segMix: mix });
   } catch (e) { /* the mix card is left out */ }
 
