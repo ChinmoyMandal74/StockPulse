@@ -17474,7 +17474,10 @@ app.get('/api/basket', requireMember, route(async (req, res) => {
   // instance, keyed by the list, the window and the named symbols. A member's
   // own list ('my:') is never cached: it is theirs, and it is small.
   const key = name.startsWith('my:') ? null : `${name}|${days}|${only.join(',')}`;
-  const hit = key && basketCache.get(key);
+  // ?fresh=1 from an admin skips the cached copy (the theme page after an
+  // edit, 2026-10-27), and the fresh answer replaces it.
+  const fresh = String(req.query.fresh || '') === '1' && (await isAdmin(req));
+  const hit = key && !fresh && basketCache.get(key);
   if (hit && Date.now() - hit.at < BASKET_TTL_MS) return res.json(hit.body);
   const out = await basketPayload(req, name, days, only.length ? only : null);
   if (out.error) return res.status(out.status).json({ error: out.error });

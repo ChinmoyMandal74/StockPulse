@@ -65,6 +65,30 @@
             font-size: 11.5px; color: var(--muted); }
     .lede { margin: 8px 0 20px; font-size: 12.5px; }
 
+    /* the theme editor (2026-10-27): admin, shared themes only */
+    #thEditBtn { margin-left: 2px; }
+    #thEdit { margin: -6px 0 18px; }
+    #thEdit .core { padding: 16px 20px 14px; display: grid; gap: 12px; }
+    #thEdit .addrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    #thEdit input { width: 150px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hair-2);
+                    background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text);
+                    font: 500 12.5px var(--mono); text-transform: uppercase; }
+    #thEdit input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+    #thEdit .st { font-size: 12px; color: var(--muted); }
+    #thEdit .st.err { color: var(--amber); }
+    #thEdit .st button { margin-left: 6px; padding: 0; border: 0; background: none; cursor: pointer;
+                         font: 500 12px var(--sans); color: var(--accent); text-decoration: underline; }
+    #thEdit .mem { display: flex; flex-wrap: wrap; gap: 6px; }
+    #thEdit .mem button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 11px;
+                          border-radius: 999px; border: 1px solid var(--hair); cursor: pointer;
+                          background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+                          font: 500 11.5px var(--mono); color: var(--muted); }
+    #thEdit .mem button span { font-family: var(--sans); font-size: 14px; line-height: 1; color: var(--faint); }
+    #thEdit .mem button:hover { color: var(--text); border-color: var(--hair-2); }
+    #thEdit .mem button:hover span { color: var(--text); }
+    #thEdit .mem button.nodata { border-style: dashed; }
+    #thEdit .mem button:disabled { opacity: 0.45; cursor: default; }
+
     .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
     /* A GRID ITEM IS min-width: auto, so it refuses to shrink below its
        content — the stock table's 620px floor then pushed the card wider
@@ -284,6 +308,15 @@
     let allRows = [];        // the whole visible snapshot, for context means
     let curve = null;        // /api/basket payload for the current range
     const curveCache = {};
+    // THE THEME EDITOR (2026-10-27, the owner: "give me ability to add or
+    // remove a stock from the theme on top"). Admin only, shared themes only:
+    // the same two routes the screener's theme menu uses, which answer with
+    // the fresh theme map. The server enforces requireAdmin; hiding the
+    // button is only manners.
+    let isAdmin = false;
+    let members = [];        // the theme's symbols as stored, with or without data
+    let editOpen = false;
+    let editMsg = '', editErr = false, editUndo = null, editBusy = false, edited = false;
     let sharedNames = [];    // from the snapshot payload
     let myNames = [];        // the member's own lists
     let showStocks = null;   // null until the first paint decides the default
@@ -909,6 +942,56 @@
         + '</div></section>';
     }
 
+    function canEdit() {
+      return isAdmin && SCOPE === 'theme' && NAME !== 'All' && !/^my:/.test(NAME) && !(curve && curve.mine);
+    }
+    function editHtml() {
+      const have = new Set(allRows.map((x) => x.symbol));
+      const chips = members.slice().sort().map((m) =>
+        `<button type="button" data-rm="${esc(m)}"${have.has(m) ? '' : ' class="nodata"'}${editBusy ? ' disabled' : ''} ` +
+        `title="Take ${esc(m)} out of ${esc(NAME)}${have.has(m) ? '' : ' (no data yet)'}">${esc(m)}<span aria-hidden="true">×</span></button>`).join('');
+      return '<section id="thEdit" class="bezel card"><div class="core">' +
+        `<h2>Edit ${esc(NAME)}</h2>` +
+        '<form class="addrow" id="thAddForm" autocomplete="off">' +
+        `<input id="thAddSym" maxlength="12" spellcheck="false" placeholder="Add a symbol" aria-label="Symbol to add"${editBusy ? ' disabled' : ''} />` +
+        `<button class="rng" type="submit"${editBusy ? ' disabled' : ''}>Add</button>` +
+        `<span id="thSt" class="st${editErr ? ' err' : ''}" role="status">${esc(editMsg)}` +
+        (editUndo ? `<button type="button" id="thUndo">Undo</button>` : '') + '</span></form>' +
+        `<div class="mem" aria-label="Stocks in ${esc(NAME)}">${chips || '<span class="st">No stocks in this theme.</span>'}</div>` +
+        '<p class="note">Click a stock to take it out of this theme; it stays in the screener and in any other theme. ' +
+        'A symbol new to the screener joins it too, and has no prices or fundamentals until the next refresh ' +
+        '(dashed: in the theme, no data yet).</p>' +
+        '</div></section>';
+    }
+    async function editTheme(method, sym) {
+      const url = method === 'POST'
+        ? `/api/portfolios/${encodeURIComponent(NAME)}/tickers`
+        : `/api/portfolios/${encodeURIComponent(NAME)}/tickers/${encodeURIComponent(sym)}`;
+      const r = await fetch(url, { method, headers: { 'content-type': 'application/json' },
+        body: method === 'POST' ? JSON.stringify({ symbol: sym }) : undefined });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || ('The server answered ' + r.status + '.'));
+      return d;
+    }
+    async function runEdit(method, sym) {
+      editBusy = true; editMsg = (method === 'POST' ? 'Adding ' : 'Taking out ') + sym + '…'; editErr = false; editUndo = null; paint();
+      try {
+        const d = await editTheme(method, sym);
+        const known = allRows.some((x) => x.symbol === sym);
+        editMsg = method === 'POST'
+          ? sym + (d.name ? ' (' + d.name + ')' : '') + ' added to ' + NAME + '.' + (known ? '' : ' No data yet: it fills in on the next refresh.')
+          : sym + ' taken out of ' + NAME + '.';
+        if (method === 'POST' && !d.name && !known) editMsg += ' No company name came back for it, so check the symbol.';
+        editUndo = { method: method === 'POST' ? 'DELETE' : 'POST', sym };
+        edited = true;
+        for (const k of Object.keys(curveCache)) delete curveCache[k];
+        editBusy = false;
+        await loadAll(true);
+      } catch (err) {
+        editBusy = false; editMsg = err.message; editErr = true; paint();
+      }
+    }
+
     function paint() {
       const main = $('main');
       if (!rows.length) {
@@ -963,7 +1046,8 @@
       const chips = `<span class="chip">${rows.length} stocks</span>` +
         (SCOPE === 'sector' ? `<span class="chip">${inds.size} industr${inds.size === 1 ? 'y' : 'ies'}</span>`
           : SCOPE === 'industry' ? `<span class="chip">${esc([...sectors][0] || 'no sector recorded')}</span>`
-            : `<span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span>`);
+            : `<span class="chip">${sectors.size} sector${sectors.size === 1 ? '' : 's'}</span>`) +
+        (canEdit() ? `<button type="button" id="thEditBtn" class="rng${editOpen ? ' on' : ''}" aria-expanded="${editOpen}">${editOpen ? 'Done editing' : 'Add or remove stocks'}</button>` : '');
       main.innerHTML =
         `<div class="head"><h1 class="ppick">` +
         `<button id="pfBtn" aria-expanded="false" aria-haspopup="listbox" title="Pick another group">` +
@@ -971,10 +1055,25 @@
         `<div id="pfMenu">${menu}</div>` +
         `</h1><span class="kind" style="font-size:15px">${esc(kindWord)}</span>${chips}</div>` +
         '<p class="lede">A screener’s view of the group as one thing — descriptive throughout, positions nowhere.</p>' +
+        (canEdit() && editOpen ? editHtml() : '') +
         `<div class="grid">${curveCard()}${stanceHtml()}${compositionHtml()}${leadersHtml()}` +
         `${returnsHtml()}${correlationHtml()}${fundamentalsHtml()}${stocksHtml()}</div>`;
       const more = $('moreRows');
       if (more) more.addEventListener('click', () => { listShown += 50; paint(); });
+      const eb = $('thEditBtn');
+      if (eb) eb.addEventListener('click', () => { editOpen = !editOpen; editMsg = ''; editErr = false; editUndo = null; paint(); if (editOpen && $('thAddSym')) $('thAddSym').focus(); });
+      const af = $('thAddForm');
+      if (af) af.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sym = String($('thAddSym').value || '').trim().toUpperCase();
+        if (!sym) return;
+        if (!/^[A-Z0-9.\-]{1,12}$/.test(sym)) { editMsg = 'A symbol is letters, digits, dots and dashes.'; editErr = true; editUndo = null; paint(); return; }
+        if (members.includes(sym)) { editMsg = sym + ' is already in ' + NAME + '.'; editErr = true; editUndo = null; paint(); return; }
+        runEdit('POST', sym);
+      });
+      document.querySelectorAll('#thEdit [data-rm]').forEach((b) => b.addEventListener('click', () => runEdit('DELETE', b.dataset.rm)));
+      const ub = $('thUndo');
+      if (ub) ub.addEventListener('click', () => { const u = editUndo; if (u) runEdit(u.method, u.sym); });
       // A FIRST CLICK SHOWS THE INTERESTING END. A number opens descending
       // (biggest, best, furthest up) and a name opens A-Z, which is what both
       // mean by "the top"; clicking the column again flips it. The screener's
@@ -1088,7 +1187,8 @@
       if (curveCache[key]) { curve = curveCache[key]; paint(); return; }
       curve = null; paint();
       try {
-        const r = await fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' });
+        // After an edit every window is asked fresh: another instance may hold the old list.
+        const r = await fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}${edited ? '&fresh=1' : ''}`, { cache: 'no-store' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Could not load the curve.');
         curveCache[key] = d;
@@ -1099,11 +1199,11 @@
       paint();
     }
 
-    (async () => {
+    async function loadAll(fresh) {
       try {
-        const [snap, bk, mine] = await Promise.all([
+        const [snap, bk, mine, me] = await Promise.all([
           fetch('/api/stocks', { cache: 'no-store' }).then((r) => r.json()),
-          fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}`, { cache: 'no-store' }).then(async (r) => {
+          fetch(`/api/basket?name=${encodeURIComponent(NAME)}&days=${range.days}${fresh ? '&fresh=1' : ''}`, { cache: 'no-store' }).then(async (r) => {
             const d = await r.json();
             if (!r.ok) throw new Error(d.error || `No such ${SCOPE_WORD[SCOPE]}.`);
             return d;
@@ -1111,7 +1211,10 @@
           fetch('/api/my/portfolios', { cache: 'no-store' })
             .then((r) => (r.ok ? r.json() : { portfolios: {} }))
             .catch(() => ({ portfolios: {} })),
+          fetch('/api/me', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
         ]);
+        isAdmin = !!(me && me.admin);
+        members = (bk.symbols || []).slice();
         sharedNames = snap.portfolios || [];
         myNames = Object.keys(mine.portfolios || {});
         allRows = (snap.stocks || []).filter((s) => !s.error);
@@ -1124,7 +1227,8 @@
       } catch (err) {
         $('main').innerHTML = `<div class="bezel card"><div class="core"><div class="error">${esc(err.message)} <a href="/" style="color:var(--accent)">Back to the screener</a>.</div></div></div>`;
       }
-    })();
+    }
+    loadAll();
   </script>
 </body>
 </html>

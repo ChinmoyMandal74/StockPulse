@@ -88,3 +88,13 @@
   - **A REVERT THAT ABORTS THE SUITE REPORTS "NOT LOAD-BEARING".** Slicing before the sort leaves 50 rows as the whole list, so `Show 50 more` is never drawn and a bare `page.click('#moreRows')` **throws** — 28 of 43 checks ran and the harness reported 6 failures where there are 8. Assert the button exists, then click the handle; the `page.selectOption` trap in a new shape.
   - **The glyphs in the source are LITERAL UTF-8, not `▾` escapes**, so a double-backslashed anchor looked for text the file does not contain — and the source line ends `` </span></th>` ``, so an anchor carrying that trailing backtick matched nothing either. Two separate ways for one anchor to miss.
 
+
+## Editing a theme from its page (2026-10-27)
+
+The owner: "From these theme page, Can you give me ability to add or remove a stock from the theme on top".
+
+- **Admin, shared themes only.** An "Add or remove stocks" button on the heading row, beside the chips, when `/api/me` says admin and the page is a shared theme: not All, not a personal (`my:`) theme, not a sector, industry or size page. It opens an "Edit <theme>" card above the grid: a symbol box with Add, a status line, and every stored member as a chip (from the basket's `symbols`, so members with no data are included and drawn dashed). Clicking a chip takes that stock out.
+- **The screener's own routes:** `POST /api/portfolios/:name/tickers` and `DELETE /api/portfolios/:name/tickers/:symbol`, both `requireAdmin`. Adding a symbol new to the screener adds it to the universe, as the screener's theme menu does; it has no data until the next refresh, and the message says so (and flags it when no company name came back). Taking one out leaves it in the screener and other themes.
+- **Undo** sits beside the message and reverses the last edit. Duplicates and malformed symbols are refused in the page before any request.
+- **Caching:** `/api/basket` keeps a 10-minute copy per instance. After an edit the page asks with `?fresh=1`, which an admin may use to skip and replace the cached copy, for every window from then on (`edited`).
+- Tests: a scratchpad browser suite (20 checks) on the in-memory server. It covers the button absent on All and on a sector page, add and remove reaching the stored theme and the count, a removed stock staying in the universe, Undo, a no-data symbol drawn dashed, and no sideways scroll at 390px.
