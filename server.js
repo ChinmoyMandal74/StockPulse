@@ -4540,6 +4540,10 @@ function stampCapDerived(rows) {
   for (const r of rows) {
     if (!r || !r.symbol) continue;
     r.capBand = Filters.capBandOf(r.marketCap);
+    // Insiders and Instit. days to cover (filters.js holderDays): derived on
+    // the way out from fields already on the row, never stored, read by no rule.
+    r.insDays = Filters.holderDays(r.insiderPct, r.sharesOutstanding, r.avgVol20, r.volume, r.volX);
+    r.instDays = Filters.holderDays(r.institutionPct, r.sharesOutstanding, r.avgVol20, r.volume, r.volX);
     // The word for the distance below the 52-week high (filters.js). Derived
     // on the way out like the size band, never stored, and read by no rule.
     r.ddState = Filters.ddStateOf(r.pctFromHigh, r.historyDays);
@@ -9340,6 +9344,9 @@ async function computeStocks(asOf, opts = {}) {
         macdSignal: mac ? mac.signal : null,
         volTrend: volumeTrendPct(values),
         volX: volumeX(values),             // today's volume / its prior 20-day average
+        // That prior 20-day average itself, for Insiders and Instit. days to
+        // cover (Filters.holderDays). Display only: read by no rule.
+        avgVol20: (() => { const a = avgVolume(values, 20, 1); return a != null && a > 0 ? Math.round(a) : null; })(),
         // Today's shares traded and their value — what "most active" means. A
         // mid-session refresh sees the volume so far, which is what it is.
         //

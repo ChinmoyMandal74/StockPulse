@@ -598,6 +598,9 @@
     ['own',   'Short % out',    (s) => V.short(s.shortPctOutstanding)],
     ['own',   'Insiders',       (s) => V.lvl(s.insiderPct)],
     ['own',   'Institutions',   (s) => V.lvl(s.institutionPct)],
+    // Stamped on the way out (server stampCapDerived, Filters.holderDays).
+    ['own',   'Insiders days to cover', (s) => (ok(s.insDays) ? { t: Number(s.insDays).toFixed(1), c: '', n: Number(s.insDays), u: 'num' } : null)],
+    ['own',   'Instit. days to cover',  (s) => (ok(s.instDays) ? { t: Number(s.instDays).toFixed(1), c: '', n: Number(s.instDays), u: 'num' } : null)],
     // The newest 13D or 13G filed about the company in the last sixty days.
     // Form 13F: how many institutional managers held it at the last published
     // quarter end, and the change in their combined shares on the quarter before.

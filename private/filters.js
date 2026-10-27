@@ -110,6 +110,28 @@
     return null;
   }
 
+  // DAYS TO COVER FOR A HOLDER (2026-10-26, the owner: "Like how we have Short
+  // Days to cover ... Insiders Days to Cover and Instit Days to Cover"). The
+  // shares a holder group owns over the average shares traded a day: how many
+  // days of normal trading it would take to absorb them, the way Short days to
+  // cover is the shorts' position over the same. A size, not a forecast.
+  //   shares held  = pct of shares held (the price provider's) x shares out
+  //   average day  = avgVol20, the prior 20 sessions' average volume, put on
+  //                  the row by the price refresh from the bars it holds.
+  // A row written before avgVol20 existed falls back to today's volume over
+  // Rel. volume (volX), which gives that same average back -- but volX is
+  // rounded to two places, so early in a session (volX 0.03) the average could
+  // be 17% out; the fallback is taken only at volX 0.5 or more (within 1%).
+  // Every input must be present and positive; any gap is a blank, never zero.
+  function holderDays(pct, sharesOut, avgVol, volume, volX) {
+    const n = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const p = n(pct), so = n(sharesOut), a = n(avgVol), v = n(volume), x = n(volX);
+    if (p == null || p <= 0 || so == null || so <= 0) return null;
+    const adv = a != null && a > 0 ? a : (v != null && v > 0 && x != null && x >= 0.5 ? v / x : null);
+    if (adv == null) return null;
+    return Math.round((p / 100) * so / adv * 10) / 10;
+  }
+
   function capBandOf(cap) {
     if (cap == null || !isFinite(cap) || cap <= 0) return null;
     for (const b of CAP_BANDS) if (cap >= b.min) return b.label;
@@ -440,7 +462,7 @@
   return {
     PULLBACK, cardScreen,
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
-    CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf,
+    CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf, holderDays,
     DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,
