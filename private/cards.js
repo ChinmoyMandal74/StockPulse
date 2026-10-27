@@ -8723,7 +8723,17 @@
   //
   // INDEX MEMBERSHIP IS THREE-STATE. `spMember` is true, false or unknown,
   // and unknown is not "not a member".
-  const COV_TPLS = { covsize: { by: 'size', word: 'by size', row: 'Size band' }, covsector: { by: 'sector', word: 'by sector', row: 'Sector' }, covindex: { by: 'index', word: 'by index', row: 'Index membership' } };
+  const COV_TPLS = { covsize: { by: 'size', word: 'by size', row: 'Size band' }, covsector: { by: 'sector', word: 'by sector', row: 'Sector' }, covindex: { by: 'index', word: 'by index', row: 'Index membership' },
+    // (2026-10-27, the owner: "This visual is missing the instrument type".)
+    // What each security IS, from the provider's free US reference list --
+    // the screener's Instrument column. A label, not a judgement: an ADR or a
+    // REIT is as much a company here as a common stock.
+    covinst: { by: 'instrument', word: 'by instrument', row: 'Instrument' } };
+  // The provider's labels, shortened to fit the row at every size (the full
+  // "American Depositary Receipt" was cut off at all three); the note says
+  // what an ADR and a REIT are.
+  const COV_INST_LABEL = { 'American Depositary Receipt': 'ADR', 'Depositary Receipt': 'Depositary receipt', 'Limited Partnership': 'Partnership',
+    'Common Stock': 'Common stock', 'Preferred Stock': 'Preferred stock', 'Exchange-Traded Note': 'Exchange-traded note' };
   const COV_ROWS = { portrait: 12, square: 8, story: 13 };
   function coverageCard(tpl) {
     const T = COV_TPLS[tpl];
@@ -8742,6 +8752,13 @@
       rows = BRD_CAP_ORDER.filter((b) => m.has(b)).map((b) => ({ label: b, sub: BEAT_BAND_RANGE[b] || '', n: m.get(b).n, cap: m.get(b).cap }));
       if (m.has('')) rows.push({ label: 'No market value on file', sub: '', n: m.get('').n, cap: null, odd: true });
       extra = 'Size is today\u2019s market value. ';
+    } else if (T.by === 'instrument') {
+      const m = group((r) => (r.instrumentType ? String(r.instrumentType) : ''));
+      rows = [...m.keys()].filter((k) => k).map((k) => ({ label: COV_INST_LABEL[k] || k, sub: '', n: m.get(k).n, cap: m.get(k).cap }))
+        .sort((a, b) => b.n - a.n || (a.label < b.label ? -1 : 1));
+      if (m.has('')) rows.push({ label: 'Type not on file', sub: '', n: m.get('').n, cap: null, odd: true });
+      extra = 'The instrument is what the security is, from the data provider\u2019s reference list of US listings. '
+        + 'An ADR is a foreign company\u2019s shares, traded in the US; a REIT is a real estate investment trust. ';
     } else if (T.by === 'sector') {
       const m = group((r) => (r.sector ? String(r.sector) : ''));
       rows = [...m.keys()].filter((k) => k).map((k) => ({ label: k, sub: new Set(m.get(k).rows.map((r) => r.industry).filter(Boolean)).size + ' industries', n: m.get(k).n, cap: m.get(k).cap }))
@@ -13680,6 +13697,7 @@
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
     covindex: () => coverageCard('covindex'),
+    covinst: () => coverageCard('covinst'),
     covdata: coverageData,
     covread: tplReadings,
     movegrid: tplMoveGrid,
