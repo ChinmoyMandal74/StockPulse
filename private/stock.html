@@ -6,6 +6,33 @@
   <title>Stock — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
+  <script>
+    // THE PAGE'S DATA IS ASKED FOR HERE, before the scripts below load
+    // (2026-10-27, the owner: "still not fast" in a fresh browser). The main
+    // script is at the end of the body and waits for every script tag above
+    // it; measured on production, two of them took 1.2 s on cold instances,
+    // and only then did /api/stock and the fifteen section requests start.
+    // None of them needs a script, only the symbol. sectionFetch (in the
+    // main script) takes each first answer from this map, once; the URLs
+    // must match the loaders' own exactly, or the loader simply asks again
+    // (news is NEWS_PAGE, 10).
+    window.STOCK_EARLY = (function () {
+      const m = new Map();
+      try {
+        const q = encodeURIComponent(decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || '').toUpperCase());
+        if (!q) return m;
+        ['/api/stock?symbol=' + q, '/api/stock/quick?symbol=' + q,
+          '/api/news?symbol=' + q + '&limit=10', '/api/news/tone?symbol=' + q + '&limit=8&offset=0',
+          '/api/releases?symbol=' + q, '/api/releases/history?symbol=' + q, '/api/peer-trend?symbol=' + q,
+          '/api/sec?symbol=' + q, '/api/insider?symbol=' + q, '/api/options?symbol=' + q,
+          '/api/capital-returns?symbol=' + q, '/api/segments?symbol=' + q, '/api/institutions?symbol=' + q,
+          '/api/institutions/history?symbol=' + q, '/api/fund-holders?symbol=' + q, '/api/holders?symbol=' + q,
+          '/api/events?symbol=' + q, '/api/shortint?symbol=' + q]
+          .forEach(function (u) { m.set(u, fetch(u, { cache: 'no-store' })); });
+      } catch (e) { /* the loaders ask for themselves */ }
+      return m;
+    })();
+  </script>
   <!-- Before anything paints: sets data-theme, so a light choice never flashes dark. -->
   <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -3991,40 +4018,29 @@
       const st = document.getElementById('status');
       if (st) st.hidden = true;
     }
-    fetch(`/api/stock/quick?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null)).then(drawQuick).catch(() => {});
     try { RowCard.loadHistory(SYMBOL, range.days + REPLAY_PAD); } catch (e) { /* the chart asks again */ }
-    // THE SECTIONS' DATA IS ASKED FOR NOW, BESIDE /api/stock (2026-10-27, the
-    // owner: "still not fast" in a fresh browser). None of these requests needs
-    // the page's payload, only the symbol, yet each loader below starts after
-    // /api/stock has landed -- seconds on an instance that has to fetch the
-    // snapshot first. The loaders take their first answer from here through
-    // sectionFetch (once each; a later call, the news button or the tone's
-    // "more", asks afresh); a card the page does not draw leaves its answer
+    // THE SECTIONS' DATA WAS ASKED FOR IN THE HEAD (STOCK_EARLY), beside
+    // /api/stock: none of it needs the payload, only the symbol, and each
+    // loader below used to start only after /api/stock had landed -- seconds
+    // on an instance that has to fetch the snapshot first. A loader takes its
+    // first answer from there, once; a later call (the news button, the tone's
+    // "more") asks afresh. A card the page does not draw leaves its answer
     // unread, which is one wasted request and nothing else.
-    const SECTION_PRE = new Map();
     function sectionFetch(url, opts) {
-      const p = SECTION_PRE.get(url);
-      if (p) { SECTION_PRE.delete(url); return p; }
+      const early = window.STOCK_EARLY;
+      const p = early && early.get(url);
+      if (p) { early.delete(url); return p; }
       return fetch(url, opts);
     }
-    {
-      const q = encodeURIComponent(SYMBOL);
-      [`/api/news?symbol=${q}&limit=${NEWS_PAGE}`, `/api/news/tone?symbol=${q}&limit=8&offset=0`,
-        `/api/releases?symbol=${q}`, `/api/releases/history?symbol=${q}`, '/api/peer-trend?symbol=' + q,
-        '/api/sec?symbol=' + q, '/api/insider?symbol=' + q, '/api/options?symbol=' + q,
-        '/api/capital-returns?symbol=' + q, '/api/segments?symbol=' + q, '/api/institutions?symbol=' + q,
-        '/api/institutions/history?symbol=' + q, '/api/fund-holders?symbol=' + q, '/api/holders?symbol=' + q,
-        '/api/events?symbol=' + q, '/api/shortint?symbol=' + q]
-        .forEach((u) => SECTION_PRE.set(u, fetch(u, { cache: 'no-store' })));
-      // The Drawdowns card's history, the volatility pane's key; RowCard keeps it.
-      try { RowCard.loadHistory(SYMBOL, VOL_MED_DAYS); } catch (e) { /* the card asks again */ }
-    }
+    // The Drawdowns card's history, the volatility pane's key; RowCard keeps it.
+    try { RowCard.loadHistory(SYMBOL, VOL_MED_DAYS); } catch (e) { /* the card asks again */ }
+    sectionFetch(`/api/stock/quick?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).then(drawQuick).catch(() => {});
 
     (async () => {
       let payload;
       try {
-        const res = await fetch(`/api/stock?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
+        const res = await sectionFetch(`/api/stock?symbol=${encodeURIComponent(SYMBOL)}`, { cache: 'no-store' });
         if (res.status === 401) { window.location.href = '/login'; return; }
         payload = await res.json();
         if (!res.ok) throw new Error(payload.error || 'Could not load this stock.');
