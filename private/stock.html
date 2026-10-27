@@ -1175,6 +1175,7 @@
                  text-decoration: underline dotted color-mix(in srgb, var(--amber) 55%, transparent);
                  text-underline-offset: 3px; cursor: help; }
     #sec td.per { font-family: var(--sans); font-weight: 600; }
+    #sec .secmore { margin-top: 10px; }
     #sec td.per .fp { color: var(--faint); font-weight: 400; margin-left: 7px;
                       font-family: var(--mono); font-size: 11px; }
     /* The filing link is the whole argument for this source, so it reads as
@@ -4906,6 +4907,11 @@
       let secMode = 'quarterly';
       // Which columns: the filed dollars, or the ratios derived from them.
       let secView = 'figures';
+      // The newest SEC_PAGE periods, the rest behind Show more (owner,
+      // 2026-10-26: "Only show top 4 lines, and rest put under a Show more
+      // button"). One state for both views and both period switches.
+      const SEC_PAGE = 4;
+      let secAll = false;
 
       // Money as filed: compact, signed, and NEVER abbreviated past the point
       // where -183.0M and -1.83B look alike.
@@ -5237,12 +5243,20 @@
       function paintSec() {
         const host = document.getElementById('secBody');
         if (!host || !secData) return;
-        const rows = secData[secMode] || [];
+        let rows = secData[secMode] || [];
         if (!rows.length) {
           host.innerHTML = '<p class="msg">No ' + secMode + ' periods filed.</p>';
           return;
         }
-        if (secView === 'ratios') { host.innerHTML = secRatiosHtml(rows); return; }
+        const more = rows.length > SEC_PAGE
+          ? '<button type="button" class="rng secmore" id="secMore">' +
+            (secAll ? 'Show fewer' : 'Show more — ' + (rows.length - SEC_PAGE) + ' earlier ' +
+              (secMode === 'annual' ? 'years' : 'quarters')) + '</button>'
+          : '';
+        const wire = () => { const b = document.getElementById('secMore');
+          if (b) b.addEventListener('click', () => { secAll = !secAll; paintSec(); }); };
+        if (!secAll) rows = rows.slice(0, SEC_PAGE);
+        if (secView === 'ratios') { host.innerHTML = secRatiosHtml(rows, more); wire(); return; }
         const anyDerived = rows.some((r) => r.derived || (r.derivedFields || []).length);
         let h = '<div class="stab"><table><thead><tr><th>Period</th>' +
           SEC_COLS.map((c) => '<th>' + esc(c[1]) + '</th>').join('') +
@@ -5268,7 +5282,7 @@
               esc(r.filed) + '</a>'
             : esc(r.filed || '—')) + '</td></tr>';
         }
-        h += '</tbody></table></div>';
+        h += '</tbody></table></div>' + more;
         // WHY THESE NUMBERS DIFFER FROM THE CARDS ABOVE, said before anyone
         // has to wonder: a different source, on a fiscal calendar, as filed.
         h += '<p class="note">Straight from the company’s own filings at ' +
@@ -5280,6 +5294,7 @@
           (anyDerived ? 'A dotted value was computed here rather than filed: no company files a fourth quarter, and a cash-flow statement is year-to-date, so those quarters are the difference between the cumulative periods either side. ' : '') +
           'Nothing on this card feeds the Signal or the screener.</p>';
         host.innerHTML = h;
+        wire();
       }
 
       // WHAT THE RULES MADE OF THOSE NUMBERS — the last step in the chain the
@@ -5324,7 +5339,7 @@
       // and computed on a different basis, and this project has measured the
       // two ~4 points apart on one company. Showing both and naming the gap
       // turns a confusing discrepancy into the useful half of the card.
-      function secRatiosHtml(rows) {
+      function secRatiosHtml(rows, more) {
         // THE COMPARISON LEADS, because it is what the view is for and it was
         // buried under twenty-six rows of history where nobody found it.
         let h = '';
@@ -5376,7 +5391,7 @@
             ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.filed) + '</a>'
             : esc(r.filed || '—')) + '</td></tr>';
         }
-        table += '</tbody></table></div>';
+        table += '</tbody></table></div>' + (more || '');
 
         // LIKE FOR LIKE, OR THE STRIP LIBELS THE VENDOR. The engine's MARGINS
         // are trailing-twelve-month, so they are compared against four filed

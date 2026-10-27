@@ -613,3 +613,6 @@ Six were real and are now card rows, so they reach the stock page, the hover car
   - **REMOVING a key from `emptyProfile()` is safe in a way adding one is not**: `profileGaps()` looks for profiles MISSING a key the app writes, so extra keys in stored blobs are ignored rather than triggering a re-pull of the universe.
 - Verified: 25 checks driving a real refresh and the real page — each removed field absent from the row, the analyst endpoints never called, `posMonths` out of the glossary, and all six new fields rendering both in `fieldValues()` and on `/stock`.
 
+
+### The SEC EDGAR card shows four periods, the rest behind Show more (2026-10-26)
+The owner: "Only show top 4 lines, and rest put under a Show more button". `paintSec()` in `private/stock.html` draws the newest `SEC_PAGE` (4) periods. The button under the table says how many earlier quarters or years are hidden, and turns into Show fewer once clicked. One `secAll` state covers both views and both period switches. In the Ratios view the "Last 4 quarters" row stays on top, and the comparison strip still reads `rows[0]`, which is the newest period either way.
