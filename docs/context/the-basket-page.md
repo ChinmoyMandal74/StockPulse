@@ -98,3 +98,7 @@ The owner: "From these theme page, Can you give me ability to add or remove a st
 - **Undo** sits beside the message and reverses the last edit. Duplicates and malformed symbols are refused in the page before any request.
 - **Caching:** `/api/basket` keeps a 10-minute copy per instance. After an edit the page asks with `?fresh=1`, which an admin may use to skip and replace the cached copy, for every window from then on (`edited`).
 - Tests: a scratchpad browser suite (20 checks) on the in-memory server. It covers the button absent on All and on a sector page, add and remove reaching the stored theme and the count, a removed stock staying in the universe, Undo, a no-data symbol drawn dashed, and no sideways scroll at 390px.
+
+## Fundamentals against the S&P 500 (2026-10-27)
+
+The owner: "instead of All screened, Can you change it to S&P (SPY ETF)". The fund has no margin, growth or P/E of its own, so the comparison column is its **holdings**: the companies on the screen with `spMember === true`, from the newest SPY file, each counted once whatever its weight (medians, as before). The heading reads "Fundamentals, against the S&P 500", the column "S&P 500", and the note gives the holdings date and how many are on the screen. With no holdings file (`spMember` null on every row) the whole screen stands in, and the heading, column and note say so. Tests: a scratchpad browser suite (8 checks) on the in-memory server. It checks both states, and that every S&P median and the gap match a count from a production snapshot copy.

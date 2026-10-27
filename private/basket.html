@@ -573,11 +573,20 @@
         : (r.unit === '%' ? (v >= 0 ? '+' : '') + v.toFixed(r.dp) + '%'
           : v.toFixed(r.dp) + r.unit));
       let dropped = 0;
+      // AGAINST THE S&P 500 (2026-10-27, the owner: "instead of All screened,
+      // change it to S&P (SPY ETF)"). The fund itself has no margin, growth or
+      // P/E, so the comparison is its holdings: the screen's companies the
+      // SPY file lists (spMember, three-state: only `=== true` counts). With
+      // no file on hand the whole screen stands in, and the column says so.
+      const spRows = allRows.filter((x) => x.spMember === true);
+      const bySp = spRows.length > 0;
+      const bench = bySp ? spRows : allRows;
+      const spAsOf = bySp ? (spRows.find((x) => x.spAsOf) || {}).spAsOf : null;
       const body = FUND_ROWS.map((r) => {
         const mine = rows.filter((s) => (r.keep ? r.keep(s) : true));
         if (r.k === 'grossMargin') dropped = rows.length - mine.length;
         const a = median(mine.map((s) => s[r.k]));
-        const b = median(allRows.filter((s) => (r.keep ? r.keep(s) : true)).map((s) => s[r.k]));
+        const b = median(bench.filter((s) => (r.keep ? r.keep(s) : true)).map((s) => s[r.k]));
         const d = a != null && b != null ? a - b : null;
         // A ratio's gap is points of the ratio, not a percentage OF it: 28x
         // against 19x is nine turns, and "+47%" would be a different claim.
@@ -586,11 +595,13 @@
           `<td class="mono ${cls(d)}">${d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(r.dp)}</td>` +
           `<td class="mono dim">${mine.filter((s) => s[r.k] != null).length}</td></tr>`;
       }).join('');
-      return '<section class="bezel card"><div class="core"><h2>Fundamentals, against the whole screen</h2>' +
-        '<table><thead><tr><th></th><th>This group</th><th>All screened</th><th>Gap</th><th>n</th></tr></thead>' +
+      return `<section class="bezel card"><div class="core"><h2>Fundamentals, against ${bySp ? 'the S&amp;P 500' : 'the whole screen'}</h2>` +
+        `<table><thead><tr><th></th><th>This group</th><th>${bySp ? 'S&amp;P 500' : 'All screened'}</th><th>Gap</th><th>n</th></tr></thead>` +
         `<tbody>${body}</tbody></table>` +
-        '<p class="note">Compared against the whole screen rather than an index: the S&P 500 and the Dow ' +
-        'are ETFs here, and a fund has no margin, no growth and no P/E of its own to compare with. ' +
+        (bySp
+          ? `<p class="note">The S&amp;P 500 here is its companies, not the SPY fund: a fund has no margin, no growth and no P/E of its own. ` +
+            `Its holdings${spAsOf ? ' as of ' + esc(spAsOf) : ''}, ${spRows.length} of them on the screen, each counted once whatever its weight. `
+          : '<p class="note">Compared against the whole screen: the S&amp;P 500 holdings list is not on hand, and the SPY fund itself has no margin, no growth and no P/E to compare with. ') +
         'Medians, not means — one extreme multiple would drag a mean somewhere no company ' +
         'in the group sits. A forward P/E at or below zero is excluded: a multiple off a loss is arithmetic, ' +
         'not cheapness.' +
