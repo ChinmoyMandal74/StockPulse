@@ -7098,6 +7098,11 @@ const STARTER_SCREENS = [
   sc('bouncelw', 'Technical', 'Bouncing off the lows', 'Low in the 52-week range, but up over the last month and fortnight.',
     { filters: { range52Pos: '..30', oneMonthPct: '>3', twoWeekPct: '>0' }, sort: { key: 'range52Pos', dir: 1 },
       columns: ['range52Pos', 'pctFromHigh', 'twoWeekPct', 'oneMonthPct', 'actionTrend', 'av:Balanced', 'spMember'] }),
+  // The owner, 2026-10-27: "Strong uptrend, still well off the high ... over
+  // 30% off its high". 14 stocks on the 2026-10-26 close (DUOL -57% the furthest).
+  sc('upofhigh', 'Technical', 'Strong uptrend, still well off the high', 'More than 10% above the 200-day average (Strong uptrend on our trend rules), yet still 30% or more below the 52-week high.',
+    { filters: { actionTrend: 'Strong uptrend', pctFromHigh: '<=-30' }, sort: { key: 'pctFromHigh', dir: 1 },
+      columns: ['pctFromHigh', 'vs200ma', 'oneMonthPct', 'threeMonthPct', 'range52Pos', 'actionTrend', 'av:Balanced', 'spMember'] }),
   sc('wakingup', 'Technical', 'Just started moving', 'Up more than 5% in a fortnight, still down over three months.',
     { filters: { twoWeekPct: '>5', threeMonthPct: '<0' }, sort: { key: 'twoWeekPct', dir: -1 },
       columns: ['twoWeekPct', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'actionEntry', 'av:Balanced', 'spMember'] }),
