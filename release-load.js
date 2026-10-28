@@ -48,14 +48,17 @@ const COLUMN_ONLY = flag('--column-only');
 // `results` list everything read since the last mailing, a batch a call,
 // looping while any are left. Whether this run read anything new does not
 // matter: the evening run's finds go out now. Never fails the run.
-async function mailList() {
-  if (!MAIL) return;
+// The weekday morning run: the one that sends the mailing and Reporting today.
+function weekdayMorning() {
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(new Date())) % 24;
-  if (hour >= 12) return;
+  if (hour >= 12) return false;
   // WEEKDAYS ONLY: the Saturday 05:00 run (2026-10-25) reads Friday's
   // releases, and they go out in Monday's mailing, as before.
   const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(new Date());
-  if (wd === 'Sat' || wd === 'Sun') return;
+  return wd !== 'Sat' && wd !== 'Sun';
+}
+async function mailList() {
+  if (!MAIL || !weekdayMorning()) return;
   const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
   if (!secret) return;
   let sent = 0, failed = 0, total = 0, companies = 0;
@@ -71,6 +74,21 @@ async function mailList() {
     }
     console.log('  mailing: ' + (companies ? sent + ' of ' + total + ' subscribers sent ' + companies + ' companies' + (failed ? ', ' + failed + ' failed' : '') : 'nothing read since the last one'));
   } catch (e) { console.log('  mailing: not sent (' + String(e.message).slice(0, 80) + ')'); }
+}
+// REPORTING TODAY (2026-10-28, the owner: "schedule it right after the
+// earning results email and send it to admin"): straight after the mailing,
+// ask the app to email the operator the tracked companies the earnings
+// calendar lists for today. The app sends it once a day. Never fails the run.
+async function mailToday() {
+  if (!MAIL || !weekdayMorning()) return;
+  const secret = process.env.CRON_SECRET, base = (process.env.APP_URL || 'https://www.tickrlab.com').replace(/\/+$/, '');
+  if (!secret) return;
+  try {
+    const r = await fetch(base + '/api/cron/earnings-today', { method: 'POST', signal: AbortSignal.timeout(120000),
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + secret }, body: '{}' });
+    const d = await r.json().catch(() => ({}));
+    console.log('  reporting today: ' + (!r.ok ? 'not sent (' + (d.error || r.status) + ')' : d.sent ? 'sent, ' + d.companies + ' companies' : d.already ? 'already sent today' : 'nobody listed for today'));
+  } catch (e) { console.log('  reporting today: not sent (' + String(e.message).slice(0, 80) + ')'); }
 }
 // --guidance (with --commit): read again the stored results releases in the
 // window whose guidance items were never read (before 2026-10-23), and write
@@ -395,6 +413,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   await recordRun();
   await mailDigest();
   await mailList();
+  await mailToday();
   process.exit(0);
 })().catch(async (e) => {
   console.log(`  STOPPED: ${e instanceof Stop ? e.message : e.stack}; $${spent.toFixed(4)} spent`);

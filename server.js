@@ -20227,6 +20227,80 @@ app.get('/api/fund-holdings', requireAdmin, route(async (req, res) => {
 // that wrote new results releases, with their filing numbers. Sent to the
 // operator address (REPORT_TO) through the one send path. A run with no new
 // results never calls it.
+// ---- Reporting today (2026-10-28) ------------------------------------------
+// The owner: "create a new email talking about upcoming earning today .. and
+// schedule it right after the earning results email and send it to admin".
+// The tracked companies the earnings calendar lists for today (the nightly's
+// calendar step stores them), split by when they report, largest first. One
+// email to the operator address, kind 'earnings-today', once a day: the 09:15
+// results run calls this straight after the Earnings results mailing.
+// Descriptive only: no Signal, no expectation, the last quarter's surprise as
+// a fact about the past.
+const ET_TIMES = [
+  ['pre', 'Before the open', /pre/],
+  ['post', 'After the close', /post|after/],
+  ['other', 'Time not given', null],
+];
+function moneyShort(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n >= 1e12) return '$' + (n / 1e12).toFixed(1) + 'T';
+  if (n >= 1e9) return '$' + (n >= 1e10 ? Math.round(n / 1e9) : (n / 1e9).toFixed(1)) + 'B';
+  return '$' + Math.round(n / 1e6) + 'M';
+}
+// list: [{ symbol, time }] for the day; rows: symbol to its snapshot row.
+function earningsTodayEmail(day, list, rows) {
+  const site = APP_URL || '';
+  const when = new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
+  const cap = (s) => { const v = Number((rows[s] || {}).marketCap); return Number.isFinite(v) && v > 0 ? v : -1; };
+  const groups = ET_TIMES.map(([id, label, re]) => ({ id, label, items: [] }));
+  for (const x of list) {
+    const t = String(x.time || '').toLowerCase();
+    const g = groups.find((gr, i) => ET_TIMES[i][2] && ET_TIMES[i][2].test(t)) || groups[2];
+    g.items.push(x.symbol);
+  }
+  for (const g of groups) g.items.sort((a, b) => cap(b) - cap(a) || (a < b ? -1 : 1));
+  const shown = groups.filter((g) => g.items.length);
+  const n = list.length;
+  const nameOf = (s) => { const r = rows[s] || {}; return r.shortName || r.name || s; };
+  const surprise = (s) => { const v = (rows[s] || {}).lastSurprise; return v == null || !Number.isFinite(Number(v)) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Number(v)).toFixed(1) + '%'; };
+  const counts = shown.map((g) => g.items.length + ' ' + g.label.toLowerCase()).join(', ');
+  const subject = `Reporting today: ${n} compan${n === 1 ? 'y' : 'ies'} (${when})`;
+  const intro = `${n} of the companies Tickr Lab tracks are listed to report results today: ${counts}.`;
+  const th = (t, right) => `<th${st(`padding:6px 8px;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:${MC.faint};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${t}</th>`;
+  const td = (t, right, extra) => `<td${st(`padding:7px 8px;font-size:13.5px;color:${MC.body};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line};${extra || ''}`)}>${t}</td>`;
+  const body = shown.map((g) => `<h2${st(`margin:22px 0 6px;font-size:15px;font-weight:700;color:${MC.ink}`)}>${mailEsc(g.label)} <span${st(`font-weight:500;color:${MC.faint}`)}>${g.items.length}</span></h2>`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse')}>`
+    + `<tr>${th('Company')}${th('Sector')}${th('Value', true)}${th('Last surprise', true)}</tr>`
+    + g.items.map((s) => `<tr>${td(`<a href="${site}/stock/${encodeURIComponent(s)}"${st(`color:${MC.ink};font-weight:600;text-decoration:none`)}>${mailEsc(nameOf(s))}</a> <span${st(`color:${MC.faint};font-size:12px`)}>${mailEsc(s)}</span>`)}`
+      + `${td(mailEsc((rows[s] || {}).sector || '—'), false, `color:${MC.mute};font-size:12.5px`)}${td(moneyShort((rows[s] || {}).marketCap), true, 'white-space:nowrap')}${td(surprise(s), true, 'white-space:nowrap')}</tr>`).join('')
+    + '</table>').join('')
+    + `<p${st(`margin:18px 0 0;font-size:12.5px;color:${MC.mute}`)}>Last surprise: how far the last quarter's earnings per share came in above or below the consensus estimate. Dates are the companies' own, as listed on the earnings calendar. <a href="${site}/filings"${st(`color:${MC.mute}`)}>Results as they are read</a>.</p>`;
+  const text = [intro, ''].concat(...shown.map((g) => [g.label + ' (' + g.items.length + ')'].concat(g.items.map((s) => '  ' + nameOf(s) + ' (' + s + ')  ' + moneyShort((rows[s] || {}).marketCap) + '  last surprise ' + surprise(s)), ['']))).join('\n')
+    + '\nMechanical readings of published data, not investment advice.';
+  const html = emailShell({ heading: 'Reporting today, ' + when, intro, body, note: 'Sent to the site’s operator each weekday morning, after the Earnings results mailing.' });
+  return { subject, text, html, companies: n };
+}
+app.post('/api/cron/earnings-today', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const now = Date.now(), today = nyDay(now);
+  const force = !!(req.body && req.body.force === true);
+  if (!force && (await store.readEarningsTodayMark()) === today) return res.json({ sent: false, already: today });
+  // Listings read yesterday or today: the 04:00 nightly reads the calendar.
+  const cal = await store.readEarningsCalendarSeen(today, nyDay(now - 2 * 86400000));
+  const list = Object.entries(cal).filter(([, v]) => v.d === today).map(([symbol, v]) => ({ symbol, time: v.time }));
+  if (!list.length) return res.json({ sent: false, companies: 0 });
+  const snap = await snapshotCached().catch(() => null);
+  const rows = Object.fromEntries(((snap && snap.stocks) || []).map((x) => [x.symbol, x]));
+  const d = earningsTodayEmail(today, list, rows);
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sent = await sendMail({ kind: 'earnings-today', to, subject: d.subject, text: d.text, html: d.html });
+  if (sent) { try { await store.writeEarningsTodayMark(today); } catch { /* bookkeeping never fails the send */ } }
+  res.json({ sent: !!sent, companies: d.companies });
+}));
+
 app.post('/api/cron/release-digest', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });

@@ -56,7 +56,7 @@ const JOBS = [
     // the Saturday 04:00 nightly, read the same morning rather than Monday.
     extra: [{ days: ['Sat'], times: ['05:00'] }],
     spends: { kind: 'anthropic', text: 'About $0.002 a release, capped at $2 a run' },
-    what: 'Reads the press release of every results 8-K the nightly runs recorded (the morning run reads the previous business day; Saturday 05:00 reads Friday’s), checks older ones against their 10-Q, and rebuilds the screener group and the S&P 500 recon. When it read new results, emails the owner a digest of them; after a weekday morning run, sends the Earnings results mailing to its subscribers.',
+    what: 'Reads the press release of every results 8-K the nightly runs recorded (the morning run reads the previous business day; Saturday 05:00 reads Friday’s), checks older ones against their 10-Q, and rebuilds the screener group and the S&P 500 recon. When it read new results, emails the owner a digest of them; after a weekday morning run, sends the Earnings results mailing to its subscribers, then emails the owner Reporting today (the tracked companies the earnings calendar lists for the day).',
     log: '/news-runs',
   },
   {

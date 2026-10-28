@@ -340,3 +340,19 @@ The owner, after SoFi filed its results 8-K at 07:03 ET and the 09:15 run did no
 - **`release-load.js`** calls it (`secToday()`) before it looks for filings, on committed runs only, since it writes `sec_events`. It never fails the run.
 - Timing now: filed before 09:15, read at 09:15; filed by 18:15, read at 18:15; later, the next morning, as before. The subscriber mailing is unchanged (weekday mornings), so an evening find still goes out the next morning. `/home` and `/help` say so.
 - Tests: `secdaily-test.js` (feed parsing from the real format, the 2.02 filter proven by reverting it, previous business day). A scratchpad run of the route against the live feed on the in-memory database found SoFi's 8-K, stored it, skipped it on a second call, and dropped a forged pending pair.
+
+## Reporting today: the owner's morning email (2026-10-28)
+The owner: "create a new email talking about upcoming earning today .. and schedule it right after the earning results email and send it to admin".
+
+**What is in it:**
+- The tracked companies the earnings calendar (`earnings_calendar`, see `which-dates-the-fundamentals-actually-describe.md`) lists for today, in three groups: Before the open, After the close, Time not given. Alpha Vantage's `timeOfTheDay`, or Nasdaq's `time`.
+- Largest first. Each row shows the name (linked to `/stock/<SYM>`), ticker, sector, market value and last surprise, the last quarter's EPS against consensus.
+- No Signal and no expectation in it.
+
+**How it is sent:**
+- `earningsTodayEmail(day, list, rows)` builds it in `emailShell`. `POST /api/cron/earnings-today` (cron or admin) sends it to `operatorEmail()` through `sendMail`, kind `earnings-today`, so it appears in the mail log at `/emails`.
+- Listings must have been read in the last two days; the 04:00 nightly reads the calendar.
+- Once a day: `app_meta` `earnings_today_mark` holds the day it went out. `{ force: true }` sends it again.
+- Nobody listed (weekends) sends nothing.
+
+**When:** `release-load.js` `mailToday()` runs straight after `mailList()` (the Earnings results mailing). It uses the same `weekdayMorning()` guard, now shared, so it goes out only from the weekday 09:15 run. It never fails the run.

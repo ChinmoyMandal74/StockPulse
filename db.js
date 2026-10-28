@@ -2776,6 +2776,17 @@ async function writeResultsListMark(ms) {
   await init();
   await db.execute({ sql: "insert or replace into app_meta (key, value) values ('results_list_mark', ?)", args: [String(Number(ms) || 0)] });
 }
+// The day the owner's Reporting today email last went out (2026-10-28), so a
+// second morning run on the same day does not send it twice.
+async function readEarningsTodayMark() {
+  await init();
+  const r = await db.execute({ sql: "select value from app_meta where key = 'earnings_today_mark'" });
+  return r.rows.length ? String(r.rows[0].value || '') : '';
+}
+async function writeEarningsTodayMark(day) {
+  await init();
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('earnings_today_mark', ?)", args: [String(day)] });
+}
 async function listSubscribers() {
   await init();
   const r = await db.execute('select * from subscribers order by created_at desc');
@@ -8515,7 +8526,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark,
   listSubscribers,
   deleteSubscriber,
   readSentFor,
