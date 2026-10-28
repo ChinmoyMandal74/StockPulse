@@ -36,3 +36,6 @@ docs/security-review-*.md
 news-tone-shadow.jsonl
 # The scheduled tasks' generated launchers (each holds this machine's node path).
 *.run.cmd
+
+# earndate-compare.js research snapshots, local only
+earndate-compare-*.json

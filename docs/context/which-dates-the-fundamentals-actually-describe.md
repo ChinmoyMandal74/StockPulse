@@ -111,3 +111,23 @@ The owner: "Netflix earning is next tuesday and not yesterday". The screener sho
   - A fund is NA; nothing behind is a dash. Sorts by how many issues, none last.
 - Spans: Reporting banner 4, `PAD_SPAN` 160, error row 135, empty row 137.
 - Display only. Nothing here reaches `action.js`, the snapshot or `CHAT_FIELDS`.
+
+## Confirmed dates beside our estimate: earndate-compare.js (2026-10-28)
+The owner asked about earnings calendars and added an Alpha Vantage key (`Alpha_Vantage`, both on Vercel and in `.env`).
+
+**`earndate-compare.js` is read only.**
+- Without arguments it records three sources and saves them to `earndate-compare-<day>.json` (gitignored):
+  - our `nextEarningsDate` and its estimate flag;
+  - Nasdaq's calendar (`api.nasdaq.com/api/calendar/earnings?date=`, keyless, one call a weekday, browser user agent);
+  - Alpha Vantage `EARNINGS_CALENDAR` (one call, three months, CSV).
+- `--score <file>` marks each source against the day the results 8-K (item 2.02) was filed, from `sec_events`. A filing the next business day after an after-hours date counts as on time.
+
+**First snapshot, 2026-10-28, window to 2026-11-18:**
+- 811 of 1,283 stocks have a Nasdaq date in the window. Where ours is an estimate, it is the same day 49% of the time and within a week 88%. Against Alpha Vantage: 50% and 88%.
+- **Nasdaq and Alpha Vantage agree on 99% (802 of 811).** They are probably one upstream source, so two of them are not two confirmations.
+- **The Balanced Earnings soon reading would differ for 205 stocks today. The largest group is 97 whose estimated date has already passed with no report:**
+  - VRT was estimated for 10-21 and Nasdaq has 10-28; INTC 10-22, Nasdaq 10-29.
+  - `daysToEarnings` returns null for a past date ("stale feed data"), so Earnings soon is off for them in the very week they report.
+- The other differences: 63 where ours falls inside 7 days and Nasdaq's does not; 42 the other way round; 3 provider-confirmed oddities.
+
+**Nothing changed in the Signal: the date and the rule are owner decisions.** Score this file after 2026-11-18 to see which source the 8-K filings bear out.
