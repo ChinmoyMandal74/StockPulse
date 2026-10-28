@@ -101,6 +101,12 @@
     .nw-mix td.nw-mix-c { background: color-mix(in srgb, var(--c) calc(var(--a) * 30%), transparent); }
     .nw-mix td.nw-mix-z { color: var(--faint); }
     .nw-mix tr.nw-mix-tot td { font-weight: 600; border-bottom: 0; }
+    .nw-mix td button.nw-mix-n { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; width: 100%; text-align: right; cursor: pointer; }
+    .nw-mix td:has(button.nw-mix-n) { cursor: pointer; }
+    .nw-mix td:has(button.nw-mix-n):hover { box-shadow: inset 0 0 0 1px var(--hair-2); }
+    .nw-mix td.nw-mix-sel { box-shadow: inset 0 0 0 2px var(--accent) !important; }
+    .nw-pick { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-family: var(--sans); color: var(--text); }
+    .nw-pick button { font: 500 11.5px var(--sans); color: var(--accent); background: none; border: 1px solid var(--hair-2); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
     .nw-mix-note { margin: 8px 2px 0; font-size: 11.5px; color: var(--faint); }
     .nw-it.nw-high { --c: var(--accent); }
     .nw-it.nw-medium { --c: var(--azure); }
@@ -175,6 +181,10 @@
     const RANK = { high: 2, medium: 1, low: 0 };
     const LABEL = { high: 'High importance', medium: 'Medium importance', low: 'Low importance' };
     let data = null, minImp = 'medium';
+    // An exact level picked in the day's table ('high', 'medium', 'low', or
+    // 'all' for a row's total), which the tabs cannot say: they are "this
+    // level and above". Null when the tabs decide. Not remembered.
+    let onlyImp = null;
     try { minImp = localStorage.getItem('nw-imp') || 'medium'; } catch (e) { /* a private window */ }
     const dayLabel = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const timeOf = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET';
@@ -199,16 +209,19 @@
     }
     function draw() {
       if (!data) return;
-      for (const b of document.querySelectorAll('.nw-tab')) b.classList.toggle('on', b.dataset.imp === minImp);
+      for (const b of document.querySelectorAll('.nw-tab')) b.classList.toggle('on', !onlyImp && b.dataset.imp === minImp);
       const kind = $('kind').value, sector = $('sector').value, tone = $('tone').value, q = $('q').value.trim().toLowerCase();
-      const want = (x) => RANK[x.importance] >= RANK[minImp] && (!kind || x.kindLabel === kind) && (!sector || x.sector === sector) && (!tone || x.toneLabel === tone)
+      const levelOk = (x) => (onlyImp ? onlyImp === 'all' || x.importance === onlyImp : RANK[x.importance] >= RANK[minImp]);
+      const want = (x) => levelOk(x) && (!kind || x.kindLabel === kind) && (!sector || x.sector === sector) && (!tone || x.toneLabel === tone)
         && (!q || x.symbol.toLowerCase() === q || String(x.name).toLowerCase().includes(q) || String(x.headline).toLowerCase().includes(q));
       // A story once, under its lead; the rest of its articles listed under it.
       const byStory = new Map();
       for (const x of data.items) { if (!byStory.has(x.story)) byStory.set(x.story, []); byStory.get(x.story).push(x); }
       const leads = data.items.filter((x) => x.lead && want(x));
       drawMix();
-      $('count').textContent = leads.length + (leads.length === 1 ? ' story' : ' stories') + ' shown, ' + data.items.length + ' articles read on the day';
+      $('count').innerHTML = esc(leads.length + (leads.length === 1 ? ' story' : ' stories') + ' shown, ' + data.items.length + ' articles read on the day')
+        + (onlyImp ? '<span class="nw-pick">· ' + esc([onlyImp === 'all' ? 'every importance' : onlyImp.charAt(0).toUpperCase() + onlyImp.slice(1), kind || 'every kind'].join(' · '))
+          + ' <button type="button" id="pickClear">Clear</button></span>' : '');
       if (!leads.length) { $('feed').innerHTML = '<div class="bezel"><div class="core" style="padding:0"><div class="nw-empty">Nothing matches on this day. Try All, or an earlier day.</div></div></div>'; return; }
       const sections = ['high', 'medium', 'low'].map((lv) => {
         const list = leads.filter((x) => x.importance === lv);
@@ -239,7 +252,9 @@
     // outlets is one, as in the feed. Its own two axes (kind and importance) are
     // never narrowed by the kind select or the importance tabs, so it stays the
     // whole picture; the sector, tone and search filters do narrow it, and the
-    // note says so. A kind's name sets the kind filter, and again clears it.
+    // note says so. A kind's name sets the kind filter, and again clears it;
+    // every number filters the feed to its cell (2026-10-27, the owner: "make
+    // the pivot table clickable so that the news table filters automatically").
     let mixOpen = true;
     try { mixOpen = localStorage.getItem('nw-mix') !== 'closed'; } catch (e) { /* a private window */ }
     const MIX_C = { high: 'var(--accent)', medium: 'var(--azure)', low: 'var(--hair-2)' };
@@ -256,7 +271,13 @@
       const sum = (c) => c.high + c.medium + c.low;
       const kinds = [...by.keys()].sort((a, b) => sum(by.get(b)) - sum(by.get(a)) || a.localeCompare(b));
       const max = Math.max(1, ...kinds.flatMap((k) => ['high', 'medium', 'low'].map((lv) => by.get(k)[lv])));
-      const cell = (n, lv) => (n ? '<td class="nw-mix-c" style="--c:' + MIX_C[lv] + ';--a:' + (0.15 + 0.85 * n / max).toFixed(2) + '">' + n + '</td>' : '<td class="nw-mix-z">–</td>');
+      // Every count is a button: kind and exact level into the feed below.
+      const pick = (k, lv, n, cls, style) => {
+        const sel = onlyImp === lv && kind === k;
+        return '<td class="' + (cls || '') + (sel ? ' nw-mix-sel' : '') + '"' + (style || '') + '><button type="button" class="nw-mix-n" data-pk="' + esc(k) + '" data-pl="' + lv + '" title="'
+          + (sel ? 'Clear this filter' : 'Show ' + esc((lv === 'all' ? 'every importance' : lv) + ' · ' + (k || 'every kind'))) + '">' + n + '</button></td>';
+      };
+      const cell = (n, lv, k) => (n ? pick(k, lv, n, 'nw-mix-c', ' style="--c:' + MIX_C[lv] + ';--a:' + (0.15 + 0.85 * n / max).toFixed(2) + '"') : '<td class="nw-mix-z">–</td>');
       const narrowed = [sector, tone && tone + ' tone', q && '“' + q + '”'].filter(Boolean);
       $('mix').innerHTML = '<div class="bezel nw-mix"><div class="core"><details' + (mixOpen ? ' open' : '') + '><summary><h2>The day by kind and importance</h2>'
         + '<span class="nw-mix-sub">' + sum(tot) + (sum(tot) === 1 ? ' story' : ' stories') + '</span><span class="nw-mix-tog"></span></summary>'
@@ -265,21 +286,38 @@
           + ['high', 'medium', 'low'].map((lv) => '<th style="--c:' + MIX_C[lv] + '"><i></i>' + lv.charAt(0).toUpperCase() + lv.slice(1) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>'
           + kinds.map((k) => { const c = by.get(k);
             return '<tr' + (k === kind ? ' class="on"' : '') + '><td class="nw-mix-k"><button type="button" data-kind="' + esc(k) + '" title="' + (k === kind ? 'Show every kind' : 'Show only ' + esc(k)) + '">' + esc(k) + '</button></td>'
-              + cell(c.high, 'high') + cell(c.medium, 'medium') + cell(c.low, 'low') + '<td>' + sum(c) + '</td></tr>'; }).join('')
-          + '<tr class="nw-mix-tot"><td class="nw-mix-k">Total</td><td>' + tot.high + '</td><td>' + tot.medium + '</td><td>' + tot.low + '</td><td>' + sum(tot) + '</td></tr></tbody></table></div>'
+              + cell(c.high, 'high', k) + cell(c.medium, 'medium', k) + cell(c.low, 'low', k) + pick(k, 'all', sum(c)) + '</tr>'; }).join('')
+          + '<tr class="nw-mix-tot"><td class="nw-mix-k">Total</td>' + ['high', 'medium', 'low'].map((lv) => (tot[lv] ? pick('', lv, tot[lv]) : '<td class="nw-mix-z">0</td>')).join('')
+          + pick('', 'all', sum(tot)) + '</tr></tbody></table></div>'
           + '<p class="nw-mix-note">Stories, with a story told by several outlets counted once. Every kind and every importance'
-          + (narrowed.length ? ', for ' + esc(narrowed.join(', ')) : '') + '. Click a kind to show only it.</p>')
+          + (narrowed.length ? ', for ' + esc(narrowed.join(', ')) : '') + '. Click a number to show those stories below; click it again, or Clear, to undo.</p>')
         + '</details></div></div>';
       const det = $('mix').querySelector('details');
       det.addEventListener('toggle', () => { mixOpen = det.open; try { localStorage.setItem('nw-mix', mixOpen ? 'open' : 'closed'); } catch (e) { /* fine */ } });
     }
+    // A number in the table: its kind (none for the total row) and its exact
+    // level ('all' for a row's total) become the feed's filter; the grand total,
+    // or the cell already picked, clears both. Then the feed is brought into view.
+    $('mix').addEventListener('click', (e) => {
+      const c = e.target.closest('[data-pl]'); if (!c) return;
+      const k = c.dataset.pk, lv = c.dataset.pl, el = $('kind');
+      const clear = (onlyImp === lv && el.value === k) || (!k && lv === 'all');
+      onlyImp = clear ? null : lv;
+      el.value = clear ? '' : ([...el.options].some((o) => o.value === k) ? k : '');
+      draw();
+      if (!clear) { const t = $('count').getBoundingClientRect().top; if (t > innerHeight * 0.55 || t < 0) $('count').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    });
+    $('count').addEventListener('click', (e) => {
+      if (!e.target.closest('#pickClear')) return;
+      onlyImp = null; $('kind').value = ''; draw();
+    });
     $('mix').addEventListener('click', (e) => {
       const b = e.target.closest('[data-kind]'); if (!b) return;
       const k = b.dataset.kind, el = $('kind');
       el.value = el.value === k ? '' : ([...el.options].some((o) => o.value === k) ? k : '');
       draw();
     });
-    for (const b of document.querySelectorAll('.nw-tab')) b.addEventListener('click', () => { minImp = b.dataset.imp; try { localStorage.setItem('nw-imp', minImp); } catch (e) { /* fine */ } draw(); });
+    for (const b of document.querySelectorAll('.nw-tab')) b.addEventListener('click', () => { onlyImp = null; minImp = b.dataset.imp; try { localStorage.setItem('nw-imp', minImp); } catch (e) { /* fine */ } draw(); });
     for (const id of ['kind', 'sector', 'tone']) $(id).addEventListener('change', draw);
     $('q').addEventListener('input', draw);
     load(null);
