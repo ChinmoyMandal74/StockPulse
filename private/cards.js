@@ -10706,9 +10706,12 @@
   // screener choose with one definition. A description of where prices stand,
   // never an invitation: nothing says the gap will close.
   const UH_X = [-60, 0];
-  // The Pulled back caps, three rows fewer on a story: its four figures wrap
-  // to two lines there and this note is a sentence longer.
-  const UH_ROWS = { portrait: 7, square: 4, story: 9 };
+  // Rows and chart height per size, set so the list fills the card down to
+  // the note (measured 2026-10-28: a row is 47px on a post, 39 on a square,
+  // 54 on a story, where the four figures wrap and leave no room for more).
+  // The post's chart is 20px shorter than the Pulled back one's to fit two.
+  const UH_ROWS = { portrait: 9, square: 6, story: 9 };
+  const UH_H = { portrait: 280, square: PB_H.square, story: PB_H.story };
   function tplUpOffHigh() {
     const F = globalThis.Filters;
     if (!F || !F.cardScreen) return chromeTop() + '<div class="s-body"><div class="s-empty">Not available here.</div></div>' + chromeFoot();
@@ -10726,7 +10729,7 @@
     const cut = Number(String(c.def.filters.pctFromHigh).replace(/[^0-9.]/g, ''));
 
     // ---- the scatter, at its true pixel size so its text is safe
-    const W = 952, H = PB_H[size.id] || 330, fs = size.id === 'story' ? 20 : 16;
+    const W = 952, H = UH_H[size.id] || 330, fs = size.id === 'story' ? 20 : 16;
     const L = 58, R = 16, T = 12, B = fs * 2.4;
     // The top at the dots' 90th percentile, not their maximum: a few far above
     // the average would squash the rest onto the bottom line. Beyond it a dot
