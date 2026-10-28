@@ -2593,6 +2593,127 @@
         + '</div></div>' + chromeFoot();
     }
 
+    // ---- Too much to read --------------------------------------------------
+    //
+    // THE OWNER, 2026-10-28, of a cartoon in another app's advertisement (a
+    // whirlwind of charts and jargon over someone with their head in their
+    // hands): "I like this visual … it's kind of funny, can you add something
+    // like this under promo". Our own drawing, not theirs: the papers are the
+    // filings this site reads (10-Q, 8-K, 13F) and the bubbles are jargon.
+    //
+    // NO BUY, SELL OR HOLD IN ANY BUBBLE, and no bull or bear either: the
+    // advertisement's funniest words are exactly the ones this site never
+    // prints. Green and red appear only on the price charts and arrows, which
+    // is what they mean everywhere else; the rest is accent and neutral
+    // tints of the card's tokens, so all four grounds follow.
+    //
+    // EVERGREEN, like the other Brand cards: no date, no count, reads no data.
+    // THE PEN WOBBLE IS SEEDED, so the same card draws identically every time
+    // (a saved post rebuilt on the phone matches the studio's).
+    function tplOverload() {
+      let seed = 20261028;
+      const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      const jit = (v, a) => (v + (rnd() - 0.5) * 2 * a).toFixed(1);
+      const path = (pts, a, close) => 'M' + pts.map(([x, y]) => jit(x, a) + ' ' + jit(y, a)).join(' L') + (close ? ' Z' : '');
+      const box = (w, h, a = 2) => path([[0, 0], [w, 0], [w, h], [0, h]], a, true);
+      // A STORY IS 570px TALLER, so the drawing is too: the same scene with
+      // its heights stretched, never a post-shaped drawing centred in bands
+      // of empty ground (the story layout's lesson).
+      const SY = size.id === 'story' ? 1.4 : 1, H = Math.round(1000 * SY);
+      const at = (x, y, r, inner) => `<g transform="translate(${x} ${Math.round(y * SY)}) rotate(${r})">${inner}</g>`;
+      const txt = (x, y, s, size, cls) => `<text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" class="${cls || 'ov-t'}">${esc(s)}</text>`;
+
+      // A chart tile: a framed zigzag, rising, falling or level.
+      const chart = (kind) => {
+        const w = 132, h = 88, n = 9, drift = kind === 'up' ? -6 : kind === 'dn' ? 6 : 0;
+        const pts = [];
+        let y = kind === 'up' ? 66 : kind === 'dn' ? 26 : 46;
+        for (let i = 0; i < n; i++) { pts.push([10 + i * (w - 20) / (n - 1), Math.max(12, Math.min(78, y))]); y += drift + (rnd() - 0.5) * 26; }
+        const c = kind === 'up' ? 'up' : kind === 'dn' ? 'dn' : 'ac';
+        return `<path d="${box(w, h)}" class="ov-paper"/>`
+          + `<path d="${path(pts, 1.2)} L${w - 10} ${h - 8} L10 ${h - 8} Z" class="ov-${c}f"/>`
+          + `<path d="${path(pts, 0.8)}" class="ov-${c}"/>`;
+      };
+      // A filing: a sheet with a form name on top and lines of print.
+      const sheet = (label) => {
+        let s = `<path d="${box(96, 124)}" class="ov-paper"/>`;
+        if (label) s += txt(48, 30, label, 22, 'ov-t ov-mono');
+        for (let i = 0; i < 6; i++) { const yy = (label ? 50 : 22) + i * 14, w = 30 + rnd() * 46; s += `<path d="${path([[14, yy], [14 + w, yy]], 1)}" class="ov-print"/>`; }
+        return s;
+      };
+      // A speech bubble of jargon.
+      const bubble = (word) => {
+        const w = 34 + word.length * 21, h = 60;
+        return `<path d="M${w * 0.28} ${h - 4} L${w * 0.16} ${h + 18} L${w * 0.44} ${h - 4} Z" class="ov-tint"/>`
+          + `<rect x="0" y="0" width="${w}" height="${h}" rx="30" class="ov-tint"/>`
+          + txt(w / 2, 40, word, 28);
+      };
+      const sticky = (mark) => `<path d="${box(78, 78, 1.5)}" class="ov-note"/>` + txt(39, 54, mark, 38);
+      const calendar = (day) => `<path d="${box(84, 92)}" class="ov-paper"/><path d="${box(84, 26, 1)}" class="ov-band"/>`
+        + `<path d="M22 -8 L22 8 M62 -8 L62 8" class="ov-line"/>` + txt(42, 20, 'EARNINGS', 13, 'ov-t ov-mono ov-onband') + txt(42, 74, day, 40);
+      const bell = () => `<path d="M-22 18 C-22 -4 -18 -24 0 -26 C18 -24 22 -4 22 18 L28 24 L-28 24 Z" class="ov-bell"/>`
+        + `<circle cx="0" cy="30" r="6" class="ov-bell"/><path d="M-36 -18 Q-44 -2 -36 14 M36 -18 Q44 -2 36 14" class="ov-line"/>`;
+      const arrow = (dir) => {
+        const c = dir === 'up' ? 'up' : 'dn';
+        return `<path d="${path([[0, 0], [34, -22], [58, -6], [96, -40]], 1.5)}" class="ov-${c} ov-thick"/>`
+          + `<path d="M${84} ${-58} L${112} ${-50} L${100} ${-22} Z" class="ov-${c}h"/>`;
+      };
+
+      // The whirlwind: rings narrowing from the top of the frame to the head,
+      // the top stretched with the frame and the tip kept on the head.
+      let swirl = '';
+      for (let i = 0; i < 11; i++) {
+        const top = 210 * SY, tip = 730 + H - 1000, t = i / 10, cy = top + t * (tip - top), rx = 380 * Math.pow(1 - t, 1.25) + 26, ry = rx * 0.17 + 8, tilt = (rnd() - 0.5) * 8;
+        const pts = [];
+        for (let k = 0; k <= 26; k++) { const a = k / 26 * Math.PI * 2; pts.push([500 + rx * Math.cos(a), cy + ry * Math.sin(a)]); }
+        swirl += `<path d="${path(pts, 3)}" class="ov-swirl" transform="rotate(${tilt.toFixed(1)} 500 ${cy.toFixed(0)})"/>`;
+      }
+
+      // Back to front. Nothing sits over the person (x 360-680, y 740 down).
+      const items = [
+        at(40, 300, -16, sheet('10-Q')), at(440, 120, 6, sheet('8-K')), at(770, 360, 14, sheet('13F')),
+        at(390, 420, -9, sheet('')), at(640, 560, 9, sheet('')),
+        at(110, 170, -13, chart('ac')), at(300, 240, 8, chart('up')), at(620, 210, -6, chart('dn')),
+        at(810, 130, 10, chart('up')), at(540, 470, 12, chart('up')), at(250, 540, -10, chart('dn')),
+        at(200, 310, -12, sticky('?!')), at(720, 470, 10, sticky('??')), at(470, 620, -6, sticky('!?')),
+        at(880, 210, 12, calendar('29')), at(120, 480, -8, calendar('14')),
+        at(60, 450, 0, bell()), at(610, 90, 12, bell()), at(890, 640, -10, bell()), at(380, 360, -8, bell()),
+        at(700, 330, -18, arrow('up')), at(210, 250, 150, arrow('dn')), at(470, 600, -24, arrow('up')), at(760, 650, 140, arrow('dn')),
+        at(40, 90, -6, bubble('P/E')), at(870, 290, 8, bubble('RSI')), at(500, 300, -6, bubble('MACD')),
+        at(860, 500, 6, bubble('ETF')), at(90, 620, -10, bubble('BETA')), at(250, 680, -8, bubble('FUD')),
+        at(790, 560, 4, bubble('FOMO')), at(760, 720, 6, bubble('YIELD')), at(210, 410, -4, bubble('EPS')),
+        at(280, 60, -4, bubble('GUIDANCE')), at(660, 30, 5, bubble('IPO')),
+      ].join('');
+
+      // The reader at the desk, head in hands, eyes shut. Neutral tones for
+      // the face, so the figure is nobody in particular.
+      // Each arm twice, ink then cloth, so it reads as an arm and not as
+      // part of the hoodie.
+      const arm = (pts) => { const d = path(pts, 1.2); return `<path d="${d}" class="ov-armo"/><path d="${d}" class="ov-arm"/>`; };
+      const person = `<path d="${path([[470, 990], [480, 862], [640, 862], [652, 990]], 2, true)}" class="ov-hood"/>`
+        + `<circle cx="560" cy="806" r="44" class="ov-face"/>`
+        + `<path d="M516 798 C514 752 606 744 604 798 C590 776 534 774 516 798 Z" class="ov-hair"/>`
+        + arm([[494, 872], [458, 902], [526, 772]]) + arm([[626, 872], [662, 902], [594, 772]])
+        + `<circle cx="528" cy="768" r="20" class="ov-face"/><circle cx="592" cy="768" r="20" class="ov-face"/>`
+        + `<path d="M538 812 q8 6 16 0 M566 812 q8 6 16 0 M548 834 q12 -8 24 0" class="ov-line"/>`
+        + `<path d="M532 728 l-8 -16 M560 722 l0 -18 M588 728 l8 -16" class="ov-line"/>`
+        + `<path d="${path([[300, 906], [740, 906], [740, 930], [300, 930]], 1.5, true)}" class="ov-desk"/>`
+        + `<path d="${path([[316, 930], [724, 930], [720, 994], [320, 994]], 1.5, true)}" class="ov-front"/>`
+        + `<path d="${path([[318, 800], [446, 790], [452, 896], [324, 900]], 1.5, true)}" class="ov-laptop"/>`
+        + `<path d="${path([[338, 870], [362, 846], [384, 860], [410, 826], [432, 836]], 1)}" class="ov-ac"/>`
+        + `<path d="${path([[306, 900], [470, 896], [480, 906], [300, 906]], 1, true)}" class="ov-laptop"/>`;
+
+      return chromeTop(false)
+        + '<div class="s-body"><div class="ov-in">'
+        + '<span class="s-kick">Tickr Lab · sound familiar?</span>'
+        + '<h2 class="s-title">Reading it all<br><span class="dim">on your own?</span></h2>'
+        + `<div class="ov-art"><svg viewBox="0 0 1000 ${H}"` + ' preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
+        + swirl + items + `<g transform="translate(0 ${H - 1000})">${person}</g>` + '</svg></div>'
+        + '<p class="ov-say"><b>Every stock, measured the same way after every close.</b> '
+        + 'Prices, filings, holders and headlines, side by side on one screen.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
     // ---- render ------------------------------------------------------------
 
     // ---- Range -----------------------------------------------------------
@@ -13845,7 +13966,7 @@
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
-    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution,
+    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     buybacks: tplBuybacks,
@@ -16395,6 +16516,48 @@
     .sz-story .dc-item { grid-template-columns: 76px minmax(0, 1fr); }
     .sz-story .dc-close { font-size: 28px; }
     .sz-story .dc-where { font-size: 24px; }
+
+    /* ---- Too much to read ----------------------------------------------
+       Every colour is a token or a color-mix() of one. Green and red only
+       on the price charts and arrows; the rest is accent and neutral. */
+    .ov-in { display: flex; flex-direction: column; height: 100%; }
+    .ov-art { flex: 1; min-height: 0; margin: 18px -24px 0; }
+    .ov-art svg { display: block; width: 100%; height: 100%; overflow: visible;
+                  stroke-linecap: round; stroke-linejoin: round; }
+    .ov-art path, .ov-art rect, .ov-art circle { stroke: color-mix(in srgb, var(--text) 72%, transparent); stroke-width: 3; }
+    .ov-paper { fill: color-mix(in srgb, var(--text) 7%, var(--card-ground)); }
+    .ov-print { stroke: color-mix(in srgb, var(--muted) 70%, transparent) !important; stroke-width: 4 !important; fill: none; }
+    .ov-tint { fill: color-mix(in srgb, var(--accent) 18%, var(--card-ground)); }
+    .ov-note { fill: color-mix(in srgb, var(--accent) 34%, var(--card-ground)); }
+    .ov-band { fill: var(--accent); }
+    .ov-bell { fill: color-mix(in srgb, var(--muted) 30%, var(--card-ground)); }
+    .ov-line { fill: none; }
+    .ov-thick { stroke-width: 9 !important; }
+    .ov-up, .ov-dn, .ov-ac { fill: none; stroke-width: 4 !important; }
+    .ov-up { stroke: var(--green) !important; }
+    .ov-dn { stroke: var(--red) !important; }
+    .ov-ac { stroke: var(--accent) !important; }
+    .ov-upf { fill: color-mix(in srgb, var(--green) 24%, transparent); stroke: none !important; }
+    .ov-dnf { fill: color-mix(in srgb, var(--red) 24%, transparent); stroke: none !important; }
+    .ov-acf { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: none !important; }
+    .ov-uph { fill: var(--green); stroke: var(--green) !important; }
+    .ov-dnh { fill: var(--red); stroke: var(--red) !important; }
+    .ov-swirl { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, transparent) !important; stroke-width: 4 !important; }
+    .ov-hood { fill: color-mix(in srgb, var(--accent) 62%, var(--card-ground)); }
+    .ov-arm { fill: none; stroke: color-mix(in srgb, var(--accent) 62%, var(--card-ground)) !important; stroke-width: 30 !important; }
+    .ov-armo { fill: none; stroke: color-mix(in srgb, var(--text) 72%, transparent) !important; stroke-width: 38 !important; }
+    .ov-front { fill: color-mix(in srgb, var(--muted) 24%, var(--card-ground)); }
+    .ov-face { fill: color-mix(in srgb, var(--text) 14%, var(--card-ground)); }
+    .ov-hair { fill: color-mix(in srgb, var(--text) 72%, var(--card-ground)); }
+    .ov-desk { fill: color-mix(in srgb, var(--muted) 38%, var(--card-ground)); }
+    .ov-laptop { fill: color-mix(in srgb, var(--text) 18%, var(--card-ground)); }
+    .ov-art text { stroke: none; fill: var(--text); font-family: var(--sans); font-weight: 700; }
+    .ov-art .ov-mono { font-family: var(--mono); }
+    .ov-art .ov-onband { fill: var(--card-ground); }
+    .ov-say { margin: 18px 0 0; font: 400 23px/1.45 var(--sans); color: var(--muted); }
+    .ov-say b { color: var(--text); font-weight: 650; }
+    .sz-square .ov-say { font-size: 20px; margin-top: 10px; }
+    .sz-story .ov-say { font-size: 30px; }
 
     .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
                 color: var(--green); }

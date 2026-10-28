@@ -2601,6 +2601,7 @@
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
       { id: 'showcase', name: 'Showcase', note: 'The site in a laptop and a phone, drawn from today\u2019s data, under a headline of your own' },
+      { id: 'overload', name: 'Too much to read', note: 'A cartoon: charts, filings and jargon swirling round someone reading it all on their own' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
     ];
@@ -2737,6 +2738,7 @@
       ['howto', 'How to'],
       ['announce', 'Announcement'],
       ['showcase', 'Showcase'],
+      ['overload', 'Too much to read'],
       ['disclaimer', 'Disclaimer'],
       ['avatar', 'Profile picture'],
     ];
@@ -4394,7 +4396,9 @@
         }
         for (const node of pieces) {
           const el = node.parentNode;
-          if (!el || el.closest('a') || el.closest('.s-top') || el.closest('style, script')) continue;
+          // .ov-art: the Too much to read cartoon's bubbles are jargon (ETF, IPO,
+          // BETA, RSI ...), several of them somebody's ticker, never a company.
+          if (!el || el.closest('a') || el.closest('.s-top') || el.closest('.ov-art') || el.closest('style, script')) continue;
           const raw = node.nodeValue || '';
           const t = raw.trim();
           if (t.length < 2 || t.length > 60) continue;
