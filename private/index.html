@@ -198,10 +198,6 @@
     .adot.a-strong-elevated-risk { background: color-mix(in srgb, var(--green) 55%, var(--muted)); }
     .adot.a-weak { background: color-mix(in srgb, var(--red) 70%, var(--muted)); }
     .adot.a-very-weak { background: var(--red); }
-    /* and the same idea for the direction of a move — Unchanged keeps the muted default */
-    .adot.mv-upgraded { background: var(--green); }
-    .adot.mv-downgraded { background: var(--red); }
-    .adot.mv-moved { background: var(--amber); }
     td.ctype { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
     td.ctype .early { color: var(--amber); }
     td.state { font-family: var(--sans); font-size: 11.5px; color: var(--muted); white-space: nowrap; cursor: pointer; text-align: left; }
@@ -855,7 +851,9 @@
        on 2026-09-16: the Changed chip filtered to exactly these rows, and the
        per-column chevron still marks which verdict moved, so the bar was a
        third way of saying the same thing. The chip itself went on 2026-09-23,
-       replaced by the Signal move picker, which says WHICH WAY as well. */
+       replaced by the Signal move picker, which says WHICH WAY as well; that
+       picker left the bar on 2026-10-28 (the pivot's Signal move dimension
+       still answers it, and a screen saved with a move still applies it). */
     /* The frozen name column: the link ellipsizes, the pencil sits beside it.
        Width comes from .frz1 above, not from here — this cell IS that column
        now that Name has gone, and two different widths would fight. */
@@ -1212,14 +1210,6 @@
           <button class="btn picker-btn" id="advBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="picker-menu" id="advMenu" role="listbox" aria-label="Signal"></div>
         </div>
-        <!-- Which way the Balanced verdict went since the previous session.
-             This was a Changed chip — an on/off toggle meaning "moved either
-             way" — until 2026-09-23. `Moved` is that same view, kept as one of
-             the choices rather than lost to the split. -->
-        <div class="picker" id="movePicker" data-open="0" style="display:none">
-          <button class="btn picker-btn" id="moveBtn" aria-haspopup="listbox" aria-expanded="false"></button>
-          <div class="picker-menu" id="moveMenu" role="listbox" aria-label="Signal move"></div>
-        </div>
         <button class="btn picker-btn" id="fltBtn" aria-pressed="false"></button>
         <!-- The promo studio, open to every account since 2026-09-15 (the
              Announcement template stays the owner's). Hidden for guests. -->
@@ -1250,6 +1240,22 @@
         <a class="btn" id="compareLink" href="/compare" target="_blank" rel="noopener"
            title="Compare two stocks side by side">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Compare
+        </a>
+        <!-- Three pages that lived in the ... menu until 2026-10-28, brought up
+             to the bar. Ids unchanged: News and Paper positions are members'
+             pages and hide for guests with the research link; Earnings results
+             is public and stays for everyone. -->
+        <a class="btn" id="newsLink" href="/news" target="_blank" rel="noopener"
+           title="News — every article read by AI, by day and importance">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>News
+        </a>
+        <a class="btn" id="resultsLink" href="/results" target="_blank" rel="noopener"
+           title="Earnings results — the latest results releases, read by AI">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>Earnings results
+        </a>
+        <a class="btn" id="paperLink" href="/paper" target="_blank" rel="noopener"
+           title="Paper positions — a pretend account to open and close positions in">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Paper positions
         </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
@@ -1356,25 +1362,10 @@
                     <button type="button" data-theme-pick="dark">Dark</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="navy">Navy</button><button type="button" data-theme-pick="auto" title="Follow this computer's own light or dark setting">Auto</button>
                   </span>
                 </div>
-                <!-- Members: paper positions, a simulation with pretend money. -->
-                <a class="pick" href="/paper" id="paperLink">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
-                  <span class="nm">Paper positions</span>
-                </a>
                 <!-- Members: every 13D/13G and 8-K, a day at a time (2026-10-20). -->
                 <a class="pick" href="/filings" id="filingsLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                   <span class="nm">SEC filings</span>
-                </a>
-                <!-- Members: the news feed, every AI-read article by day and importance (2026-10-24). -->
-                <a class="pick" href="/news" id="newsLink">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
-                  <span class="nm">News</span>
-                </a>
-                <!-- Everyone: the public page of recent results releases read by AI (2026-10-22). -->
-                <a class="pick" href="/results" id="resultsLink">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
-                  <span class="nm">Earnings results</span>
                 </a>
                 <!-- The corporate site, which / no longer shows once signed in (2026-10-23). -->
                 <a class="pick" href="/home" id="homeLink">
@@ -2973,7 +2964,6 @@
       { root: 'spPicker', btn: 'spBtn', menu: 'spMenu' },
       { root: 'sizePicker', btn: 'sizeBtn', menu: 'sizeMenu' },
       { root: 'advPicker', btn: 'advBtn', menu: 'advMenu' },
-      { root: 'movePicker', btn: 'moveBtn', menu: 'moveMenu' },
       { root: 'researchPicker', btn: 'researchBtn', menu: 'researchMenu' },
       { root: 'morePicker', btn: 'moreBtn', menu: 'moreMenu' },
     ];
@@ -3285,11 +3275,6 @@
       render();
       if (!tilesOn()) paintWindow(true);   // the table sizes itself from its own height
     }
-
-    // Defined once in filters.js, which the server also runs for the phone —
-    // the ladder is worst-first there and getting that backwards would label
-    // every upgrade a downgrade.
-    const adviceMove = (s) => Filters.adviceMove(s);
 
     // Tab and sector together decide what the view is ABOUT; the advice-move
     // filter then narrows it. Both the table and its counts read this,
@@ -3913,68 +3898,6 @@
         : 'Filter the table to one or more sectors';
     }
 
-    // Which way the Balanced verdict went since the previous close. This was a
-    // Changed chip — one on/off toggle — until 2026-09-23; 'Moved' is that
-    // toggle's on state, kept as a fourth option so the either-way view did not
-    // cost anything and so a screen stored as `changed: true` still means what
-    // it meant. Counts are of the CURRENT tab, sector, industry, size and
-    // advice, so a count here can never describe a different population from
-    // the one the menu beside it just counted.
-    function renderMoveMenu(scope) {
-      const counts = { Moved: 0, Upgraded: 0, Unchanged: 0, Downgraded: 0 };
-      let blank = 0;
-      scope.forEach((s) => {
-        const m = adviceMove(s);
-        if (!m) { blank++; return; }
-        counts[m]++;
-        if (m !== 'Unchanged') counts.Moved++;
-      });
-      const row = (val, label, n) =>
-        `<button class="pick ${moveFilter === val ? 'on' : ''}" data-move="${we(val)}" role="option" ` +
-        `aria-selected="${moveFilter === val}">` +
-        (val === 'All' ? '' : `<span class="adot mv-${val.toLowerCase()}"></span>`) +
-        `<span class="nm">${we(label)}</span><span class="count">${n}</span></button>`;
-      const note = blank
-        ? `${blank} ${blank === 1 ? 'row has' : 'rows have'} no previous signal to compare against yet.`
-        : '';
-      $('moveMenu').innerHTML = '<div class="picker-inner">' +
-        row('All', 'Any', scope.length) +
-        row('Moved', 'Moved either way', counts.Moved) +
-        row('Upgraded', 'Upgraded', counts.Upgraded) +
-        row('Unchanged', 'Unchanged', counts.Unchanged) +
-        row('Downgraded', 'Downgraded', counts.Downgraded) +
-        '<div class="pick-sep"></div><div class="pick-hint">The signal against the previous ' +
-        'close. An upgrade is a step up the ladder, Very Strong being the top.' + (note ? ' ' + we(note) : '') +
-        '</div></div>';
-      $('moveMenu').querySelectorAll('[data-move]').forEach((b) => {
-        b.addEventListener('click', () => {
-          moveFilter = b.dataset.move;
-          window.track && track('picker', 'move:' + moveFilter);
-          closePickers();
-          render();
-        });
-      });
-    }
-
-    function renderMoveTrigger(scope) {
-      const root = $('movePicker');
-      if (!root) return;
-      // Hidden until a refresh has stored yesterday's verdict — there is
-      // nothing to compare against before that, and every option would read 0.
-      const any = scope.some((s) => s.advicePrev);
-      root.style.display = any ? '' : 'none';
-      const on = moveFilter !== 'All';
-      $('moveBtn').innerHTML =
-        '<svg class="ic ic-sm" aria-hidden="true"><use href="#i-refresh-all" /></svg>' +
-        '<span class="picker-label">Signal move</span>' +
-        `<span class="count">${on ? we(moveFilter) : 'Any'}</span>` +
-        '<svg class="ic ic-sm chev" aria-hidden="true"><use href="#i-chevron" /></svg>';
-      $('moveBtn').classList.toggle('on', on);
-      $('moveBtn').title = on
-        ? `Showing rows whose Balanced signal is ${moveFilter.toLowerCase()} since the previous close — open to change or clear`
-        : 'Filter by which way the Balanced signal moved since the previous close';
-    }
-
     // One row of the table. Pulled out of render() so a window repaint can
     // build a slice of rows without rebuilding the page around them.
     function rowHtml(s, i, freshest) {
@@ -4324,7 +4247,6 @@
       renderSpTrigger();
       renderSizeTrigger();
       renderAdviceTrigger();
-      renderMoveTrigger(scopedStocks());
       const tbody = $('tbody');
       const rows = visibleStocks();
       markSortedColumn();
@@ -7126,7 +7048,6 @@
         if (opening && p.root === 'spPicker') renderSpMenu(narrowed());
         if (opening && p.root === 'sizePicker') renderSizeMenu(narrowed());
         if (opening && p.root === 'advPicker') renderAdviceMenu();
-        if (opening && p.root === 'movePicker') renderMoveMenu(scopedStocks());
         if (opening && p.root === 'scrPicker') renderScreensMenu();
         openPicker(opening ? p.root : null);
       });

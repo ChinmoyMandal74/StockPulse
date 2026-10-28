@@ -444,10 +444,6 @@
           drops an industry that no longer applies. Each menu carries live counts, and says how many
           rows have no value yet, so counts that do not add up are explained rather than puzzling.</li>
         <li><b>Signal</b> filters to one signal.</li>
-        <li><b>Signal move</b> answers <em>which way</em>, not just whether: <b>Moved</b>,
-          <b>Upgraded</b>, <b>Unchanged</b> or <b>Downgraded</b> since the previous session. A stock
-          with no previous signal matches none of them — nothing to compare against is a different
-          fact from having held — and the menu counts those separately.</li>
         <li>These are not remembered between visits, deliberately: a filter surviving a reload is a
           table missing rows for no visible reason.</li>
       </ul>
@@ -979,7 +975,7 @@
         state columns beside it show the working, so the derivation reads left to right without
         anything to open.</p>
       <p>A <strong>chevron</strong> before the word means the signal moved since the previous
-        session, and names what it was. <b>Signal move</b> in the bar filters to exactly those rows.</p>
+        session, and names what it was. <b>Signal move</b> in the pivot view counts those rows by direction.</p>
 
       <h3>The trend ribbon on the stock page</h3>
       <p>Each stock's page paints a thin strip under the price chart: the Trend word, session by
@@ -1053,12 +1049,11 @@
         previous trading session — yesterday's technical readings walked through the same rules,
         with the day-cached fundamentals standing for both days. The cell's tooltip and the hover
         card name yesterday's signal.</p>
-      <p>The <strong>Signal move</strong> picker in the bar filters the table by that movement:
-        <em>Upgraded</em>, <em>Unchanged</em>, <em>Downgraded</em>, or <em>Moved either way</em> for
-        both directions at once. An upgrade is a step up the ladder, Very Strong being the top. A stock with no signal from
-        the previous close appears under none of the four — there is nothing to compare it against,
-        which is a different fact from having held. The picker is hidden until a refresh has stored
-        a previous signal to compare with.</p>
+      <p>To count those movements, put <strong>Signal move</strong> on an axis of the pivot view:
+        <em>Upgraded</em>, <em>Unchanged</em> or <em>Downgraded</em>. An upgrade is a step up the
+        ladder, Very Strong being the top. A stock with no signal from the previous close falls under
+        none of them — there is nothing to compare it against, which is a different fact from having
+        held.</p>
 
       <h3>The thresholds (fixed defaults)</h3>
 
