@@ -121,4 +121,73 @@ function build(o) {
   return { latest: o.latest, years: o.years || YEARS, months, companies, broken, groups: out };
 }
 
-module.exports = { YEARS, MAX_MONTH, plan, monthly, groupsOf, build };
+// ---- Year by year (2026-10-28, the owner: "in promo under market can you
+// create a year on year slide similar to month on month") -------------------
+//
+// THE SAME RULES, A YEAR AT A TIME, and further back: from 2007, the first
+// calendar year the bar archive (from 2006-10-12) holds a closing price
+// before. A bar is the plain average of the members' price returns over the
+// calendar year, each company counting the same. NOT the month card's
+// compounded months: that is a portfolio rebalanced to equal weights every
+// month, this is what the typical member did over the year, so the two can
+// differ by a point or two for the same year. Each card says which it is.
+const FIRST_YEAR = 2007;
+// A year past 50 times is a break in the series (Chord Energy's reorganisation
+// reads +30,991% inside 2020), never a return; left out and reported.
+const MAX_YEAR = 5000;
+function planYears(latest, first) {
+  const Y = Number(String(latest).slice(0, 4));
+  const years = [], bounds = [];
+  for (let y = first || FIRST_YEAR; y <= Y; y++) { years.push(String(y)); bounds.push(y + '-01-01'); }
+  bounds.push(iso(Date.parse(latest + 'T12:00:00Z') + DAY));
+  return { years, bounds };
+}
+// One company's return in each year, or null. BOTH ENDS MUST BELONG: the
+// earlier close to the last fortnight of the year before, the later one to
+// the last fortnight before the next boundary. A company listed mid-year, or
+// a ticker whose bars stop and start again (GM, old company to new), has no
+// return for that year rather than one borrowed across the gap.
+function yearly(closes, bounds) {
+  const out = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const a = closes[k], b = closes[k + 1];
+    const aMin = iso(Date.parse(bounds[k] + 'T12:00:00Z') - 15 * DAY), bMin = iso(Date.parse(bounds[k + 1] + 'T12:00:00Z') - 15 * DAY);
+    const ok = a && b && a.close >= MIN_CLOSE && b.close >= MIN_CLOSE && a.d >= aMin && a.d < bounds[k] && b.d >= bMin && b.d < bounds[k + 1];
+    const v = ok ? (b.close / a.close - 1) * 100 : null;
+    out.push(v != null && v > MAX_YEAR ? null : v);
+  }
+  return out;
+}
+// The year-by-year counterpart of build(): the same groups, members and shape,
+// with `years` where build() has `months`.
+function buildYears(o) {
+  const { years, bounds } = planYears(o.latest, o.first);
+  const groups = {};
+  const slot = (key) => groups[key] || (groups[key] = { members: 0, sum: years.map(() => 0), n: years.map(() => 0) });
+  let companies = 0;
+  const broken = [];
+  for (const row of o.rows || []) {
+    if (!row || !row.symbol || row.error || row.instrumentType === 'ETF') continue;
+    const sym = String(row.symbol).toUpperCase();
+    const cl = (o.closesBySym && o.closesBySym.get(sym)) || [];
+    const r = yearly(cl, bounds);
+    for (let k = 0; k < years.length; k++) { const a = cl[k], b = cl[k + 1]; if (r[k] == null && a && b && a.close >= MIN_CLOSE && (b.close / a.close - 1) * 100 > MAX_YEAR) broken.push(sym + ' ' + years[k]); }
+    companies++;
+    for (const key of groupsOf(row, o.themesOf ? o.themesOf(sym) : [])) {
+      const g = slot(key);
+      g.members++;
+      for (let k = 0; k < years.length; k++) if (r[k] != null && Number.isFinite(r[k])) { g.sum[k] += r[k]; g.n[k]++; }
+    }
+  }
+  const out = {};
+  for (const key of Object.keys(groups)) {
+    const g = groups[key];
+    out[key] = { members: g.members, n: g.n, r: g.sum.map((s, k) => (g.n[k] ? Math.round((s / g.n[k]) * 100) / 100 : null)) };
+  }
+  // The S&P 500 fund over the same boundaries, when its closes are handed in.
+  const fc = o.benchCloses ? yearly(o.benchCloses, bounds) : null;
+  const bench = fc ? fc.map((v) => (v == null ? null : Math.round(v * 100) / 100)) : null;
+  return { latest: o.latest, years, companies, broken, bench, groups: out };
+}
+
+module.exports = { YEARS, MAX_MONTH, plan, monthly, groupsOf, build, FIRST_YEAR, MAX_YEAR, planYears, yearly, buildYears };

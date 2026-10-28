@@ -91,3 +91,33 @@ The owner: "create a promo similar to month by month and call it Day by Day, Onl
 - **`groupdays-test.js`, 53 checks:** the window, the holiday, the hole, a late listing, the break, the sub-cent floor, groups and funds, what the four cards draw on each size, the fallback without an index. The break, holiday-slot and to-come guards were each proved by reverting them.
 - **The real studio over production's bars (read only):** all four cards on all three sizes, looked at. NVDA's newest day and SPY's matched the snapshot's own Today figures, and the market's newest day matched the snapshot's average.
 - **The real server on an in-memory database:** the rebuild, the tiers (anonymous, guest, admin), and a saved post of each card drawn by the phone route.
+
+### Year by year: the market since 2007 (2026-10-28)
+
+The owner: "In promo under market can you create a year on year slide similar to month on month". Template `mktyears`, in Market straight after Month by month; controls `gykGroup` (every company, S&P 500 members, Nasdaq 100 members) and `gykView` (own return, or against the S&P 500 fund).
+
+**The arithmetic** lives in `groupmonths.js` beside the months, with the same rules a year at a time:
+- `planYears(latest, first)` sets boundaries at each 1 January from 2007, the archive's first full year, plus the day after the newest bar.
+- `yearly(closes, bounds)` requires both ends to belong to the last fortnight before each boundary. A mid-year listing, or a ticker whose bars stop and restart, has no figure for that year.
+- A year past 50 times (`MAX_YEAR`) is a break in the series, never a return. GM 2010 and APLD 2021 on the first build.
+- `buildYears(o)` gives the same groups as `build`, with `years` in place of `months`, and the S&P 500 fund's own years (`bench`) when its closes are handed in.
+- The month build's output is unchanged; `groupyears-test.js` (16 checks) includes that check. The both-ends rule was proved by removing it: the GM shape read −98.75%.
+
+**A bar is the average of the members' calendar-year returns.** It is not the month card's compounded months, which is a portfolio rebalanced to equal weights every month. So the same year can differ by a point or two between the two cards. The note says what a bar is.
+
+**Built nightly in the same request as the months and days** (`POST /api/group-months/rebuild`, its own try):
+- `groupYearsBuild` reads the last close before each of about 21 boundaries for every company and SPY, about 27,000 seeks, and stores `app_meta` `group_years`.
+- `GET /api/group-years` (members) serves it. The studio fetches it once a visit (`getGroupYears`), and the phone route reads it for a saved post (`groupYearsNeed`).
+
+**The card (`tplMktYears`):**
+- A bar a year, green up and red down, with the number at its end. The S&P 500 fund's year is a tick on the same column, and each number sits beyond whichever reaches further, the bar or the tick.
+- The current year is lighter and starred, "so far".
+- Four tiles: years up, the largest rise, the largest fall, the typical (median) year. On the against-the-fund view: years ahead of the fund, furthest ahead, furthest behind, typical, in points.
+- **The note says the members are today's, applied to every past year,** and how many stand behind 2007 (702 of 1,258 for every company). The against-the-fund view adds that survivors flatter the comparison, because the fund held the index as it was. Today's S&P 500 members' average was ahead of the fund in 17 of 20 years for exactly that reason.
+
+**Cross-checked:** S&P 500 members' yearly figures equal the Research card's equal-weighted averages (`sp-years.js`) year for year: 2007 +13.5, 2008 −34.8, 2009 +41.3, 2010 +24.8. Two separate pieces of code agree.
+
+**Tested** with scratchpad `gyr-test.js`, 26 checks in the real studio fed the locally built years:
+- the reading state, the placement, and the pickers;
+- for three group and view pairs: a column a year, the fund ticks, the tiles matching the build, no number over a tick (it failed first on the falling years, the label starting at the tick's top edge), everything inside the frame, no buy/sell/hold wording, and the members notes;
+- no page errors.

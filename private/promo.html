@@ -1987,6 +1987,14 @@
         <p class="hint">The average of the members’ returns each month, every company counting the same — what
           the typical stock did, which is not what an index fund did. Today’s members, applied to every past month.</p>
       </div>
+      <div id="gykBox">
+        <label>Market</label>
+        <select id="gykGroup"></select>
+        <label>Show</label>
+        <select id="gykView"></select>
+        <p class="hint">A bar a year since 2007: the average of the members’ returns that calendar year, every company
+          counting the same, with the S&amp;P 500 fund’s own year as a tick. Today’s members, applied to every past year.</p>
+      </div>
       <div id="gscBox">
         <label>Sector</label>
         <select id="gscName"></select>
@@ -2504,6 +2512,7 @@
       { id: 'upofhigh', name: 'Strong uptrend, still well off the high', note:'The saved screen as a card — every company in a strong uptrend placed by its distance from the 52-week high, and a numbered list of those 30% or more below it' },
       { id: 'pullback', name: 'Pulled back', note: 'Fell hard today and now near the 200-day average — a scatter of the fallers and a numbered list of those in the band' },
       { id: 'idxpe', name: 'Valuation', note: 'The index’s P/E and the typical member’s, quarter by quarter for ten years' },
+      { id: 'mktyears', name: 'Market, year by year', note: 'A bar a year since 2007: the average of every company’s return that year, equal weight, with the S&P 500 fund’s year beside it' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
       { id: 'mktdays', name: 'Market, day by day', note: 'The market over the last eight weeks, a row a week — the average of every company’s return each session, equal weight' },
       { id: 'secdays', name: 'Sector, day by day', note: 'One sector over the last eight weeks, a row a week — the average of its companies’ returns each session, equal weight' },
@@ -2683,6 +2692,7 @@
       ['beat', 'Beating the index'],
       ['movegrid', 'Moves by sector'],
       ['mktmonths', 'Month by month'],
+      ['mktyears', 'Year by year'],
       ['mktdays', 'Day by day'],
       ['earngrow', 'Earnings growth'],
       ['earnahead', 'Earnings ahead'],
@@ -3300,6 +3310,18 @@
       const full = ys.find((y) => !y.partial);
       sel.value = ys.some((y) => String(y.y) === keep) ? keep : full ? String(full.y) : sel.value;
     }
+    // Year by year for every group (the daily build), read once a visit.
+    let gyData = null, gyPending = false;
+    function getGroupYears() {
+      if (gyData) return gyData;
+      if (gyPending) return null;
+      gyPending = true;
+      fetch('/api/group-years', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { years: [], groups: {} }))
+        .then((d) => { gyData = d || { years: [], groups: {} }; gyPending = false; if (Cards.groupYearsNeed(tpl)) render(); })
+        .catch(() => { gyData = { years: [], groups: {} }; gyPending = false; if (Cards.groupYearsNeed(tpl)) render(); });
+      return null;
+    }
     let gmData = null, gmPending = false;
     function getGroupMonths() {
       if (gmData) return gmData;
@@ -3678,7 +3700,7 @@
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'uohSp500', 'lowSp500', 'lowSize','gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'uohSp500', 'lowSp500', 'lowSize','gmkGroup', 'gmkView', 'gykGroup', 'gykView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
@@ -3707,7 +3729,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getSpYears, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getGroupYears, getSpYears, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4635,6 +4657,7 @@
       $('beatBox').style.display = tpl === 'beat' ? 'block' : 'none';
       $('mvgBox').style.display = tpl === 'movegrid' ? 'block' : 'none';
       $('gmkBox').style.display = tpl === 'mktmonths' ? 'block' : 'none';
+      $('gykBox').style.display = tpl === 'mktyears' ? 'block' : 'none';
       $('ipeBox').style.display = tpl === 'idxpe' ? 'block' : 'none';
       $('pbBox').style.display = tpl === 'pullback' ? 'block' : 'none';
       $('uohBox').style.display = tpl === 'upofhigh' ? 'block' : 'none';
@@ -5107,7 +5130,7 @@
     $('lowSp500').addEventListener('change', () => { if (tpl === 'rec52lo0') { paintLowSize(); render(); } });
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
-    [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>
+    [['gykGroup', 'mktyears'], ['gykView', 'mktyears'], ['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>
       $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     ['mvgPeriod', 'mvgSp500'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'movegrid') render(); }));
@@ -6339,6 +6362,8 @@
         { const fill = (id, pairs) => { const keep = $(id).value; $(id).innerHTML = pairs.map(([v, lab]) => `<option value="${esc(v)}">${esc(lab)}</option>`).join(''); if ([...$(id).options].some((o) => o.value === keep)) $(id).value = keep; };
           fill('gmkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
           for (const id of ['gmkView', 'gscView', 'gthView']) fill(id, Cards.monthViews());
+          fill('gykGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));
+          fill('gykView', Cards.monthViews());
           fill('gscName', Cards.sectors(stocks).map((n) => [n, n]));
           fill('gthName', Cards.groupMonthThemes(stocks).map((n) => [n, n]));
           fill('gdkGroup', Cards.groupMonthMarkets().map(([v, lab]) => [v, lab + ', equal weight']));

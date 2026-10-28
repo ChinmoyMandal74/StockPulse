@@ -13012,6 +13012,8 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   // Month by month for a group: the stored daily build, only when asked for.
   let gmonths = null;
   if (Cards.groupMonthsNeed(post.tpl, post.opts || {})) { try { gmonths = await groupMonthsStored(); } catch { gmonths = null; } }
+  let gyears = null;
+  if (Cards.groupYearsNeed(post.tpl, post.opts || {})) { try { gyears = await groupYearsStored(); } catch { gyears = null; } }
 
   // The Margins card, likewise.
   let mgins = null;
@@ -13091,6 +13093,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(glRel && glRel.symbol === s ? Object.assign({}, r, glRel.fields) : r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
+      getGroupYears: () => gyears,
       getSpYears: () => spYearsFile(),
       getDays: () => days,
       getGroupDays: () => gdays,
@@ -17212,6 +17215,42 @@ async function groupMonthsBuild() {
   return { built: true, latest, months: built.months.length, companies: built.companies, groups: Object.keys(built.groups).length, broken: built.broken, seeks: symbols.length * bounds.length, ms: Date.now() - t0 };
 }
 let groupMonthsMemo = null;
+// YEAR BY YEAR for every group (2026-10-28, the owner: "in promo under market
+// can you create a year on year slide similar to month on month"): the last
+// close before each 1 January from 2007, and the newest bar, for every
+// company and the S&P 500 fund. About 21 boundaries, so some 27,000 seeks,
+// a fifth of the months'. Stored as app_meta group_years.
+async function groupYearsBuild() {
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error);
+  const latest = rows.reduce((m, x) => (x.latestDate && x.latestDate > m ? x.latestDate : m), '');
+  if (!latest) return { built: false, reason: 'no prices on file' };
+  const [, pf] = await Promise.all([stampSpMember(rows).catch(() => {}), readPortfoliosAll()]);
+  const { bounds } = GroupMonths.planYears(latest);
+  const symbols = rows.filter((x) => x.instrumentType !== 'ETF').map((x) => String(x.symbol).toUpperCase());
+  const BENCH = 'SPY';
+  const all = symbols.includes(BENCH) ? symbols : symbols.concat(BENCH);
+  const closesBySym = new Map(all.map((s) => [s, new Array(bounds.length).fill(null)]));
+  const t0 = Date.now();
+  for (let i = 0; i < bounds.length; i += 12) {
+    const part = bounds.slice(i, i + 12);
+    const got = await store.closesBefore(part, all);
+    for (let k = 0; k < part.length; k++) for (const s of all) { const c = got[k] && got[k][s]; if (c) closesBySym.get(s)[i + k] = c; }
+  }
+  const built = GroupMonths.buildYears({ latest, rows, closesBySym, benchCloses: closesBySym.get(BENCH), themesOf: (sym) => membershipOf(sym, pf) });
+  if (!built.groups.all || !built.groups.all.r.some((v) => v != null)) return { built: false, reason: 'no returns worked out' };
+  const body = Object.assign({ at: Date.now(), benchSymbol: BENCH }, built);
+  await store.writeGroupYears(body);
+  groupYearsMemo = { at: Date.now(), body };
+  return { built: true, latest, years: built.years.length, companies: built.companies, groups: Object.keys(built.groups).length, broken: built.broken, seeks: all.length * bounds.length, ms: Date.now() - t0 };
+}
+let groupYearsMemo = null;
+async function groupYearsStored() {
+  if (groupYearsMemo && Date.now() - groupYearsMemo.at < 10 * 60 * 1000) return groupYearsMemo.body;
+  const body = await store.readGroupYears();
+  if (body && body.groups) groupYearsMemo = { at: Date.now(), body };
+  return body && body.groups ? body : null;
+}
 // S&P 500 returns by year for the phone's saved posts: the offline build
 // (sp-years.js) shipped in private/, read once per instance. A build
 // artefact like the strategy files, not state.
@@ -17234,9 +17273,16 @@ app.post('/api/group-months/rebuild', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (await standAside(res)) return;
   const months = await groupMonthsBuild();
-  let days;
+  let days, years;
   try { days = await groupDaysBuild(); } catch (e) { console.error('group days build failed:', e.message); days = { built: false, reason: 'the build failed' }; }
-  res.json(Object.assign({}, months, { days }));
+  // Year by year rides in the same request too, its failure its own.
+  try { years = await groupYearsBuild(); } catch (e) { console.error('group years build failed:', e.message); years = { built: false, reason: 'the build failed' }; }
+  res.json(Object.assign({}, months, { days, years }));
+}));
+
+app.get('/api/group-years', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json((await groupYearsStored()) || { at: null, years: [], groups: {} });
 }));
 
 // ---- the earnings calendar (2026-10-28) ------------------------------------

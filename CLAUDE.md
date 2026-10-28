@@ -51,7 +51,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `margins.js` | Aggregate margins from the filings, and one company's margin change: the arithmetic behind the Margins card and the Margin chg column |
 | `capreturns.js`, `sec-reread.js` | Capital returns (buybacks, dividends, stock pay, share count) from the stored filings: the arithmetic, and the script that asks the deployed app to re-read every company after the reader changes |
 | `secprobe.js`, `secinstance.js` | The SEC probe (`/api/sec/probe`, read only): where one company's newest report stops. And the reader for a report the SEC facts feed lacks, taken from the report's own data file |
-| `groupmonths.js` | Month by month for a group (the market, a sector, a theme): the equal-weight average of the members' monthly returns, built once a day for every group and stored |
+| `groupmonths.js` | Month by month for a group (the market, a sector, a theme): the equal-weight average of the members' monthly returns, built once a day for every group and stored. Also year by year since 2007 (`buildYears`, the Market Year by year card), built in the same nightly request; `groupyears-test.js` |
 | `secquality.js` | The quality of the filings data and how it compares with the price provider's figures: the checks behind the Quality card on `/edgar`, built on the daily pass |
 | `optionsoi.js`, `options-load.js` | Options open interest per stock from the Options Clearing Corporation: the reader and arithmetic, and the loader run from the owner's machine |
 | `splitadj.js` | Two periods' share counts on one footing across a split, for the 13F and N-PORT loaders, applied only where the holders' own counts confirm the factor (spin-off price factors are not share changes) |

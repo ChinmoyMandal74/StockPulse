@@ -13591,6 +13591,88 @@
     });
   }
 
+  // ---- Year by year: the market since 2007 (2026-10-28) ----------------------
+  // The owner: "in promo under market can you create a year on year slide
+  // similar to month on month". The month card's rules a year at a time and
+  // further back: from 2007, the archive's first full year. A bar a year: the
+  // average of the members' price returns that calendar year, each company
+  // counting the same (groupmonths.js buildYears, built nightly beside the
+  // months). Not the month card's compounded months, so the same year can read
+  // a point or two apart on the two cards; the note says which this is.
+  //
+  // The S&P 500 fund's own year is drawn on every bar as a tick, and the
+  // Against the S&P 500 view draws the difference instead. Today's members,
+  // applied to every past year, as on the month card: the early years rest on
+  // fewer companies and on the ones that lasted, and the note says how many.
+  let getGroupYears = () => null;
+  function groupYearsNeed(tpl) { return tpl === 'mktyears' ? {} : null; }
+  function tplMktYears() {
+    const shell = (a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">Market · year by year</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const data = getGroupYears();
+    if (!data) return shell('Drawing', 'the years…', 'Reading the archive.');
+    const years = Array.isArray(data.years) ? data.years : [];
+    const m = GM_MARKETS.find(([k]) => k === O.gykGroup) || GM_MARKETS[0];
+    const g = data.groups && data.groups[m[0]];
+    const name = m[0] === 'all' ? 'The market' : m[1];
+    if (!years.length || !g) return shell(name, 'year by year', years.length ? 'No company in this group has a year on record.' : 'The years have not been built yet. They are built once a day, after the nightly run.');
+    const rel = O.gykView === 'rel';
+    const bench = Array.isArray(data.bench) ? data.bench : [];
+    const lastY = years[years.length - 1];
+    const partial = String(data.latest || '').slice(5) !== '12-31' && String(data.latest || '').slice(0, 4) === lastY;
+    const cols = years.map((y, k) => {
+      const own = g.r[k] == null ? null : Number(g.r[k]), fund = bench[k] == null ? null : Number(bench[k]);
+      return { y, own, fund, v: rel ? (own == null || fund == null ? null : own - fund) : own, n: g.n[k] };
+    });
+    const shown = cols.filter((c) => c.v != null);
+    if (!shown.length) return shell(name, 'year by year', 'No year has a figure yet.');
+    const top = Math.max(5, ...cols.flatMap((c) => [Math.abs(c.v || 0), rel ? 0 : Math.abs(c.fund || 0)]));
+    const pc = (v, d = 1) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d));
+    // Each bar grows from the zero line, up or down; the plot's halves are
+    // sized to the largest move either way, so a market that never fell 40%
+    // does not waste half the card.
+    const up = Math.max(5, ...cols.map((c) => Math.max(c.v || 0, rel ? 0 : c.fund || 0)));
+    const dn = Math.max(5, ...cols.map((c) => Math.max(-(c.v || 0), rel ? 0 : -(c.fund || 0))));
+    const zero = up / (up + dn) * 100;
+    const at = (v) => (v >= 0 ? zero - v / (up + dn) * 100 : zero + -v / (up + dn) * 100);
+    const bars = cols.map((c, i) => {
+      const last = i === cols.length - 1 && partial;
+      const yl = (i === 0 || i === cols.length - 1 ? c.y : '’' + c.y.slice(2)) + (last ? '*' : '');
+      if (c.v == null) return `<div class="gyr-col"><span class="gyr-y">${esc(yl)}</span></div>`;
+      const pos = c.v >= 0, h = Math.abs(c.v) / (up + dn) * 100;
+      const bar = `<i class="gyr-bar ${pos ? 'gyr-up' : 'gyr-dn'}${last ? ' gyr-part' : ''}" style="top:${(pos ? zero - h : zero).toFixed(2)}%;height:${Math.max(0.4, h).toFixed(2)}%"></i>`;
+      // The number sits beyond whichever reaches further, the bar or the
+      // fund's tick, so the two never print over each other.
+      const tip = pos ? Math.min(zero - h, !rel && c.fund != null ? at(c.fund) : 100) : Math.max(zero + h, !rel && c.fund != null ? at(c.fund) : 0);
+      // A few pixels clear of it: the tick is a 3px line drawn below its point.
+      const lab = `<span class="gyr-v" style="${pos ? 'bottom:calc(' + (100 - tip).toFixed(2) + '% + 2px)' : 'top:calc(' + tip.toFixed(2) + '% + 5px)'}">${pc(c.v, 0)}</span>`;
+      const tick = !rel && c.fund != null ? `<b class="gyr-fund" style="top:${at(c.fund).toFixed(2)}%"></b>` : '';
+      return `<div class="gyr-col">${bar}${tick}${lab}<span class="gyr-y">${esc(yl)}</span></div>`;
+    }).join('');
+    const ups = shown.filter((c) => c.v > 0).length;
+    const best = shown.reduce((a, b) => (b.v > a.v ? b : a)), worst = shown.reduce((a, b) => (b.v < a.v ? b : a));
+    const sorted = shown.map((c) => c.v).sort((a, b) => a - b), mid = sorted.length >> 1;
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    const tiles = (rel
+      ? [['Ahead of the fund', ups + ' of ' + shown.length + ' years'], ['Furthest ahead', best.y + '  ' + pc(best.v) + ' pts'], ['Furthest behind', worst.y + '  ' + pc(worst.v) + ' pts'], ['Typical year', pc(median) + ' pts']]
+      : [['Years up', ups + ' of ' + shown.length], ['Largest rise', best.y + '  ' + pc(best.v) + '%'], ['Largest fall', worst.y + '  ' + pc(worst.v) + '%'], ['Typical year', pc(median) + '%']])
+      .map(([k, v]) => `<div class="gyr-tile"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+    const first = shown[0];
+    const span = shown[0].y + '–' + (partial ? lastY + ' so far' : lastY);
+    return chromeTop()
+      + '<div class="s-body"><div class="gyr-in">'
+      + `<span class="s-kick">Market · ${esc(span)}</span>`
+      + `<h2 class="s-title">${esc(name)}, year by year<br><span class="dim">${rel ? 'against the S&amp;P 500 fund' : 'equal weight'}</span></h2>`
+      + `<div class="gyr-tiles">${tiles}</div>`
+      + `<div class="gyr-plot"><span class="gyr-zero" style="top:${zero.toFixed(2)}%"></span>${bars}</div>`
+      + (rel ? '' : '<div class="gyr-key"><span><i class="gyr-sw gyr-up"></i><i class="gyr-sw gyr-dn"></i>Average member, each counting the same</span><span><b class="gyr-swf"></b>S&amp;P 500 fund</span></div>')
+      + `<p class="gyr-note">${rel ? 'Each bar is the average member’s price return less the S&amp;P 500 fund’s, in points. Today’s members are the companies that lasted, which flatters them against the fund: it held the index as it was. ' :'Each bar is the average of the members’ price returns over the calendar year, each company counting the same; dividends are not included. '}`
+      + `The members are today’s ${esc(g.members.toLocaleString())}, applied to every past year: companies since dropped are missing, and ${esc(first.y)} rests on ${esc(first.n.toLocaleString())} of them.${partial ? ' * ' + esc(lastY) + ' so far.' : ''}</p>`
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Day by day: the last eight weeks, for a stock or a group -------------
   //
   // (2026-10-22, the owner: "create a promo similar to month by month and call
@@ -14119,6 +14201,7 @@
     covread: tplReadings,
     movegrid: tplMoveGrid,
     mktmonths: () => groupMonthsCard('mktmonths'),
+    mktyears: tplMktYears,
     spyears: tplSpYears,
     secmonths: () => groupMonthsCard('secmonths'),
     thmmonths: () => groupMonthsCard('thmmonths'),
@@ -16651,6 +16734,34 @@
     .sz-square .ov-say { font-size: 20px; margin-top: 10px; }
     .sz-story .ov-say { font-size: 30px; }
 
+    /* ---- Market: year by year --------------------------------------------- */
+    .gyr-in { display: flex; flex-direction: column; height: 100%; }
+    .gyr-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .gyr-tile { padding: 12px 14px; border: 1px solid var(--hair-2); border-radius: 14px;
+                background: color-mix(in srgb, var(--text) 4%, transparent); display: flex; flex-direction: column; gap: 4px; }
+    .gyr-tile span { font: 600 13px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .gyr-tile b { font: 700 25px var(--sans); letter-spacing: -0.02em; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .gyr-plot { flex: 1; min-height: 300px; position: relative; display: flex; gap: 6px; margin: 34px 0 40px; }
+    .gyr-zero { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--hair-2); }
+    .gyr-col { flex: 1; position: relative; min-width: 0; }
+    .gyr-bar { position: absolute; left: 8%; right: 8%; border-radius: 3px; }
+    .gyr-up { background: color-mix(in srgb, var(--green) 80%, transparent); }
+    .gyr-dn { background: color-mix(in srgb, var(--red) 80%, transparent); }
+    .gyr-part { opacity: 0.55; }
+    .gyr-fund { position: absolute; left: -2%; right: -2%; height: 0; border-top: 3px solid var(--text); }
+    .gyr-v { position: absolute; left: -20%; right: -20%; text-align: center; font: 600 15px var(--mono); color: var(--muted); padding: 3px 0; }
+    .gyr-y { position: absolute; left: -30%; right: -30%; bottom: -34px; text-align: center; font: 500 14px var(--mono); color: var(--faint); white-space: nowrap; }
+    .gyr-key { display: flex; gap: 24px; justify-content: center; font: 400 16px var(--sans); color: var(--muted); }
+    .gyr-key span { display: flex; align-items: center; gap: 8px; }
+    .gyr-sw { display: inline-block; width: 12px; height: 16px; border-radius: 2px; }
+    .gyr-swf { display: inline-block; width: 22px; height: 0; border-top: 3px solid var(--text); }
+    .gyr-note { margin: 16px 0 0; font: 400 17px/1.5 var(--sans); color: var(--muted); }
+    .sz-square .gyr-tile b { font-size: 21px; } .sz-square .gyr-tiles { margin-top: 14px; }
+    .sz-square .gyr-plot { margin: 22px 0 36px; } .sz-square .gyr-note { font-size: 15px; margin-top: 10px; }
+    .sz-square .gyr-v { font-size: 13px; }
+    .sz-story .gyr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sz-story .gyr-tile b { font-size: 34px; } .sz-story .gyr-note { font-size: 21px; }
+
     /* ---- Research: S&P 500 returns by year ------------------------------- */
     .spy-in { display: flex; flex-direction: column; height: 100%; }
     .spy-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
@@ -17154,7 +17265,7 @@
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
-    groupMonthsNeed, groupMonthThemes, indexPeNeed, spYearsNeed,
+    groupMonthsNeed, groupMonthThemes, indexPeNeed, spYearsNeed, groupYearsNeed,
     daysNeed, groupDaysNeed,
     indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
@@ -17270,6 +17381,7 @@
       getPeerTrend = c.getPeerTrend || (() => null);
       getGroupMonths = c.getGroupMonths || (() => null);
       getSpYears = c.getSpYears || (() => null);
+      getGroupYears = c.getGroupYears || (() => null);
       getDays = c.getDays || (() => null);
       getGroupDays = c.getGroupDays || (() => null);
       getIndexPe = c.getIndexPe || (() => null);

@@ -3549,6 +3549,20 @@ async function writeGroupMonths(obj) {
     args: [JSON.stringify(obj || {})],
   });
 }
+// Year by year for every group (2026-10-28), built beside the months.
+async function readGroupYears() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'group_years'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+async function writeGroupYears(obj) {
+  await init();
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('group_years', ?)",
+    args: [JSON.stringify(obj || {})],
+  });
+}
 
 // Day by day for every group: the last eight weeks, built with the month
 // build (groupdays.js). One row, replaced by each build like group_months:
@@ -8422,7 +8436,7 @@ module.exports = {
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
-  readGroupMonths, writeGroupMonths, readGroupDays, writeGroupDays, readFigure,
+  readGroupMonths, writeGroupMonths, readGroupYears, writeGroupYears, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
   readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
