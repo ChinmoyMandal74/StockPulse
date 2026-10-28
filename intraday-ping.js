@@ -20,7 +20,7 @@
 // universe and pay the 470-day archive read three times instead of once.
 //
 // THE SERVER DECIDES WHETHER TO ACT, which is what makes a dumb scheduler
-// safe. Every call refuses outside 9:38 AM - 4:00 PM New York, at weekends,
+// safe. Every call refuses outside 9:30 AM - 4:00 PM New York, at weekends,
 // when another refresh is running, and when the NYSE is shut for a holiday or
 // an early close. So a schedule that is broad, slightly early, or firing on
 // Christmas morning costs one credit and changes nothing. Daylight saving

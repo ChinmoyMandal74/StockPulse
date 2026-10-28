@@ -350,7 +350,7 @@
       const day = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
       const today = day(Date.now());
       const list = runs.filter((r) => r.kind === 'intraday' && day(r.startedAt) === today);
-      if (!list.length) return '<div class="sub">Intraday prices today: none yet (every 30 min from 9:40 AM ET on trading days).</div>';
+      if (!list.length) return '<div class="sub">Intraday prices today: none yet (9:32 AM ET, then every 30 min from 9:45, on trading days).</div>';
       const done = list.filter((r) => r.status === 'complete');
       const bad = list.filter((r) => ['failed', 'abandoned'].includes(r.status)).length;
       const skipped = list.filter((r) => r.status === 'skipped').length;

@@ -34,8 +34,11 @@ const JOBS = [
   {
     id: 'intraday', name: 'Intraday prices', task: 'TickrLab intraday prices', host: 'laptop', script: 'intraday-ping.js', taskScript: 'intraday-task.ps1',
     days: WEEKDAYS, repeat: { start: '09:45', every: 30, last: '15:45' }, minutes: 3,
-    spends: { kind: 'twelve', text: 'About 1 credit a stock (~1,300 a run), thirteen runs a day' },
-    what: 'Live prices for the whole universe through the session. No 16:00 run: the evening nightly records the settled close.',
+    // 09:32 TOO (2026-10-28, the owner): the opening prices, two minutes after
+    // the bell, rather than waiting for 09:45. Its own trigger in the task.
+    extra: [{ days: WEEKDAYS, times: ['09:32'] }],
+    spends: { kind: 'twelve', text: 'About 1 credit a stock (~1,300 a run), fourteen runs a day' },
+    what: 'Live prices for the whole universe through the session, from 09:32 just after the opening bell. No 16:00 run: the evening nightly records the settled close.',
     log: '/refreshes',
   },
   {
@@ -89,8 +92,9 @@ const RESERVED = [
   { label: 'Nightly refresh window', days: WEEKDAYS, from: '15:55', to: '16:50' },
   { label: 'Nightly refresh window', days: ['Sat'], from: '03:55', to: '04:50' },
 ];
-// The intraday slots: minutes 13 to 20 and 43 to 50 of each hour, 9:10 to 16:20.
-const SLOT = { from: '09:10', to: '16:20', minutes: [[13, 20], [43, 50]] };
+// The intraday slots: minutes 13 to 20 and 43 to 50 of each hour, 9:10 to 16:20,
+// and the opening run's 9:30 to 9:37 (a 09:32 start, about three minutes).
+const SLOT = { from: '09:10', to: '16:20', minutes: [[13, 20], [43, 50]], extra: [{ from: '09:30', to: '09:37' }] };
 
 const hm = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
 const fmt = (m) => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -109,6 +113,7 @@ function busyAt(now) {
   if (WEEKDAYS.includes(day) && minute >= hm(SLOT.from) && minute <= hm(SLOT.to)) {
     const mm = minute % 60;
     if (SLOT.minutes.some(([a, b]) => mm >= a && mm <= b)) return 'an intraday price slot';
+    if (SLOT.extra.some((w) => minute >= hm(w.from) && minute <= hm(w.to))) return 'an intraday price slot';
   }
   return null;
 }
@@ -127,22 +132,23 @@ function cronEastern(cron, date) {
 function runsOn(job, day, date) {
   const more = (job.extra || []).filter((x) => x.days.includes(day)).flatMap((x) => x.times.map(hm));
   if (!job.days.includes(day)) return more.sort((a, b) => a - b);
-  if (more.length && !job.cron && !job.repeat) return [...new Set((job.times || []).map(hm).concat(more))].sort((a, b) => a - b);
-  if (job.cron) return [cronEastern(job.cron, date)];
-  if (job.repeat) {
-    const out = [];
-    for (let t = hm(job.repeat.start); t <= hm(job.repeat.last); t += job.repeat.every) out.push(t);
-    return out;
-  }
-  return (job.times || []).map(hm).sort((a, b) => a - b);
+  let base;
+  if (job.cron) base = [cronEastern(job.cron, date)];
+  else if (job.repeat) {
+    base = [];
+    for (let t = hm(job.repeat.start); t <= hm(job.repeat.last); t += job.repeat.every) base.push(t);
+  } else base = (job.times || []).map(hm);
+  // Extra runs join the base ones, a repeating job's included (intraday's 09:32).
+  return [...new Set(base.concat(more))].sort((a, b) => a - b);
 }
 
 // How a job's schedule reads in words.
 function whenText(job, date) {
   const days = job.days.length === 7 ? 'every day' : job.days.join(' ') === WEEKDAYS.join(' ') ? 'weekdays' : job.days.join(', ');
   if (job.cron) return fmt(cronEastern(job.cron, date)) + ' ' + days + ' (Vercel cron ' + job.cron + ' UTC)';
-  if (job.repeat) return 'every ' + job.repeat.every + ' min, ' + job.repeat.start + ' to ' + job.repeat.last + ', ' + days;
-  return job.times.join(', ') + ', ' + days + (job.extra || []).map((x) => '; ' + x.times.join(', ') + ' ' + x.days.join(', ')).join('');
+  const extra = (job.extra || []).map((x) => '; ' + x.times.join(', ') + ' ' + (x.days.join(' ') === WEEKDAYS.join(' ') ? 'weekdays' : x.days.join(', '))).join('');
+  if (job.repeat) return 'every ' + job.repeat.every + ' min, ' + job.repeat.start + ' to ' + job.repeat.last + ', ' + days + extra;
+  return job.times.join(', ') + ', ' + days + extra;
 }
 
 // ---- THE LIVE TASK LIST, as schedule-report.js sends it ---------------------

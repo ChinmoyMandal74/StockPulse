@@ -1,5 +1,6 @@
 # Register (or remove) the Windows scheduled task that pings the intraday price
-# refresh every 30 minutes through the US session.
+# refresh at 9:32, just after the opening bell, then every 30 minutes through
+# the US session.
 #
 #   .\intraday-task.ps1            register, or update an existing one
 #   .\intraday-task.ps1 -Remove    take it away
@@ -42,6 +43,9 @@ if (-not $node) { throw 'node is not on PATH for this shell.' }
 $start    = '09:45'
 $every    = (New-TimeSpan -Minutes 30)
 $forHours = (New-TimeSpan -Hours 6)
+# 9:32 TOO (2026-10-28, the owner): the opening prices, two minutes after the
+# bell. A second trigger of its own; the server's window opens at 9:30.
+$opening  = '09:32'
 
 # NO WINDOW (2026-10-23, the owner: "sometimes it is hard to know what is
 # running" - every task opened a blank console). The command goes in
@@ -55,6 +59,7 @@ Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At $start
 $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $start -RepetitionInterval $every -RepetitionDuration $forHours).Repetition
+$openTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At $opening
 
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
@@ -68,15 +73,15 @@ if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run      : $node intraday-ping.js"
   Write-Output "  in       : $Root"
-  Write-Output "  weekdays : $start, every 30 min for 6h  (last 15:45)"
-  Write-Output "  firings  : 13 a day"
+  Write-Output "  weekdays : $opening, then $start every 30 min for 6h  (last 15:45)"
+  Write-Output "  firings  : 14 a day"
   exit 0
 }
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($openTrigger, $trigger) `
   -Settings $settings -Description 'Asks tickrlab.com to refresh prices intraday. The server decides whether to act.' -Force | Out-Null
 
-Write-Output "Registered '$TaskName' -- weekdays $start, every 30 min for 6 hours (last 15:45 ET)."
+Write-Output "Registered '$TaskName' -- weekdays $opening, then $start every 30 min for 6 hours (last 15:45 ET)."
 Write-Output "Log: $(Join-Path $Root 'intraday-ping.log')"
 Write-Output "Run it once now with:  node intraday-ping.js --dry"
 

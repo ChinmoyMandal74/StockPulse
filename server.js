@@ -20446,14 +20446,17 @@ async function secSetsCheck() {
 // Called every 30 minutes by an external scheduler (cron-job.org, set in New
 // York time: minutes 10 and 40, hours 9-15, Monday-Friday). The server decides
 // whether to act, so the schedule can be broad and daylight saving needs no
-// thought: a weekday between 9:40 AM and 4:00 PM New York time, nothing else
+// thought: a weekday between 9:30 AM and 4:00 PM New York time, nothing else
 // running (two jobs in one minute breach the 610 credits), and NYSE open by
 // Twelve Data's market_state (1 credit — it knows holidays and early closes).
 // Then one plain price refresh, no email, logged as an `intraday` run. A call
 // outside the window returns without logging (the 9:10 call lands there every
 // day); a holiday or a busy slot is logged as `skipped`, since those are the
 // calls worth seeing. ?dry=1 reports the decision and changes nothing.
-const INTRADAY_START_MIN = 9 * 60 + 38;   // two minutes of scheduler slack before 9:40
+// 9:30 since 2026-10-28 (the owner asked for a 9:32 run, the opening bell's
+// prices): two minutes of slack before 9:32. It was 9:38, slack before the
+// old 9:40 first slot, never a rule about the data.
+const INTRADAY_START_MIN = 9 * 60 + 30;
 const INTRADAY_END_MIN = 16 * 60;
 
 function nyClock(ms = Date.now()) {
@@ -20487,7 +20490,7 @@ app.all('/api/cron/intraday', route(async (req, res) => {
   };
   if (['Sat', 'Sun'].includes(clock.weekday)) return skip('weekend', false);
   if (clock.minutes < INTRADAY_START_MIN || clock.minutes >= INTRADAY_END_MIN) {
-    return skip(`outside 9:40 AM-4:00 PM New York (${clock.label})`, false);
+    return skip(`outside 9:30 AM-4:00 PM New York (${clock.label})`, false);
   }
   const running = await readRefreshState();
   if (running) return skip(`another refresh is running (${running.mode === 'missing' ? 'Fill missing'
