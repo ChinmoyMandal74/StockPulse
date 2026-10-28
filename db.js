@@ -5696,7 +5696,7 @@ async function readSecEvents(symbol, limit) {
 // keeps its first_seen; the source and time follow the latest read.
 async function writeEarningsCalendar(rows, source, seen) {
   await init();
-  const list = (rows || []).filter((r) => r && r.symbol && /^d{4}-d{2}-d{2}$/.test(String(r.d || '')));
+  const list = (rows || []).filter((r) => r && r.symbol && /^\d{4}-\d{2}-\d{2}$/.test(String(r.d || '')));
   for (let i = 0; i < list.length; i += 200) {
     await db.batch(list.slice(i, i + 200).map((r) => ({
       sql: 'insert into earnings_calendar (symbol, d, time, source, first_seen, last_seen) values (?, ?, ?, ?, ?, ?) '
