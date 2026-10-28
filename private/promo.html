@@ -1932,6 +1932,16 @@
       <!-- Month by month for a group (groupmonths.js): the market, a sector, a
            theme. One box each, since each card sits in its own group of the
            picker and a saved post keeps its own choice. -->
+      <!-- Screeners: Recent 52-week lows (the saved screen rec52lo0, plus a size floor). -->
+      <div id="lowBox">
+        <label>Index</label>
+        <select id="lowSp500"></select>
+        <label>Company size</label>
+        <select id="lowSize"></select>
+        <p class="hint">The saved screen of the same name: the lowest price of the past year came in the last five sessions.
+          Company size keeps only companies worth at least that much, to shorten the list; the bars set new highs against
+          new lows in the same index and size. The card prints a link that opens the same list on the screener.</p>
+      </div>
       <!-- Screeners: Strong uptrend, still well off the high (the saved screen upofhigh). -->
       <div id="uohBox">
         <label>Index</label>
@@ -2475,7 +2485,8 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
-      { id: 'upofhigh', name: 'Strong uptrend, still well off the high', note: 'The saved screen as a card — every company in a strong uptrend placed by its distance from the 52-week high, and a numbered list of those 30% or more below it' },
+      { id: 'rec52lo0', name: 'Recent 52-week lows', note: 'The saved screen as a card, with a smallest company size — new 52-week highs against new lows over five sessions, and the list of the lows' },
+      { id: 'upofhigh', name: 'Strong uptrend, still well off the high', note:'The saved screen as a card — every company in a strong uptrend placed by its distance from the 52-week high, and a numbered list of those 30% or more below it' },
       { id: 'pullback', name: 'Pulled back', note: 'Fell hard today and now near the 200-day average — a scatter of the fallers and a numbered list of those in the band' },
       { id: 'idxpe', name: 'Valuation', note: 'The index’s P/E and the typical member’s, quarter by quarter for ten years' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
@@ -2786,7 +2797,7 @@
       { name: 'Coverage', views: COV_VIEWS, last: 'covsize' },
       // One sub-template a saved screen, added as the owner chooses them
       // (2026-10-27: "I will slowly build the other important sub templates").
-      { name: 'Screeners', views: [['upofhigh', 'Strong uptrend, still well off the high']], last: 'upofhigh' },
+      { name: 'Screeners', views: [['upofhigh', 'Strong uptrend, still well off the high'], ['rec52lo0', 'Recent 52-week lows']], last: 'upofhigh' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
@@ -3599,7 +3610,7 @@
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'uohSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'uohSp500', 'lowSp500', 'lowSize','gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
@@ -4555,6 +4566,7 @@
       $('ipeBox').style.display = tpl === 'idxpe' ? 'block' : 'none';
       $('pbBox').style.display = tpl === 'pullback' ? 'block' : 'none';
       $('uohBox').style.display = tpl === 'upofhigh' ? 'block' : 'none';
+      $('lowBox').style.display = tpl === 'rec52lo0' ? 'block' : 'none';
       $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
       $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
       for (const [box, id] of [['gdkBox', 'mktdays'], ['gdsBox', 'secdays'], ['gdtBox', 'thmdays'], ['dbdBox', 'days']]) $(box).style.display = tpl === id ? 'block' : 'none';
@@ -4993,6 +5005,8 @@
     for (const [v, label] of Cards.indexPeCuts()) $('ipeCut').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('pbSp500').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('uohSp500').add(new Option(label, v));
+    for (const [v, label] of Cards.spCuts()) $('lowSp500').add(new Option(label, v));
+    for (const [v, label] of Filters.SIZE_FLOORS) $('lowSize').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('fldSp500').add(new Option(label, v));
     for (const [v, label] of Cards.filedShows()) $('fldShow').add(new Option(label, v));
     ['fldDay', 'fldShow', 'fldSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'filed') render(); }));
@@ -5014,6 +5028,9 @@
     $('pbSp500').value = 'All';
     $('uohSp500').value = 'All';
     $('uohSp500').addEventListener('change', () => { if (tpl === 'upofhigh') render(); });
+    $('lowSp500').value = 'All';
+    $('lowSize').value = '10B';
+    ['lowSp500', 'lowSize'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'rec52lo0') render(); }));
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
     [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>

@@ -458,9 +458,26 @@
       query: 'card=upofhigh&sp=' + sp,
     };
   }
+  // Recent 52-week lows (2026-10-28): the saved screen rec52lo0 as a card's
+  // rule, with the index cut and a smallest company size, which the stored
+  // screen does not have (the owner: "Add a filter for company size too to
+  // reduce the list"). A size is a floor, written as the bands at or above it
+  // so the screener's own size picker shows it. Filters, sort and columns are
+  // the stored screen's; a test holds them to one definition.
+  const REC52LO_FILTERS = { daysSince52wLow: '..4' };
+  const REC52LO_COLUMNS = ['daysSince52wLow', 'pctFromLow', 'oneMonthPct', 'threeMonthPct', 'actionTrend', 'av:Balanced', 'spMember'];
+  const SIZE_FLOORS = [['All', 'Every size', 0], ['2B', '$2B and up', 2e9], ['10B', '$10B and up', 10e9], ['50B', '$50B and up', 50e9]];
+  function recentLows(o) {
+    const sp = INDEX_CUTS.some(([k]) => k === o.sp) ? o.sp : 'All';
+    const fl = SIZE_FLOORS.find(([k]) => k === o.size) || SIZE_FLOORS[2];
+    const def = { filters: Object.assign({}, REC52LO_FILTERS), sp, sort: { key: 'oneMonthPct', dir: 1 }, columns: REC52LO_COLUMNS.slice() };
+    if (fl[2]) def.size = CAP_BANDS.filter((b) => b.min >= fl[2]).map((b) => b.label).join('|');
+    return { name: 'Recent 52-week lows', params: { sp, size: fl[0], sizeName: fl[1] }, def, query: 'card=rec52lo0&sp=' + sp + '&size=' + fl[0] };
+  }
   function cardScreen(kind, q) {
     const o = q || {};
     if (kind === 'upofhigh') return upOffHigh(o);
+    if (kind === 'rec52lo0') return recentLows(o);
     if (kind !== 'pullback') return null;
     const pick = (k, d) => (PULLBACK[k].includes(String(o[k])) ? String(o[k]) : d);
     const down = pick('down', '5'), band = pick('band', '0..10'), fly = pick('fly', '0');
@@ -478,7 +495,7 @@
   return {
     PULLBACK, cardScreen,
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
-    CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf, holderDays,
+    CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf, holderDays, SIZE_FLOORS,
     DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,

@@ -10796,6 +10796,98 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Screeners: Recent 52-week lows ---------------------------------------------
+  //
+  // (2026-10-28, the owner: "next can you work on recent 52 week lows, Add a
+  // filter for company size too to reduce the list".) The saved screen
+  // rec52lo0 (a new 52-week low in the last five sessions) as a card, with the
+  // index cut and a smallest company size; the rule is
+  // Filters.cardScreen('rec52lo0'), so the card, its printed link and the
+  // screener choose with one definition. The chart is the five sessions side by
+  // side: new highs up, new lows down, in the same cut and size, so a lone count
+  // of lows is never read without the other side. The list is the screen's own
+  // order, the weakest month first. Nothing here says a low is a floor.
+  const LO_ROWS = { portrait: 9, square: 7, story: 11 };
+  const LO_H = { portrait: 270, square: 200, story: 380 };
+  function tplRecentLows() {
+    const F = globalThis.Filters;
+    if (!F || !F.cardScreen) return chromeTop() + '<div class="s-body"><div class="s-empty">Not available here.</div></div>' + chromeFoot();
+    const c = F.cardScreen('rec52lo0', { sp: O.lowSp500 || 'All', size: O.lowSize || '10B' });
+    const P = c.params;
+    const cutName = P.sp === 'All' ? 'Every company tracked' : ((F.INDEX_CUTS || []).find(([k]) => k === P.sp) || [P.sp, P.sp])[1];
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const base = { sp: P.sp, size: c.def.size };
+    const inCut = F.screenRows(base, stocks);
+    const hits = F.screenRows(c.def, stocks);
+    const highs = F.screenRows(Object.assign({}, base, { filters: { daysSince52wHigh: '..4' } }), stocks);
+    const shown = hits.slice(0, LO_ROWS[size.id] || 10);
+    // Sessions back: 4 .. 0, the last close at the right.
+    const perDay = (rows, key) => [4, 3, 2, 1, 0].map((d) => rows.filter((r) => num(r[key]) === d).length);
+    const loD = perDay(hits, 'daysSince52wLow'), hiD = perDay(highs, 'daysSince52wHigh');
+
+    // ---- the five sessions, at true pixel size
+    const W = 952, H = LO_H[size.id] || 220, fs = size.id === 'story' ? 20 : 16;
+    // One scale for both sides, and the zero line placed by the two largest
+    // counts, so the taller side gets the room rather than half of it.
+    const T = fs * 1.8, B = fs * 2.6, pad = fs * 1.2;
+    const hiMax = Math.max(...hiD), loMax = Math.max(...loD);
+    const per = (H - T - B - 2 * pad) / Math.max(1, hiMax + loMax);
+    const mid = T + pad + hiMax * per;
+    const colW = W / 5, bw = Math.min(64, colW * 0.34);
+    let svg = '<svg class="pb-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img">';
+    svg += '<line class="pb-zero" x1="0" x2="' + W + '" y1="' + mid.toFixed(1) + '" y2="' + mid.toFixed(1) + '"/>';
+    svg += '<text class="lo-hl" x="0" y="' + (fs * 1.1).toFixed(1) + '" font-size="' + fs + '">' + esc('New 52-week highs, up') + '</text>'
+      + '<text class="lo-ll" x="' + W + '" y="' + (fs * 1.1).toFixed(1) + '" text-anchor="end" font-size="' + fs + '">' + esc('New 52-week lows, down') + '</text>';
+    const labels = ['4 ago', '3 ago', '2 ago', '1 ago', 'Last close'];
+    for (let i = 0; i < 5; i++) {
+      const cx = colW * i + colW / 2;
+      const hh = hiD[i] * per, lh = loD[i] * per;
+      svg += '<rect class="lo-hb" x="' + (cx - bw / 2).toFixed(1) + '" y="' + (mid - hh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '"/>'
+        + '<rect class="lo-lb" x="' + (cx - bw / 2).toFixed(1) + '" y="' + mid.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + lh.toFixed(1) + '"/>'
+        + '<text class="lo-n" x="' + cx.toFixed(1) + '" y="' + (mid - hh - fs * 0.35).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '">' + hiD[i] + '</text>'
+        + '<text class="lo-n" x="' + cx.toFixed(1) + '" y="' + (mid + lh + fs * 1.05).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '">' + loD[i] + '</text>'
+        + '<text class="pb-ax" x="' + cx.toFixed(1) + '" y="' + (H - fs * 0.6).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '">' + esc(labels[i]) + '</text>';
+    }
+    svg += '</svg>';
+
+    // ---- the list
+    const pct = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%');
+    const pct0 = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(0) + '%');
+    const mv = (v) => '<span class="pb-v' + (v == null ? '' : v > 0 ? ' uh-up' : v < 0 ? ' pb-dn' : '') + '">' + pct0(v) + '</span>';
+    const when = (d) => (d == null ? '—' : d === 0 ? 'Last close' : d + ' ago');
+    const rows = shown.map((r) => '<div class="pb-r">'
+      + '<span class="pb-t">' + esc(r.symbol) + '</span><span class="pb-nm">' + esc(nameOf(r)) + '</span>'
+      + '<span class="lo-sz">' + esc(r.capBand || F.capBandOf(r.marketCap) || '—') + '</span>'
+      + '<span class="pb-v">' + esc(when(num(r.daysSince52wLow))) + '</span><span class="pb-v">' + pct(num(r.pctFromHigh)) + '</span>' + mv(num(r.oneMonthPct)) + '</div>').join('');
+    const head = '<div class="pb-r pb-hd"><span class="pb-t"></span><span class="pb-nm">Company</span><span class="lo-sz">Size</span><span class="pb-v">Low set</span><span class="pb-v">From high</span><span class="pb-v">1 month</span></div>';
+    const link = 'tickrlab.com/?' + c.query;
+    const more = hits.length > shown.length ? (hits.length - shown.length) + ' more in the screen. ' : '';
+    const scope = (P.sp === 'All' ? 'the screen' : cutName) + (P.size === 'All' ? '' : ' at ' + P.sizeName.replace(' and up', ' or more'));
+    const list = hits.length
+      ? '<div class="pb-list lo-list">' + head + rows + '</div>'
+      : '<p class="s-sub wide" style="--fs:19px">' + esc('No company in ' + scope + ' set a new 52-week low in the last five sessions.') + '</p>';
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
+    const med = (a) => { const v = a.filter((x) => x != null).sort((p, q) => p - q); if (!v.length) return null; const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+    const m1 = med(hits.map((r) => num(r.oneMonthPct)));
+    const figs = fig('New 52-week lows', hits.length.toLocaleString(), 'of ' + inCut.length.toLocaleString() + ', five sessions')
+      + fig('New 52-week highs', highs.length.toLocaleString(), 'the same five sessions')
+      + fig('At the last close', loD[4].toLocaleString(), 'of the ' + hits.length.toLocaleString() + ' lows')
+      + fig('Typical month', m1 == null ? '—' : pct0(m1), 'the median of the lows');
+    const note = 'The screen keeps any company whose lowest traded price of the past year came in the last five sessions'
+      + (P.size === 'All' ? '' : ', here those worth ' + P.sizeName.replace(' and up', '') + ' or more') + '. '
+      + 'The bars count, for each session, how many set the year’s high or low that still stands. Weakest month first. ' + more + 'The full list, sortable: ';
+    const noteLink = '<a class="s-nl" href="/?' + esc(c.query) + '" target="_blank" rel="noopener">' + esc(link) + '</a>';
+    const noteEnd = '. A description of where prices stand, not a view on what comes next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName + (P.size === 'All' ? ' · screen' : ' · ' + P.sizeName)) + '</span>'
+      + '<h2 class="s-title">Recent 52-week lows<br><span class="dim">a new low in the last five sessions</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="pb-chart">' + svg + '</div>' + list
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + noteLink + esc(noteEnd) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Valuation: the index's P/E over ten years (indexpe.js) -------------------------
   //
   // (2026-10-14.) Two lines over 41 quarter ends: the index's own P/E (the
@@ -13796,6 +13888,7 @@
     idxpe: tplIndexPe,
     pullback: tplPullback,
     upofhigh: tplUpOffHigh,
+    rec52lo0: tplRecentLows,
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
@@ -14470,6 +14563,14 @@
     .pb-list .uh-up { color: var(--green); }
     .sz-square .pb-list { font-size: 18px; } .sz-square .pb-list .pb-r { padding: 5px 0; }
     .sz-story .pb-list { font-size: 23px; } .sz-story .pb-list .pb-r { padding: 9px 0; }
+    .pb-list.lo-list .pb-r { grid-template-columns: 92px minmax(0, 1fr) 110px 150px 120px 100px; }
+    .pb-list.lo-list .lo-sz { color: var(--muted); font-size: 0.8em; }
+    .pb-list.lo-list .pb-hd .lo-sz { font-size: 1em; }
+    .lo-hb { fill: var(--green); opacity: 0.85; }
+    .lo-lb { fill: var(--red); opacity: 0.85; }
+    .lo-n { fill: var(--text); font-family: var(--mono); font-weight: 700; }
+    .lo-hl { fill: var(--green); font-family: var(--mono); }
+    .lo-ll { fill: var(--red); font-family: var(--mono); }
     .mg-chart .mg-svg { display: block; }
     .ipe-key { display: flex; gap: 28px; flex-wrap: wrap; margin: 18px 0 4px; font-size: 17px; color: var(--muted); }
     .ipe-key i { display: inline-block; width: 22px; height: 5px; border-radius: 3px; margin-right: 9px; vertical-align: middle; }
