@@ -2335,6 +2335,13 @@
           phone one stock with six months of prices, both from today's data. Keep
           the headline to what the site does: no picks, no "next big stock".</p>
       </div>
+      <div id="spyBox">
+        <label>Year</label>
+        <select id="spyYear"></select>
+        <p class="hint">One year a slide. The stocks are today's S&amp;P 500 members, so the
+          companies that left the index are missing and the averages run high; the
+          S&amp;P 500 fund's line is the index as it was. Rebuilt with sp-years.js.</p>
+      </div>
       <div id="disBox">
         <label>Depth</label>
         <select id="disMode">
@@ -2604,6 +2611,7 @@
       { id: 'overload', name: 'Too much to read', note: 'A cartoon: charts, filings and jargon swirling round someone reading it all on their own' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
+      { id: 'spyears', name: 'S&P 500 returns by year', note: 'How many of the S&P 500’s stocks returned what in one year, with the equal-weighted and cap-weighted averages and the S&P 500 fund. One year a slide, 2007 on' },
     ];
     // Opens on Market > Snapshot (owner, 2026-10-15). A link naming a template
     // (/promo?tpl=spotlight&sym=MU) still wins: it is read after this.
@@ -2808,6 +2816,9 @@
       // One sub-template a saved screen, added as the owner chooses them
       // (2026-10-27: "I will slowly build the other important sub templates").
       { name: 'Screeners', views: [['upofhigh', 'Strong uptrend, still well off the high'], ['rec52lo0', 'Recent 52-week lows']], last: 'upofhigh' },
+      // Research (2026-10-28, the owner: "put under a new template category
+      // called research"): findings from the archive, built offline.
+      { name: 'Research', views: [['spyears', 'S&P 500 returns by year']], last: 'spyears' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
@@ -3265,6 +3276,30 @@
         .catch(() => { delete dbdPending[symbol]; });
       return null;
     }
+    // S&P 500 returns by year: the offline build (sp-years.js), read once.
+    let spyData = null, spyPending = false;
+    function getSpYears() {
+      if (spyData) return spyData;
+      if (spyPending) return null;
+      spyPending = true;
+      fetch('/sp-years.json', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { years: [] }))
+        .then((d) => { spyData = d || { years: [] }; spyPending = false; fillSpyYears(); if (Cards.spYearsNeed(tpl)) render(); })
+        .catch(() => { spyData = { years: [] }; spyPending = false; if (Cards.spYearsNeed(tpl)) render(); });
+      return null;
+    }
+    // The Year picker holds the years the build has, newest first; the current
+    // year is "so far". Filled once the data is in, keeping a saved choice.
+    function fillSpyYears() {
+      const sel = $('spyYear');
+      if (!spyData) { getSpYears(); return; }
+      if (sel.options.length) return;
+      const ys = (spyData.years || []).slice().reverse();
+      const keep = sel.dataset.want || '';
+      sel.innerHTML = ys.map((y) => '<option value="' + y.y + '">' + y.y + (y.partial ? ' so far' : '') + '</option>').join('');
+      const full = ys.find((y) => !y.partial);
+      sel.value = ys.some((y) => String(y.y) === keep) ? keep : full ? String(full.y) : sel.value;
+    }
     let gmData = null, gmPending = false;
     function getGroupMonths() {
       if (gmData) return gmData;
@@ -3652,7 +3687,7 @@
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
-      'disMode'];
+      'disMode', 'spyYear'];
     function controlOpts() {
       const o = {};
       CONTROL_IDS.forEach((id) => { const el = $(id); if (el) o[id] = el.value; });
@@ -3672,7 +3707,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getSpYears, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4521,6 +4556,8 @@
       $('shwBox').style.display = tpl === 'showcase' ? 'block' : 'none';
       $('covBox').style.display = tpl === 'covread' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
+      $('spyBox').style.display = tpl === 'spyears' ? 'block' : 'none';
+      if (tpl === 'spyears') fillSpyYears();
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
       $('movAdvWrap').style.display = $('movDir').value === 'split' ? 'none' : 'block';
@@ -4919,6 +4956,8 @@
       paintControls();
       render();
     });
+    ['spyYear'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'spyears') render(); }));
     ['disMode'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
     ['shwHead', 'shwSub'].forEach((id) =>
@@ -5560,6 +5599,9 @@
       // The three group tone cards: their group lists exist only under their own cut.
       ['stoSp500', 'itoSp500', 'ttoSp500'].forEach(set);
       fillToneNames();
+      // The Year picker is filled when the build arrives, perhaps after this:
+      // keep the saved year for fillSpyYears to choose then.
+      if (opts.spyYear != null) $('spyYear').dataset.want = String(opts.spyYear);
       Object.keys(opts).forEach(set);
       // Light blue is retired: a post saved on it opens on Light, as cards.js draws it.
       if (opts.cardTheme === 'sky') $('cardTheme').value = 'light';

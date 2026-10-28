@@ -13961,6 +13961,97 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Research: S&P 500 returns by year (2026-10-28) ----------------------
+  // The owner: "show to everyone the spread of average equal weighted or cap
+  // weighted return by year in a histogram .. may be one slide per year ..
+  // only for s&p stocks .. for last 20 years .. I should be able to select the
+  // year". Built offline by sp-years.js into private/sp-years.json.
+  //
+  // One year a card: how many of the S&P 500's stocks returned what, in
+  // ten-point bins with the two ends open, so every year shares one axis and
+  // the slides compare. Three lines over it: the equal-weighted average, the
+  // cap-weighted average, and the S&P 500 fund's own return.
+  //
+  // TODAY'S MEMBERS, AND THE CARD SAYS SO. The universe keeps no record of who
+  // was in the index in 2008, so every year's stocks are today's members that
+  // traded through it: the companies that fell out or failed are missing, which
+  // lifts the averages. The fund's return is the honest one beside them,
+  // because it held the index as it was. Price returns; dividends left out.
+  // Green and red are up and down, as everywhere; the lines are not signals.
+  let getSpYears = () => null;
+  const SPY_LO = -60, SPY_HI = 100, SPY_STEP = 10;
+  const SPY_BINS = (SPY_HI - SPY_LO) / SPY_STEP + 2;
+  function spYearsNeed(tpl) { return tpl === 'spyears' ? {} : null; }
+  // Where a return (in %) sits across the bins, 0 to 1. The open ends hold
+  // everything beyond them, so a line past an end sits in that end's middle.
+  const spyX = (v) => (v < SPY_LO ? 0.5 : v >= SPY_HI ? SPY_BINS - 0.5 : 1 + (v - SPY_LO) / SPY_STEP) / SPY_BINS;
+  function tplSpYears() {
+    const data = getSpYears();
+    const shell = (a, b, msg) => chromeTop(false) + '<div class="s-body"><div>'
+      + '<span class="s-kick">Tickr Lab research · S&amp;P 500</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    if (!data) return shell('Returns', 'by year…', 'Reading the archive.');
+    const years = Array.isArray(data.years) ? data.years : [];
+    const full = years.filter((y) => !y.partial);
+    const Y = years.find((y) => String(y.y) === String(O.spyYear)) || full[full.length - 1] || years[years.length - 1];
+    if (!Y || !Y.n) return shell('Returns', 'by year', 'No year to show.');
+    const pc = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(1) + '%');
+    const day = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+
+    // The bins: [below -60], -60..-50, ..., 90..100, [100 and up].
+    const counts = new Array(SPY_BINS).fill(0);
+    for (const [, r] of Y.rows) {
+      const v = r * 100;
+      counts[v < SPY_LO ? 0 : v >= SPY_HI ? SPY_BINS - 1 : 1 + Math.floor((v - SPY_LO) / SPY_STEP)]++;
+    }
+    const top = Math.max(1, ...counts);
+    const bins = counts.map((c, i) => {
+      const lo = i === 0 ? -Infinity : SPY_LO + (i - 1) * SPY_STEP;
+      const cls = lo >= 0 ? 'spy-up' : 'spy-dn';
+      return `<div class="spy-bin"><span class="spy-n">${c || ''}</span><i class="spy-bar ${cls}" style="height:${c ? Math.max(1.5, c / top * 100).toFixed(1) : 0}%"></i></div>`;
+    }).join('');
+    const ticks = [];
+    for (let i = 0; i <= SPY_BINS - 2; i += 2) {
+      const v = SPY_LO + i * SPY_STEP;
+      ticks.push(`<span style="left:${((i + 1) / SPY_BINS * 100).toFixed(2)}%">${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}%</span>`);
+    }
+    // Three lines, labels stacked in the order they fall so close ones do not
+    // overprint. Equal and cap are this card's two measures; the fund is the
+    // benchmark that includes the companies no longer in the index.
+    const marks = [
+      ['eq', 'Equal-weighted', Y.eq], ['cap', 'Cap-weighted', Y.cap], ['fund', 'S&P 500 fund', Y.fund],
+    ].filter((m) => m[2] != null).sort((a, b) => a[2] - b[2]);
+    // The three usually sit within a few points of each other, so a label on
+    // each line would print across the next. One key instead, beside the whole
+    // group: right of the rightmost line, or left of the leftmost near the end.
+    const xs = marks.map((m) => spyX(m[2] * 100) * 100);
+    const lines = marks.map(([k], i) => `<div class="spy-mark spy-${k}" style="left:${xs[i].toFixed(2)}%"></div>`).join('');
+    const hiX = Math.max(...xs), loX = Math.min(...xs);
+    const keyAt = hiX > 62 ? `right:calc(${(100 - loX).toFixed(2)}% + 14px)` : `left:calc(${hiX.toFixed(2)}% + 14px)`;
+    const key = marks.slice().reverse().map(([k, label, v]) => `<span class="spy-ml"><i class="spy-sw spy-${k}"></i>${esc(label)} <b>${pc(v)}</b></span>`).join('');
+    const legend = marks.length ? `<div class="spy-key" style="${keyAt}">${key}</div>` : '';
+
+    const title = Y.partial ? Y.y + ' so far' : String(Y.y);
+    const sub = Y.partial ? 'to ' + day(Y.to) : 'calendar year';
+    const tiles = [
+      ['Equal-weighted', pc(Y.eq), 'each stock counts once'],
+      ['Cap-weighted', pc(Y.cap), 'by value at the start'],
+      ['S&P 500 fund', pc(Y.fund), 'the index as it was'],
+      ['Stocks up', Y.up + ' of ' + Y.n, 'median ' + pc(Y.median)],
+    ].map(([k, v, s]) => `<div class="spy-tile"><span class="spy-tk">${esc(k)}</span><b>${esc(v)}</b><span class="spy-ts">${esc(s)}</span></div>`).join('');
+    return chromeTop(false)
+      + '<div class="s-body"><div class="spy-in">'
+      + '<span class="s-kick">Tickr Lab research · S&amp;P 500 · price return</span>'
+      + `<h2 class="s-title">${esc(title)}<br><span class="dim">${esc(sub)}</span></h2>`
+      + `<div class="spy-tiles">${tiles}</div>`
+      + '<div class="spy-chart"><div class="spy-plot">' + bins + lines + legend + '</div>'
+      + `<div class="spy-axis">${ticks.join('')}</div>`
+      + '<div class="spy-xcap">Number of stocks by return, in ten-point steps</div></div>'
+      + `<p class="spy-note">Today’s ${esc(String(data.members || ''))} members that traded through the year (${Y.n} of them). Companies that left the index or failed are not here, which lifts both averages; the S&amp;P 500 fund held the index as it was. Dividends not included.</p>`
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
@@ -14028,6 +14119,7 @@
     covread: tplReadings,
     movegrid: tplMoveGrid,
     mktmonths: () => groupMonthsCard('mktmonths'),
+    spyears: tplSpYears,
     secmonths: () => groupMonthsCard('secmonths'),
     thmmonths: () => groupMonthsCard('thmmonths'),
     mktdays: () => groupDaysCard('mktdays'),
@@ -16559,6 +16651,42 @@
     .sz-square .ov-say { font-size: 20px; margin-top: 10px; }
     .sz-story .ov-say { font-size: 30px; }
 
+    /* ---- Research: S&P 500 returns by year ------------------------------- */
+    .spy-in { display: flex; flex-direction: column; height: 100%; }
+    .spy-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
+    .spy-tile { padding: 14px 16px; border: 1px solid var(--hair-2); border-radius: 14px;
+                background: color-mix(in srgb, var(--text) 4%, transparent); display: flex; flex-direction: column; gap: 4px; }
+    .spy-tile b { font: 700 32px var(--sans); letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+    .spy-tk { font: 600 14px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .spy-ts { font: 400 15px var(--sans); color: var(--faint); }
+    .spy-chart { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 30px; }
+    .spy-plot { flex: 1; min-height: 260px; position: relative; display: flex; align-items: stretch; gap: 4px;
+                padding-top: 120px; border-bottom: 2px solid var(--hair-2); }
+    .spy-bin { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; min-width: 0; }
+    .spy-n { font: 600 15px var(--mono); color: var(--muted); text-align: center; padding-bottom: 4px; min-height: 19px; }
+    .spy-bar { display: block; border-radius: 4px 4px 0 0; }
+    .spy-up { background: color-mix(in srgb, var(--green) 78%, transparent); }
+    .spy-dn { background: color-mix(in srgb, var(--red) 78%, transparent); }
+    .spy-mark { position: absolute; top: 0; bottom: 0; width: 0; border-left: 3px solid var(--text); }
+    .spy-mark.spy-cap { border-left-color: var(--accent); }
+    .spy-mark.spy-eq { border-left-style: dashed; }
+    .spy-mark.spy-fund { border-left: 3px dotted var(--muted); }
+    .spy-key { position: absolute; top: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px;
+               border-radius: 10px; background: color-mix(in srgb, var(--card-ground) 88%, transparent); border: 1px solid var(--hair-2); }
+    .spy-ml { white-space: nowrap; font: 500 17px var(--sans); color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .spy-sw { display: inline-block; width: 0; height: 18px; border-left: 3px solid var(--text); }
+    .spy-sw.spy-cap { border-left-color: var(--accent); } .spy-sw.spy-eq { border-left-style: dashed; } .spy-sw.spy-fund { border-left: 3px dotted var(--muted); }
+    .spy-ml b { color: var(--text); font-weight: 700; }
+    .spy-cap .spy-ml b { color: var(--accent); }
+    .spy-axis { position: relative; height: 30px; }
+    .spy-axis span { position: absolute; top: 8px; transform: translateX(-50%); font: 500 15px var(--mono); color: var(--faint); white-space: nowrap; }
+    .spy-xcap { font: 400 15px var(--sans); color: var(--faint); text-align: center; margin-top: 4px; }
+    .spy-note { margin: 18px 0 0; font: 400 17px/1.5 var(--sans); color: var(--muted); }
+    .sz-square .spy-tile b { font-size: 26px; } .sz-square .spy-tiles { margin-top: 16px; }
+    .sz-square .spy-chart { margin-top: 16px; } .sz-square .spy-note { font-size: 15px; margin-top: 10px; }
+    .sz-story .spy-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sz-story .spy-tile b { font-size: 40px; } .sz-story .spy-note { font-size: 21px; }
+
     .ann-kick { font-size: 19px; font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
                 color: var(--green); }
     .ann-head { margin: 18px 0 0; font-size: 86px; font-weight: 800; line-height: 1.03;
@@ -17026,7 +17154,7 @@
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
-    groupMonthsNeed, groupMonthThemes, indexPeNeed,
+    groupMonthsNeed, groupMonthThemes, indexPeNeed, spYearsNeed,
     daysNeed, groupDaysNeed,
     indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
@@ -17141,6 +17269,7 @@
       getMonths = c.getMonths || (() => null);
       getPeerTrend = c.getPeerTrend || (() => null);
       getGroupMonths = c.getGroupMonths || (() => null);
+      getSpYears = c.getSpYears || (() => null);
       getDays = c.getDays || (() => null);
       getGroupDays = c.getGroupDays || (() => null);
       getIndexPe = c.getIndexPe || (() => null);

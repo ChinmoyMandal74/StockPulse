@@ -2332,7 +2332,7 @@ async function isGuest(req) {
 // The research data — every close, every stored run — is exactly what the
 // guest view exists to not hand out, and so are the pages built on it.
 const GUEST_BLOCKED_ASSET =
-  /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
+  /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|sp-years\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
 
 // Signed in with a real account — the guest preview stops here.
 const requireMember = route(async (req, res, next) => {
@@ -13091,6 +13091,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getGlance: (s) => { try { const r = stocks.find((x) => x && x.symbol === s); return r ? Glance.build(glRel && glRel.symbol === s ? Object.assign({}, r, glRel.fields) : r, stocks) : null; } catch (e) { return null; } },
       getGroupLines: () => glines,
       getGroupMonths: () => gmonths,
+      getSpYears: () => spYearsFile(),
       getDays: () => days,
       getGroupDays: () => gdays,
       getIndexPe: () => ipe,
@@ -17211,6 +17212,14 @@ async function groupMonthsBuild() {
   return { built: true, latest, months: built.months.length, companies: built.companies, groups: Object.keys(built.groups).length, broken: built.broken, seeks: symbols.length * bounds.length, ms: Date.now() - t0 };
 }
 let groupMonthsMemo = null;
+// S&P 500 returns by year for the phone's saved posts: the offline build
+// (sp-years.js) shipped in private/, read once per instance. A build
+// artefact like the strategy files, not state.
+let spYearsMemo;
+function spYearsFile() {
+  if (spYearsMemo === undefined) { try { spYearsMemo = require('./private/sp-years.json'); } catch { spYearsMemo = null; } }
+  return spYearsMemo;
+}
 async function groupMonthsStored() {
   if (groupMonthsMemo && Date.now() - groupMonthsMemo.at < 10 * 60 * 1000) return groupMonthsMemo.body;
   const body = await store.readGroupMonths();
