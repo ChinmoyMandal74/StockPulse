@@ -150,6 +150,13 @@
     #tlnBox .gl-chip:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
     #tlnBox .gl-chip span.n { margin-left: auto; color: var(--faint); font: 500 11px var(--mono, monospace); }
     #tlnBox .gl-chip.off { opacity: 0.45; }
+    /* Recent 52-week lows: company size as the screener's picker, any of the six bands. */
+    #lowBox .lw-chips { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 4px; padding: 6px; border: 1px solid var(--hair); border-radius: 10px; }
+    #lowBox .lw-chip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); padding: 4px 6px; border-radius: 6px; cursor: pointer;
+                       text-transform: none; letter-spacing: normal; font-weight: 400; margin: 0; }
+    #lowBox .lw-chip:hover { background: color-mix(in srgb, var(--wash) 5%, transparent); }
+    #lowBox .lw-chip.all { border-bottom: 1px solid var(--hair); border-radius: 6px 6px 0 0; padding-bottom: 6px; margin-bottom: 2px; }
+    #lowBox .lw-chip span.n { margin-left: auto; color: var(--faint); font: 500 11px var(--mono, monospace); }
     #tlnBox .gl-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     #tlnBox .gl-acts span { font-size: 12px; color: var(--faint); }
     #glnBox label.gl-chip, #ilnBox label.gl-chip, #tlnBox label.gl-chip { text-transform: none; letter-spacing: normal; font: 500 13px var(--sans, sans-serif); margin: 0; }
@@ -1937,10 +1944,11 @@
         <label>Index</label>
         <select id="lowSp500"></select>
         <label>Company size</label>
-        <select id="lowSize"></select>
+        <input type="hidden" id="lowSize" />
+        <div class="lw-chips" id="lowSizeChips"></div>
         <p class="hint">The saved screen of the same name: the lowest price of the past year came in the last five sessions.
-          Company size keeps only companies worth at least that much, to shorten the list; the bars set new highs against
-          new lows in the same index and size. The card prints a link that opens the same list on the screener.</p>
+          Company size is the screener's: tick any of the six bands to shorten the list, the count beside each is its
+          companies in the chosen index. The bars set new highs against new lows in the same index and size. The card prints a link that opens the same list on the screener.</p>
       </div>
       <!-- Screeners: Strong uptrend, still well off the high (the saved screen upofhigh). -->
       <div id="uohBox">
@@ -3377,6 +3385,29 @@
     // The groups to tick: built from the rows, largest first; the ticked ones
     // live in the hidden `glnPick` / `ilnPick`, '|'-joined, which is what a
     // saved post keeps. None ticked yet: the five largest are ticked for you.
+    // Recent 52-week lows: company size ticked as on the screener's Size picker,
+    // the six bands with their counts in the chosen index, and All sizes. The
+    // ticked bands live in the hidden lowSize, comma-joined (or 'All'), which
+    // is what a saved post keeps; Filters.cardScreen reads the same value.
+    function paintLowSize() {
+      const c = Filters.cardScreen('rec52lo0', { sp: $('lowSp500').value, size: $('lowSize').value });
+      const on = new Set(c.params.bands);
+      const rows = Filters.screenRows({ sp: c.params.sp }, stocks);
+      const n = (b) => rows.filter((r) => (r.capBand || Filters.capBandOf(r.marketCap)) === b).length;
+      const chip = (val, label, checked, cnt, cls) => '<label class="lw-chip' + (cls ? ' ' + cls : '') + '"><input type="checkbox" data-b="' + esc(val) + '"' + (checked ? ' checked' : '') + '> '
+        + esc(label) + '<span class="n">' + cnt.toLocaleString() + '</span></label>';
+      $('lowSizeChips').innerHTML = chip('All', 'All sizes', !on.size, rows.length, 'all')
+        + Filters.CAP_ORDER.map((b) => chip(b, b, on.has(b), n(b))).join('');
+      $('lowSizeChips').querySelectorAll('input[data-b]').forEach((cb) => cb.addEventListener('change', () => {
+        const b = cb.dataset.b;
+        let next = b === 'All' ? [] : (cb.checked ? [...on, b] : [...on].filter((x) => x !== b));
+        // Unticking the last band, or ticking all six, is every size, as on the screener.
+        if (next.length === Filters.CAP_ORDER.length) next = [];
+        $('lowSize').value = next.length ? Filters.CAP_ORDER.filter((x) => next.includes(x)).join(',') : 'All';
+        paintLowSize();
+        render();
+      }));
+    }
     function paintGroupChips(p) {
       const dim = GL_DIM[p];
       const tplOf = Object.keys(GL_TPL).find((t) => GL_TPL[t] === p);
@@ -4567,6 +4598,7 @@
       $('pbBox').style.display = tpl === 'pullback' ? 'block' : 'none';
       $('uohBox').style.display = tpl === 'upofhigh' ? 'block' : 'none';
       $('lowBox').style.display = tpl === 'rec52lo0' ? 'block' : 'none';
+      if (tpl === 'rec52lo0') paintLowSize();
       $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
       $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
       for (const [box, id] of [['gdkBox', 'mktdays'], ['gdsBox', 'secdays'], ['gdtBox', 'thmdays'], ['dbdBox', 'days']]) $(box).style.display = tpl === id ? 'block' : 'none';
@@ -5006,7 +5038,6 @@
     for (const [v, label] of Cards.spCuts()) $('pbSp500').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('uohSp500').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('lowSp500').add(new Option(label, v));
-    for (const [v, label] of Filters.SIZE_FLOORS) $('lowSize').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('fldSp500').add(new Option(label, v));
     for (const [v, label] of Cards.filedShows()) $('fldShow').add(new Option(label, v));
     ['fldDay', 'fldShow', 'fldSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'filed') render(); }));
@@ -5029,8 +5060,8 @@
     $('uohSp500').value = 'All';
     $('uohSp500').addEventListener('change', () => { if (tpl === 'upofhigh') render(); });
     $('lowSp500').value = 'All';
-    $('lowSize').value = '10B';
-    ['lowSp500', 'lowSize'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'rec52lo0') render(); }));
+    $('lowSize').value = Filters.LOWS_SIZE;
+    $('lowSp500').addEventListener('change', () => { if (tpl === 'rec52lo0') { paintLowSize(); render(); } });
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
     [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>

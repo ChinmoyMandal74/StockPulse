@@ -10807,13 +10807,22 @@
   // side: new highs up, new lows down, in the same cut and size, so a lone count
   // of lows is never read without the other side. The list is the screen's own
   // order, the weakest month first. Nothing here says a low is a floor.
-  const LO_ROWS = { portrait: 9, square: 7, story: 11 };
+  const LO_ROWS = { portrait: 9, square: 7, story: 10 };
   const LO_H = { portrait: 270, square: 200, story: 380 };
   function tplRecentLows() {
     const F = globalThis.Filters;
     if (!F || !F.cardScreen) return chromeTop() + '<div class="s-body"><div class="s-empty">Not available here.</div></div>' + chromeFoot();
-    const c = F.cardScreen('rec52lo0', { sp: O.lowSp500 || 'All', size: O.lowSize || '10B' });
+    const c = F.cardScreen('rec52lo0', { sp: O.lowSp500 || 'All', size: O.lowSize });
     const P = c.params;
+    // The ticked bands by name, as the screener's picker shows them, and their
+    // dollar span when they sit next to each other.
+    const andJoin = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+    const money = (v) => '$' + (v >= 1e9 ? v / 1e9 + 'B' : v / 1e6 + 'M');
+    const bi = P.bands.map((b) => F.CAP_ORDER.indexOf(b));
+    const joined = bi.length && bi.every((v, k) => k === 0 || v === bi[k - 1] + 1);
+    const lowMin = joined ? F.CAP_BANDS[bi[bi.length - 1]].min : 0, upMin = joined && bi[0] > 0 ? F.CAP_BANDS[bi[0] - 1].min : 0;
+    const span = !joined ? '' : !upMin ? money(lowMin) + ' and up' : !lowMin ? 'under ' + money(upMin) : money(lowMin) + ' to ' + money(upMin);
+    const sizeWords = P.bands.length ? andJoin(P.bands) : '';
     const cutName = P.sp === 'All' ? 'Every company tracked' : ((F.INDEX_CUTS || []).find(([k]) => k === P.sp) || [P.sp, P.sp])[1];
     const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
     const base = { sp: P.sp, size: c.def.size };
@@ -10862,7 +10871,7 @@
     const head = '<div class="pb-r pb-hd"><span class="pb-t"></span><span class="pb-nm">Company</span><span class="lo-sz">Size</span><span class="pb-v">Low set</span><span class="pb-v">From high</span><span class="pb-v">1 month</span></div>';
     const link = 'tickrlab.com/?' + c.query;
     const more = hits.length > shown.length ? (hits.length - shown.length) + ' more in the screen. ' : '';
-    const scope = (P.sp === 'All' ? 'the screen' : cutName) + (P.size === 'All' ? '' : ' at ' + P.sizeName.replace(' and up', ' or more'));
+    const scope = (P.sp === 'All' ? 'the screen' : cutName) + (P.bands.length ? ' in the ' + sizeWords + ' size band' + (P.bands.length > 1 ? 's' : '') : '');
     const list = hits.length
       ? '<div class="pb-list lo-list">' + head + rows + '</div>'
       : '<p class="s-sub wide" style="--fs:19px">' + esc('No company in ' + scope + ' set a new 52-week low in the last five sessions.') + '</p>';
@@ -10874,13 +10883,13 @@
       + fig('At the last close', loD[4].toLocaleString(), 'of the ' + hits.length.toLocaleString() + ' lows')
       + fig('Typical month', m1 == null ? '—' : pct0(m1), 'the median of the lows');
     const note = 'The screen keeps any company whose lowest traded price of the past year came in the last five sessions'
-      + (P.size === 'All' ? '' : ', here those worth ' + P.sizeName.replace(' and up', '') + ' or more') + '. '
+      + (P.bands.length ? ', here those in the ' + sizeWords + ' size band' + (P.bands.length > 1 ? 's' : '') + (span ? ' (' + span + ')' : '') : '') + '. '
       + 'The bars count, for each session, how many set the year’s high or low that still stands. Weakest month first. ' + more + 'The full list, sortable: ';
     const noteLink = '<a class="s-nl" href="/?' + esc(c.query) + '" target="_blank" rel="noopener">' + esc(link) + '</a>';
     const noteEnd = '. A description of where prices stand, not a view on what comes next.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
-      + '<span class="s-kick">' + esc(cutName + (P.size === 'All' ? ' · screen' : ' · ' + P.sizeName)) + '</span>'
+      + '<span class="s-kick">' + esc(cutName + (P.bands.length ? ' · ' + (span || P.bands.join(', ')) : ' · screen')) + '</span>'
       + '<h2 class="s-title">Recent 52-week lows<br><span class="dim">a new low in the last five sessions</span></h2>'
       + '<div class="cr-figs">' + figs + '</div>'
       + '<div class="pb-chart">' + svg + '</div>' + list
