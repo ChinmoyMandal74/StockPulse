@@ -632,3 +632,27 @@ The owner, of the Lines card: "Can you create a new visual similar to this one u
 - **Studio**: `sclBox` (Stock or index fund, Measure, Time frame), the measure list from `Cards.lineMetrics()` and the windows from `Cards.lineWindows()` (refilled when the measure changes); `sclSym`, `sclMetric`, `sclWin` in `CONTROL_IDS` (333 of `POST_OPT_MAX` 400) and their own listener list; the stock carries across the spotlight sub-templates (`SPOT_VIEWS` third column) and is filled from the chart's stock list; the line-series repaint list and the fill-the-card measurement name it too (it is the Lines layout); the phone's name map has it.
 - Checked in Node on real closes and in the studio in headless Chrome (static host, real history from the local copy): opens from `/promo?tpl=stkchart&sym=NVDA` under Stock spotlight, NVIDIA's six-month price +11.6% and volatility 27.4%, Coca-Cola's volatility 14.9% and YTD +31.3%, the window list following the measure, no page errors.
 - **Five and ten years for volatility (same day; the owner: "extend the time frame to 5 and 10 years").** The one-company card alone offers `y5d` and `y10d` for volatility, drawn day by day from the stock's own history (`/api/history` serves up to 5,200 sessions; 2,550 asked for ten years with the run-up). They live in `LONG_DAILY`, NOT in `CHART_WINDOWS`: the Chart card accepts any key of that, and a hand-edited post must not ask the whole-screen basket for ten years. `winsFor(mk, single)` adds them only for `single` and volatility; `lineWindows` / `lineWin` take `single`; the Lines card's windows are unchanged and it cannot be handed one. A daily axis over more than 400 sessions labels month and year ("Oct 2018") instead of month and day. A stock whose stored prices start inside the window (Arm, listed 2023) says so rather than drawing a short line. Checked on real closes: Apple five and ten years, last point 19.9%, the March 2020 spike near 95%, the scale going logarithmic on its own past a fourfold range and the note saying so.
+
+
+## Screeners → Strong uptrend, still well off the high (2026-10-27)
+
+The owner: "Under Promo, I think its time to create a new template called Screeners and start creating sub-template for each screener", then, after I suggested one picker for every screen instead, "Can you build just one sub-template based on the new screen you just build .. I will slowly build the other important sub templates". So a **Screeners** group in `TPL_GROUPS` (after Coverage) with one view, template id `upofhigh`, the saved screen of the same id.
+
+- **One rule, three places held to it.** `Filters.cardScreen('upofhigh', {sp})` (`filters.js`, `upOffHigh`) returns the screen's filters (`actionTrend: Strong uptrend`, `pctFromHigh <= -30`), sort and columns, plus the S&P cut. The card chooses with it, its printed link `tickrlab.com/?card=upofhigh&sp=…` opens it on the screener through the existing `openCardLink`, and the test asserts it equals both `STARTER_SCREENS` and `add-screen.js`. The stored screen can still be edited by the owner on the screener; the card would not follow. That is the cost of a card the phone can draw without a screens read.
+- **The card** (`tplUpOffHigh`, on the Pulled back card's pattern and its `pb-*` styles):
+  - kicker: the cut and "screen"; title "Strong uptrend / still well off the high";
+  - four figures: in a strong uptrend (of the cut), 30%+ below the high, furthest from its high (with its name), and the typical 3-month move (the median of those in the zone);
+  - a scatter of every strong-uptrend company: across, the distance below the 52-week high (−60% or more at the left edge); up, the distance above the 200-day. The top is at the dots' 90th percentile and labelled "or more", so a few far above the average do not squash the rest onto the bottom line. The zone left of −30% is shaded, and the listed ones are numbered;
+  - a numbered list, furthest from the high first: from high, vs 200-day, and 3 months (green or red, a price move). It shows 7 rows on a post, 4 on a square and 9 on a story; the story loses three to the Pulled back cap because its figures wrap to two lines and its note is a sentence longer;
+  - the note, the link, and "A description of where prices stand, not a view on what comes next."
+- **Control:** `uohSp500` (the index cut, `Cards.spCuts()`), in `CONTROL_IDS`, its own box `#uohBox`.
+- Tested by scratchpad `uoh-test.js`, 36 checks, on the 2026-10-26 production snapshot (303 strong uptrend of 1,283, 14 in the zone):
+  - the rule against the stored screen and `add-screen.js`, and a bad cut falling back;
+  - offered as Screeners with one view, and its own box shown;
+  - at all three sizes: both figures against a count of `/api/stocks`, the list in order, a numbered dot per row and a plain dot for every other strong uptrend, nothing past the artboard or into the footer, names fitting, and "N more";
+  - the furthest figure, the printed link, and no buy, sell or hold wording;
+  - the S&P 500 cut narrowing it and carried by the link;
+  - the link opening the same 14 on the screener;
+  - a saved post drawn by `/api/m/post` with the same count;
+  - no script errors.
+- **The next sub-template** is one `cardScreen` kind, one template, one view in the Screeners group, one box and its controls.

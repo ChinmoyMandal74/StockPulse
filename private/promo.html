@@ -1932,6 +1932,14 @@
       <!-- Month by month for a group (groupmonths.js): the market, a sector, a
            theme. One box each, since each card sits in its own group of the
            picker and a saved post keeps its own choice. -->
+      <!-- Screeners: Strong uptrend, still well off the high (the saved screen upofhigh). -->
+      <div id="uohBox">
+        <label>Index</label>
+        <select id="uohSp500"></select>
+        <p class="hint">The saved screen of the same name: a strong uptrend on our trend rules, and 30% or more below the
+          52-week high. Every dot is in a strong uptrend; the numbered ones are in the screen and are listed under the
+          chart, furthest from the high first. The card prints a link that opens the same list on the screener.</p>
+      </div>
       <!-- Pulled back: fell hard today, now near the 200-day average. -->
       <div id="pbBox">
         <label>Fell at least, today</label>
@@ -2467,6 +2475,7 @@
       { id: 'day', name: 'Snapshot', note: 'Indexes, sectors and both ends of the move, over any window' },
       { id: 'breadth', name: 'Narrow or broad', note: 'How many are above their 200-day average, and how much of the value is' },
       { id: 'beat', name: 'Beating the index', note: 'How many companies did better than the S&P 500 over a window — a square each, in three colours' },
+      { id: 'upofhigh', name: 'Strong uptrend, still well off the high', note: 'The saved screen as a card — every company in a strong uptrend placed by its distance from the 52-week high, and a numbered list of those 30% or more below it' },
       { id: 'pullback', name: 'Pulled back', note: 'Fell hard today and now near the 200-day average — a scatter of the fallers and a numbered list of those in the band' },
       { id: 'idxpe', name: 'Valuation', note: 'The index’s P/E and the typical member’s, quarter by quarter for ten years' },
       { id: 'mktmonths', name: 'Market, month by month', note: 'The market year by month — the average of every company’s return each month, equal weight' },
@@ -2775,6 +2784,9 @@
       { name: 'Compare', views: CMP_VIEWS, last: 'size' },
       { name: 'Race chart', views: [['race', 'Leaders race']], last: 'race' },
       { name: 'Coverage', views: COV_VIEWS, last: 'covsize' },
+      // One sub-template a saved screen, added as the owner chooses them
+      // (2026-10-27: "I will slowly build the other important sub templates").
+      { name: 'Screeners', views: [['upofhigh', 'Strong uptrend, still well off the high']], last: 'upofhigh' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
@@ -3587,7 +3599,7 @@
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
       'sctX', 'sctY', 'sctColor', 'sctCount', 'sctScope', 'sctSector', 'sctIndustry', 'sctCap', 'sctScreen', 'sctSp500',
-      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
+      'brdMode', 'brdSp500', 'beatPeriod', 'beatSp500', 'beatBench', 'beatSplit', 'mvgPeriod', 'mvgSp500', 'ipeCut', 'pbDown', 'pbBand', 'pbFly', 'pbSp500', 'uohSp500', 'gmkGroup', 'gmkView', 'gscName', 'gscView', 'gthName', 'gthView', 'gdkGroup', 'gdkView', 'gdsName', 'gdsView', 'gdtName', 'gdtView', 'egrSp500', 'egrQtr', 'egrCount',
       'histMeasure', 'histMode', 'histSym', 'histScope', 'histSector', 'histIndustry', 'histCap', 'histScreen', 'histSp500',
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
@@ -4542,6 +4554,7 @@
       $('gmkBox').style.display = tpl === 'mktmonths' ? 'block' : 'none';
       $('ipeBox').style.display = tpl === 'idxpe' ? 'block' : 'none';
       $('pbBox').style.display = tpl === 'pullback' ? 'block' : 'none';
+      $('uohBox').style.display = tpl === 'upofhigh' ? 'block' : 'none';
       $('gscBox').style.display = tpl === 'secmonths' ? 'block' : 'none';
       $('gthBox').style.display = tpl === 'thmmonths' ? 'block' : 'none';
       for (const [box, id] of [['gdkBox', 'mktdays'], ['gdsBox', 'secdays'], ['gdtBox', 'thmdays'], ['dbdBox', 'days']]) $(box).style.display = tpl === id ? 'block' : 'none';
@@ -4979,6 +4992,7 @@
     // Beating the index: its own listener list, like every template here.
     for (const [v, label] of Cards.indexPeCuts()) $('ipeCut').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('pbSp500').add(new Option(label, v));
+    for (const [v, label] of Cards.spCuts()) $('uohSp500').add(new Option(label, v));
     for (const [v, label] of Cards.spCuts()) $('fldSp500').add(new Option(label, v));
     for (const [v, label] of Cards.filedShows()) $('fldShow').add(new Option(label, v));
     ['fldDay', 'fldShow', 'fldSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'filed') render(); }));
@@ -4998,6 +5012,8 @@
     [['rssName', 'secressum'], ['rssSp500', 'secressum'], ['rsiName', 'indressum'], ['rsiSp500', 'indressum'], ['rstName', 'thmressum'], ['rstSp500', 'thmressum']].forEach(([id, t]) =>
       $(id).addEventListener('change', () => { if (tpl === t) render(); }));
     $('pbSp500').value = 'All';
+    $('uohSp500').value = 'All';
+    $('uohSp500').addEventListener('change', () => { if (tpl === 'upofhigh') render(); });
     ['pbDown', 'pbBand', 'pbFly', 'pbSp500'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'pullback') render(); }));
     $('ipeCut').addEventListener('change', () => { if (tpl === 'idxpe') render(); });
     [['gmkGroup', 'mktmonths'], ['gmkView', 'mktmonths'], ['gscName', 'secmonths'], ['gscView', 'secmonths'], ['gthName', 'thmmonths'], ['gthView', 'thmmonths']].forEach(([id, t]) =>

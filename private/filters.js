@@ -443,8 +443,24 @@
     band: ['0..5', '0..10', '-3..10'],           // where it now sits against its 200-day average, %
     fly: ['0', '50'],                            // 50: had risen at least 50% over the year
   };
+  // Strong uptrend, still well off the high (2026-10-27): the saved screen
+  // upofhigh as a card's rule, the S&P cut its only choice. The filters, sort
+  // and columns are the stored screen's (server.js STARTER_SCREENS,
+  // add-screen.js); a test holds the three to one definition.
+  const UPOFF_FILTERS = { actionTrend: 'Strong uptrend', pctFromHigh: '<=-30' };
+  const UPOFF_COLUMNS = ['pctFromHigh', 'vs200ma', 'oneMonthPct', 'threeMonthPct', 'range52Pos', 'actionTrend', 'av:Balanced', 'spMember'];
+  function upOffHigh(o) {
+    const sp = INDEX_CUTS.some(([k]) => k === o.sp) ? o.sp : 'All';
+    return {
+      name: 'Strong uptrend, still well off the high',
+      params: { sp },
+      def: { filters: Object.assign({}, UPOFF_FILTERS), sp, sort: { key: 'pctFromHigh', dir: 1 }, columns: UPOFF_COLUMNS.slice() },
+      query: 'card=upofhigh&sp=' + sp,
+    };
+  }
   function cardScreen(kind, q) {
     const o = q || {};
+    if (kind === 'upofhigh') return upOffHigh(o);
     if (kind !== 'pullback') return null;
     const pick = (k, d) => (PULLBACK[k].includes(String(o[k])) ? String(o[k]) : d);
     const down = pick('down', '5'), band = pick('band', '0..10'), fly = pick('fly', '0');

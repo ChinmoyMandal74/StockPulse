@@ -10694,6 +10694,105 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Screeners: Strong uptrend, still well off the high ---------------------------
+  //
+  // (2026-10-27, the owner: a Screeners template, "one sub-template based on
+  // the new screen".) The saved screen as a card, on the Pulled back card's
+  // pattern: a scatter of EVERY company in a strong uptrend, dots only, placed
+  // by how far it sits below its 52-week high against how far above its 200-day
+  // average, the screen's zone shaded; a numbered list of the ones in the zone,
+  // furthest from the high first, the same numbers on their dots. The rule is
+  // Filters.cardScreen('upofhigh'), so the card, its printed link and the
+  // screener choose with one definition. A description of where prices stand,
+  // never an invitation: nothing says the gap will close.
+  const UH_X = [-60, 0];
+  // The Pulled back caps, three rows fewer on a story: its four figures wrap
+  // to two lines there and this note is a sentence longer.
+  const UH_ROWS = { portrait: 7, square: 4, story: 9 };
+  function tplUpOffHigh() {
+    const F = globalThis.Filters;
+    if (!F || !F.cardScreen) return chromeTop() + '<div class="s-body"><div class="s-empty">Not available here.</div></div>' + chromeFoot();
+    const c = F.cardScreen('upofhigh', { sp: O.uohSp500 || 'All' });
+    const P = c.params;
+    const cutName = P.sp === 'All' ? 'Every company tracked' : ((F.INDEX_CUTS || []).find(([k]) => k === P.sp) || [P.sp, P.sp])[1];
+    const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+    const inCut = F.screenRows({ sp: P.sp }, stocks);
+    const up = F.screenRows({ sp: P.sp, filters: { actionTrend: 'Strong uptrend' } }, stocks)
+      .filter((r) => num(r.pctFromHigh) != null && num(r.vs200ma) != null);
+    const hits = F.screenRows(c.def, stocks).filter((r) => num(r.pctFromHigh) != null)
+      .sort((a, b) => num(a.pctFromHigh) - num(b.pctFromHigh));
+    const shown = hits.slice(0, UH_ROWS[size.id] || 10);
+    const order = new Map(shown.map((r, i) => [r.symbol, i + 1]));
+    const cut = Number(String(c.def.filters.pctFromHigh).replace(/[^0-9.]/g, ''));
+
+    // ---- the scatter, at its true pixel size so its text is safe
+    const W = 952, H = PB_H[size.id] || 330, fs = size.id === 'story' ? 20 : 16;
+    const L = 58, R = 16, T = 12, B = fs * 2.4;
+    // The top at the dots' 90th percentile, not their maximum: a few far above
+    // the average would squash the rest onto the bottom line. Beyond it a dot
+    // rests on the top edge, and the top label says "or more".
+    const v200 = up.map((r) => num(r.vs200ma)).sort((a, b) => a - b);
+    const p90 = v200.length ? v200[Math.floor(v200.length * 0.9)] : 40;
+    const yHi = Math.max(40, Math.ceil(p90 / 10) * 10);
+    const yLo = 10;
+    const X = (v) => L + (Math.min(Math.max(v, UH_X[0]), UH_X[1]) - UH_X[0]) / (UH_X[1] - UH_X[0]) * (W - L - R);
+    const Y = (v) => T + (yHi - Math.min(Math.max(v, yLo), yHi)) / (yHi - yLo) * (H - T - B);
+    let svg = '<svg class="pb-svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img">';
+    svg += '<rect class="pb-band" x="' + X(UH_X[0]).toFixed(1) + '" y="' + T + '" width="' + (X(-cut) - X(UH_X[0])).toFixed(1) + '" height="' + (H - T - B).toFixed(1) + '"/>';
+    for (const v of [-60, -45, -30, -15, 0]) {
+      svg += '<line class="' + (v === -cut ? 'pb-zero' : 'pb-grid') + '" x1="' + X(v).toFixed(1) + '" x2="' + X(v).toFixed(1) + '" y1="' + T + '" y2="' + (H - B).toFixed(1) + '"/>'
+        + '<text class="pb-ax" x="' + X(v).toFixed(1) + '" y="' + (H - fs * 0.9).toFixed(1) + '" text-anchor="' + (v === UH_X[0] ? 'start' : v === UH_X[1] ? 'end' : 'middle') + '" font-size="' + fs + '">'
+        + esc(v === 0 ? 'At the high' : '−' + Math.abs(v) + '%' + (v === UH_X[0] ? ' or more' : '')) + '</text>';
+    }
+    for (let v = yLo; v <= yHi; v += (yHi - yLo > 60 ? 20 : 10)) {
+      svg += '<text class="pb-ax" x="' + (L - 8) + '" y="' + (Y(v) + fs * 0.34).toFixed(1) + '" text-anchor="end" font-size="' + fs + '">' + esc('+' + v + '%') + '</text>';
+    }
+    svg += '<text class="pb-ax" x="' + (L + 6) + '" y="' + (T + fs * 0.9).toFixed(1) + '" font-size="' + fs + '">' + esc('above the 200-day; +' + yHi + '% or more at the top') + '</text>';
+    for (const r of up) if (!order.has(r.symbol)) svg += '<circle class="pb-dot" cx="' + X(num(r.pctFromHigh)).toFixed(1) + '" cy="' + Y(num(r.vs200ma)).toFixed(1) + '" r="' + (fs * 0.28).toFixed(1) + '"/>';
+    for (const r of shown) {
+      if (num(r.vs200ma) == null) continue;
+      const x = X(num(r.pctFromHigh)), y = Y(num(r.vs200ma));
+      svg += '<circle class="pb-hit" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (fs * 0.55).toFixed(1) + '"/>'
+        + '<text class="pb-n" x="' + x.toFixed(1) + '" y="' + (y + fs * 0.32).toFixed(1) + '" text-anchor="middle" font-size="' + (fs * 0.78).toFixed(0) + '">' + order.get(r.symbol) + '</text>';
+    }
+    svg += '</svg>';
+
+    // ---- the list
+    const pct = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%');
+    const pct0 = (v) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(0) + '%');
+    const mv = (v) => '<span class="pb-v' + (v == null ? '' : v > 0 ? ' uh-up' : v < 0 ? ' pb-dn' : '') + '">' + pct0(v) + '</span>';
+    const rows = shown.map((r, i) => '<div class="pb-r">'
+      + '<span class="pb-i">' + (i + 1) + '</span><span class="pb-t">' + esc(r.symbol) + '</span><span class="pb-nm">' + esc(nameOf(r)) + '</span>'
+      + '<span class="pb-v">' + pct(num(r.pctFromHigh)) + '</span><span class="pb-v">' + pct(num(r.vs200ma)) + '</span>' + mv(num(r.threeMonthPct)) + '</div>').join('');
+    const head = '<div class="pb-r pb-hd"><span class="pb-i"></span><span class="pb-t"></span><span class="pb-nm">Company</span><span class="pb-v">From high</span><span class="pb-v">vs 200-day</span><span class="pb-v">3 months</span></div>';
+    const link = 'tickrlab.com/?' + c.query;
+    const more = hits.length > shown.length ? (hits.length - shown.length) + ' more in the zone. ' : '';
+    const list = hits.length
+      ? '<div class="pb-list">' + head + rows + '</div>'
+      : '<p class="s-sub wide" style="--fs:19px">' + esc('No company in ' + (P.sp === 'All' ? 'the screen' : cutName) + ' is in a strong uptrend and ' + cut + '% or more below its 52-week high.') + '</p>';
+    const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
+    const med = (a) => { const v = a.filter((x) => x != null).sort((p, q) => p - q); if (!v.length) return null; const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+    const far = hits[0];
+    const m3 = med(hits.map((r) => num(r.threeMonthPct)));
+    const figs = fig('In a strong uptrend', up.length.toLocaleString(), 'of ' + inCut.length.toLocaleString())
+      + fig(cut + '%+ below the high', hits.length.toLocaleString(), 'the numbered dots')
+      + fig('Furthest from its high', far ? pct0(num(far.pctFromHigh)) : '—', far ? nameOf(far) : '')
+      + fig('Typical 3-month move', m3 == null ? '—' : pct0(m3), 'the median of the ' + hits.length.toLocaleString());
+    const note = 'Every dot is in a strong uptrend on our trend rules: more than 10% above its 200-day average. '
+      + 'Across is how far it sits below its own 52-week high, the highest price of the past year; up is how far it is above the 200-day. '
+      + 'The numbered ones are ' + cut + '% or more below the high, furthest first. ' + more + 'The full list, sortable: ';
+    const noteLink = '<a class="s-nl" href="/?' + esc(c.query) + '" target="_blank" rel="noopener">' + esc(link) + '</a>';
+    const noteEnd = '. A description of where prices stand, not a view on what comes next.';
+    return chromeTop()
+      + '<div class="s-body"><div class="bx-in">'
+      + '<span class="s-kick">' + esc(cutName + ' · screen') + '</span>'
+      + '<h2 class="s-title">Strong uptrend<br><span class="dim">still well off the high</span></h2>'
+      + '<div class="cr-figs">' + figs + '</div>'
+      + '<div class="pb-chart">' + svg + '</div>' + list
+      + '<p class="s-sub wide" style="--fs:16px">' + esc(note) + noteLink + esc(noteEnd) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Valuation: the index's P/E over ten years (indexpe.js) -------------------------
   //
   // (2026-10-14.) Two lines over 41 quarter ends: the index's own P/E (the
@@ -13693,6 +13792,7 @@
     thmgrowth: tplThmGrowth,
     idxpe: tplIndexPe,
     pullback: tplPullback,
+    upofhigh: tplUpOffHigh,
     indmargin: () => marginsCard('indmargin'),
     covsize: () => coverageCard('covsize'),
     covsector: () => coverageCard('covsector'),
@@ -14364,6 +14464,7 @@
     .pb-list .pb-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
     .pb-list .pb-v { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
     .pb-list .pb-dn { color: var(--red); }
+    .pb-list .uh-up { color: var(--green); }
     .sz-square .pb-list { font-size: 18px; } .sz-square .pb-list .pb-r { padding: 5px 0; }
     .sz-story .pb-list { font-size: 23px; } .sz-story .pb-list .pb-r { padding: 9px 0; }
     .mg-chart .mg-svg { display: block; }
