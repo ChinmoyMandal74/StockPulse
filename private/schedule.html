@@ -100,8 +100,10 @@
       <span class="eyebrow"><span class="pip"></span>Operations · admin</span>
       <h1>Scheduled jobs</h1>
       <p class="lede">Every job that runs on its own, when it runs (Eastern time), what it spends and how long it usually takes.
-        The jobs run from Windows Task Scheduler on the owner's laptop, plus one Vercel cron. The laptop sends its real task list here every hour,
-        and again whenever a task script changes a task, so any difference from the declared schedule shows up below.</p>
+        The nightly, intraday prices and headlines run on one Fly.io machine, whose scheduler reads the declared times directly; the rest run from
+        Windows Task Scheduler on the owner's laptop, plus one Vercel cron. The laptop sends its real task list here every hour,
+        and again whenever a task script changes a task, so any difference from the declared schedule shows up below, as does a Fly.io job
+        still enabled on the laptop.</p>
     </header>
 
     <div class="sj-status" id="status">Loading…</div>
@@ -144,7 +146,7 @@
           + (stale ? '. Over two hours old: the laptop may be asleep or off, and the times below are the declared ones.</span>' : '.'));
       }
       const d = data.drift || { jobs: {}, unknown: [] };
-      const off = Object.entries(d.jobs).filter(([, v]) => v.status === 'differs' || v.status === 'missing' || v.status === 'disabled');
+      const off = Object.entries(d.jobs).filter(([, v]) => v.status === 'differs' || v.status === 'missing' || v.status === 'disabled' || v.status === 'doubled');
       if (off.length || d.unknown.length) bits.push('<span class="sj-warn"><b>' + (off.length + d.unknown.length) + ' difference' + (off.length + d.unknown.length === 1 ? '' : 's') + '</b> between the declared schedule and the laptop (see the Laptop column).</span>');
       else if (r) bits.push('Every task on the laptop matches the declared schedule.');
       bits.push('Right now (' + fmt(data.now.minute) + ' ET, ' + data.now.day + '): ' + (data.busy ? '<span class="sj-warn">inside ' + we(data.busy) + '; hold off on Twelve Data work.</span>' : 'clear of the Twelve Data windows.'));
@@ -198,8 +200,11 @@
           last = (t.lastRun ? we(etTime(t.lastRun)) : '') + '<span class="sj-sub' + (RESULT[code] == null ? ' sj-warn' : '') + '">' + we(word) + (t.missed ? ' · ' + t.missed + ' missed' : '') + '</span>';
           next = t.nextRun ? we(etTime(t.nextRun)) : '—';
         } else if (j.host === 'vercel') { last = '<span class="sj-sub">on Vercel; see the log</span>'; }
+        if (j.host === 'fly' && d.status === 'fly') { last = '<span class="sj-sub">on Fly.io; see the log</span>'; next = '—'; }
         const st = d.status === 'ok' ? '<span class="sj-st ok">Matches</span>'
           : d.status === 'remote' ? '<span class="sj-st">Vercel</span>'
+          : d.status === 'fly' ? '<span class="sj-st ok">Fly.io</span>'
+          : d.status === 'doubled' ? '<span class="sj-st bad">Runs twice</span><span class="sj-sub sj-warn">On Fly.io and still enabled on the laptop: disable ' + we(j.task) + '</span>'
           : d.status === 'missing' ? '<span class="sj-st bad">Not registered</span><span class="sj-sub">Run ' + we(j.taskScript || '') + ' on the laptop</span>'
           : d.status === 'disabled' ? '<span class="sj-st bad">Disabled</span>'
           : d.status === 'differs' ? '<span class="sj-st bad">Differs</span>'

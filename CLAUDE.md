@@ -69,7 +69,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `backfill-*.js`, `onboard.js`, `purge-orphans.js`, `*-load.js` | Local maintenance scripts — dry run by default, `--commit` to write |
 | `schedule.js`, `schedule-report.js`, `private/schedule.html` | **Every scheduled job** at `/schedule` (admin): the declared schedule and the Twelve Data windows (`busyAt`), the laptop's hourly report of what Task Scheduler really holds (`schedule_reports`), and the page that sets them side by side; `schedule-test.js` |
-| `nightly-ping.js`, `intraday-ping.js`, `news-ping.js` + `*-task.ps1` | The schedulers: Windows Task Scheduler on the owner's laptop, calling the deployed app over HTTP |
+| `nightly-ping.js`, `intraday-ping.js`, `news-ping.js` + `*-task.ps1` | The schedulers, calling the deployed app over HTTP. Since 2026-10-28 these three run on Fly.io (`fly/cron.js`, `fly.toml`: one machine, `fly deploy --ha=false` by hand, never from GitHub; jobs with `host: 'fly'` in `schedule.js`), their laptop tasks kept disabled as the way back. The tone and releases loaders and the schedule report stay on the laptop's Task Scheduler. See `scheduled-jobs.md` |
 | `docs/research.md`, `research.js`, `private/research.html` | **Every backtest, written up for members** at `/research`: the file is the data (idea, what was done, outcome, what follows), the parser, the page. Every backtest run gets an entry; `research-test.js` checks them |
 | `docs/backlog.md` | Work identified and deliberately not done. Each entry carries a filing line (`*Area: … · Status: …*`) that the admin page `/backlog` reads; keep it when adding one |
 

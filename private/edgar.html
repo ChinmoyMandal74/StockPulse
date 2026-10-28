@@ -323,7 +323,7 @@
         fact('Checked in the last ' + S.rotateDays + ' days', num(f.ages.d1 + f.ages.d3 + f.ages.d7), num(f.ages.d1) + ' today'),
         fact('Overdue a check', num(f.overdue), f.ages.older ? num(f.ages.older) + ' past 14 days' : 'oldest ' + ago(f.oldest), f.overdue > 0),
         fact('Never fetched', num(f.missing), '', f.missing > 0)],
-      '<b>Kept up to date by</b> the nightly job on your laptop (4:00 AM and 4:00 PM Eastern, weekdays), which re-checks the '
+      '<b>Kept up to date by</b> the nightly job (4:00 AM and 4:00 PM Eastern, weekdays), which re-checks the '
       + 'companies checked longest ago — up to 150 a run, so a full lap takes about a week. A new 10-Q can therefore take a few days to appear.'
       + (S.ready ? '' : ' <b>No contact address is configured</b> — the SEC refuses requests that do not declare one. Set MAIL_FROM, REPORT_TO or SEC_UA.'),
       '<button class="btn warm" type="button" data-run="missing"' + (f.missing && S.ready ? '' : ' disabled') + '>Fetch missing' + (f.missing ? ' (' + num(f.missing) + ')' : '') + '</button>'

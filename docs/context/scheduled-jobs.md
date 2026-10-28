@@ -40,3 +40,34 @@ The owner, after /filings showed Thursday as the newest day on a Saturday: "can 
 The owner: *"Yes but can we run the Saturday earlier .. may be 5am"*. The earnings reader also runs **Saturday 05:00**, after the Saturday 04:00 nightly (done by 04:50) has recorded Friday's 8-Ks; before, Friday's results waited for Monday 09:15. `release-task.ps1` adds the trigger, `schedule.js` declares it as `extra`, `schedule-test.js` checks both. **The subscriber mailing stays weekday mornings**: `mailList()` in `release-load.js` returns on a Saturday or Sunday, so Saturday's finds go out in Monday's mailing as before; the owner's digest is sent on Saturday. No Twelve Data credits; AI credit as any run, capped at $2.
 
 - **2026-10-26: Article tone hourly on weekdays** at :26 past, 07:26 to 18:26 except 16:26, capped at 30 minutes; 00:30 nightly; weekends three times. See `news-tone.md`.
+
+## Fly.io: the pings off the laptop (2026-10-28)
+The owner asked how to move the jobs off the laptop, then signed up to Fly.io. **Step 1 moved the three ping jobs: nightly, intraday prices and headlines.** They are HTTP calls to the app, so where they run makes no difference to what they fetch.
+
+**The machine:**
+- App `tickrlab-jobs`, one machine, shared-cpu-1x with 256MB, region `ewr` (Secaucus). About $2 a month.
+- `fly.toml` at the root, `fly/Dockerfile`, and `.dockerignore`, which lets in only `schedule.js`, the three ping scripts and `fly/cron.js`. `.env` is never uploaded.
+- **Deploy by hand from the laptop: `fly deploy --ha=false -a tickrlab-jobs`.** Never connect GitHub: a push to main is Vercel's deploy, and a Fly restart kills a running job. `--ha=false` matters too, because a second machine would run every job twice.
+- The secret is `CRON_SECRET`, set with `fly secrets import` from stdin. `fly/cron.js` writes it into `/app/.env` at start, because the pings read `.env`, never the environment. It does that only when `FLY_APP_NAME` is set, so running it on the laptop cannot overwrite the real `.env`. `APP_URL` is optional (the pings default to production).
+
+**The scheduler, `fly/cron.js`:**
+- **It is not a crontab.** Each Eastern minute it asks `schedule.js` (`eastern`, `runsOn`) which `host: 'fly'` jobs are due and runs their script, the same command the laptop task ran. The declared schedule is what runs, so Fly cannot drift from it.
+- Task Scheduler's settings are kept. A job still running is not started again. A run is stopped at the job's `limit`: nightly 120 minutes, intraday 10, headlines 45, the tasks' `ExecutionTimeLimit`.
+- A minute the machine was down for is not made up.
+- Output goes to `fly logs -a tickrlab-jobs`. The runs themselves are on `/refreshes` and `/news-runs` as before.
+
+**Changing a fly job's time:** edit `schedule.js` and redeploy Fly. Keep the laptop's task script in step (`schedule-test.js` still checks it), because it is the way back.
+
+**The way back:** change the job's `host` to `'laptop'`, `Enable-ScheduledTask` its task, and redeploy Fly so it stops running it.
+
+**Drift for fly jobs:**
+- `fly` when the laptop task is absent or disabled.
+- **`doubled`** ("Runs twice") when it is still enabled. The status line counts it as a difference.
+- `drift(report, jobs)` takes the job list, so the tests also check every task script against the schedule as if all jobs were on the laptop.
+
+**Staying on the laptop for now:**
+- **Article tone.** `news-tone-task.ps1` notes that publishers refuse data-centre addresses, and the loader records a 401/403/451 as `unreadable` and never retries it. A trial run from Fly could therefore permanently mark articles that the laptop can read. Before tone moves, run a read-only probe from Fly that writes nothing.
+- **Earnings releases.** SEC and Anthropic, a candidate for step 2.
+- **The schedule report.** It reports the laptop's own tasks.
+
+**Tests:** `schedule-test.js`, 85 checks, including the fly states, a fly job enabled on the laptop, a task removed, and every fly job having a limit. The `doubled` guard was proved by reverting it.

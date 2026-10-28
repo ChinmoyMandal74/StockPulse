@@ -1,0 +1,9 @@
+# The Fly build (fly/Dockerfile) uploads only what this lets through: the
+# scheduler and the scripts it runs. Everything else, .env included, stays here.
+*
+!schedule.js
+!nightly-ping.js
+!intraday-ping.js
+!news-ping.js
+!fly/cron.js
+!fly/Dockerfile

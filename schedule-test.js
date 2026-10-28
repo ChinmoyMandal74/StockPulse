@@ -80,16 +80,27 @@ ok(JSON.stringify(S.maskDays(62)) === JSON.stringify(['Mon', 'Tue', 'Wed', 'Thu'
 // ---- 4. Drift: the declared schedule beside a report -----------------------
 // Real report shapes (schedule-report.js --dry on the laptop, 2026-10-22).
 const tr = (kind, time, days, interval, duration) => ({ kind, start: '2026-10-01T' + time + ':00-04:00', days: days == null ? null : days, interval: interval || '', duration: duration || '', enabled: true });
+// The fly jobs' tasks are kept on the laptop, disabled, as the way back.
 const good = () => ({ at: Date.now(), tasks: [
-  { name: 'TickrLab nightly', state: 'Ready', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62), tr('Weekly', '04:00', 64)] },
-  { name: 'TickrLab intraday prices', state: 'Ready', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H'), tr('Weekly', '09:32', 62)] },
+  { name: 'TickrLab nightly', state: 'Disabled', triggers: [tr('Weekly', '04:00', 62), tr('Weekly', '16:00', 62), tr('Weekly', '04:00', 64)] },
+  { name: 'TickrLab intraday prices', state: 'Disabled', triggers: [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H'), tr('Weekly', '09:32', 62)] },
   { name: 'TickrLab earnings releases', state: 'Ready', triggers: [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62), tr('Weekly', '05:00', 64)] },
-  { name: 'TickrLab news', state: 'Ready', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
+  { name: 'TickrLab news', state: 'Disabled', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
   { name: 'TickrLab news tone', state: 'Ready', triggers: [tr('Daily', '00:30')].concat(['07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26'].map((t) => tr('Weekly', t, 62)), ['06:30', '12:30', '18:30'].map((t) => tr('Weekly', t, 65))) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
 ] });
+// The same jobs as if every one ran on the laptop, with every task enabled:
+// the matching rules, and the fly jobs' task scripts still the way back.
+const LAPTOP = S.JOBS.map((j) => (j.host === 'fly' ? Object.assign({}, j, { host: 'laptop' }) : j));
+const ready = () => { const r = good(); r.tasks.forEach((t) => { t.state = 'Ready'; }); return r; };
 let d = S.drift(good());
-ok(Object.values(d.jobs).every((v) => v.status === 'ok' || v.status === 'remote') && d.unknown.length === 0, 'the real schedule: every job matches', d);
+ok(Object.values(d.jobs).every((v) => v.status === 'ok' || v.status === 'remote' || v.status === 'fly') && d.unknown.length === 0, 'the real schedule: every job matches', d);
+ok(['nightly', 'intraday', 'news'].every((id) => d.jobs[id].status === 'fly') && d.jobs.tone.status === 'ok' && d.jobs.releases.status === 'ok', 'nightly, intraday and headlines on Fly.io; tone and releases on the laptop', d.jobs);
+d = S.drift(ready());
+ok(['nightly', 'intraday', 'news'].every((id) => d.jobs[id].status === 'doubled') && d.jobs.tone.status === 'ok', 'a fly job still enabled on the laptop runs twice', d.jobs);
+ok(Object.values(S.drift(ready(), LAPTOP).jobs).every((v) => v.status === 'ok' || v.status === 'remote'), 'moved back to the laptop, every task script still matches', S.drift(ready(), LAPTOP).jobs);
+ok(S.drift({ at: 1, tasks: [] }).jobs.nightly.status === 'fly', 'a fly job whose laptop task is gone is fine');
+ok(S.JOBS.filter((j) => j.host === 'fly').every((j) => j.limit > j.minutes), 'every fly job has a time limit above its usual length');
 ok(d.jobs.watchdog.status === 'remote', 'the Vercel cron is not looked for on the laptop');
 { const r = good(); r.tasks[2].triggers = [tr('Weekly', '09:15', 62), tr('Weekly', '18:15', 62)];
 const d = S.drift(r);
@@ -97,23 +108,23 @@ ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyDeclared.join() =
 let r = good(); r.tasks[2].triggers = [tr('Weekly', '09:30', 62), tr('Weekly', '18:00', 62), tr('Weekly', '05:00', 64)];
 d = S.drift(r);
 ok(d.jobs.releases.status === 'differs' && d.jobs.releases.onlyLive.join() === 'weekdays 09:30,weekdays 18:00' && d.jobs.releases.onlyDeclared.join() === 'weekdays 09:15,weekdays 18:15', 'a moved time reads as the runs on each side', d.jobs.releases);
-r = good(); r.tasks[0].triggers[1] = tr('Weekly', '16:00', 30);   // Mon-Thu
-d = S.drift(r);
+r = ready(); r.tasks[0].triggers[1] = tr('Weekly', '16:00', 30);   // Mon-Thu
+d = S.drift(r, LAPTOP);
 ok(d.jobs.nightly.status === 'differs' && d.jobs.nightly.onlyDeclared.join() === 'Fri 16:00', 'a dropped day is named', d.jobs.nightly);
-r = good(); r.tasks[1].triggers = [tr('Weekly', '09:45', 62, 'PT30M', 'PT5H'), tr('Weekly', '09:32', 62)];
-d = S.drift(r);
+r = ready(); r.tasks[1].triggers = [tr('Weekly', '09:45', 62, 'PT30M', 'PT5H'), tr('Weekly', '09:32', 62)];
+d = S.drift(r, LAPTOP);
 ok(d.jobs.intraday.status === 'differs' && d.jobs.intraday.onlyDeclared.join() === 'weekdays 15:15,weekdays 15:45', 'a shorter repetition loses its last runs', d.jobs.intraday);
-r = good(); r.tasks[1].triggers = [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')];
-d = S.drift(r);
+r = ready(); r.tasks[1].triggers = [tr('Weekly', '09:45', 62, 'PT30M', 'PT6H')];
+d = S.drift(r, LAPTOP);
 ok(d.jobs.intraday.status === 'differs' && d.jobs.intraday.onlyDeclared.join() === 'weekdays 09:32', 'a task without the opening trigger is named', d.jobs.intraday);
 r = good(); r.tasks.splice(5, 1);
 ok(S.drift(r).jobs.schedule.status === 'missing', 'an unregistered task is missing');
-r = good(); r.tasks[3].state = 'Disabled';
-ok(S.drift(r).jobs.news.status === 'disabled', 'a disabled task says so');
+r = good(); r.tasks[4].state = 'Disabled';
+ok(S.drift(r).jobs.tone.status === 'disabled', 'a disabled task says so');
 r = good(); r.tasks.push({ name: 'TickrLab something new', state: 'Ready', triggers: [tr('Daily', '11:00')] });
 d = S.drift(r);
 ok(d.unknown.length === 1 && d.unknown[0].runs.join() === 'daily 11:00', 'a task nobody declared is listed', d.unknown);
-ok(S.drift(null).jobs.nightly.status === 'missing', 'no report: nothing matches');
+ok(S.drift(null).jobs.releases.status === 'missing', 'no report: nothing matches');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

@@ -1,0 +1,13 @@
+# The scheduled jobs' machine (fly/cron.js). ONE machine, always on, no
+# public service: deploy with `fly deploy --ha=false`, because a second
+# machine would run every job twice. Deployed from the laptop by hand, never
+# from GitHub, so a push to main (Vercel's deploy) does not restart a run.
+app = 'tickrlab-jobs'
+primary_region = 'ewr'
+
+[build]
+  dockerfile = 'fly/Dockerfile'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

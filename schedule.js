@@ -9,6 +9,14 @@
 // change to a *-task.ps1 changes this file in the same commit, and
 // schedule-test.js fails until it does.
 //
+// HOSTS: 'laptop' (Task Scheduler), 'vercel' (a Vercel cron) and, since
+// 2026-10-28, 'fly': one machine on Fly.io whose scheduler (fly/cron.js) runs
+// this file's times directly, so it cannot drift from it. A fly job keeps its
+// task script as the way back to the laptop; drift says 'doubled' if that
+// task is registered and enabled, because then every run happens twice.
+// `limit` is the minutes after which a fly run is stopped (the tasks'
+// ExecutionTimeLimit).
+//
 // Times are Eastern. The laptop is on Eastern, so a Task Scheduler time is an
 // Eastern time; Vercel's crons are UTC and are converted for the day asked.
 //
@@ -22,8 +30,8 @@ const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // 'anthropic' (API dollars), 'free'.
 const JOBS = [
   {
-    id: 'nightly', name: 'Nightly refresh', task: 'TickrLab nightly', host: 'laptop', script: 'nightly-ping.js', taskScript: 'nightly-task.ps1',
-    days: WEEKDAYS, times: ['04:00', '16:00'], minutes: 55,
+    id: 'nightly', name: 'Nightly refresh', task: 'TickrLab nightly', host: 'fly', script: 'nightly-ping.js', taskScript: 'nightly-task.ps1',
+    days: WEEKDAYS, times: ['04:00', '16:00'], minutes: 55, limit: 120,
     // SATURDAY 04:00 TOO (2026-10-24, the owner): Friday's 8-Ks and 13D/13G
     // filings were read only on Monday, so /filings showed Thursday all weekend.
     extra: [{ days: ['Sat'], times: ['04:00'] }],
@@ -32,8 +40,8 @@ const JOBS = [
     log: '/refreshes',
   },
   {
-    id: 'intraday', name: 'Intraday prices', task: 'TickrLab intraday prices', host: 'laptop', script: 'intraday-ping.js', taskScript: 'intraday-task.ps1',
-    days: WEEKDAYS, repeat: { start: '09:45', every: 30, last: '15:45' }, minutes: 3,
+    id: 'intraday', name: 'Intraday prices', task: 'TickrLab intraday prices', host: 'fly', script: 'intraday-ping.js', taskScript: 'intraday-task.ps1',
+    days: WEEKDAYS, repeat: { start: '09:45', every: 30, last: '15:45' }, minutes: 3, limit: 10,
     // 09:32 TOO (2026-10-28, the owner): the opening prices, two minutes after
     // the bell, rather than waiting for 09:45. Its own trigger in the task.
     extra: [{ days: WEEKDAYS, times: ['09:32'] }],
@@ -52,8 +60,8 @@ const JOBS = [
     log: '/news-runs',
   },
   {
-    id: 'news', name: 'Headlines', task: 'TickrLab news', host: 'laptop', script: 'news-ping.js', taskScript: 'news-task.ps1',
-    days: ALL_DAYS, times: ['05:00', '09:00', '13:00', '17:00'], minutes: 6,
+    id: 'news', name: 'Headlines', task: 'TickrLab news', host: 'fly', script: 'news-ping.js', taskScript: 'news-task.ps1',
+    days: ALL_DAYS, times: ['05:00', '09:00', '13:00', '17:00'], minutes: 6, limit: 45,
     spends: { kind: 'free', text: 'Free (Google News search feeds, keyless)' },
     what: 'Tops up the headlines for the stocks whose news is oldest, batch by batch until nothing is stale.',
     log: '/news-runs',
@@ -182,14 +190,17 @@ const key = (r) => r.day + ' ' + fmt(r.minute);
 
 // The declared schedule beside the laptop's: per job, 'ok', 'differs' (with
 // the runs only one side has), 'missing' (no such task registered) or
-// 'disabled'; plus any TickrLab task this file does not know.
-function drift(report) {
+// 'disabled'; plus any TickrLab task this file does not know. A fly job is
+// 'fly' when the laptop's task is absent or disabled, and 'doubled' when it
+// is still enabled there.
+function drift(report, jobs = JOBS) {
   const tasks = (report && report.tasks) || [];
   const byName = new Map(tasks.map((t) => [t.name, t]));
   const out = { jobs: {}, unknown: [] };
-  for (const job of JOBS) {
+  for (const job of jobs) {
     if (!job.task) { out.jobs[job.id] = { status: 'remote' }; continue; }
     const t = byName.get(job.task);
+    if (job.host === 'fly') { out.jobs[job.id] = { status: t && String(t.state || '') !== 'Disabled' ? 'doubled' : 'fly' }; continue; }
     if (!t) { out.jobs[job.id] = { status: 'missing' }; continue; }
     const want = new Set(), have = new Set();
     for (const d of ALL_DAYS) for (const m of runsOn(job, d)) want.add(key({ day: d, minute: m }));
@@ -201,7 +212,7 @@ function drift(report) {
       onlyDeclared: summarise(onlyDeclared), onlyLive: summarise(onlyLive),
     };
   }
-  const known = new Set(JOBS.map((j) => j.task).filter(Boolean));
+  const known = new Set(jobs.map((j) => j.task).filter(Boolean));
   for (const t of tasks) if (!known.has(t.name)) out.unknown.push({ name: t.name, runs: summarise(liveRuns(t).map(key)) });
   return out;
 }
