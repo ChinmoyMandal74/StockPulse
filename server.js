@@ -57,6 +57,7 @@ const Glance = require('./private/glance.js');
 const Paper = require('./paper.js');
 // The next report date when the provider gives none (fetchProfile, earndate-load.js).
 const EarnDate = require('./earndate.js');
+const EarnCal = require('./earncal.js');
 // Earnings releases read by an AI model (release-load.js writes, these routes read).
 const Releases = require('./releases.js');
 const Schedule = require('./schedule.js');
@@ -5095,6 +5096,16 @@ async function fetchProfile(symbol) {
           out.nextEarningsEstimated = true;
         }
       }
+      // A DAY THE EARNINGS CALENDAR LISTS WINS (2026-10-28, the owner chose
+      // confirmed dates): the nightly's calendar phase stores them, and this
+      // keeps the 7-day rotation from writing our estimate back over one. Only
+      // a listing read in the last three days counts, so a date the calendar
+      // has dropped stops counting. It feeds the Signal's Earnings soon rule.
+      try {
+        const now = Date.now();
+        const cal = await store.readEarningsCalendarNext(symbol, nyDay(now), nyDay(now - 3 * 86400000));
+        if (cal) { out.nextEarningsDate = cal.d; out.nextEarningsEstimated = false; }
+      } catch { /* the date worked out above stands */ }
     } catch {
       /* leave earnings null */
     }
@@ -17217,6 +17228,41 @@ app.post('/api/group-months/rebuild', route(async (req, res) => {
   let days;
   try { days = await groupDaysBuild(); } catch (e) { console.error('group days build failed:', e.message); days = { built: false, reason: 'the build failed' }; }
   res.json(Object.assign({}, months, { days }));
+}));
+
+// ---- the earnings calendar (2026-10-28) ------------------------------------
+// The owner chose confirmed report days over our estimate (earndate.js) for
+// the Signal's Earnings soon rule. Measured that day: 97 estimated dates had
+// passed with no report, so the rule was off for those stocks in the very
+// week they reported. The nightly calls this BEFORE its rotation, so the
+// profiles it refreshes and the snapshot it writes carry the listed days.
+// Alpha Vantage first (one call, three months), Nasdaq if that fails
+// (earncal.js). Every listing is kept in earnings_calendar; each universe
+// stock it lists gets that day as nextEarningsDate, no longer an estimate.
+// A stock the calendar does not list keeps the date it had. No Twelve Data
+// credits; it stands aside only so it never writes profiles beside a refresh.
+app.post('/api/earnings-calendar/refresh', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  const t0 = Date.now(), today = nyDay(t0);
+  let source = 'alphavantage';
+  let got = await EarnCal.fetchAlphaVantage(process.env.Alpha_Vantage || process.env.ALPHA_VANTAGE_API_KEY || '').catch(() => ({ rows: null, reason: 'the call failed' }));
+  const avWhy = got.reason;
+  if (!got.rows) { source = 'nasdaq'; got = await EarnCal.fetchNasdaq(today, 21, 300).catch(() => ({ rows: null })); }
+  if (!got.rows) return res.json({ ok: false, reason: 'neither calendar answered (Alpha Vantage: ' + (avWhy || 'no answer') + '; Nasdaq refused)' });
+  const profiles = await store.readProfiles();
+  const listed = Object.entries(got.rows).filter(([sym, v]) => profiles[sym] && v.d >= today);
+  const written = await store.writeEarningsCalendar(listed.map(([symbol, v]) => ({ symbol, d: v.d, time: v.time })), source, today);
+  const patch = {};
+  let replacedEstimate = 0, moved = 0;
+  for (const [sym, v] of listed) {
+    const p = profiles[sym];
+    if (p.nextEarningsDate === v.d && p.nextEarningsEstimated === false) continue;
+    if (p.nextEarningsEstimated !== false) replacedEstimate++; else moved++;
+    patch[sym] = { nextEarningsDate: v.d, nextEarningsEstimated: false };
+  }
+  const changed = await store.mergeProfileFields(patch);
+  res.json({ ok: true, source, listed: Object.keys(got.rows).length, universe: listed.length, written, changed, replacedEstimate, moved, ms: Date.now() - t0 });
 }));
 
 // ---- day by day: the last eight weeks, a stock or every group ----------------

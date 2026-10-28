@@ -616,6 +616,20 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     // credits, and non-fatal: a failure leaves the rotation as it was.
     try { await secDaily(); } catch (e) { say(`sec daily  skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`); }
 
+    // THE EARNINGS CALENDAR, ALSO BEFORE THE ROTATION (2026-10-28, the owner
+    // chose confirmed report days for the Signal's Earnings soon rule): the
+    // server reads Alpha Vantage (else Nasdaq), keeps the listing and writes
+    // each listed day into the profile, so the rotation's snapshot carries
+    // it. One call, no Twelve Data credits, non-fatal.
+    try {
+      const r = await fetch(`${base}/api/earnings-calendar/refresh`, { method: 'POST', signal: AbortSignal.timeout(120000), headers: { Authorization: 'Bearer ' + secret } });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) say(`calendar   HTTP ${r.status}`);
+      else if (j.skipped) say(`calendar   skipped -- ${j.reason || 'a refresh is running'}`);
+      else if (!j.ok) say(`calendar   not read -- ${j.reason || 'no reason given'}`);
+      else say(`calendar   ${j.universe} tracked companies listed by ${j.source} (of ${j.listed}); ${j.changed} dates written (${j.replacedEstimate} estimates replaced, ${j.moved} moved), ${Math.round((j.ms || 0) / 1000)}s`);
+    } catch (e) { say(`calendar   skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`); }
+
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;

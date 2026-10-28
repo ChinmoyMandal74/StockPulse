@@ -131,3 +131,23 @@ The owner asked about earnings calendars and added an Alpha Vantage key (`Alpha_
 - The other differences: 63 where ours falls inside 7 days and Nasdaq's does not; 42 the other way round; 3 provider-confirmed oddities.
 
 **Nothing changed in the Signal: the date and the rule are owner decisions.** Score this file after 2026-11-18 to see which source the 8-K filings bear out.
+
+## The owner chose option 1: a listed day replaces our estimate (2026-10-28)
+After the snapshot above, the owner chose "use the confirmed date when the calendar has one, keep our estimate otherwise", **knowing it moves Signals** (the Earnings soon rule). Option 2 (only roll lapsed estimates forward) and option 3 (wait for the 18 November scoring) were offered.
+
+**How it works:**
+- **`earncal.js`:** fetch and parse only. Alpha Vantage first (`Alpha_Vantage`, one call, three months, CSV); Nasdaq as the fallback (keyless, a call a weekday, may refuse data-centre addresses). Class shares are normalised to the dot form (BRK/B and BRK-B read as BRK.B). A company listed twice keeps its earliest day. `earncal-test.js` has 11 checks. `earndate-compare.js` uses the same module.
+- **`earnings_calendar`** keeps one row per (symbol, report day) with `first_seen`, `last_seen`, `source` and `time`. A moved date is a new row. History is kept (in `SYMBOL_TABLES`). Reads:
+  - `readEarningsCalendarNext(sym, from, seenSince)`, a primary-key seek;
+  - `readEarningsCalendarSeen`, a range on `idx_earnings_calendar_seen`.
+- **`POST /api/earnings-calendar/refresh`** (cron or admin; stands aside for a refresh, because it writes profiles):
+  - reads the calendar and stores the universe's listings;
+  - writes `nextEarningsDate` and `nextEarningsEstimated: false` into each listed stock's profile through `mergeProfileFields`, so `fetched_at` stays as it is;
+  - answers with the counts: listed, universe, changed, estimates replaced, moved.
+- **The nightly calls it right after the SEC daily read, before the rotation** ("calendar" line in the log), so the profiles it refreshes and the snapshot it writes carry the days.
+- **`fetchProfile`** checks the calendar after working out the provider's or our date. A day listed in a read from the last three days wins, so the 7-day rotation never writes an estimate back over one. A date the calendar stops listing stops counting after three days.
+- **A stock the calendar does not list keeps the date it had** (the provider's, or our estimate).
+
+**What is unchanged:** the Signal's code. `daysToEarnings` still ignores a past date. Only the date it is handed changed.
+
+**Copy:** the Next Earn header says "confirmed when the earnings calendar lists it". `/privacy` lists Alpha Vantage and Nasdaq among the services contacted; nothing about a user reaches them.

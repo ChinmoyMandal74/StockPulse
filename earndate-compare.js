@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./db.js');
 const ActionRules = require('./private/action.js');
+const EarnCal = require('./earncal.js');
 
 const argv = process.argv.slice(2);
 const arg = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null; };
@@ -39,8 +40,6 @@ const diffDays = (a, b) => Math.round((dayMs(a) - dayMs(b)) / 86400000);
 const isWeekday = (d) => { const w = new Date(dayMs(d)).getUTCDay(); return w > 0 && w < 6; };
 const nextBizDay = (d) => { let x = addDays(d, 1); while (!isWeekday(x)) x = addDays(x, 1); return x; };
 const easternToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
-// Nasdaq writes class shares with a slash (BRK/B); the universe uses a dot.
-const normSym = (s) => String(s || '').trim().toUpperCase().replace('/', '.');
 
 function envKey(name) {
   try {
@@ -52,56 +51,12 @@ function envKey(name) {
   return process.env[name] || '';
 }
 
-// A CSV line with quoted fields (company names carry commas).
-function csvLine(line) {
-  const out = []; let cur = '', q = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
-    else if (c === '"') q = true; else if (c === ',') { out.push(cur); cur = ''; } else cur += c;
-  }
-  out.push(cur);
-  return out;
-}
-
-async function nasdaq(from, days) {
-  const out = {}; let calls = 0, failed = 0;
-  for (let i = 0; i <= days; i++) {
-    const d = addDays(from, i);
-    if (!isWeekday(d)) continue;
-    calls++;
-    try {
-      const r = await fetch('https://api.nasdaq.com/api/calendar/earnings?date=' + d, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', Accept: 'application/json' },
-      });
-      if (!r.ok) { failed++; continue; }
-      const j = await r.json();
-      for (const row of (j.data && j.data.rows) || []) {
-        const s = normSym(row.symbol);
-        if (s && !out[s]) out[s] = { d, time: String(row.time || '').replace('time-', '') };
-      }
-    } catch { failed++; }
-    await sleep(600);
-  }
-  return { rows: out, calls, failed };
-}
-
+async function nasdaq(from, days) { return EarnCal.fetchNasdaq(from, days); }
 async function alphaVantage() {
   const key = envKey('Alpha_Vantage') || envKey('ALPHA_VANTAGE_API_KEY');
   if (!key) return { rows: null, note: 'no Alpha_Vantage in .env' };
-  const r = await fetch('https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&horizon=3month&apikey=' + encodeURIComponent(key));
-  const text = await r.text();
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const head = csvLine(lines[0] || '').map((h) => h.trim());
-  const iS = head.indexOf('symbol'), iD = head.indexOf('reportDate'), iT = head.indexOf('timeOfTheDay');
-  // A refusal comes back as JSON with a message, not CSV: say so, never echo the key.
-  if (iS < 0 || iD < 0) return { rows: null, note: 'Alpha Vantage did not return the calendar (' + text.slice(0, 160).replace(key, '<key>') + ')' };
-  const out = {};
-  for (const l of lines.slice(1)) {
-    const f = csvLine(l), s = normSym(f[iS]);
-    if (s && f[iD] && !out[s]) out[s] = { d: f[iD], time: iT >= 0 ? f[iT] || '' : '' };
-  }
-  return { rows: out, note: Object.keys(out).length + ' companies' };
+  const r = await EarnCal.fetchAlphaVantage(key);
+  return r.rows ? { rows: r.rows, note: Object.keys(r.rows).length + ' companies' } : { rows: null, note: 'not read (' + r.reason + ')' };
 }
 
 function pctTxt(n, of) { return of ? n + ' (' + Math.round(n / of * 100) + '%)' : String(n); }
@@ -112,6 +67,7 @@ async function snapshot() {
   const profiles = await store.readProfiles();
   const universe = Object.keys(profiles).filter((s) => profiles[s]);
   const [nq, av] = [await nasdaq(today, DAYS), await alphaVantage()];
+  nq.rows = nq.rows || {};
   console.log('  Nasdaq: ' + Object.keys(nq.rows).length + ' companies over ' + nq.calls + ' weekdays' + (nq.failed ? ', ' + nq.failed + ' calls failed' : ''));
   console.log('  Alpha Vantage: ' + av.note);
   const rows = {};

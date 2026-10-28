@@ -320,6 +320,20 @@ const SCHEMA = [
    )`,
   'create index if not exists idx_earnings_releases_symbol on earnings_releases (symbol, filed)',
   'create index if not exists idx_earnings_releases_filed on earnings_releases (filed)',
+  // The earnings calendar (2026-10-28, the owner chose confirmed dates over
+  // our estimate): each company's announced report day as the nightly read it
+  // from Alpha Vantage or Nasdaq, one row per (symbol, report day), kept. A
+  // moved date is a new row; last_seen says which one the calendar still lists.
+  `create table if not exists earnings_calendar (
+     symbol     text not null,
+     d          text not null,
+     time       text,
+     source     text not null,
+     first_seen text not null,
+     last_seen  text not null,
+     primary key (symbol, d)
+   )`,
+  'create index if not exists idx_earnings_calendar_seen on earnings_calendar (last_seen)',
   // The laptop's scheduled tasks as schedule-report.js sent them, for
   // /schedule. One row an hour and one per task registration; kept, never
   // pruned, so a change to the schedule has a date.
@@ -5677,6 +5691,45 @@ async function readSecEvents(symbol, limit) {
 
 // Every company's events since a date, for the screener's column. The index
 // is named so the planner cannot choose to walk the table instead.
+// ---- the earnings calendar ---------------------------------------------
+// rows: [{ symbol, d, time }] as listed on `seen` (a day). An existing row
+// keeps its first_seen; the source and time follow the latest read.
+async function writeEarningsCalendar(rows, source, seen) {
+  await init();
+  const list = (rows || []).filter((r) => r && r.symbol && /^d{4}-d{2}-d{2}$/.test(String(r.d || '')));
+  for (let i = 0; i < list.length; i += 200) {
+    await db.batch(list.slice(i, i + 200).map((r) => ({
+      sql: 'insert into earnings_calendar (symbol, d, time, source, first_seen, last_seen) values (?, ?, ?, ?, ?, ?) '
+        + 'on conflict(symbol, d) do update set time = excluded.time, source = excluded.source, last_seen = excluded.last_seen',
+      args: [String(r.symbol).toUpperCase(), String(r.d), r.time || null, String(source), String(seen), String(seen)],
+    })), 'write');
+  }
+  return list.length;
+}
+// The next listed report day for one company, on or after `fromDay`, from a
+// read on or after `seenSince` (a date the calendar stopped listing is not
+// next). A seek on the primary key.
+async function readEarningsCalendarNext(symbol, fromDay, seenSince) {
+  await init();
+  const r = await db.execute({
+    sql: 'select d, time, source from earnings_calendar where symbol = ? and d >= ? and last_seen >= ? order by d limit 1',
+    args: [String(symbol).toUpperCase(), String(fromDay), String(seenSince)],
+  });
+  const x = r.rows[0];
+  return x ? { d: String(x.d), time: x.time ? String(x.time) : null, source: String(x.source) } : null;
+}
+// Every company's next listed day from one read: a range on last_seen.
+async function readEarningsCalendarSeen(fromDay, seenSince) {
+  await init();
+  const r = await db.execute({
+    sql: 'select symbol, d, time, source from earnings_calendar indexed by idx_earnings_calendar_seen where last_seen >= ? and d >= ? order by symbol, d',
+    args: [String(seenSince), String(fromDay)],
+  });
+  const out = {};
+  for (const x of r.rows) if (!out[x.symbol]) out[x.symbol] = { d: String(x.d), time: x.time ? String(x.time) : null, source: String(x.source) };
+  return out;
+}
+
 async function readSecEventsSince(since) {
   await init();
   const r = await db.execute({
@@ -6337,7 +6390,7 @@ async function readBarsFor(symbols, since) {
 // JSON row rewritten wholesale on the next refresh, so it heals itself.
 const SYMBOL_TABLES = ['bars', 'fundamentals_history', 'profiles', 'names', 'news', 'news_archive', 'news_tone', 'news_state', 'drawdown_stats', 'sec_events', 'sec_holders', 'inst_holdings', 'inst_history', 'cusip_map', 'sec_segments', 'seg_periods', 'seg_filings', 'fund_holders', 'fund_history', 'options_state', 'options_oi',
   'earnings_history', 'price_state', 'price_extremes', 'tech_history', 'alerts', 'alert_events', 'peer_links',
-  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series', 'earnings_releases', 'signal_recon'];
+  'sec_facts', 'sec_state', 'sec_instance', 'short_interest', 'short_state', 'splits', 'split_state', 'onboard_state', 'line_series', 'earnings_releases', 'signal_recon', 'earnings_calendar'];
 
 // Remove a symbol from the database entirely.
 //
@@ -8560,7 +8613,7 @@ module.exports = {
   markRefreshPrices, readBarsFullFor, readBarsWindow, notePricePull, readPriceState,
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
-  writeSecEvents, readSecEvents, readSecEventsSince,
+  writeSecEvents, readSecEvents, readSecEventsSince, writeEarningsCalendar, readEarningsCalendarNext, readEarningsCalendarSeen,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince, readSecHoldersBy,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
