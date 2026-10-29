@@ -11624,7 +11624,9 @@ function columnCatalogue() {
       const id = (/data-col="([^"]+)"/.exec(attrs) || /data-fkey="([^"]+)"/.exec(attrs)
         || /data-key="([^"]+)"/.exec(attrs) || [])[1];
       if (!id || group === 'fwd') continue;               // forward returns follow the as-of mode
-      const label = m[3].replace(/<br\s*\/?>/g, ' ').replace(/<[^>]*>/g, '')
+      // A tag becomes a space, so the period tag under a name (2026-10-29) reads
+      // "Revenue TTM", not "RevenueTTM".
+      const label = m[3].replace(/<br\s*\/?>/g, ' ').replace(/<[^>]*>/g, ' ')
         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
       out.push({ id, label, group, groupLabel: labels[group] || group });

@@ -88,6 +88,19 @@
     .sm-add b { color: var(--text); }
     .sm-mv { display: inline-block; margin-top: 6px; margin-right: 6px; font: 600 11px var(--sans); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 50%, transparent); border-radius: 999px; padding: 2px 9px; }
     @media (max-width: 1000px) { .sm-tv { grid-template-columns: 1fr; } }
+    /* Status of each step, and the decisions log (2026-10-29). */
+    .sm-stat { display: inline-block; margin-left: 6px; font: 600 10px var(--sans); text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hair-2); color: var(--faint); vertical-align: 1px; }
+    .sm-stat.done { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .sm-stat.decided { color: var(--sky); border-color: color-mix(in srgb, var(--sky) 55%, transparent); }
+    .sm-stat.decision { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
+    .sm-plan li .note { display: block; margin-top: 3px; color: var(--faint); font-size: 12px; }
+    .sm-dec { margin: 0 0 16px; }
+    .sm-dec .core { padding: 14px 18px; }
+    .sm-dec h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+    .sm-dec ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+    .sm-dec li { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .sm-dec li time { font: 500 11.5px var(--mono); color: var(--faint); margin-right: 8px; }
+    .sm-dec li b { color: var(--text); font-weight: 600; }
     .sm-best div { color: var(--muted); max-width: 52ch; }
     .sm-best b.b-rule { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
     /* The owner's rule, as it would run today: one bar, release / SEC / Twelve Data. */
@@ -151,6 +164,7 @@
     </header>
 
     <div class="sm-tiles" id="tiles"></div>
+    <div class="bezel sm-dec" id="dec" hidden></div>
     <div class="sm-plan" id="plan"></div>
     <div class="sm-tv" id="tv"></div>
     <div class="sm-bar">
@@ -207,7 +221,7 @@
           <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
           <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b>${useBar(r)}<div>${esc(r.best.why)}</div></td>
           <td class="sm-per${r.proposal && r.proposal.periodChange ? ' chg' : ''}">${r.proposal ? esc(r.proposal.now) + (r.proposal.periodChange ? '<span class="to">\u2192 ' + esc(r.proposal.to) + '</span>' : '<span class="to">Keep</span>') : ''}</td>
-          <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + '<br><span class="sm-mv" title="The proposed group (see Proposed groups above)">' + (r.proposal.groupMoves ? 'Moves to ' : 'Group: ') + esc(r.proposal.group) + '</span>' + (r.proposal.extract ? '<span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
+          <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + '<br><span class="sm-mv" title="The proposed group (see Proposed groups above)">' + (r.proposal.moved ? 'Moved to ' : r.proposal.groupMoves ? 'Moves to ' : 'Group: ') + esc(r.proposal.group) + '</span>' + (r.proposal.extract ? '<span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
           <td class="sm-shown">${esc(r.shown)}</td>
           <td><span class="sm-st ${r.sec.status.toLowerCase()}">${esc(r.sec.status)}</span><div class="sm-eq">${esc(r.sec.equivalent)}</div></td>
@@ -241,8 +255,9 @@
         tile('SEC filing data', num(DOC.secCompanies), `companies with a quarter in the last 200 days; ${DOC.secSameQuarter}% already have the quarter the newest release reports`),
         tile('Release ahead of the 10-Q', T.filingMedianDays != null ? T.filingMedianDays + ' day' + (T.filingMedianDays === 1 ? '' : 's') : '—', `median; same day ${T.filingSameDayPct ?? '—'}%, 90th percentile ${T.filingP90Days ?? '—'} days`),
       ].join('');
-      $('plan').innerHTML = '<div class="bezel"><div class="core"><h2>The proposal, in order</h2><ol>' + (DOC.plan || []).map((p) => '<li><b>' + esc(p.t) + '.</b> ' + esc(p.d) + '</li>').join('') + '</ol></div></div>'
+      $('plan').innerHTML = '<div class="bezel"><div class="core"><h2>The proposal, in order</h2><ol>' + (DOC.plan || []).map((p) => '<li><b>' + esc(p.t) + '.</b>' + (p.status ? '<span class="sm-stat ' + esc(p.status) + '">' + esc({ done: 'Done', open: 'Open', decided: 'Decided', decision: 'Your decision' }[p.status] || p.status) + '</span>' : '') + ' ' + esc(p.d) + (p.note ? '<span class="note">' + esc(p.note) + '</span>' : '') + '</li>').join('') + '</ol></div></div>'
         + '<div class="bezel"><div class="core"><h2>New data to extract (' + (DOC.extracts || []).length + ')</h2><div class="sm-ex">' + (DOC.extracts || []).map((e) => '<div><b>' + esc(e.item) + '.</b> ' + esc(e.from) + '. ' + esc(e.cost) + ' <span class="cols">For: ' + esc(e.columns.join(', ')) + '.</span></div>').join('') + '</div></div></div>';
+      if ((DOC.decisions || []).length) { $('dec').hidden = false; $('dec').innerHTML = '<div class="core"><h2>Decisions and changes</h2><ul>' + DOC.decisions.map((x) => '<li><time>' + esc(x.d) + '</time><b>' + esc(x.t) + '.</b> ' + esc(x.x) + '</li>').join('') + '</ul></div>'; }
       $('tv').innerHTML = '<div class="bezel"><div class="core"><h2>What TradingView does</h2><ul>' + (DOC.tradingview || []).map((x) => '<li><b>' + esc(x.t) + '.</b> ' + esc(x.d) + '</li>').join('') + '</ul></div></div>'
         + '<div class="bezel"><div class="core"><h2>Proposed groups, by statement</h2><div style="overflow-x:auto"><table class="sm-grp"><thead><tr><th>Group</th><th>Period</th><th>From today\u2019s groups</th><th>Holds</th></tr></thead><tbody>'
         + (DOC.groups || []).map((g) => '<tr><td>' + esc(g.name) + ' <code>' + esc(g.id) + '</code></td><td>' + esc(g.period) + '</td><td>' + esc(g.from) + '</td><td>' + esc(g.note) + '</td></tr>').join('') + '</tbody></table></div>'

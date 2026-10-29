@@ -1069,6 +1069,9 @@
       background: none; color: var(--muted); cursor: pointer; font-family: var(--sans);
       transition: background 0.4s var(--ease), color 0.4s var(--ease); }
     .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
+    /* THE PERIOD TAG (2026-10-29, docs/context/data-sources.md): the period a
+       column measures, on a small line under its name: TTM, Q YoY, Q end, Fwd. */
+    thead th .ptag { display: block; margin-top: 2px; font: 500 9.5px var(--mono); letter-spacing: 0.03em; color: var(--faint); text-transform: none; }
     /* Last Earning AI Extracted (2026-10-22): text cut to one line, read on hover. */
     td.grp-aier.er-tx > span { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     td.grp-aier.er-amb { color: var(--amber); }
@@ -1584,20 +1587,21 @@
         <th class="group grp-short" data-group="short" colspan="7">Short-term %</th>
         <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
+        <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
         <th class="group grp-rel" data-group="rel" colspan="14">Range and level</th>
         <th class="group grp-risk" data-group="risk" colspan="8">Risk</th>
         <th class="group grp-react" data-group="react" colspan="6">Reactions</th>
-        <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
-        <th class="group grp-size" data-group="size" colspan="7">Scale</th>
-        <th class="group grp-value" data-group="value" colspan="11">Valuation</th>
-        <th class="group grp-profit" data-group="profit" colspan="7">Profitability</th>
-        <th class="group grp-growth" data-group="growth" colspan="3">Growth</th>
-        <th class="group grp-finpos" data-group="finpos" colspan="7">Financial position</th>
+        <th class="group grp-size" data-group="size" colspan="6" title="The income statement over the last twelve months (TTM). Each header says its period.">Income statement · TTM</th>
+        <th class="group grp-value" data-group="value" colspan="11" title="Today’s price over a twelve-month figure (TTM), book at the quarter end (Q end), or an estimate (Fwd). Each header says its period.">Valuation</th>
+        <th class="group grp-profit" data-group="profit" colspan="7" title="Margins and returns over the last twelve months (TTM), except where a header says otherwise.">Profitability · TTM</th>
+        <th class="group grp-growth" data-group="growth" colspan="2" title="The latest quarter against the same quarter a year earlier (Q YoY).">Growth · Q YoY</th>
+        <th class="group grp-finpos" data-group="finpos" colspan="7" title="The balance sheet at the latest quarter end (Q end).">Balance sheet · Q end</th>
+        <th class="group grp-cflow" data-group="cflow" colspan="2" title="Cash flow over the last twelve months (TTM). Twelve Data’s free cash flow is levered free cash flow; see /sources.">Cash flow · TTM</th>
         <th class="group grp-divs" data-group="divs" colspan="4">Dividends and returns</th>
         <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="16">Long run</th>
         <th class="group grp-own" data-group="own" colspan="14">Ownership</th>
-        <th class="group grp-aier" data-group="aier" colspan="25">Last Earning AI Extracted</th>
+        <th class="group grp-aier" data-group="aier" colspan="25" title="The newest quarter as the company reported it in its results press release, read by AI the day it is filed: one quarter, by design.">Latest quarter · from the release</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1640,6 +1644,12 @@
         <th class="grp-fwd" data-key="fwd3M" title="Return in the ~3 months after the as-of date">+3M</th>
         <th class="grp-fwd" data-key="fwd6M" title="Return in the ~6 months after the as-of date">+6M</th>
         <th class="grp-fwd" data-key="fwdSince" title="Return from the as-of date to the latest close">Since</th>
+        <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
+        <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
+        <th class="grp-trend" data-key="z200" title="200-day z-score: how many standard deviations the latest close is from its 200-day average, the deviation taken over the same 200 closes. It puts a volatile stock and a quiet one on one scale: 20% above the average is ordinary for one and rare for the other. Since 2007, 42% of stock-days sat between -1 and +1 and 84% between -2 and +2; more sat above +2 (11%) than below -2 (5%). A position, not a forecast: no level of it was followed by a better or worse month than the average stock's, in either period tested (see Research). Not an input to Signal.">200D<br>z-score</th>
+        <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
+        <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
+        <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Signal.">Awesome<br>Osc</th>
         <th class="grp-rel" data-key="relStrength" title="3-month return minus the S&P 500's">RS vs<br>S&amp;P</th>
         <th class="grp-rel" data-key="pctFromLow" title="How far the price has risen above its 52-week low. A level, not a change — small means it is still sitting on the floor of its range.">% from<br>52W Lo</th>
         <th class="grp-rel" data-key="daysSince52wLow" title="Trading sessions since the 52-week low was set — 0 is today. A new low this week reads 0 to 4.">52W Lo<br>days</th>
@@ -1668,51 +1678,45 @@
         <th class="grp-react" data-key="shortBuild" title="The change in shares sold short between the two most recent FINRA reports, which are published twice a month, about a fortnight apart; each cell names the two dates. Positive means the short position grew. Blank where a split falls between the two reports, since FINRA does not restate for one, and for a stock not on the latest report. It is the direction of the position, not its size: Short % Float in Ownership is the size.">Short<br>build</th>
         <th class="grp-react" data-key="insiderNet" title="What the company's own insiders did on the open market over the past 90 days: purchases less sales, as a percentage of the company's market value, from their Form 4 filings. Sales under a pre-arranged trading plan are left out, because they were scheduled months earlier. NEGATIVE IS THE ORDINARY CASE: most insider selling is pay being turned into cash, and about two companies in three are net sellers, so a small negative says little. Each cell names how many insiders bought and sold. Blank where no insider traded, and where a filed dollar value is too large against the company to be real.">Insider<br>net</th>
         <th class="left grp-react" data-key="lastEvent" title="The newest 8-K the company filed in the last sixty days: what it was about, and how many days ago. An 8-K is the report a company files within four business days of something material: results released, an officer or director arriving or leaving, a material agreement, new debt. The words name the kind of event from the item numbers on the filing and do not say whether it was good news. The rare kinds are in bold: a restatement warning, an auditor change, an impairment, a listing notice, a change of control, a cybersecurity incident, a bankruptcy. Type in the filter row to find a kind, for example officer. Blank when nothing was filed in the window. From the SEC, updated as each company's filings are re-read.">Last<br>8-K</th>
-        <th class="grp-trend" data-key="vs50ma" title="Price vs 50-day moving average">vs 50D<br>MA</th>
-        <th class="grp-trend" data-key="vs200ma" title="Price vs 200-day moving average">vs 200D<br>MA</th>
-        <th class="grp-trend" data-key="z200" title="200-day z-score: how many standard deviations the latest close is from its 200-day average, the deviation taken over the same 200 closes. It puts a volatile stock and a quiet one on one scale: 20% above the average is ordinary for one and rare for the other. Since 2007, 42% of stock-days sat between -1 and +1 and 84% between -2 and +2; more sat above +2 (11%) than below -2 (5%). A position, not a forecast: no level of it was followed by a better or worse month than the average stock's, in either period tested (see Research). Not an input to Signal.">200D<br>z-score</th>
-        <th class="left grp-trend" data-key="maCrossRank" title="50/200-day MA cross: Golden (50 above 200) or Death, with trading days since the last cross">MA<br>Cross</th>
-        <th class="grp-trend" data-key="macdHist" title="MACD histogram (12/26/9) = MACD line − signal; positive = bullish">MACD</th>
-        <th class="grp-trend" data-key="aoPct" title="Awesome Oscillator: the 5-day average of each day&#39;s midpoint, (high + low) / 2, less the 34-day average, shown as a percentage of the price so stocks can be compared. Above zero means the last week has run ahead of the last seven weeks. Not an input to Signal.">Awesome<br>Osc</th>
-        <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<br>TTM</th>
-        <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit</th>
-        <th class="grp-size" data-key="netIncomeTtm" title="Net income to common, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Net<br>Income</th>
-        <th class="grp-size" data-key="fcfTtm" title="Levered free cash flow, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">FCF<br>TTM</th>
-        <th class="grp-size" data-key="ebitda" title="EBITDA (trailing twelve months) — earnings before interest, tax, depreciation and amortisation, in the company's own reporting currency.">EBITDA</th>
-        <th class="grp-size" data-key="operatingCashFlowTtm" title="Cash generated by operations, trailing twelve months — free cash flow before capital spending.">Op<br>Cash</th>
-        <th class="grp-size" data-key="revenuePerEmployee" title="Trailing twelve months of revenue for each full-time employee the company reports, in its own reporting currency. A rough measure of how much revenue the business turns over per person; it differs enormously by industry, so read it against peers.">Rev /<br>Employee</th>
-        <th class="grp-value" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E</th>
-        <th class="grp-value" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E</th>
-        <th class="grp-value" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E</th>
-        <th class="grp-value" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a signal.">P/E vs<br>peers</th>
-        <th class="grp-value" data-key="peg" title="PEG ratio &mdash; &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless. It leads the three P/E columns rather than sitting among them: a PEG is earnings growth priced in, so it belongs beside them and not between them.">PEG</th>
-        <th class="grp-value" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B</th>
-        <th class="grp-value" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S</th>
-        <th class="grp-value" data-key="evToSales" title="Enterprise value (market value plus debt less cash) over trailing revenue. Like P/S but it counts debt, so a heavily borrowed company does not look cheaper than it is. Dollar reporters only.">EV /<br>Sales</th>
-        <th class="grp-value" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA</th>
-        <th class="grp-value" data-key="priceToOcf" title="Market value over trailing operating cash flow: the price of a dollar of cash from operations, before capital spending. Blank where operating cash flow was negative, and for a company reporting in another currency.">P /<br>Op Cash</th>
-        <th class="grp-value" data-key="earningsYield" title="Earnings yield: trailing earnings per share over the price, in percent, which is the P/E turned over. Unlike the P/E it reads for a loss-maker, as a negative figure, so loss-making companies sort where they belong rather than vanishing. A description, not a return.">Earn<br>Yield</th>
-        <th class="grp-profit" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin</th>
-        <th class="grp-profit" data-key="operatingMargin" title="Operating margin (TTM) — the cleanest read on the business itself: after the cost of running it, before financing and tax.">Op<br>Margin</th>
-        <th class="grp-profit" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin</th>
-        <th class="grp-profit" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin</th>
-        <th class="grp-profit" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own SEC filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg</th>
-        <th class="grp-profit" data-key="roe" title="Return on equity (TTM)">ROE</th>
-        <th class="grp-profit" data-key="roa" title="Return on assets (TTM). Unlike ROE it is not flattered by borrowing.">ROA</th>
-        <th class="grp-growth" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev Grth<br>Q YoY</th>
-        <th class="grp-growth" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group. Excluded from the Quality score for loss-making companies — a shrinking loss is not earnings growth. Very large values are usually genuine but come off a near-zero base (memory names in an upcycle), and the score caps their contribution anyway.">Earn Grth<br>Q YoY</th>
-        <th class="grp-growth" data-key="dilutedEpsTtm" title="Diluted earnings per share, trailing twelve months, in the company's own reporting currency.">EPS<br>TTM</th>
-        <th class="grp-finpos" data-key="totalCash" title="Total cash, most recent quarter — the two sides of Net Cash shown separately, because $60B against $40B of debt is a different company from $20B against none.">Cash</th>
-        <th class="grp-finpos" data-key="totalDebt" title="Total debt, most recent quarter, in the company's own reporting currency.">Debt</th>
-        <th class="grp-finpos" data-key="netCash" title="Total cash minus total debt, most recent quarter. Positive = net cash, negative = net debt">Net<br>Cash</th>
-        <th class="grp-finpos" data-key="netCashPerShare" title="Net cash (cash less total debt, the Net Cash column) for each share outstanding, in dollars. Negative is net debt per share. Dollar reporters only: a depositary receipt&#39;s share count is in another unit.">Net Cash<br>/ Share</th>
-        <th class="grp-finpos" data-key="workingCapital" title="Working capital: current assets less current liabilities on the newest balance sheet the company has filed with the SEC, in dollars (a company filing in another currency is converted at the rate on that date). Negative means more falls due within a year than the company holds in short-term assets. Blank where the filings state neither line (a bank or an insurer files no current assets), or the newest is over fifteen months old. Rebuilt daily.">Working<br>Capital</th>
-        <th class="grp-finpos" data-key="debtToEquity" title="Total debt as a percentage of shareholders' equity, most recent quarter — how leveraged the balance sheet is.">Debt/<br>Equity</th>
-        <th class="grp-finpos" data-key="currentRatio" title="Current assets ÷ current liabilities, most recent quarter. Below 1 means short-term bills exceed short-term assets.">Curr<br>Ratio</th>
-        <th class="grp-divs" data-key="divYield" title="Forward annual dividend yield. Every return column on this page is price-only, so a yield here is income the table does not otherwise show.">Div<br>Yield</th>
-        <th class="grp-divs" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout</th>
-        <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield</th>
-        <th class="grp-divs" data-key="shareholderYield" title="Dividend yield plus buyback yield: the cash returned to shareholders over the latest year as a share of today&#39;s market value. Blank where the company files no buyback line, which is not the same as zero. Before shares handed out as pay, so a company that issues many shares can return cash and still dilute: see Shares chg 1Y.">Holder<br>Yield</th>
+        <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<span class="ptag">TTM</span></th>
+        <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit<span class="ptag">TTM</span></th>
+        <th class="grp-size" data-key="netIncomeTtm" title="Net income to common, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Net<br>Income<span class="ptag">TTM</span></th>
+        <th class="grp-size" data-key="ebitda" title="EBITDA (trailing twelve months) — earnings before interest, tax, depreciation and amortisation, in the company's own reporting currency.">EBITDA<span class="ptag">TTM</span></th>
+        <th class="grp-size" data-key="revenuePerEmployee" title="Trailing twelve months of revenue for each full-time employee the company reports, in its own reporting currency. A rough measure of how much revenue the business turns over per person; it differs enormously by industry, so read it against peers.">Rev /<br>Employee<span class="ptag">TTM</span></th>
+        <th class="grp-size" data-key="dilutedEpsTtm" title="Diluted earnings per share, trailing twelve months, in the company's own reporting currency.">EPS<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="forwardPe" title="Forward price/earnings ratio. Shown for reference but excluded from the Quality score when the company is loss-making, where it carries no meaning.">Fwd<br>P/E<span class="ptag">Fwd</span></th>
+        <th class="grp-value" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a signal.">P/E vs<br>peers<span class="ptag">Fwd</span></th>
+        <th class="grp-value" data-key="peg" title="PEG ratio &mdash; &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless. It leads the three P/E columns rather than sitting among them: a PEG is earnings growth priced in, so it belongs beside them and not between them.">PEG<span class="ptag">Fwd</span></th>
+        <th class="grp-value" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B<span class="ptag">Q end</span></th>
+        <th class="grp-value" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="evToSales" title="Enterprise value (market value plus debt less cash) over trailing revenue. Like P/S but it counts debt, so a heavily borrowed company does not look cheaper than it is. Dollar reporters only.">EV /<br>Sales<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="priceToOcf" title="Market value over trailing operating cash flow: the price of a dollar of cash from operations, before capital spending. Blank where operating cash flow was negative, and for a company reporting in another currency.">P /<br>Op Cash<span class="ptag">TTM</span></th>
+        <th class="grp-value" data-key="earningsYield" title="Earnings yield: trailing earnings per share over the price, in percent, which is the P/E turned over. Unlike the P/E it reads for a loss-maker, as a negative figure, so loss-making companies sort where they belong rather than vanishing. A description, not a return.">Earn<br>Yield<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="operatingMargin" title="Operating margin (TTM) — the cleanest read on the business itself: after the cost of running it, before financing and tax.">Op<br>Margin<span class="ptag">latest Q</span></th>
+        <th class="grp-profit" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own SEC filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg<span class="ptag">TTM YoY</span></th>
+        <th class="grp-profit" data-key="roe" title="Return on equity (TTM)">ROE<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="roa" title="Return on assets (TTM). Unlike ROE it is not flattered by borrowing.">ROA<span class="ptag">TTM</span></th>
+        <th class="grp-growth" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev<br>Growth<span class="ptag">Q YoY</span></th>
+        <th class="grp-growth" data-key="earningsGrowthYoY" title="Earnings growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the trailing-twelve-month figures in the Size group. Excluded from the Quality score for loss-making companies — a shrinking loss is not earnings growth. Very large values are usually genuine but come off a near-zero base (memory names in an upcycle), and the score caps their contribution anyway.">Earn<br>Growth<span class="ptag">Q YoY</span></th>
+        <th class="grp-finpos" data-key="totalCash" title="Total cash, most recent quarter — the two sides of Net Cash shown separately, because $60B against $40B of debt is a different company from $20B against none.">Cash<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="totalDebt" title="Total debt, most recent quarter, in the company's own reporting currency.">Debt<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="netCash" title="Total cash minus total debt, most recent quarter. Positive = net cash, negative = net debt">Net<br>Cash<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="netCashPerShare" title="Net cash (cash less total debt, the Net Cash column) for each share outstanding, in dollars. Negative is net debt per share. Dollar reporters only: a depositary receipt&#39;s share count is in another unit.">Net Cash<br>/ Share<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="workingCapital" title="Working capital: current assets less current liabilities on the newest balance sheet the company has filed with the SEC, in dollars (a company filing in another currency is converted at the rate on that date). Negative means more falls due within a year than the company holds in short-term assets. Blank where the filings state neither line (a bank or an insurer files no current assets), or the newest is over fifteen months old. Rebuilt daily.">Working<br>Capital<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="debtToEquity" title="Total debt as a percentage of shareholders' equity, most recent quarter — how leveraged the balance sheet is.">Debt/<br>Equity<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="currentRatio" title="Current assets ÷ current liabilities, most recent quarter. Below 1 means short-term bills exceed short-term assets.">Curr<br>Ratio<span class="ptag">Q end</span></th>
+        <th class="grp-cflow" data-key="operatingCashFlowTtm" title="Cash generated by operations, trailing twelve months — free cash flow before capital spending.">Op<br>Cash<span class="ptag">TTM</span></th>
+        <th class="grp-cflow" data-key="fcfTtm" title="Levered free cash flow, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">FCF<span class="ptag">TTM</span></th>
+        <th class="grp-divs" data-key="divYield" title="Forward annual dividend yield. Every return column on this page is price-only, so a yield here is income the table does not otherwise show.">Div<br>Yield<span class="ptag">Fwd</span></th>
+        <th class="grp-divs" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout<span class="ptag">TTM</span></th>
+        <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield<span class="ptag">TTM</span></th>
+        <th class="grp-divs" data-key="shareholderYield" title="Dividend yield plus buyback yield: the cash returned to shareholders over the latest year as a share of today&#39;s market value. Blank where the company files no buyback line, which is not the same as zero. Before shares handed out as pay, so a company that issues many shares can return cash and still dilute: see Shares chg 1Y.">Holder<br>Yield<span class="ptag">Fwd + TTM</span></th>
         <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE COMPANY FIGURES COVER &mdash; revenue, the margins, ROE, net income and FCF (in Scale, Valuation, Profitability and Growth) are all a trailing twelve months ENDING on this date. Last results out beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
         <th class="grp-report" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Last results out</th>
         <th class="grp-report" data-col="secResults" title="When the company told the SEC it had results — the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. A SECOND, INDEPENDENT answer to &quot;has this company reported&quot;, from the company itself rather than from the price feed: on 2026-10-01 Micron had announced on Sep 30 and the feed still said Jun 24. Amber when it is ahead of the Reported column, which means the feed has missed a report. Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
@@ -1842,7 +1846,7 @@
     // Option A (owner, 2026-10-19): Relative split into Range and level (id kept)
     // and Risk; Fundamentals into Valuation, Profitability, Growth, Financial
     // position, Dividends and returns, Reporting. The ids are stored keys.
-    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own', 'aier'];
+    const GROUPS = ['info', 'rank', 'act', 'chart', 'short', 'long', 'fwd', 'trend', 'rel', 'risk', 'react', 'size', 'value', 'profit', 'growth', 'finpos', 'cflow', 'divs', 'report', 'lrun', 'own', 'aier'];
     const GROUP_COLORS_DARK = {
       // Warm neutral, and the only unused region of the palette: every other
       // group is a family of numbers, this one is a picture.
@@ -1850,7 +1854,7 @@
       short: '#34d399', long: '#a78bfa', fwd: '#fb923c',
       rel:  '#22d3ee', react: '#f472b6', trend: '#fbbf24',
       size: '#94a3b8', lrun: '#d6c58b', own: '#f0abfc', aier: '#93c5fd',
-      risk: '#fdba74', value: '#fb7185', profit: '#818cf8', growth: '#38bdf8', finpos: '#c4b5fd', divs: '#facc15', report: '#8b93a7',
+      risk: '#fdba74', value: '#fb7185', profit: '#818cf8', growth: '#38bdf8', finpos: '#c4b5fd', cflow: '#67e8f9', divs: '#facc15', report: '#8b93a7',
     };
     // THE LIGHT THEME (2026-10-15). These tints are pastels tuned for black; on
     // white each takes the darker shade the promo studio's light cards use
@@ -1875,9 +1879,9 @@
       // Scale, not Size: there is a Size COLUMN in Info (the cap band), and a
       // banner and a column answering to one word is a collision. The group id
       // stays `size`, so no saved view, screen, tile or collapse key moves.
-      size: 'Scale', value: 'Valuation', profit: 'Profitability', growth: 'Growth', finpos: 'Financial position',
+      size: 'Income statement \u00b7 TTM', value: 'Valuation', profit: 'Profitability \u00b7 TTM', growth: 'Growth \u00b7 Q YoY', finpos: 'Balance sheet \u00b7 Q end', cflow: 'Cash flow \u00b7 TTM',
       divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
-      aier: 'Last Earning AI Extracted',
+      aier: 'Latest quarter · from the release',
     };
     const collapsed = {};
     GROUPS.forEach((g) => (collapsed[g] = false));
@@ -3375,6 +3379,8 @@
     function headerText(th) {
       const c = th.cloneNode(true);
       c.querySelectorAll('br').forEach((b) => b.replaceWith(' '));
+      // The period tag (2026-10-29) reads as a word after the name: "Revenue TTM".
+      c.querySelectorAll('.ptag').forEach((t) => t.replaceWith(' ' + t.textContent));
       return c.textContent.replace(/\s+/g, ' ').trim();
     }
 
@@ -3988,6 +3994,12 @@
           ${pctCell(s.fwd3M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwd6M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwdSince, 'grp-fwd', fwdTitle)}
+          ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
+          ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
+          ${zCell(s)}
+          ${maCrossCell(s)}
+          ${macdCell(s)}
+          ${aoCell(s)}
           ${pctCell(s.relStrength, 'grp-rel', liveTitle)}
           ${marginCell(s.pctFromLow, 'grp-rel', liveTitle)}
           ${daysCell(s.daysSince52wLow, 'grp-rel', liveTitle)}
@@ -4018,20 +4030,13 @@
           ${signedPctCell(s.shortBuild, 'grp-react', s.shortBuildTo ? 'FINRA reports of ' + s.shortBuildFrom + ' and ' + s.shortBuildTo : '')}
           ${signedPctCell(s.insiderNet, 'grp-react', s.insiderSince ? (s.insiderBuyers || 0) + ' bought, ' + (s.insiderSellers || 0) + ' sold since ' + s.insiderSince + (s.insiderNet == null && (s.insiderBuyers || s.insiderSellers) ? ' — a filed value too large to be real' : '') : '', 2)}
           ${lastEventCell(s)}
-          ${pctCell(s.vs50ma, 'grp-trend', liveTitle)}
-          ${pctCell(s.vs200ma, 'grp-trend', liveTitle)}
-          ${zCell(s)}
-          ${maCrossCell(s)}
-          ${macdCell(s)}
-          ${aoCell(s)}
-          ${isFund ? naRun(7, 'grp-size') : `
+          ${isFund ? naRun(6, 'grp-size') : `
           ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.netIncomeTtm, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.fcfTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.revenuePerEmployee, s.currency, 'grp-size', cacheTitle)}`}
+          ${capCell(s.revenuePerEmployee, s.currency, 'grp-size', cacheTitle)}
+          ${numCell(s.dilutedEpsTtm, 'grp-size', cacheTitle)}`}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.forwardPe, 'grp-value', cacheTitle)}
           ${numCell(s.trailingPe, 'grp-value', cacheTitle)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.peLive, 'grp-value', liveTitle)}
@@ -4051,10 +4056,9 @@
           ${marginChgCell(s)}
           ${pctCell(s.roe, 'grp-profit', cacheTitle)}
           ${pctCell(s.roa, 'grp-profit', cacheTitle)}`}
-          ${isFund ? naRun(3, 'grp-growth') : `
+          ${isFund ? naRun(2, 'grp-growth') : `
           ${pctCell(s.revenueGrowthYoY, 'grp-growth', cacheTitle)}
-          ${pctCell(s.earningsGrowthYoY, 'grp-growth', cacheTitle)}
-          ${numCell(s.dilutedEpsTtm, 'grp-growth', cacheTitle)}`}
+          ${pctCell(s.earningsGrowthYoY, 'grp-growth', cacheTitle)}`}
           ${isFund ? naRun(7, 'grp-finpos') : `
           ${capCell(s.totalCash, s.currency, 'grp-finpos', cacheTitle)}
           ${capCell(s.totalDebt, s.currency, 'grp-finpos', cacheTitle)}
@@ -4063,6 +4067,9 @@
           ${netCashCell(s.workingCapital, 'USD', 'grp-finpos', s.workingCapitalEnd ? 'Current assets less current liabilities at ' + s.workingCapitalEnd : '')}
           ${numCell(s.debtToEquity, 'grp-finpos', cacheTitle)}
           ${numCell(s.currentRatio, 'grp-finpos', cacheTitle)}`}
+          ${isFund ? naRun(2, 'grp-cflow') : `
+          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-cflow', cacheTitle)}
+          ${capCell(s.fcfTtm, s.currency, 'grp-cflow', cacheTitle + ' Twelve Data\u2019s levered free cash flow.')}`}
           ${marginCell(s.divYield, 'grp-divs', cacheTitle)}
           ${isFund ? naRun(1, 'grp-divs') : marginCell(s.payoutRatio, 'grp-divs', cacheTitle)}
           ${isFund ? naRun(1, 'grp-divs') : buybackCell(s)}
@@ -4781,9 +4788,9 @@
     // A shorter name for a segment too narrow for the banner's word; one too
     // narrow for this as well goes blank and keeps its tooltip.
     const GM_SHORT = { info: 'Info', rank: 'Scores', act: 'Signal', chart: 'Chart', short: 'Short %', long: 'Long %',
-      fwd: 'Fwd', rel: 'Range', risk: 'Risk', react: 'React', trend: 'Trend', size: 'Scale', value: 'Value',
-      profit: 'Profit', growth: 'Growth', finpos: 'Fin pos', divs: 'Divs', report: 'Reports', lrun: 'Long run',
-      own: 'Owners', aier: 'AI earnings' };
+      fwd: 'Fwd', rel: 'Range', risk: 'Risk', react: 'React', trend: 'Trend', size: 'Income', value: 'Value',
+      profit: 'Profit', growth: 'Growth', finpos: 'Balance', cflow: 'Cash', divs: 'Divs', report: 'Reports', lrun: 'Long run',
+      own: 'Owners', aier: 'Latest Q' };
     function gmMeasure() {
       const wrap = tableWrap();
       if (!wrap) return null;
