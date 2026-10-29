@@ -878,6 +878,10 @@ function columnRows(releases, earnBySymbol) {
     // The guidance items themselves stay off the column (guideRead carries
     // what the columns show): the figure is fetched by every screener load.
     for (const k of ['problems', 'exhibit', 'accn', 'secForm', 'secCheckedAt', 'guides', 'epsGuidePrior', 'drivers']) delete f[k];
+    // The statements' lines the four columns do not read (2026-10-29): the
+    // stock page has them in full; the figure stays small.
+    for (const k of ['ocf', 'ocfPrior', 'capex', 'capexPrior', 'capexLabel', 'fcfCalcPrior', 'ebitda', 'ebitdaPrior', 'ebitdaLabel', 'dilShares', 'dilSharesPrior',
+      'bsDebtCur', 'bsDebtLt', 'bsCurAssets', 'bsCurLiab', 'bsAssets', 'bsEquity', 'bsAsOf', 'stmtRead']) delete f[k];
     if (f.guideRead && f.guideRead.revQ) f.guideRead.revQ = Object.assign({}, f.guideRead.revQ, { sentence: undefined });
     out[sym] = f;
   }

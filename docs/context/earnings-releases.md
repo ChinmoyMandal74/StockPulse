@@ -418,3 +418,10 @@ The owner: "check the financials as reported in trading view .. does it show the
 **Days from the release to the filing:** same day 48%, within a week 83%, median 1, 90th percentile 13. Quarters one to three (10-Q): same day 53%, median 0, p90 8. Fourth quarter (10-K): same day 29%, median 5, p90 23. Financial companies: median 4, p90 22; everyone else median 0, p90 9.
 
 **Twelve months from four releases against Twelve Data** (its stored values run only from 2026-08-30, so 171 releases for revenue, 183 for net income): the provider was within 1% the day before the release for 10% and 6%; it reached ours within 1% afterwards for 87% and 84%, a median of 6 days after the release (90th percentile 16; same day 12% and 7%); 13% and 16% had not reached it by 2026-10-28.
+
+## The statements on the page and the screener, display only (2026-10-29)
+The owner took the recommendation: show the release figures first (display only), then measure what they would do to the Signal.
+- `ReleaseView.stmt(r)`: gross margin (gross profit as printed, else revenue less cost of revenue, said so), operating margin, free cash flow (theirs, else ours), cash with short-term investments, debt as the two lines printed. One implementation for both surfaces.
+- **Stock page**: `ReleaseView.stmtHtml(r)` draws "From the statements, balance sheet at <date>" under a release's six cards: gross and operating margin with the change in points, cash, debt (the hover says companies draw these lines differently and the 10-Q's total can differ), equity, total assets, diluted shares. Styled once in app.css (`.rv-st`). Nothing for a release not read for them.
+- **Screener**: four columns in Last Earning AI Extracted (see `column-groups.md`), each cell's hover saying where it comes from. `columnRows` drops the statement lines the columns do not read, so the stored figure every screener load fetches stays small.
+- Never the Signal: these are `er*` fields merged after the Signal is scored, as the rest of the group.

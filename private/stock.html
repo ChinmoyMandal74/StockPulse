@@ -3646,6 +3646,7 @@
             + fig('EPS, adjusted', r.epsAdj == null ? '—' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? sub('none given') : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' — leaves out ' + r.epsAdjExcludes : '')), '--sand')
             + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut), '--slate')
             + '</div>'
+            + RV.stmtHtml(r)
             // The guidance: its label (the owner's colours), the company's words,
             // the figures as a grid of measure by period (the sentence when the
             // items were never read), and the two readings where they can be measured.

@@ -726,3 +726,12 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rv-drv-col li { font-size: 13px; line-height: 1.45; color: var(--muted); }
 .rv-drv-col p { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
 @media (max-width: 560px) { .rv-drv { grid-template-columns: 1fr; } }
+/* From the statements (2026-10-29): margins and the balance sheet from the
+   release, one quiet row of small figures under a release's six cards. */
+.rv-st { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 10px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.rv-st-h { display: block; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.rv-st-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px 16px; margin-top: 8px; }
+.rv-st-g > div { min-width: 0; }
+.rv-st-k { display: block; font-size: 11.5px; color: var(--muted); }
+.rv-st-g b { display: block; font: 600 15px var(--mono); color: var(--text); }
+.rv-st-s { display: block; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

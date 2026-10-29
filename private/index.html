@@ -1597,7 +1597,7 @@
         <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="16">Long run</th>
         <th class="group grp-own" data-group="own" colspan="14">Ownership</th>
-        <th class="group grp-aier" data-group="aier" colspan="21">Last Earning AI Extracted</th>
+        <th class="group grp-aier" data-group="aier" colspan="25">Last Earning AI Extracted</th>
         <th rowspan="2"></th>
       </tr>
       <tr>
@@ -1755,6 +1755,10 @@
         <th class="grp-aier" data-key="erOpYoY" title="Operating income against the same quarter a year earlier. Blank where the earlier quarter was a loss: from a loss there is no rate. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Op. inc.<br>YoY</th>
         <th class="grp-aier" data-key="erNetIncome" title="GAAP net income (loss) attributable to the company for the quarter, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Net<br>income</th>
         <th class="grp-aier" data-key="erNiYoY" title="Net income against the same quarter a year earlier. Blank where the earlier quarter was a loss. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">NI<br>YoY</th>
+        <th class="grp-aier" data-key="erGrossMargin" title="Gross profit over revenue for the quarter: gross profit as the release prints it, or revenue less its cost of revenue where it prints that instead. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Gross<br>margin</th>
+        <th class="grp-aier" data-key="erOpMargin" title="Income from operations over revenue for the quarter, both as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Op.<br>margin</th>
+        <th class="grp-aier" data-key="erFcf" title="Free cash flow for the quarter: the company’s own figure where the release states one; otherwise worked out here as operating cash flow less capital expenditures from the release’s cash flow statement (hover a cell to see which). Not worked out for banks and insurers. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">FCF</th>
+        <th class="grp-aier" data-key="erCash" title="Cash and equivalents, with short-term investments where printed, from the balance sheet at the quarter’s end, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Cash</th>
         <th class="grp-aier" data-key="erEps" title="GAAP diluted earnings (loss) per share for the quarter, as printed. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>GAAP</th>
         <th class="grp-aier" data-key="erEpsYoY" title="GAAP diluted EPS against the same quarter a year earlier. Blank where the earlier quarter was a loss. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>YoY</th>
         <th class="grp-aier" data-key="erEpsAdj" title="The company’s own adjusted EPS for the quarter (its non-GAAP figure, or an EPS it gives excluding an item), under its own name, which the cell’s note gives with what it leaves out. Adjusted EPS has no standard definition. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">EPS<br>adj.</th>
@@ -3923,7 +3927,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="145">${s.error}</td>
+            <td class="na" colspan="149">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4108,7 +4112,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 170;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 174;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4292,7 +4296,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="147">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="151">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4432,10 +4436,10 @@
     // The group's NA run, each cell set as its header is: the text columns
     // (Reported, Result vs est., Guidance change, Outlook, 10-Q, Summary)
     // are left-set, and a right-set NA under them read as misplaced.
-    const AIER_LEFT = new Set([0, 13, 17, 18, 19, 20]);
+    const AIER_LEFT = new Set([0, 17, 21, 22, 23, 24]);
     function aierNa() {
       let h = '';
-      for (let i = 0; i < 21; i++) h += `<td class="na grp-aier${AIER_LEFT.has(i) ? ' left' : ''}" title="${NA_TIP}">NA</td>`;
+      for (let i = 0; i < 25; i++) h += `<td class="na grp-aier${AIER_LEFT.has(i) ? ' left' : ''}" title="${NA_TIP}">NA</td>`;
       return h;
     }
     function aierCells(s) {
@@ -4459,6 +4463,10 @@
         signedPctCell(s.erOpYoY, 'grp-aier', 'Operating income against the same quarter a year earlier'),
         money(s.erNetIncome, 'Net income for the quarter'),
         signedPctCell(s.erNiYoY, 'grp-aier', 'Net income against the same quarter a year earlier'),
+        marginCell(s.erGrossMargin, 'grp-aier', s.erGrossMarginNote || ''),
+        marginCell(s.erOpMargin, 'grp-aier', s.erOpMarginNote || ''),
+        money(s.erFcf, s.erFcfNote || 'Free cash flow for the quarter'),
+        money(s.erCash, s.erCashNote || 'Cash at the quarter’s end'),
         eps(s.erEps, 'GAAP diluted EPS'),
         signedPctCell(s.erEpsYoY, 'grp-aier', 'GAAP diluted EPS against the same quarter a year earlier'),
         eps(s.erEpsAdj, (s.erEpsAdjLabel || 'Adjusted EPS') + (s.erEpsAdjExcludes ? ', leaving out ' + s.erEpsAdjExcludes : '') + '.'),

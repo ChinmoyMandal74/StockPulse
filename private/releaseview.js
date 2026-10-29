@@ -77,6 +77,46 @@
     if (r.fcfCalc == null) return sub('worked out: a year ago ' + money(r.fcfCalcPrior, r.currency), how);
     return sub('worked out' + (yr(r.fcfCalc, r.fcfCalcPrior) ? ': ' + yr(r.fcfCalc, r.fcfCalcPrior) : ''), how);
   }
+  // THE STATEMENTS' FIGURES (2026-10-29, the owner took "show them on the
+  // pages and the screener, display only"): margins from the release's own
+  // lines, cash, and free cash flow, theirs or ours. Gross profit as printed,
+  // else revenue less the cost of revenue (said so). A margin needs revenue
+  // above zero; a missing line is null, never zero.
+  const margin = (part, rev) => (part == null || !(rev > 0) ? null : part / rev * 100);
+  function stmt(r) {
+    const o = {};
+    const gp = r.grossProfit != null ? r.grossProfit : r.costRev != null && r.revenue != null ? r.revenue - r.costRev : null;
+    const gpP = r.grossProfitPrior != null ? r.grossProfitPrior : r.costRevPrior != null && r.revenuePrior != null ? r.revenuePrior - r.costRevPrior : null;
+    o.grossFrom = r.grossProfit != null ? 'gross profit as printed' : gp != null ? 'revenue less the cost of revenue as printed' : null;
+    o.gm = margin(gp, r.revenue); o.gmPrior = margin(gpP, r.revenuePrior);
+    o.om = margin(r.opIncome, r.revenue); o.omPrior = margin(r.opIncomePrior, r.revenuePrior);
+    const own = fcfOwn(r);
+    o.fcf = own ? r.fcf : r.fcfCalc != null ? r.fcfCalc : null;
+    o.fcfOurs = !own && r.fcfCalc != null;
+    o.cash = r.bsCash == null && r.bsSti == null ? null : (r.bsCash || 0) + (r.bsSti || 0);
+    o.debt = r.bsDebtCur == null && r.bsDebtLt == null ? null : (r.bsDebtCur || 0) + (r.bsDebtLt || 0);
+    return o;
+  }
+  const pts = (a, b) => (a == null || b == null ? '' : (a - b > 0 ? '+' : a - b < 0 ? MINUS : '') + Math.abs(a - b).toFixed(1) + ' pts on a year ago');
+  const pc1 = (v) => (v == null ? DASH : (v < 0 ? MINUS : '') + Math.abs(v).toFixed(1) + '%');
+  // ONE LINE OF THE STATEMENTS under the six figures on the stock page: the
+  // margins with their change, and the balance sheet at the quarter's end.
+  // Empty for a release not read for them. Styled once in app.css (.rv-st).
+  function stmtHtml(r) {
+    if (!r || r.stmtRead !== 1) return '';
+    const o = stmt(r), cur = r.currency;
+    const cell = (k, v, sub, title) => '<div' + (title ? ' title="' + esc(title) + '"' : '') + '><span class="rv-st-k">' + k + '</span><b>' + esc(v) + '</b>' + (sub ? '<span class="rv-st-s">' + esc(sub) + '</span>' : '') + '</div>';
+    const cells = [];
+    if (o.gm != null) cells.push(cell('Gross margin', pc1(o.gm), pts(o.gm, o.gmPrior), 'Worked out from ' + o.grossFrom + ', over revenue.'));
+    if (o.om != null) cells.push(cell('Operating margin', pc1(o.om), pts(o.om, o.omPrior), 'Income from operations over revenue, both as printed.'));
+    if (o.cash != null) cells.push(cell('Cash', money(o.cash, cur), r.bsSti != null ? 'with short-term investments' : '', 'Cash and equivalents ' + money(r.bsCash, cur) + (r.bsSti != null ? ', short-term investments ' + money(r.bsSti, cur) : '') + ', as printed.'));
+    if (o.debt != null) cells.push(cell('Debt', money(o.debt, cur), 'current and long-term lines', 'The release’s current and long-term debt lines as printed (' + money(r.bsDebtCur, cur) + ' and ' + money(r.bsDebtLt, cur) + '). Companies draw these lines differently; the 10-Q’s total can differ.'));
+    if (r.bsEquity != null) cells.push(cell('Equity', money(r.bsEquity, cur), '', 'Stockholders’ equity attributable to the company, as printed.'));
+    if (r.bsAssets != null) cells.push(cell('Total assets', money(r.bsAssets, cur), '', 'As printed.'));
+    if (r.dilShares != null) cells.push(cell('Diluted shares', (r.dilShares / 1e6).toLocaleString('en-US', { maximumFractionDigits: r.dilShares < 1e8 ? 1 : 0 }) + 'M', r.dilSharesPrior != null ? 'a year ago ' + (r.dilSharesPrior / 1e6).toLocaleString('en-US', { maximumFractionDigits: r.dilSharesPrior < 1e8 ? 1 : 0 }) + 'M' : '', 'Weighted-average diluted shares for the quarter, as printed.'));
+    if (!cells.length) return '';
+    return '<div class="rv-st"><span class="rv-st-h">From the statements' + (r.bsAsOf ? ', balance sheet at ' + esc(shortDay(r.bsAsOf)) : '') + '</span><div class="rv-st-g">' + cells.join('') + '</div></div>';
+  }
   // Figures the release did not contain as given (the summary's own note is not one).
   const refused = (r) => (r.problems || []).filter((p) => !/^summary/.test(p));
 
@@ -87,7 +127,7 @@
   // change off a loss or a zero is no percentage, as everywhere.
   const yoy = (a, b) => (a == null || b == null || !(b > 0) ? null : (a / b - 1) * 100);
   const FIELD_KEYS = ['erFiled', 'erPeriodEnd', 'erPeriodLabel', 'erCurrency', 'erUrl', 'erRevenue', 'erRevYoY', 'erOpIncome', 'erOpYoY', 'erNetIncome', 'erNiYoY',
-    'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erVsEstWord', 'erGuideVsQ', 'erGuideVsQNote', 'erEpsGuideVsFy', 'erEpsGuideNote', 'erGuideChange', 'erGuideChangeQuote', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
+    'erGrossMargin', 'erGrossMarginNote', 'erOpMargin', 'erOpMarginNote', 'erFcf', 'erFcfNote', 'erCash', 'erCashNote', 'erEps', 'erEpsYoY', 'erEpsAdj', 'erEpsAdjYoY', 'erEpsAdjLabel', 'erEpsAdjExcludes', 'erEst', 'erVsEst', 'erVsEstBasis', 'erVsEstWord', 'erGuideVsQ', 'erGuideVsQNote', 'erEpsGuideVsFy', 'erEpsGuideNote', 'erGuideChange', 'erGuideChangeQuote', 'erGuide', 'erTenQ', 'erTenQNote', 'erSummary'];
   const TENQ_WORD = { match: 'Matches', differs: 'Differs', none: 'Not comparable' };
   function tenQText(r) {
     if (!r || !r.secCheck) return 'The quarter’s 10-Q is not filed yet, or not read yet.';
@@ -130,7 +170,13 @@
     Object.assign(o, {
       erFiled: r.filed || null, erPeriodEnd: r.periodEnd || null, erPeriodLabel: r.periodLabel || null, erCurrency: r.currency || null, erUrl: r.url || null,
       erRevenue: r.revenue, erRevYoY: yoy(r.revenue, r.revenuePrior), erOpIncome: r.opIncome, erOpYoY: yoy(r.opIncome, r.opIncomePrior),
-      erNetIncome: r.netIncome, erNiYoY: yoy(r.netIncome, r.netIncomePrior), erEps: r.epsGaap, erEpsYoY: yoy(r.epsGaap, r.epsGaapPrior),
+      erNetIncome: r.netIncome, erNiYoY: yoy(r.netIncome, r.netIncomePrior),
+      ...(() => { const st = stmt(r); return {
+        erGrossMargin: st.gm, erGrossMarginNote: st.gm == null ? null : 'Gross margin, worked out from ' + st.grossFrom + ' over revenue' + (st.gmPrior != null ? '; ' + pc1(st.gmPrior) + ' a year earlier.' : '.'),
+        erOpMargin: st.om, erOpMarginNote: st.om == null ? null : 'Income from operations over revenue' + (st.omPrior != null ? '; ' + pc1(st.omPrior) + ' a year earlier.' : '.'),
+        erFcf: st.fcf, erFcfNote: st.fcf == null ? null : st.fcfOurs ? 'Worked out here: operating cash flow less capital expenditures from the release’s cash flow statement' + (r.fcfCalcFrom === 'ytd' ? ' (the year to date less the previous release’s).' : '.') + ' The release states no free cash flow.' : 'The company’s own figure: “' + (r.fcfLabel || 'Free cash flow') + '”.',
+        erCash: st.cash, erCashNote: st.cash == null ? null : 'Cash and equivalents' + (r.bsSti != null ? ' with short-term investments' : '') + ' at the quarter’s end, as printed.' }; })(),
+      erEps: r.epsGaap, erEpsYoY: yoy(r.epsGaap, r.epsGaapPrior),
       erEpsAdj: r.epsAdj, erEpsAdjYoY: yoy(r.epsAdj, r.epsAdjPrior), erEpsAdjLabel: r.epsAdj != null ? r.epsAdjLabel || null : null, erEpsAdjExcludes: r.epsAdj != null ? r.epsAdjExcludes || null : null,
       erEst: pv && pv.estimate != null ? pv.estimate : null, erVsEst: vs == null ? null : Math.round((vs - pv.estimate) * 100) / 100, erVsEstBasis: basis, erVsEstWord: vs == null ? null : vsEstWord(vs, pv.estimate),
       erGuideVsQ: gr ? gr.revVsQ : mid != null && r.revenue > 0 ? (mid / r.revenue - 1) * 100 : null,
@@ -233,5 +279,5 @@
       guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
       tenQ: r.secCheck || null };
   }
-  root.ReleaseView = { esc, money, eps, chg, fcfValue, fcfSub, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
+  root.ReleaseView = { esc, money, eps, chg, fcfValue, fcfSub, stmt, stmtHtml, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);
