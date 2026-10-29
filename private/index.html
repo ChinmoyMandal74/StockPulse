@@ -3952,7 +3952,9 @@
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
         // The owner's source rule (sourcerule.js): where the cell's figure came
         // from, and what Twelve Data said, for the fields the rule sets.
-        const srcT = (k) => (!asOfDate && RowCard.srcNote(s, k)) || cacheTitle;
+        // Every company-figure hover opens with where the figure came from.
+        const srcT = (k) => (asOfDate ? cacheTitle : 'Source: ' + RowCard.srcLabel(s, k) + '. ' + (RowCard.srcNote(s, k) || cacheTitle));
+        const tdT = asOfDate ? cacheTitle : 'Source: Twelve Data. ' + cacheTitle;
         // Read ONCE per row, not per cell: 36 of them ask.
         const isFund = RowCard.isFund(s);
         return `<tr style="--i:${i}">
@@ -3960,11 +3962,11 @@
           ${shortNameCell(s)}
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
           <td class="grp-info"${attr(liveTitle)}>${price != null ? curSym(s.currency) + price : '—'}</td>
-          ${classCell('secval', s.sector, 'sector', '', cacheTitle)}
-          ${classCell('indval', s.industry, 'industry', ' industry', s.industry || cacheTitle)}
+          ${classCell('secval', s.sector, 'sector', '', tdT)}
+          ${classCell('indval', s.industry, 'industry', ' industry', asOfDate ? (s.industry || cacheTitle) : 'Source: Twelve Data. ' + (s.industry || cacheTitle))}
           ${exchangeCell(s)}
           ${instrumentCell(s)}${filerCell(s)}${spCell(s)}
-          <td class="grp-info"${attr(cacheTitle)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
+          <td class="grp-info"${attr(tdT)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
           ${capBandCell(s)}
           ${newsCell(s)}
           ${toneCell(s)}
@@ -4037,14 +4039,14 @@
           ${capCell(s.revenueTtm, s.currency, 'grp-size', srcT('revenueTtm'))}
           ${capCell(s.grossProfitTtm, s.currency, 'grp-size', srcT('grossProfitTtm'))}
           ${capCell(s.netIncomeTtm, s.currency, 'grp-size', srcT('netIncomeTtm'))}
-          ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.revenuePerEmployee, s.currency, 'grp-size', cacheTitle)}
+          ${capCell(s.ebitda, s.currency, 'grp-size', tdT)}
+          ${capCell(s.revenuePerEmployee, s.currency, 'grp-size', tdT)}
           ${numCell(s.dilutedEpsTtm, 'grp-size', srcT('dilutedEpsTtm'))}`}
-          ${isFund ? naRun(1, 'grp-value') : numCell(s.forwardPe, 'grp-value', cacheTitle)}
-          ${numCell(s.trailingPe, 'grp-value', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-value') : numCell(s.forwardPe, 'grp-value', tdT)}
+          ${numCell(s.trailingPe, 'grp-value', tdT)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.peLive, 'grp-value', liveTitle)}
           ${isFund ? naRun(1, 'grp-value') : peerCell(s, 'grp-value')}
-          ${isFund ? naRun(1, 'grp-value') : pegCell(s.peg, 'grp-value', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-value') : pegCell(s.peg, 'grp-value', tdT)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToBook, 'grp-value', srcT('priceToBook'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToSales, 'grp-value', srcT('priceToSales'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.evToSales, 'grp-value', liveTitle)}
@@ -4058,7 +4060,7 @@
           ${marginCell(s.fcfMargin, 'grp-profit', srcT('fcfMargin'))}
           ${marginChgCell(s)}
           ${pctCell(s.roe, 'grp-profit', srcT('roe'))}
-          ${pctCell(s.roa, 'grp-profit', cacheTitle)}`}
+          ${pctCell(s.roa, 'grp-profit', tdT)}`}
           ${isFund ? naRun(2, 'grp-growth') : `
           ${pctCell(s.revenueGrowthYoY, 'grp-growth', srcT('revenueGrowthYoY'))}
           ${pctCell(s.earningsGrowthYoY, 'grp-growth', srcT('earningsGrowthYoY'))}`}
@@ -4073,8 +4075,8 @@
           ${isFund ? naRun(2, 'grp-cflow') : `
           ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-cflow', srcT('operatingCashFlowTtm'))}
           ${capCell(s.fcfTtm, s.currency, 'grp-cflow', srcT('fcfTtm'))}`}
-          ${marginCell(s.divYield, 'grp-divs', cacheTitle)}
-          ${isFund ? naRun(1, 'grp-divs') : marginCell(s.payoutRatio, 'grp-divs', cacheTitle)}
+          ${marginCell(s.divYield, 'grp-divs', tdT)}
+          ${isFund ? naRun(1, 'grp-divs') : marginCell(s.payoutRatio, 'grp-divs', tdT)}
           ${isFund ? naRun(1, 'grp-divs') : buybackCell(s)}
           ${isFund ? naRun(1, 'grp-divs') : magPctCell(s.shareholderYield, 'grp-divs', s.shareholderYield == null ? 'No buyback line filed, or no dividend yield on record' : 'Dividend yield plus buyback yield')}
           ${isFund ? naRun(1, 'grp-report') : periodCell(s)}
@@ -4095,12 +4097,12 @@
           ${isFund ? naRun(13, 'grp-own') : `
           ${bigNumCell(s.sharesOutstanding, null, 'grp-own', srcT('sharesOutstanding'))}
           ${signedPctCell(s.sharesChg, 'grp-own', 'Diluted share count against the fiscal year before')}
-          ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
-          ${numCell(s.shortRatio, 'grp-own', cacheTitle)}
-          ${shortCell(s.shortPctFloat, 'grp-own', cacheTitle)}
-          ${shortCell(s.shortPctOutstanding, 'grp-own', cacheTitle)}
-          ${marginCell(s.insiderPct, 'grp-own', cacheTitle)}
-          ${marginCell(s.institutionPct, 'grp-own', cacheTitle)}
+          ${bigNumCell(s.floatShares, null, 'grp-own', tdT)}
+          ${numCell(s.shortRatio, 'grp-own', tdT)}
+          ${shortCell(s.shortPctFloat, 'grp-own', tdT)}
+          ${shortCell(s.shortPctOutstanding, 'grp-own', tdT)}
+          ${marginCell(s.insiderPct, 'grp-own', tdT)}
+          ${marginCell(s.institutionPct, 'grp-own', tdT)}
           ${numCell(s.insDays, 'grp-own', s.insDays == null ? '' : 'Insiders\u2019 shares over the average day\u2019s volume (20 sessions)')}
           ${numCell(s.instDays, 'grp-own', s.instDays == null ? '' : 'Institutions\u2019 shares over the average day\u2019s volume (20 sessions)')}
           ${rangeCell(s.instManagers, 'grp-own', s.instPeriod ? 'Managers reporting a holding at ' + s.instPeriod : '')}

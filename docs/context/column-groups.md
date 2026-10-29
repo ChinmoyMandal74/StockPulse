@@ -932,3 +932,7 @@ The owner: "need to separate this hide column feature for admin and users, can y
 ### Op Margin is twelve months (2026-10-29)
 
 The header's period tag reads **TTM** (was "latest Q"): the owner's source rule (`sourcerule.js`, `data-sources.md`) works operating margin out over four quarters for about 900 companies; where neither the release nor the filings give four quarters the cell keeps Twelve Data's figure, which is mostly one quarter's, and its hover says so. Fourteen fundamentals cells now take their title from `RowCard.srcNote` (`srcT` in `render`): which source and what Twelve Data said. No column added or moved; the counts (`PAD_SPAN` and the fixed rows) are unchanged.
+
+### Hovers open with the source (2026-10-29)
+
+The owner: start the screener hover with "Source: <source>" and then the existing text. Every company-figure cell now does: the rule's fields through `srcT` (`RowCard.srcLabel`: SEC filings (10-Q, 10-K); Results release; Results release and SEC filings; SEC filings and results release; Results releases; None; or Twelve Data where the rule left the field alone), and the fields only Twelve Data has (sector, industry, market cap, EBITDA, revenue per employee, forward and trailing P/E, PEG, ROA, dividend yield, payout, float, short ratio and short %, insiders, institutions) through `tdT`, "Source: Twelve Data." before the cache line. Not in a rewound (as-of) table, where fundamentals are hidden.

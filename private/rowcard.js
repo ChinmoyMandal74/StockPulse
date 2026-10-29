@@ -1788,6 +1788,21 @@
   const SRC_PCT = { operatingMargin: 1, netCashPct: 1, grossMargin: 1, profitMargin: 1, fcfMargin: 1, roe: 1, fcfYield: 1, revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
   const SRC_GROWTH = { revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
   const SRC_FCF = { fcfTtm: 1, fcfMargin: 1, fcfYield: 1 };
+  // The short name of a figure's source, for the "Source: ..." that opens a
+  // screener cell's hover: the rule's code, or Twelve Data where the rule left
+  // the field alone.
+  function srcLabel(s, key) {
+    const code = s && s.src ? s.src[key] : null;
+    if (!code) return 'Twelve Data';
+    if (key === 'sharesOutstanding') return 'SEC filing (cover page)';
+    return {
+      s: 'SEC filings (10-Q, 10-K)',
+      r: SRC_TTM[key] ? 'Results release and SEC filings' : 'Results release',
+      m: 'SEC filings and results release',
+      o: 'Results releases',
+      n: 'None',
+    }[code] || 'Twelve Data';
+  }
   function srcNote(s, key) {
     const code = s && s.src ? s.src[key] : null;
     if (!code) return '';
@@ -1810,7 +1825,7 @@
   }
 
   global.RowCard = {
-    srcNote,
+    srcNote, srcLabel,
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, reutersUrl, mwUrl, secUrl, googleExchange, canHover,
     // used by the stock page
