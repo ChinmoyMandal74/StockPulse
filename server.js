@@ -13165,18 +13165,24 @@ app.put('/api/tile-config', requireAdmin, route(async (req, res) => {
 
 app.get('/api/columns', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ columns: columnCatalogue(), hidden: await store.readHiddenColumns() });
+  // Two lists since 2026-10-28: `hidden` is what members and guests see,
+  // `adminHidden` what an admin's own screener shows (null until first saved,
+  // meaning the same as members).
+  const [hidden, adminHidden] = await Promise.all([store.readHiddenColumns(), store.readHiddenColumnsAdmin()]);
+  res.json({ columns: columnCatalogue(), hidden, adminHidden });
 }));
 
 app.put('/api/columns', requireAdmin, route(async (req, res) => {
   const known = new Set(columnCatalogue().map((c) => c.id));
   const asked = Array.isArray(req.body && req.body.hidden) ? req.body.hidden : null;
   if (!asked) return res.status(400).json({ error: 'Expected a hidden array.' });
+  const who = req.body.who === 'admin' ? 'admin' : 'members';
   // Only ids the table actually has, so the setting cannot rot into a list of
   // names nothing matches, and cannot be used as free storage.
-  const hidden = await store.writeHiddenColumns(asked.filter((x) => known.has(x)));
-  logAct(req, 'view', 'sitecols:' + hidden.length);
-  res.json({ ok: true, hidden });
+  const keep = asked.filter((x) => known.has(x));
+  const hidden = who === 'admin' ? await store.writeHiddenColumnsAdmin(keep) : await store.writeHiddenColumns(keep);
+  logAct(req, 'view', (who === 'admin' ? 'admincols:' : 'sitecols:') + hidden.length);
+  res.json({ ok: true, who, hidden });
 }));
 
 // The announcement. Read by everyone through /api/prefs; written only here.
@@ -13209,9 +13215,14 @@ app.get('/api/prefs', requireAuth, route(async (req, res) => {
   // screener already awaits it before its first render, and a second request
   // would paint the table and then drop a banner in above it. A failure to
   // read it must never cost anyone the screener, so it degrades to none.
-  const [siteHidden, tile, announcement] = await Promise.all([
-    store.readHiddenColumns(), tileConfig(), store.readAnnouncement().catch(() => null),
+  const [memberHidden, adminHidden, admin, tile, announcement] = await Promise.all([
+    store.readHiddenColumns(), store.readHiddenColumnsAdmin().catch(() => null), isAdmin(req).catch(() => false),
+    tileConfig(), store.readAnnouncement().catch(() => null),
   ]);
+  // AN ADMIN HAS THEIR OWN LIST (2026-10-28, the owner: "separate this hide
+  // column feature for admin and users"), set on /columns. Until it is first
+  // saved it is null and an admin sees the members' list, as before.
+  const siteHidden = admin && adminHidden ? adminHidden : memberHidden;
   // The card's chart ranges ride along too, so the screener's Tiles view and
   // the phone page offer the same windows without either restating the list.
   const ranges = CARD_RANGES.map((r) => ({ id: r.id, short: r.short, label: r.label, days: r.days }));

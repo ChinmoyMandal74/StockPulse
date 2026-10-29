@@ -71,6 +71,14 @@
     input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
     .empty, .error { padding: 26px; font-size: 13px; color: var(--muted); }
     .error { color: var(--red); }
+    /* Which list is being edited: members and guests, or the admin's own. */
+    .who { display: inline-flex; gap: 4px; padding: 4px; margin: 0 4px 14px; border-radius: 999px;
+           border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3%, transparent); }
+    .who button { border: 0; background: none; color: var(--muted); font: 500 13px var(--sans);
+                  padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+    .who button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); }
+    .who button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .who-said { margin: -4px 6px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 84ch; }
     .note { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 84ch; }
     @media (max-width: 768px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
   </style>
@@ -101,14 +109,22 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Admin</span>
       <h1>Screener columns</h1>
-      <p class="lede">Which columns the screener shows, for everyone. A ticked column is shown. This is the floor
-        under every account's own column views — a view cannot bring back a column hidden here.</p>
+      <p class="lede">Which columns the screener shows. Members and guests share one list; your own admin screener
+        has another. A ticked column is shown. Each list is the floor under that screener's column views: a view
+        cannot bring back a column hidden here.</p>
     </header>
+
+    <div class="who" role="group" aria-label="Whose screener">
+      <button type="button" data-who="members" aria-pressed="true">Members and guests</button>
+      <button type="button" data-who="admin" aria-pressed="false">Admin (you)</button>
+    </div>
+    <p class="who-said" id="whoSaid"></p>
 
     <div class="tools">
       <input type="search" id="q" placeholder="Find a column" aria-label="Find a column" />
       <span class="count" id="count"></span>
       <button class="btn" id="all" type="button">Show all</button>
+      <button class="btn" id="copy" type="button" hidden>Copy members' list</button>
       <button class="btn" id="reset" type="button">Undo changes</button>
     </div>
 
@@ -119,8 +135,8 @@
 
     <p class="note">Nothing is deleted: the data keeps being recorded and a column comes back the moment it is
       ticked again. Symbol, Name and the forward-returns columns are not listed — the first two are the table's
-      anchors and the last follow the as-of view. Hiding applies to every account including this one, and a
-      screener tab left open keeps the old set until it is reloaded.</p>
+      anchors and the last follow the as-of view. Members and guests see the first list; every admin account sees the
+      second. A screener tab left open keeps the old set until it is reloaded.</p>
   </main>
 
   <script>
@@ -146,10 +162,31 @@
       rel: '#22d3ee', trend: '#fbbf24', vol: '#f472b6', size: '#94a3b8', risk: '#fdba74', value: '#fb7185', profit: '#818cf8', growth: '#38bdf8', finpos: '#c4b5fd', divs: '#facc15', report: '#8b93a7', lrun: '#d6c58b', own: '#f0abfc', aier: '#93c5fd',
     };
     let cat = [];
-    let hidden = new Set();
-    let saved = new Set();          // what the server last confirmed, for Undo
+    // TWO LISTS (2026-10-28, the owner: "separate this hide column feature for
+    // admin and users"). Each keeps its own edits and its own last-saved copy,
+    // so switching tabs never loses an unsaved change. The admin list arrives
+    // null until first saved, which means "the same as members".
+    const lists = {
+      members: { hidden: new Set(), saved: new Set() },
+      admin: { hidden: new Set(), saved: new Set(), set: false },
+    };
+    let who = 'members';
+    const L = () => lists[who];
+    const isDirty = (x) => x.hidden.size !== x.saved.size || [...x.hidden].some((id) => !x.saved.has(id));
 
     function paint() {
+      const { hidden, saved } = L();
+      document.querySelectorAll('.who [data-who]').forEach((b) => {
+        const d = isDirty(lists[b.dataset.who]);
+        b.setAttribute('aria-pressed', String(b.dataset.who === who));
+        b.textContent = (b.dataset.who === 'admin' ? 'Admin (you)' : 'Members and guests') + (d ? ' ·' : '');
+      });
+      $('whoSaid').textContent = who === 'members'
+        ? 'What every member and guest sees on the screener.'
+        : lists.admin.set
+          ? 'What your own screener shows, and every admin account’s. Members do not see this list.'
+          : 'Not set yet, so your screener follows the members’ list. Save here to give it its own.';
+      $('copy').hidden = who !== 'admin';
       const q = $('q').value.trim().toLowerCase();
       const groups = [];
       for (const c of cat) {
@@ -172,36 +209,40 @@
 
       $('list').querySelectorAll('[data-col]').forEach((cb) =>
         cb.addEventListener('change', () => {
-          if (cb.checked) hidden.delete(cb.dataset.col); else hidden.add(cb.dataset.col);
+          if (cb.checked) L().hidden.delete(cb.dataset.col); else L().hidden.add(cb.dataset.col);
           paint();
         }));
       $('list').querySelectorAll('[data-group]').forEach((cb) =>
         cb.addEventListener('change', () => {
           for (const c of cat.filter((x) => x.group === cb.dataset.group)) {
-            if (cb.checked) hidden.delete(c.id); else hidden.add(c.id);
+            if (cb.checked) L().hidden.delete(c.id); else L().hidden.add(c.id);
           }
           paint();
         }));
 
       const n = hidden.size;
-      const dirty = n !== saved.size || [...hidden].some((id) => !saved.has(id));
+      // An admin list never saved is "dirty" the moment it is saved as is:
+      // saving the members' copy is how it gets a list of its own.
+      const dirty = isDirty(L()) || (who === 'admin' && !lists.admin.set);
       $('count').textContent = (n ? `${cat.length - n} of ${cat.length} shown · ${n} hidden` : `all ${cat.length} shown`)
-        + (dirty ? ' · unsaved' : '');
+        + (isDirty(L()) ? ' · unsaved' : '');
       $('save').disabled = !dirty;
-      $('reset').disabled = !dirty;
+      $('reset').disabled = !isDirty(L());
     }
 
     async function save() {
       $('save').disabled = true;
       say('Saving…');
       try {
-        const r = await api('PUT', '/api/columns', { hidden: [...hidden] });
-        hidden = new Set(r.hidden || []);
-        saved = new Set(r.hidden || []);
+        const r = await api('PUT', '/api/columns', { who, hidden: [...L().hidden] });
+        L().hidden = new Set(r.hidden || []);
+        L().saved = new Set(r.hidden || []);
+        if (who === 'admin') lists.admin.set = true;
+        const n = L().hidden.size;
+        const whom = who === 'admin' ? 'on admin screeners' : 'for members and guests';
         paint();
-        say(hidden.size
-          ? `Saved — ${hidden.size} column${hidden.size === 1 ? '' : 's'} hidden for everyone. Reload an open screener tab to see it.`
-          : 'Saved — every column is shown again. Reload an open screener tab to see it.', 'good');
+        say((n ? `Saved — ${n} column${n === 1 ? '' : 's'} hidden ${whom}.` : `Saved — every column is shown ${whom}.`)
+          + ' Reload an open screener tab to see it.', 'good');
       } catch (err) {
         say('Could not save: ' + err.message, 'bad');
         paint();
@@ -211,13 +252,20 @@
     (async function boot() {
       $('q').addEventListener('input', paint);
       $('save').addEventListener('click', save);
-      $('all').addEventListener('click', () => { hidden = new Set(); paint(); });
-      $('reset').addEventListener('click', () => { hidden = new Set(saved); paint(); say(''); });
+      $('all').addEventListener('click', () => { L().hidden = new Set(); paint(); });
+      $('reset').addEventListener('click', () => { L().hidden = new Set(L().saved); paint(); say(''); });
+      $('copy').addEventListener('click', () => { lists.admin.hidden = new Set(lists.members.hidden); paint(); });
+      document.querySelectorAll('.who [data-who]').forEach((b) =>
+        b.addEventListener('click', () => { who = b.dataset.who; say(''); paint(); }));
       try {
         const r = await api('GET', '/api/columns');
         cat = r.columns || [];
-        hidden = new Set(r.hidden || []);
-        saved = new Set(r.hidden || []);
+        lists.members.hidden = new Set(r.hidden || []);
+        lists.members.saved = new Set(r.hidden || []);
+        lists.admin.set = Array.isArray(r.adminHidden);
+        const a = lists.admin.set ? r.adminHidden : (r.hidden || []);
+        lists.admin.hidden = new Set(a);
+        lists.admin.saved = new Set(a);
         paint();
       } catch (err) {
         $('list').innerHTML = `<div class="error">Could not read the column list: ${we(err.message)}</div>`;

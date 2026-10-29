@@ -2993,6 +2993,31 @@ async function writeHiddenColumns(ids) {
   return list;
 }
 
+// The ADMIN's own hidden columns (2026-10-28, the owner: "need to separate
+// this hide column feature for admin and users"). hidden_columns above is
+// now what members and guests see; this is what an admin's screener shows.
+// NULL until first saved, meaning "the same as members": the admin saw the
+// members' list until this existed, and nothing changes until it is set.
+async function readHiddenColumnsAdmin() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'hidden_columns_admin'");
+  if (!r.rows.length) return null;
+  try {
+    const v = JSON.parse(r.rows[0].value || 'null');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : null;
+  } catch { return null; }
+}
+
+async function writeHiddenColumnsAdmin(ids) {
+  await init();
+  const list = [...new Set((ids || []).filter((x) => typeof x === 'string'))];
+  await db.execute({
+    sql: "insert or replace into app_meta (key, value) values ('hidden_columns_admin', ?)",
+    args: [JSON.stringify(list)],
+  });
+  return list;
+}
+
 // How far a SINGLE-ROUND price refresh has walked the universe.
 //
 // The paced price slice already existed, but its cursor lived on
@@ -8561,6 +8586,8 @@ module.exports = {
   readAnnouncement,
   writeAnnouncement,
   writeHiddenColumns,
+  readHiddenColumnsAdmin,
+  writeHiddenColumnsAdmin,
   readPriceCursor,
   writePriceCursor,
   writeEarnings,

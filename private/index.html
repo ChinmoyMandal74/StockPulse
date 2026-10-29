@@ -5086,7 +5086,7 @@
     // (v1): a view hides columns rather than rebuilding the table, through
     // nth-child rules in #viewStyle, which the windowed rows and the filter
     // row pick up without any per-cell work.
-    // Columns the owner has hidden for EVERYONE, from /api/prefs (site setting,
+    // Columns hidden on /columns, from /api/prefs: the members list, or for an admin their own (site setting,
     // not a pref). They are hidden in Standard and inside every view, so a view
     // or a screen cannot bring back a column the site has taken away.
     let siteHidden = new Set();
