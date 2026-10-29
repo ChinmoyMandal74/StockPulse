@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T15:22:04.612Z",
+ "builtAt": "2026-10-29T15:43:01.979Z",
  "secCompanies": 1150,
  "secSameQuarter": 78.9,
  "secSameQuarterN": 1125,
@@ -24,6 +24,122 @@
   "every Long run column",
   "13F holders and 13F shares chg",
   "Insider net, Short build, Last 8-K and 5% filing"
+ ],
+ "plan": [
+  {
+   "t": "One period rule for the screener",
+   "d": "Twelve months (TTM) for size, valuation, margins and returns; the quarter on the same quarter a year earlier for growth and the Last Earning AI Extracted group; at quarter end for the balance sheet; today for anything on the price; forward only for analysts’ figures."
+  },
+  {
+   "t": "Say the period in every header and hover",
+   "d": "Display text only, as the Proposed header shows; the stored group|label keys behind tiles and the phone keep their names."
+  },
+  {
+   "t": "Fix Operating margin",
+   "d": "Twelve Data’s is mostly one quarter’s, beside twelve-month margins. Twelve months from the SEC data. Not a Signal input."
+  },
+  {
+   "t": "Take the statement figures from the SEC data, the release first",
+   "d": "The columns marked SEC filings below, display only. Signal inputs among them wait for the owner."
+  },
+  {
+   "t": "Decide the free cash flow measure",
+   "d": "Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it."
+  },
+  {
+   "t": "Define total debt once",
+   "d": "Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted."
+  },
+  {
+   "t": "Extract the new data items",
+   "d": "Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field."
+  }
+ ],
+ "extracts": [
+  {
+   "id": "da",
+   "columns": [
+    "EBITDA",
+    "EV/EBITDA"
+   ],
+   "item": "Depreciation and amortization",
+   "from": "SEC data: add the concept to secfacts.js (DepreciationDepletionAndAmortization, DepreciationAndAmortization), then one re-read of every company (sec-reread.js); the release’s cash flow statement for the 10-Q gap",
+   "cost": "No API credits: about 1,150 SEC fetches, one at a time. The release side adds a field to the second request (about $8 to backfill since July 2025).",
+   "unlocks": "EBITDA, EV/EBITDA"
+  },
+  {
+   "id": "shout",
+   "columns": [
+    "Market Cap",
+    "Net cash / share",
+    "Shares out",
+    "Book value/share",
+    "Short % out",
+    "Institutions"
+   ],
+   "item": "Shares outstanding (the 10-Q and 10-K cover page)",
+   "from": "SEC data: dei:EntityCommonStockSharesOutstanding, added to secfacts.js, one re-read",
+   "cost": "No API credits: one SEC re-read.",
+   "unlocks": "Market cap, Shares out, Book value/share, Net cash / share, Short % out"
+  },
+  {
+   "id": "sti",
+   "columns": [
+    "Cash"
+   ],
+   "item": "Short-term investments",
+   "from": "SEC data: ShortTermInvestments, MarketableSecuritiesCurrent, AvailableForSaleSecuritiesDebtSecuritiesCurrent, added to secfacts.js, one re-read (the release already gives it)",
+   "cost": "No API credits: one SEC re-read.",
+   "unlocks": "Cash on the same footing as Twelve Data’s total cash, Net cash"
+  },
+  {
+   "id": "debt",
+   "columns": [
+    "Enterprise value",
+    "EV / sales",
+    "Debt",
+    "Net cash",
+    "Debt / equity",
+    "Net cash %"
+   ],
+   "item": "The rest of the debt lines",
+   "from": "SEC data: LongTermDebtCurrent, ShortTermBorrowings, CommercialPaper (and finance lease liabilities, kept apart), added to secfacts.js, one re-read. Today the stored debt is long-term debt only (LongTermDebtNoncurrent)",
+   "cost": "No API credits: one SEC re-read.",
+   "unlocks": "One defined total debt: Debt, Net cash, Debt / equity, Enterprise value and the multiples on it"
+  },
+  {
+   "id": "divdecl",
+   "columns": [
+    "Dividend yield",
+    "Dividend rate",
+    "Ex-dividend",
+    "Dividend paid"
+   ],
+   "item": "The dividend declared per share, with its record and payment dates",
+   "from": "The release (many announce the next dividend), added to the second request; a separate dividend 8-K otherwise",
+   "cost": "About $8 to backfill the releases since July 2025; a few cents a day after that.",
+   "unlocks": "Forward Dividend yield and Dividend rate, Ex-dividend and Dividend paid dates"
+  },
+  {
+   "id": "emp",
+   "columns": [
+    "Revenue / employee"
+   ],
+   "item": "Employees",
+   "from": "SEC data: dei:EntityNumberOfEmployees where a filer tags it (few do); otherwise the 10-K text, once a year",
+   "cost": "Coverage uncertain; measure before building.",
+   "unlocks": "Revenue / employee"
+  },
+  {
+   "id": "float",
+   "columns": [
+    "Float"
+   ],
+   "item": "Public float",
+   "from": "SEC data: dei:EntityPublicFloat on the 10-K cover, once a year, in dollars",
+   "cost": "No API credits; but annual and in dollars, so a poor substitute.",
+   "unlocks": "Float, Short % float (only roughly)"
+  }
  ],
  "rows": [
   {
@@ -70,6 +186,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance. Measured: SEC agrees with Twelve Data on 35.6%, the release on 35.5%."
+   },
+   "proposal": {
+    "now": "Today",
+    "to": "Today",
+    "periodChange": false,
+    "header": "Market cap",
+    "text": "Keep Twelve Data until shares outstanding are extracted; then price × the cover-page count is an exact alternative. A Signal input: changing its source is the owner’s decision.",
+    "extract": "shout"
    }
   },
   {
@@ -116,6 +240,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,076 companies; Twelve Data agrees on 83.1% within 2% (median gap 0%), most of the rest is banks and insurers (net revenue against total). The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Revenue TTM",
+    "text": "SEC four quarters, the release while the 10-Q is pending; Twelve Data where neither has it.",
+    "extract": null
    }
   },
   {
@@ -162,6 +294,14 @@
    "best": {
     "source": "SEC filings, Twelve Data where missing",
     "why": "The filing itself, so exact, but for 695 of 1,258 companies; Twelve Data for the rest. Twelve Data agrees on 73.2% within 2% (median gap 0.1%), what each counts in cost of revenue."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Gross profit TTM",
+    "text": "Say TTM in the header. SEC where it carries it (695 companies), Twelve Data for the rest.",
+    "extract": null
    }
   },
   {
@@ -208,6 +348,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,122 companies; Twelve Data agrees on 76.6% within 2% (median gap 0%), non-controlling interests or preferred dividends in or out. The release matches the 10-Q 90.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Net income TTM",
+    "text": "Say TTM in the header. SEC four quarters, the release first; say “attributable to the company” in the hover. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -254,6 +402,14 @@
    "best": {
     "source": "Your decision",
     "why": "Two measures: Twelve Data’s levered free cash flow, or operating cash flow less capex (SEC filings, exact; the release until the 10-Q). The Signal reads Twelve Data’s today. Measured: SEC agrees with Twelve Data on 3.2%, the release on 2.5%."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "FCF TTM",
+    "text": "Decide the measure first: levered (Twelve Data) or operating cash flow less capex (SEC, release first). If unlevered, call it “FCF TTM” and add “Levered FCF” as its own column if wanted. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -289,6 +445,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The filing sources have it only in part or on another definition. The release a median 1 day before the 10-Q (13 for the slowest tenth)."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "EBITDA TTM",
+    "text": "Build it as operating income plus depreciation and amortization from the filings, twelve months; until then keep Twelve Data. The companies’ adjusted EBITDA stays a release-only figure, labelled as theirs.",
+    "extract": "da"
    }
   },
   {
@@ -335,6 +499,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,120 companies; Twelve Data agrees on 90.4% within 2% (median gap 0%), restated cash flow statements. The release matches the 10-Q 96.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Op. cash flow TTM",
+    "text": "Say TTM. SEC four quarters, the release first.",
+    "extract": null
    }
   },
   {
@@ -358,6 +530,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Revenue / employee",
+    "text": "Keep Twelve Data’s head count unless a filing source covers enough companies.",
+    "extract": "emp"
    }
   },
   {
@@ -404,6 +584,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 28.8%, the release on 41.5%."
+   },
+   "proposal": {
+    "now": "Today",
+    "to": "Today",
+    "periodChange": false,
+    "header": "Enterprise value",
+    "text": "Keep Twelve Data until the debt lines are extracted; then market value + total debt − cash and short-term investments from the filings.",
+    "extract": "debt"
    }
   },
   {
@@ -427,6 +615,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Forward (next twelve months)",
+    "to": "Forward (next twelve months)",
+    "periodChange": false,
+    "header": "Fwd P/E",
+    "text": "Keep Twelve Data: analysts’ estimates have no filing source. Say “next twelve months” in the hover. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -473,6 +669,14 @@
    "best": {
     "source": "SEC filings, Twelve Data where missing",
     "why": "The filing itself, so exact, but for 855 of 1,162 companies; Twelve Data for the rest. Twelve Data agrees on 36.4% within 2% (median gap 3%), Twelve Data’s price is its own last pull, up to a week old."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Trailing P/E",
+    "text": "Merge with Live P/E or drop: Twelve Data’s uses its own week-old price. Live P/E on the SEC’s twelve-month EPS says the same thing better.",
+    "extract": null
    }
   },
   {
@@ -519,6 +723,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 855 companies; Twelve Data agrees on 81.1% within 2% (median gap 0.1%), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "P/E (TTM, today’s price)",
+    "text": "Today’s price over twelve-month diluted EPS from the SEC (release first).",
+    "extract": null
    }
   },
   {
@@ -542,6 +754,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Forward (next twelve months)",
+    "to": "Forward (next twelve months)",
+    "periodChange": false,
+    "header": "Fwd P/E vs peers",
+    "text": "Keep; say forward in the header, as it is built on forward P/E.",
+    "extract": null
    }
   },
   {
@@ -565,6 +785,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Forward (next twelve months)",
+    "to": "Forward (next twelve months)",
+    "periodChange": false,
+    "header": "PEG",
+    "text": "Keep Twelve Data: forecast growth.",
+    "extract": null
    }
   },
   {
@@ -611,6 +839,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,081 companies; Twelve Data agrees on 58.2% within 2% (median gap 1.4%), equity with or without non-controlling interests. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "P/B",
+    "text": "Market value over equity at quarter end from the SEC (release first). Say “book at quarter end” in the hover.",
+    "extract": null
    }
   },
   {
@@ -657,6 +893,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,074 companies; Twelve Data agrees on 62.4% within 2% (median gap 1.1%), as Revenue TTM. The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "P/S (TTM)",
+    "text": "Market value over SEC twelve-month revenue.",
+    "extract": null
    }
   },
   {
@@ -703,6 +947,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 27.4%, the release on 40.1%."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "EV / sales (TTM)",
+    "text": "After the debt lines: filing enterprise value over SEC twelve-month revenue.",
+    "extract": "debt"
    }
   },
   {
@@ -738,6 +990,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The filing sources have it only in part or on another definition. The release a median 1 day before the 10-Q (13 for the slowest tenth)."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "EV / EBITDA (TTM)",
+    "text": "After depreciation and the debt lines: both from the filings.",
+    "extract": "da"
    }
   },
   {
@@ -784,6 +1044,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,016 companies; Twelve Data agrees on 90.7% within 2% (median gap 0%), as Operating cash. The release matches the 10-Q 96.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "P / op cash (TTM)",
+    "text": "Market value over SEC twelve-month operating cash flow.",
+    "extract": null
    }
   },
   {
@@ -830,6 +1098,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,026 companies; Twelve Data agrees on 92.5% within 1 pt (median gap 0 pts), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Earnings yield (TTM)",
+    "text": "SEC twelve-month EPS over today’s price.",
+    "extract": null
    }
   },
   {
@@ -876,6 +1152,14 @@
    "best": {
     "source": "Your decision",
     "why": "As FCF TTM. Measured: SEC agrees with Twelve Data on 40.6%, the release on 42.1%."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "FCF yield (TTM)",
+    "text": "Follows the free cash flow decision.",
+    "extract": null
    }
   },
   {
@@ -922,6 +1206,14 @@
    "best": {
     "source": "SEC filings, Twelve Data where missing",
     "why": "The filing itself, so exact, but for 695 of 1,248 companies; Twelve Data for the rest. Twelve Data agrees on 75.8% within 1 pt (median gap 0.1 pts), what each counts in cost of revenue."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Gross margin TTM",
+    "text": "Say TTM. SEC where it carries gross profit or cost of revenue; Twelve Data for the rest. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -968,6 +1260,14 @@
    "best": {
     "source": "SEC filings",
     "why": "Twelve Data’s is mostly the latest quarter’s, not twelve months’; the filings give the twelve months exactly. Measured: SEC agrees with Twelve Data on 24.4%, the release on 26.5%."
+   },
+   "proposal": {
+    "now": "Mixed",
+    "to": "Twelve months",
+    "periodChange": true,
+    "header": "Op. margin TTM",
+    "text": "FIX: Twelve Data’s is mostly the latest quarter’s, beside twelve-month gross and profit margins. Make it twelve months from the SEC (operating income over revenue); the values will move. Not a Signal input.",
+    "extract": null
    }
   },
   {
@@ -1014,6 +1314,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,070 companies; Twelve Data agrees on 81.4% within 1 pt (median gap 0 pts), non-controlling interests in or out. The release matches the 10-Q 90.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Profit margin TTM",
+    "text": "Say TTM. SEC four quarters, release first. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1060,6 +1368,14 @@
    "best": {
     "source": "Your decision",
     "why": "As FCF TTM. Measured: SEC agrees with Twelve Data on 14.9%, the release on 17.4%."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "FCF margin TTM",
+    "text": "Follows the free cash flow decision. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1106,6 +1422,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,055 companies; Twelve Data agrees on 51.5% within 1 pt (median gap 1 pt), Twelve Data divides by average equity, the filings give the quarter end. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "ROE (TTM, avg equity)",
+    "text": "Twelve-month net income over AVERAGE equity (this quarter end and the same quarter a year earlier, both stored in the SEC data), to match the usual definition. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1152,6 +1476,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,120 companies; Twelve Data agrees on 39.7% within 1 pt (median gap 1.4 pts), Twelve Data divides by average assets, the filings give the quarter end. The release matches the 10-Q 99.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "ROA (TTM, avg assets)",
+    "text": "As ROE, over average total assets.",
+    "extract": null
    }
   },
   {
@@ -1198,6 +1530,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,100 companies; Twelve Data agrees on 83.6% within 1 pt (median gap 0 pts), restated year-earlier quarters, and banks’ revenue line. The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Quarter, on a year earlier",
+    "to": "Quarter, on a year earlier",
+    "periodChange": false,
+    "header": "Rev growth (Q on Q a year ago)",
+    "text": "Keep the quarter. The release first (it is out days before the 10-Q), the SEC once filed. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1244,6 +1584,14 @@
    "best": {
     "source": "SEC filings, Twelve Data where missing",
     "why": "The filing itself, so exact, but for 960 of 1,206 companies; Twelve Data for the rest. Twelve Data agrees on 81.3% within 1 pt (median gap 0 pts), no rate off a loss on our side; Twelve Data sometimes gives one."
+   },
+   "proposal": {
+    "now": "Quarter, on a year earlier",
+    "to": "Quarter, on a year earlier",
+    "periodChange": false,
+    "header": "Net income growth (Q on Q a year ago)",
+    "text": "Keep the quarter; name it net income growth, which is what both sides measure. Release first, then SEC. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1290,6 +1638,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,026 companies; Twelve Data agrees on 77.3% within 2% (median gap 0.1%), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "EPS TTM (diluted)",
+    "text": "SEC: four quarters, or the year, or last year plus this year to date less last year’s; release first.",
+    "extract": null
    }
   },
   {
@@ -1336,6 +1692,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The filing sources have it only in part or on another definition. SEC filings carry it for 1,140 companies; Twelve Data agrees on 56.1% within 2% (median gap 0.3%), Twelve Data’s total includes short-term investments; the filing data’s cash line does not."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Cash + ST inv. (Q end)",
+    "text": "Say “at quarter end” and whether short-term investments are in. After extracting them, the SEC total; the release has it already.",
+    "extract": "sti"
    }
   },
   {
@@ -1382,6 +1746,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Every source draws debt differently; none agrees with another often enough to swap. Keep one definition throughout. Measured: SEC agrees with Twelve Data on 12.3%, the release on 20.7%."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Total debt (Q end)",
+    "text": "Define total debt once (current + long-term borrowings, leases apart), extract the missing lines, then take it from the filings everywhere.",
+    "extract": "debt"
    }
   },
   {
@@ -1428,6 +1800,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 10.5%, the release on 18.1%."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Net cash (Q end)",
+    "text": "Follows Cash and Debt.",
+    "extract": "debt"
    }
   },
   {
@@ -1474,6 +1854,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 7.5%, the release on 13.2%."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Net cash / share (Q end)",
+    "text": "Follows Cash and Debt, over cover-page shares.",
+    "extract": "shout"
    }
   },
   {
@@ -1520,6 +1908,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 11.1%, the release on 18.9%."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Debt / equity (Q end)",
+    "text": "Follows Debt; show it as a ratio (0.78), not Twelve Data’s percent (78).",
+    "extract": "debt"
    }
   },
   {
@@ -1561,6 +1957,14 @@
    "best": {
     "source": "SEC filings, Twelve Data where missing",
     "why": "The filing itself, so exact, but for 903 of 1,196 companies; Twelve Data for the rest. Twelve Data agrees on 96.8% within 2% (median gap 0%), rounding."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Current ratio (Q end)",
+    "text": "SEC current assets over current liabilities (96.8% already agree); Twelve Data for banks and insurers, which do not split them.",
+    "extract": null
    }
   },
   {
@@ -1607,6 +2011,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Debt. Measured: SEC agrees with Twelve Data on 23.7%, the release on 38.8%."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Net cash % of mkt cap",
+    "text": "Follows Net cash.",
+    "extract": "debt"
    }
   },
   {
@@ -1630,6 +2042,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Forward, from the declared rate; the filings give trailing dividends."
+   },
+   "proposal": {
+    "now": "Forward (next twelve months)",
+    "to": "Forward (next twelve months)",
+    "periodChange": false,
+    "header": "Dividend yield (forward)",
+    "text": "Keep Twelve Data’s forward rate unless the declared dividend is extracted from the releases; a trailing yield from the SEC could sit beside it as its own column.",
+    "extract": "divdecl"
    }
   },
   {
@@ -1653,6 +2073,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Twelve Data’s is on the declared dividend; the filings’ is trailing. Either is defensible."
+   },
+   "proposal": {
+    "now": "Twelve months",
+    "to": "Twelve months",
+    "periodChange": false,
+    "header": "Payout ratio (TTM)",
+    "text": "SEC dividends paid over net income, twelve months, or keep Twelve Data’s; say which in the hover.",
+    "extract": null
    }
   },
   {
@@ -1676,6 +2104,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Half is already from the filings (buybacks); the dividend half follows Dividend yield."
+   },
+   "proposal": {
+    "now": "Mixed",
+    "to": "Twelve months",
+    "periodChange": true,
+    "header": "Shareholder yield (TTM)",
+    "text": "Make both halves twelve months from the filings (dividends paid and buybacks), so it is one period, not forward plus trailing.",
+    "extract": null
    }
   },
   {
@@ -1699,6 +2135,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "As Dividend yield."
+   },
+   "proposal": {
+    "now": "Forward (next twelve months)",
+    "to": "Forward (next twelve months)",
+    "periodChange": false,
+    "header": "Dividend rate (forward)",
+    "text": "As Dividend yield.",
+    "extract": "divdecl"
    }
   },
   {
@@ -1722,6 +2166,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "A date",
+    "to": "A date",
+    "periodChange": false,
+    "header": "Ex-dividend",
+    "text": "Keep Twelve Data unless the declared-dividend dates are extracted.",
+    "extract": "divdecl"
    }
   },
   {
@@ -1745,6 +2197,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "A date",
+    "to": "A date",
+    "periodChange": false,
+    "header": "Dividend paid",
+    "text": "As Ex-dividend.",
+    "extract": "divdecl"
    }
   },
   {
@@ -1768,6 +2228,14 @@
    "best": {
     "source": "Release",
     "why": "It names the newer quarter first: a median 1 day before the 10-Q and 6 days before Twelve Data."
+   },
+   "proposal": {
+    "now": "A date",
+    "to": "A date",
+    "periodChange": false,
+    "header": "Figures to",
+    "text": "Take the newest quarter from the release; it names it first.",
+    "extract": null
    }
   },
   {
@@ -1791,6 +2259,14 @@
    "best": {
     "source": "Release",
     "why": "The day the results 8-K was filed is the report day."
+   },
+   "proposal": {
+    "now": "A date",
+    "to": "A date",
+    "periodChange": false,
+    "header": "Last results out",
+    "text": "The results 8-K’s filing day. Not read by the Signal; its next-report estimate is fed by it.",
+    "extract": null
    }
   },
   {
@@ -1814,6 +2290,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "A date",
+    "to": "A date",
+    "periodChange": false,
+    "header": "Last split",
+    "text": "Keep Twelve Data.",
+    "extract": null
    }
   },
   {
@@ -1860,6 +2344,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "Outstanding today; the filings give the quarter’s diluted average. Measured: SEC agrees with Twelve Data on 73.2%, the release on 72.9%."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Shares out",
+    "text": "After extracting the cover-page count, take it from the filings; keep the quarter’s diluted average apart.",
+    "extract": "shout"
    }
   },
   {
@@ -1906,6 +2398,14 @@
    "best": {
     "source": "SEC filings, release first",
     "why": "The filing itself, so exact. SEC filings carry it for 1,054 companies; Twelve Data agrees on 66.9% within 2% (median gap 1.2%), diluted average against outstanding shares. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
+   },
+   "proposal": {
+    "now": "At quarter end",
+    "to": "At quarter end",
+    "periodChange": false,
+    "header": "Book value / share (Q end)",
+    "text": "Equity at quarter end over cover-page shares.",
+    "extract": "shout"
    }
   },
   {
@@ -1929,6 +2429,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Float",
+    "text": "Keep Twelve Data: the filings give float once a year in dollars.",
+    "extract": "float"
    }
   },
   {
@@ -1952,6 +2460,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Short ratio",
+    "text": "Keep Twelve Data, or use FINRA short interest (already read) over average volume.",
+    "extract": null
    }
   },
   {
@@ -1975,6 +2491,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Short % float",
+    "text": "Keep Twelve Data: needs float. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   },
   {
@@ -1998,6 +2522,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Short % out",
+    "text": "FINRA short interest (already read) over cover-page shares outstanding.",
+    "extract": "shout"
    }
   },
   {
@@ -2021,6 +2553,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Insiders %",
+    "text": "Keep Twelve Data.",
+    "extract": null
    }
   },
   {
@@ -2044,6 +2584,14 @@
    "best": {
     "source": "Twelve Data",
     "why": "The only source: neither the release nor the filing data has it."
+   },
+   "proposal": {
+    "now": "Latest reported",
+    "to": "Latest reported",
+    "periodChange": false,
+    "header": "Institutions %",
+    "text": "Keep Twelve Data, or 13F shares (already loaded) over cover-page shares, quarterly.",
+    "extract": "shout"
    }
   },
   {
@@ -2067,6 +2615,14 @@
    "best": {
     "source": "Follows its inputs",
     "why": "A score of ours; its source is whatever its inputs use."
+   },
+   "proposal": {
+    "now": "Our score",
+    "to": "Our score",
+    "periodChange": false,
+    "header": "Qual.",
+    "text": "Moves with its inputs; no change of its own. A Signal input: changing its source is the owner’s decision.",
+    "extract": null
    }
   }
  ]

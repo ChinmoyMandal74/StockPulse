@@ -48,12 +48,30 @@
     .sm-xl { white-space: nowrap; }
 
     .sm-wrap { overflow-x: auto; }
-    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1900px; }
+    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 2400px; }
     .sm-best b { display: inline-block; font: 600 11px var(--sans); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--hair-2); margin-bottom: 4px; color: var(--text); }
     .sm-best b.b-sec { color: var(--sky); border-color: color-mix(in srgb, var(--sky) 55%, transparent); background: color-mix(in srgb, var(--sky) 9%, transparent); }
     .sm-best b.b-rel { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
     .sm-best b.b-dec { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
     .sm-best { min-width: 320px; }
+    /* The proposals (2026-10-29): the plan, the new data to extract, and two columns a row. */
+    .sm-plan { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; margin: 0 0 16px; }
+    .sm-plan .core { padding: 16px 18px; }
+    .sm-plan h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+    .sm-plan ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+    .sm-plan li { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+    .sm-plan li b { color: var(--text); font-weight: 600; }
+    .sm-ex { display: grid; gap: 10px; }
+    .sm-ex > div { border-left: 3px solid var(--amber); padding-left: 10px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+    .sm-ex > div b { color: var(--text); font-weight: 600; }
+    .sm-ex .cols { color: var(--faint); }
+    .sm-per { min-width: 150px; font-size: 12px; color: var(--muted); }
+    .sm-per .to { display: block; margin-top: 3px; color: var(--text); }
+    .sm-per.chg .to { color: var(--amber); }
+    .sm-prop { min-width: 300px; max-width: 52ch; color: var(--muted); }
+    .sm-prop .hdr { display: block; font: 600 12px var(--mono); color: var(--text); margin-bottom: 3px; }
+    .sm-new { display: inline-block; margin-top: 6px; font: 600 11px var(--sans); color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); background: color-mix(in srgb, var(--amber) 10%, transparent); border-radius: 999px; padding: 2px 9px; }
+    @media (max-width: 1000px) { .sm-plan { grid-template-columns: 1fr; } }
     .sm-best div { color: var(--muted); max-width: 52ch; }
     .sm-bar select { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
     .sm-wrap th, .sm-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; line-height: 1.45; }
@@ -110,8 +128,10 @@
     </header>
 
     <div class="sm-tiles" id="tiles"></div>
+    <div class="sm-plan" id="plan"></div>
     <div class="sm-bar">
       <span id="chips"></span>
+      <button class="sm-chip" id="newOnly" type="button" aria-pressed="false">Needs new data</button>
       <button class="sm-chip" id="sigOnly" type="button" aria-pressed="false">Signal inputs only</button>
       <select id="best" aria-label="Best source"><option value="">Any best source</option></select>
       <input type="search" id="q" placeholder="Column or field" aria-label="Find a column" />
@@ -125,7 +145,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const num = (v) => Number(v).toLocaleString('en-US');
-    let DOC = null, status = '', sigOnly = false;
+    let DOC = null, status = '', sigOnly = false, newOnly = false;
 
     function quality(r) {
       const out = [];
@@ -136,21 +156,24 @@
       return out.length ? out.join('') : '<span class="na">Not measured</span>';
     }
 
+    const exOf = (id) => (DOC.extracts || []).find((e) => e.id === id) || { item: id, from: '' };
     const bestCls = (b) => (/^SEC/.test(b) ? 'b-sec' : /^Release/.test(b) ? 'b-rel' : /decision/.test(b) ? 'b-dec' : '');
     function render() {
       const q = $('q').value.trim().toLowerCase();
       const bestSel = $('best').value;
-      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal || r.signalIndirect) && (!bestSel || r.best.source === bestSel)
+      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal || r.signalIndirect) && (!bestSel || r.best.source === bestSel) && (!newOnly || (r.proposal && r.proposal.extract))
         && (!q || (r.label + ' ' + r.group + ' ' + r.field + ' ' + r.source + ' ' + r.equivalent).toLowerCase().includes(q)));
       if (!rows.length) { $('tbl').innerHTML = '<div class="sm-empty">No column matches.</div>'; return; }
-      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th title="Whether the Signal (private/action.js) reads this field, and in which step">Signal input</th><th>Best source</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Equivalent in SEC EDGAR data</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th title="Whether the Signal (private/action.js) reads this field, and in which step">Signal input</th><th>Best source</th><th title="What the column measures today, and what it should">Period</th><th>Proposal</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Equivalent in SEC EDGAR data</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
       let g = null;
       for (const r of rows) {
-        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="8">${esc(g)}</td></tr>`; }
+        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="10">${esc(g)}</td></tr>`; }
         html += `<tr>
           <td class="sm-col"><b>${esc(r.label)}</b><code>${esc(r.source)}</code></td>
           <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
           <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b><div>${esc(r.best.why)}</div></td>
+          <td class="sm-per${r.proposal && r.proposal.periodChange ? ' chg' : ''}">${r.proposal ? esc(r.proposal.now) + (r.proposal.periodChange ? '<span class="to">\u2192 ' + esc(r.proposal.to) + '</span>' : '<span class="to">Keep</span>') : ''}</td>
+          <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + (r.proposal.extract ? '<br><span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
           <td class="sm-shown">${esc(r.shown)}</td>
           <td><span class="sm-st ${r.sec.status.toLowerCase()}">${esc(r.sec.status)}</span><div class="sm-eq">${esc(r.sec.equivalent)}</div></td>
@@ -184,6 +207,9 @@
         tile('SEC filing data', num(DOC.secCompanies), `companies with a quarter in the last 200 days; ${DOC.secSameQuarter}% already have the quarter the newest release reports`),
         tile('Release ahead of the 10-Q', T.filingMedianDays != null ? T.filingMedianDays + ' day' + (T.filingMedianDays === 1 ? '' : 's') : '—', `median; same day ${T.filingSameDayPct ?? '—'}%, 90th percentile ${T.filingP90Days ?? '—'} days`),
       ].join('');
+      $('plan').innerHTML = '<div class="bezel"><div class="core"><h2>The proposal, in order</h2><ol>' + (DOC.plan || []).map((p) => '<li><b>' + esc(p.t) + '.</b> ' + esc(p.d) + '</li>').join('') + '</ol></div></div>'
+        + '<div class="bezel"><div class="core"><h2>New data to extract (' + (DOC.extracts || []).length + ')</h2><div class="sm-ex">' + (DOC.extracts || []).map((e) => '<div><b>' + esc(e.item) + '.</b> ' + esc(e.from) + '. ' + esc(e.cost) + ' <span class="cols">For: ' + esc(e.columns.join(', ')) + '.</span></div>').join('') + '</div></div></div>';
+      $('newOnly').addEventListener('click', () => { newOnly = !newOnly; $('newOnly').classList.toggle('on', newOnly); $('newOnly').setAttribute('aria-pressed', String(newOnly)); render(); });
       chips();
       const bc = {}; for (const r of DOC.rows) bc[r.best.source] = (bc[r.best.source] || 0) + 1;
       $('best').innerHTML = '<option value="">Any best source</option>' + Object.entries(bc).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<option value="${esc(k)}">${esc(k)} (${v})</option>`).join('');

@@ -407,6 +407,95 @@ function bestOf(o) {
 }
 const num = (v) => Number(v).toLocaleString('en-US');
 
+// ---- THE PROPOSALS (2026-10-29, the owner: "I want you propose everything in
+// this page ... If a new data item needs to be extracted highlight that also")
+// --------------------------------------------------------------------------
+// One period rule for the whole screener, then each column: the period it
+// measures today, the period it should, the header text (DISPLAY ONLY: the
+// FIELD_SPEC label is the stored group|label key of tiles and the phone and is
+// never renamed), what to change, and any NEW DATA it would need extracted
+// (`ex`, an id into EXTRACT below). Nothing here is done; it is a plan for the
+// owner. Signal inputs say so: their source is the owner's decision.
+const PERIOD = { ttm: 'Twelve months', q: 'Quarter, on a year earlier', qe: 'At quarter end', today: 'Today', fwd: 'Forward (next twelve months)', date: 'A date', latest: 'Latest reported', score: 'Our score', mixed: 'Mixed' };
+const EXTRACT = {
+  da: { item: 'Depreciation and amortization', from: 'SEC data: add the concept to secfacts.js (DepreciationDepletionAndAmortization, DepreciationAndAmortization), then one re-read of every company (sec-reread.js); the release\u2019s cash flow statement for the 10-Q gap', cost: 'No API credits: about 1,150 SEC fetches, one at a time. The release side adds a field to the second request (about $8 to backfill since July 2025).', unlocks: 'EBITDA, EV/EBITDA' },
+  shout: { item: 'Shares outstanding (the 10-Q and 10-K cover page)', from: 'SEC data: dei:EntityCommonStockSharesOutstanding, added to secfacts.js, one re-read', cost: 'No API credits: one SEC re-read.', unlocks: 'Market cap, Shares out, Book value/share, Net cash / share, Short % out' },
+  sti: { item: 'Short-term investments', from: 'SEC data: ShortTermInvestments, MarketableSecuritiesCurrent, AvailableForSaleSecuritiesDebtSecuritiesCurrent, added to secfacts.js, one re-read (the release already gives it)', cost: 'No API credits: one SEC re-read.', unlocks: 'Cash on the same footing as Twelve Data\u2019s total cash, Net cash' },
+  debt: { item: 'The rest of the debt lines', from: 'SEC data: LongTermDebtCurrent, ShortTermBorrowings, CommercialPaper (and finance lease liabilities, kept apart), added to secfacts.js, one re-read. Today the stored debt is long-term debt only (LongTermDebtNoncurrent)', cost: 'No API credits: one SEC re-read.', unlocks: 'One defined total debt: Debt, Net cash, Debt / equity, Enterprise value and the multiples on it' },
+  divdecl: { item: 'The dividend declared per share, with its record and payment dates', from: 'The release (many announce the next dividend), added to the second request; a separate dividend 8-K otherwise', cost: 'About $8 to backfill the releases since July 2025; a few cents a day after that.', unlocks: 'Forward Dividend yield and Dividend rate, Ex-dividend and Dividend paid dates' },
+  emp: { item: 'Employees', from: 'SEC data: dei:EntityNumberOfEmployees where a filer tags it (few do); otherwise the 10-K text, once a year', cost: 'Coverage uncertain; measure before building.', unlocks: 'Revenue / employee' },
+  float: { item: 'Public float', from: 'SEC data: dei:EntityPublicFloat on the 10-K cover, once a year, in dollars', cost: 'No API credits; but annual and in dollars, so a poor substitute.', unlocks: 'Float, Short % float (only roughly)' },
+};
+const P = (now, to, header, text, ex) => ({ now, to, header, text, ex: ex || null });
+const SIG = ' A Signal input: changing its source is the owner\u2019s decision.';
+const PROPOSE = {
+  'Market Cap': P('today', 'today', 'Market cap', 'Keep Twelve Data until shares outstanding are extracted; then price \u00d7 the cover-page count is an exact alternative.' + SIG, 'shout'),
+  'Revenue TTM': P('ttm', 'ttm', 'Revenue TTM', 'SEC four quarters, the release while the 10-Q is pending; Twelve Data where neither has it.'),
+  'Gross profit': P('ttm', 'ttm', 'Gross profit TTM', 'Say TTM in the header. SEC where it carries it (695 companies), Twelve Data for the rest.'),
+  'Net income': P('ttm', 'ttm', 'Net income TTM', 'Say TTM in the header. SEC four quarters, the release first; say \u201cattributable to the company\u201d in the hover.' + SIG),
+  'FCF TTM': P('ttm', 'ttm', 'FCF TTM', 'Decide the measure first: levered (Twelve Data) or operating cash flow less capex (SEC, release first). If unlevered, call it \u201cFCF TTM\u201d and add \u201cLevered FCF\u201d as its own column if wanted.' + SIG),
+  'EBITDA': P('ttm', 'ttm', 'EBITDA TTM', 'Build it as operating income plus depreciation and amortization from the filings, twelve months; until then keep Twelve Data. The companies\u2019 adjusted EBITDA stays a release-only figure, labelled as theirs.', 'da'),
+  'Operating cash': P('ttm', 'ttm', 'Op. cash flow TTM', 'Say TTM. SEC four quarters, the release first.'),
+  'Revenue / employee': P('ttm', 'ttm', 'Revenue / employee', 'Keep Twelve Data\u2019s head count unless a filing source covers enough companies.', 'emp'),
+  'Enterprise value': P('today', 'today', 'Enterprise value', 'Keep Twelve Data until the debt lines are extracted; then market value + total debt \u2212 cash and short-term investments from the filings.', 'debt'),
+  'Fwd P/E': P('fwd', 'fwd', 'Fwd P/E', 'Keep Twelve Data: analysts\u2019 estimates have no filing source. Say \u201cnext twelve months\u201d in the hover.' + SIG),
+  'Trailing P/E': P('ttm', 'ttm', 'Trailing P/E', 'Merge with Live P/E or drop: Twelve Data\u2019s uses its own week-old price. Live P/E on the SEC\u2019s twelve-month EPS says the same thing better.'),
+  'Live P/E': P('ttm', 'ttm', 'P/E (TTM, today\u2019s price)', 'Today\u2019s price over twelve-month diluted EPS from the SEC (release first).'),
+  'P/E vs peers': P('fwd', 'fwd', 'Fwd P/E vs peers', 'Keep; say forward in the header, as it is built on forward P/E.'),
+  'PEG': P('fwd', 'fwd', 'PEG', 'Keep Twelve Data: forecast growth.'),
+  'P/B': P('qe', 'qe', 'P/B', 'Market value over equity at quarter end from the SEC (release first). Say \u201cbook at quarter end\u201d in the hover.'),
+  'P/S': P('ttm', 'ttm', 'P/S (TTM)', 'Market value over SEC twelve-month revenue.'),
+  'EV / sales': P('ttm', 'ttm', 'EV / sales (TTM)', 'After the debt lines: filing enterprise value over SEC twelve-month revenue.', 'debt'),
+  'EV/EBITDA': P('ttm', 'ttm', 'EV / EBITDA (TTM)', 'After depreciation and the debt lines: both from the filings.', 'da'),
+  'P / op cash': P('ttm', 'ttm', 'P / op cash (TTM)', 'Market value over SEC twelve-month operating cash flow.'),
+  'Earnings yield': P('ttm', 'ttm', 'Earnings yield (TTM)', 'SEC twelve-month EPS over today\u2019s price.'),
+  'FCF yield': P('ttm', 'ttm', 'FCF yield (TTM)', 'Follows the free cash flow decision.'),
+  'Gross margin': P('ttm', 'ttm', 'Gross margin TTM', 'Say TTM. SEC where it carries gross profit or cost of revenue; Twelve Data for the rest.' + SIG),
+  'Operating margin': P('mixed', 'ttm', 'Op. margin TTM', 'FIX: Twelve Data\u2019s is mostly the latest quarter\u2019s, beside twelve-month gross and profit margins. Make it twelve months from the SEC (operating income over revenue); the values will move. Not a Signal input.'),
+  'Profit margin': P('ttm', 'ttm', 'Profit margin TTM', 'Say TTM. SEC four quarters, release first.' + SIG),
+  'FCF margin': P('ttm', 'ttm', 'FCF margin TTM', 'Follows the free cash flow decision.' + SIG),
+  'ROE': P('ttm', 'ttm', 'ROE (TTM, avg equity)', 'Twelve-month net income over AVERAGE equity (this quarter end and the same quarter a year earlier, both stored in the SEC data), to match the usual definition.' + SIG),
+  'ROA': P('ttm', 'ttm', 'ROA (TTM, avg assets)', 'As ROE, over average total assets.'),
+  'Rev grth Q YoY': P('q', 'q', 'Rev growth (Q on Q a year ago)', 'Keep the quarter. The release first (it is out days before the 10-Q), the SEC once filed.' + SIG),
+  'Earn grth Q YoY': P('q', 'q', 'Net income growth (Q on Q a year ago)', 'Keep the quarter; name it net income growth, which is what both sides measure. Release first, then SEC.' + SIG),
+  'EPS TTM': P('ttm', 'ttm', 'EPS TTM (diluted)', 'SEC: four quarters, or the year, or last year plus this year to date less last year\u2019s; release first.'),
+  'Cash': P('qe', 'qe', 'Cash + ST inv. (Q end)', 'Say \u201cat quarter end\u201d and whether short-term investments are in. After extracting them, the SEC total; the release has it already.', 'sti'),
+  'Debt': P('qe', 'qe', 'Total debt (Q end)', 'Define total debt once (current + long-term borrowings, leases apart), extract the missing lines, then take it from the filings everywhere.', 'debt'),
+  'Net cash': P('qe', 'qe', 'Net cash (Q end)', 'Follows Cash and Debt.', 'debt'),
+  'Net cash / share': P('qe', 'qe', 'Net cash / share (Q end)', 'Follows Cash and Debt, over cover-page shares.', 'shout'),
+  'Debt / equity': P('qe', 'qe', 'Debt / equity (Q end)', 'Follows Debt; show it as a ratio (0.78), not Twelve Data\u2019s percent (78).', 'debt'),
+  'Current ratio': P('qe', 'qe', 'Current ratio (Q end)', 'SEC current assets over current liabilities (96.8% already agree); Twelve Data for banks and insurers, which do not split them.'),
+  'Net cash %': P('qe', 'qe', 'Net cash % of mkt cap', 'Follows Net cash.', 'debt'),
+  'Dividend yield': P('fwd', 'fwd', 'Dividend yield (forward)', 'Keep Twelve Data\u2019s forward rate unless the declared dividend is extracted from the releases; a trailing yield from the SEC could sit beside it as its own column.', 'divdecl'),
+  'Payout ratio': P('ttm', 'ttm', 'Payout ratio (TTM)', 'SEC dividends paid over net income, twelve months, or keep Twelve Data\u2019s; say which in the hover.'),
+  'Shareholder yield': P('mixed', 'ttm', 'Shareholder yield (TTM)', 'Make both halves twelve months from the filings (dividends paid and buybacks), so it is one period, not forward plus trailing.'),
+  'Dividend rate': P('fwd', 'fwd', 'Dividend rate (forward)', 'As Dividend yield.', 'divdecl'),
+  'Ex-dividend': P('date', 'date', 'Ex-dividend', 'Keep Twelve Data unless the declared-dividend dates are extracted.', 'divdecl'),
+  'Dividend paid': P('date', 'date', 'Dividend paid', 'As Ex-dividend.', 'divdecl'),
+  'Period': P('date', 'date', 'Figures to', 'Take the newest quarter from the release; it names it first.'),
+  'Reported': P('date', 'date', 'Last results out', 'The results 8-K\u2019s filing day. Not read by the Signal; its next-report estimate is fed by it.'),
+  'Last split': P('date', 'date', 'Last split', 'Keep Twelve Data.'),
+  'Shares out': P('latest', 'latest', 'Shares out', 'After extracting the cover-page count, take it from the filings; keep the quarter\u2019s diluted average apart.', 'shout'),
+  'Book value/share': P('qe', 'qe', 'Book value / share (Q end)', 'Equity at quarter end over cover-page shares.', 'shout'),
+  'Float': P('latest', 'latest', 'Float', 'Keep Twelve Data: the filings give float once a year in dollars.', 'float'),
+  'Short ratio': P('latest', 'latest', 'Short ratio', 'Keep Twelve Data, or use FINRA short interest (already read) over average volume.'),
+  'Short % float': P('latest', 'latest', 'Short % float', 'Keep Twelve Data: needs float.' + SIG),
+  'Short % out': P('latest', 'latest', 'Short % out', 'FINRA short interest (already read) over cover-page shares outstanding.', 'shout'),
+  'Insiders': P('latest', 'latest', 'Insiders %', 'Keep Twelve Data.'),
+  'Institutions': P('latest', 'latest', 'Institutions %', 'Keep Twelve Data, or 13F shares (already loaded) over cover-page shares, quarterly.', 'shout'),
+  'Qual.': P('score', 'score', 'Qual.', 'Moves with its inputs; no change of its own.' + SIG),
+};
+// The plan in order, for the panel above the table.
+const PLAN = [
+  { t: 'One period rule for the screener', d: 'Twelve months (TTM) for size, valuation, margins and returns; the quarter on the same quarter a year earlier for growth and the Last Earning AI Extracted group; at quarter end for the balance sheet; today for anything on the price; forward only for analysts\u2019 figures.' },
+  { t: 'Say the period in every header and hover', d: 'Display text only, as the Proposed header shows; the stored group|label keys behind tiles and the phone keep their names.' },
+  { t: 'Fix Operating margin', d: 'Twelve Data\u2019s is mostly one quarter\u2019s, beside twelve-month margins. Twelve months from the SEC data. Not a Signal input.' },
+  { t: 'Take the statement figures from the SEC data, the release first', d: 'The columns marked SEC filings below, display only. Signal inputs among them wait for the owner.' },
+  { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.' },
+  { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.' },
+  { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.' },
+];
+
 // THE SIGNAL'S USE OF EACH (private/action.js, read 2026-10-29): which step
 // reads the field. Company type is classify() (size, profitability, free cash
 // flow, priced on earnings, quality or ROE); Fundamentals is fundamentals()
@@ -498,6 +587,8 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
       o.vs10q = { figure: col.q10, pairs: f.pairs, within05: f.pairs ? Math.round(1000 * f.bands[1] / f.pairs) / 10 : null };
     }
     o.best = bestOf(o);
+    const pr = PROPOSE[col.label];
+    o.proposal = pr ? { now: PERIOD[pr.now], to: PERIOD[pr.to], periodChange: pr.now !== pr.to, header: pr.header, text: pr.text, extract: pr.ex } : null;
     out.push(o);
   }
   // How current the filings are: of the companies with a release in the last
@@ -511,7 +602,8 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     timing: { tdMedianDays: lags.length ? lags[lags.length >> 1] : null, tdP90Days: lags.length ? lags[Math.floor(0.9 * lags.length)] : null, tdN: lags.length,
       filingSameDayPct: filingLag.length ? Math.round(1000 * filingLag.filter((d) => d === 0).length / filingLag.length) / 10 : null,
       filingMedianDays: filingLag.length ? filingLag[filingLag.length >> 1] : null, filingP90Days: filingLag.length ? filingLag[Math.floor(0.9 * filingLag.length)] : null },
-    fromFilings: FROM_FILINGS, rows: out };
+    fromFilings: FROM_FILINGS, plan: PLAN,
+    extracts: Object.entries(EXTRACT).map(([id, e]) => Object.assign({ id, columns: out.filter((r) => r.proposal && r.proposal.extract === id).map((r) => r.label) }, e)), rows: out };
   fs.writeFileSync(OUT, JSON.stringify(doc, null, 1));
   const c = (st) => out.filter((r) => r.status === st).length;
   console.log(`written ${OUT}: ${out.length} columns (Yes ${c('Yes')}, Partly ${c('Partly')}, No ${c('No')}); ${ctx.size} of ${rows.length} companies with a release in the last 130 days`);
