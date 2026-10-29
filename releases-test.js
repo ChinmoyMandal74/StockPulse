@@ -437,5 +437,33 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('history: a new year reads initiated, before any comparison', ini && ini.change === 'initiated', ini);
 }
 
+// ---- free cash flow (2026-10-29): only the company's own stated figure ----
+{
+  const t = 'Alphabet Q3 | Revenues | 127,580 | 102,346 | Free cash flow | 24,463 | (1,200) | Net cash provided by operating activities | 48,414 | in millions';
+  const m = { accn: 'f1', symbol: 'GOOGL', filed: '2026-10-28' };
+  const base = { is_results_release: true, period_label: 'Q3', period_end: '2026-09-30', currency: 'USD',
+    revenue: { printed: '127,580', prior_printed: '102,346', unit: 'millions' }, summary: 'x' };
+  let r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '24,463', prior_printed: '(1,200)', unit: 'millions', label: 'Free cash flow' } }), t, m);
+  check('fcf: kept, scaled, a negative prior', r.row.fcf === 24463e6 && r.row.fcfPrior === -1200e6 && r.row.fcfLabel === 'Free cash flow' && !r.problems.length, [r.row.fcf, r.row.fcfPrior, r.problems]);
+  r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '', prior_printed: '', unit: 'millions', label: '' } }), t, m);
+  check('fcf: none given is null with an empty label, not zero', r.row.fcf === null && r.row.fcfPrior === null && r.row.fcfLabel === '', r.row);
+  r = Rel.toRow(base, t, m);
+  check('fcf: an answer without the field is none given', r.row.fcf === null && r.row.fcfLabel === '', r.row);
+  r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '35,000', prior_printed: '', unit: 'millions', label: 'Free cash flow' } }), t, m);
+  check('fcf: a worked-out figure not in the release is refused', r.row.fcf === null && r.problems.some((p) => /free cash flow "35,000"/.test(p)), r.problems);
+  r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '24,463', prior_printed: '', unit: 'billions', label: '' } }), t, m);
+  check('fcf: a scale slip against revenue is refused', r.row.fcf === null && r.problems.some((p) => /does not fit/.test(p)) && r.row.revenue === 127580e6, r.problems);
+  r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '24,463', prior_printed: '', unit: 'millions', label: '' } }), t, m);
+  check('fcf: a figure without a label is named for what was asked', r.row.fcfLabel === 'Free cash flow', r.row.fcfLabel);
+  r = Rel.toRow(Object.assign({}, base, { is_results_release: false, free_cash_flow: { printed: '24,463', prior_printed: '', unit: 'millions', label: 'x' } }), t, m);
+  check('fcf: not a results release, nothing kept', r.row.fcf === null && r.row.fcfLabel === null);
+  require('./private/releaseview.js'); const RV = globalThis.ReleaseView;
+  const sub = (t, title) => t + '|' + (title || '');
+  check('fcfSub: change on a year ago', /^\+.*on a year ago\|.*Free cash flow/.test(RV.fcfSub({ fcf: 120, fcfPrior: 100, fcfLabel: 'Free cash flow' }, sub)));
+  check('fcfSub: off a negative prior, the prior instead of a percentage', /^a year ago /.test(RV.fcfSub({ fcf: 120, fcfPrior: -100, fcfLabel: 'Free cash flow' }, sub)));
+  check('fcfSub: none given', /^none given/.test(RV.fcfSub({ fcf: null, fcfPrior: null, fcfLabel: '' }, sub)));
+  check('fcfSub: read before it was asked for', /^not read/.test(RV.fcfSub({ fcf: null, fcfPrior: null, fcfLabel: null }, sub)));
+}
+
 console.log(`${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

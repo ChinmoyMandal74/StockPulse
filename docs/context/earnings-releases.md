@@ -356,3 +356,17 @@ The owner: "create a new email talking about upcoming earning today .. and sched
 - Nobody listed (weekends) sends nothing.
 
 **When:** `release-load.js` `mailToday()` runs straight after `mailList()` (the Earnings results mailing). It uses the same `weekdayMorning()` guard, now shared, so it goes out only from the weekday 09:15 run. It never fails the run.
+
+## Free cash flow on the Results releases card (2026-10-29)
+The owner, over Alphabet's card: "How difficult is to add Free cash Flow to the Results release section", then "yes build the first version".
+
+**First version: the company's own figure only.**
+- The schema (`releases.js` `SCHEMA.free_cash_flow`) asks for a quarter's free cash flow ONLY where the release prints a figure it calls that (or its own close name), with the year-earlier quarter, the scale and the company's label. Never worked out from operating cash flow less capital spending; a year-to-date or twelve-month figure alone is not given.
+- `toRow` runs it through the same `money()` as the other figures, so each must be found in the release text and carry a scale. A figure more than five times the same quarter's revenue is refused as a scale slip ("does not fit the quarter's revenue"), each quarter on its own.
+- Stored as `fcf`, `fcf_prior`, `fcf_label` (three `alter table` columns, in `ER_COLS`). `fcf_label` is three-state: the company's name; `''` when the release was read for it and gives none; null for a reading made before 2026-10-29. Readings are written once, so older releases stay null until re-read.
+- The stock page draws a sixth card, Free cash flow (teal), between Net income and EPS, through `ReleaseView.fcfSub`: the change on a year ago (none off a negative or zero year, the prior figure instead), the label as the hover, "none given", or "not read for this release". Grid of six, three at 1000px, two at 700px.
+- Display only: not on the screener group, `/filings`, the card or the mailing, and never the Signal.
+
+**Not done (the owner's call):** a worked-out figure (operating cash flow less capital spending, marked as ours) for releases that print a cash flow statement but no free cash flow line, including the year-to-date subtraction; re-reading the history for it, which spends API credit.
+
+Tests: `releases-test.js` (kept, scaled, a negative prior; none given; a figure not in the text; a scale slip; no label; not a results release; the four `fcfSub` lines; the scale guard proven by reverting it). A scratchpad harness on the in-memory database drew the card for a stated figure, none given and an older reading, at 1600px (one row of six) and 390px (three rows of two, no sideways scroll).

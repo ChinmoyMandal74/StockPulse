@@ -719,7 +719,7 @@
     #rels .rl-head a:hover { text-decoration: underline; }
     /* A colour a part (2026-10-23, the owner: "made colorful"): it names the
        figure, never good or bad; theme tokens, so Dark, Navy and Light follow. */
-    #rels .rl-figs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    #rels .rl-figs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
     #rels .rl-f { border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-top: 3px solid var(--c); border-radius: 12px; padding: 10px 12px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, transparent), color-mix(in srgb, var(--c) 3%, transparent)); }
     #rels .rl-f .rl-k { color: var(--c); }
@@ -3641,6 +3641,7 @@
             + '<div class="rl-figs">'
             + fig('Revenue', e(RV.money(r.revenue, cur)), sub(RV.chg(r.revenue, r.revenuePrior)), '--azure')
             + fig('Net income', e(RV.money(r.netIncome, cur)), sub(RV.chg(r.netIncome, r.netIncomePrior)), '--cyan')
+            + fig('Free cash flow', e(RV.money(r.fcf, cur)), RV.fcfSub(r, sub), '--teal')
             + fig('EPS, as reported', e(RV.eps(r.epsGaap, cur)), sub(r.epsGaapPrior != null ? 'a year ago ' + RV.eps(r.epsGaapPrior, cur) : ''), '--accent-2')
             + fig('EPS, adjusted', r.epsAdj == null ? '—' : e(RV.eps(r.epsAdj, cur)), r.epsAdj == null ? sub('none given') : sub(r.epsAdjLabel || 'adjusted', (r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' — leaves out ' + r.epsAdjExcludes : '')), '--sand')
             + fig('Estimate', cut < 0 ? est : est.slice(0, cut), cut < 0 ? '' : est.slice(cut), '--slate')
@@ -4332,7 +4333,8 @@
           <p class="rels-note">Each quarter's results press release (the 8-K's Exhibit 99.1), read by an AI model that copies the
             figures out as printed; every figure is checked against the release's own text, and one that cannot be found there is left
             out. "As reported" is the GAAP diluted figure. The adjusted one is the company's own, under its own name, and has no standard
-            definition. The estimate comes from the price data provider. Once the quarter's 10-Q is filed, the release is compared with it.
+            definition. Free cash flow is shown only where the release itself states it for the quarter, under the company's own
+            name (hover); it is never worked out here, and a release read before it was asked for says so. The estimate comes from the price data provider. Once the quarter's 10-Q is filed, the release is compared with it.
             Every quarter on file is listed under the newest, back to 2017 where the filings reach; the strip shows, oldest to newest,
             what each release itself said about its outlook. A record of what the company said, not a forecast.</p>
         </div></section>

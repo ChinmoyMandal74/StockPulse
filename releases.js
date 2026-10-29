@@ -57,7 +57,7 @@ const FIG = (what) => ({ type: 'object', additionalProperties: false, required: 
   prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
   unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in, from the table heading or the sentence (e.g. "In millions").' } } });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'drivers', 'summary'],
+  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'free_cash_flow', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'drivers', 'summary'],
   properties: {
     is_results_release: { type: 'boolean', description: 'True if this document reports the company’s financial results for a completed quarter, whatever it is called (a press release, a shareholder letter, a quarterly "Update"). False for a preliminary estimate of results, a contract or deal announcement, or anything without the completed quarter’s figures.' },
     period_label: { type: 'string', description: 'The company’s own name for the quarter, e.g. "Third Quarter 2026".' },
@@ -66,6 +66,16 @@ const SCHEMA = { type: 'object', additionalProperties: false,
     revenue: FIG('Total revenue (or net sales, total net revenue) for the three months, not year to date.'),
     operating_income: FIG('GAAP income (loss) from operations for the three months.'),
     net_income: FIG('GAAP net income (loss) attributable to the company for the three months.'),
+    // FREE CASH FLOW (2026-10-29, the owner): only the company's own stated
+    // figure. Never worked out from operating cash flow less capital spending,
+    // and never a year-to-date or twelve-month one passed off as the quarter.
+    free_cash_flow: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed', 'unit', 'label'],
+      description: 'Free cash flow for the three months, ONLY where the release itself prints a figure it calls free cash flow (or its own close name for it, e.g. "Free cash flow (non-GAAP)", "Adjusted free cash flow"). Never compute it from operating cash flow and capital expenditures. All empty strings if the release gives no such figure for the three months (a year-to-date or twelve-month figure alone is not one).',
+      properties: {
+        printed: { type: 'string', description: 'This quarter, exactly as printed (parentheses for a negative), no $ sign. Empty string if not given.' },
+        prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
+        unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in.' },
+        label: { type: 'string', description: 'The company’s own name for the figure, e.g. "Free cash flow". Empty string if none given.' } } },
     eps_gaap_diluted: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed'], description: 'GAAP diluted earnings (loss) per share for the three months.',
       properties: { printed: { type: 'string' }, prior_printed: { type: 'string' } } },
     eps_adjusted: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed', 'label', 'excludes'],
@@ -208,6 +218,7 @@ function toRow(ans, text, meta) {
   const [revenue, revenuePrior] = isRes ? money('revenue', A.revenue) : [null, null];
   const [opIncome, opIncomePrior] = isRes ? money('operating income', A.operating_income) : [null, null];
   const [netIncome, netIncomePrior] = isRes ? money('net income', A.net_income) : [null, null];
+  const [fcf, fcfPrior] = isRes ? money('free cash flow', A.free_cash_flow) : [null, null];
   const E = A.eps_gaap_diluted || {}, J = A.eps_adjusted || {}, G = A.guidance || {};
   const epsGaap = isRes ? num(keep('GAAP EPS', E.printed)) : null;
   const epsGaapPrior = isRes ? num(keep('GAAP EPS a year earlier', E.prior_printed)) : null;
@@ -254,6 +265,14 @@ function toRow(ans, text, meta) {
     if (revenue > 0 && !near(revenue, q, 0.1, 10)) { problems.push('revenue ' + revenue + ' does not fit twelve months’ revenue (scale doubtful)'); revenueG = null; }
     if (revenuePrior > 0 && !near(revenuePrior, q, 0.1, 10)) { problems.push('revenue a year earlier ' + revenuePrior + ' does not fit twelve months’ revenue (scale doubtful)'); revenuePriorG = null; }
   }
+  // FREE CASH FLOW AGAINST REVENUE: a scale slip is a thousandfold, and no
+  // quarter's cash flow is five times its revenue. Each figure on its own.
+  let fcfG = fcf, fcfPriorG = fcfPrior;
+  if (fcf != null && revenueG > 0 && Math.abs(fcf) > revenueG * 5) { problems.push('free cash flow ' + fcf + ' does not fit the quarter’s revenue (scale doubtful)'); fcfG = null; }
+  if (fcfPrior != null && revenuePriorG > 0 && Math.abs(fcfPrior) > revenuePriorG * 5) { problems.push('free cash flow a year earlier ' + fcfPrior + ' does not fit that quarter’s revenue (scale doubtful)'); fcfPriorG = null; }
+  // The label: the company's name for it, or '' when the release was read for
+  // it and gives none (null is a reading made before it was asked for).
+  const fcfLabel = !isRes ? null : fcfG == null && fcfPriorG == null ? '' : blankStr((A.free_cash_flow || {}).label) || 'Free cash flow';
   // Every guidance item, each figure found in the text; and the stated change.
   const guides = isRes ? guideItems(A.guidance_items, keep) : [];
   const ch = isRes ? guideChange(A.guidance_change, norm, problems) : { change: null, quote: null };
@@ -262,7 +281,7 @@ function toRow(ans, text, meta) {
   const row = {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
     isResults: isRes, periodEnd: pe && /^\d{4}-\d{2}-\d{2}$/.test(pe) ? pe : null, periodLabel: blankStr(A.period_label), currency: blankStr(A.currency),
-    revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
+    revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, fcf: fcfG, fcfPrior: fcfPriorG, fcfLabel, epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
     epsAdjLabel: epsAdj != null ? blankStr(J.label) : null, epsAdjExcludes: epsAdj != null ? blankStr(J.excludes) : null,
     guideKind: gKind, guidePeriod: gKind ? blankStr(G.period_label) : null, guideLow, guideHigh, guideMid, guidePm,
     guideUnit: gKind ? gUnit : null, guideSentence: gKind ? blankStr(G.sentence) : null, summary,

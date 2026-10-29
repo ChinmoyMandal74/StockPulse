@@ -1798,6 +1798,12 @@ const ADDED_COLUMNS = [
   // What helped and what weighed on the quarter, as the company explains it
   // (2026-10-23): JSON { helped, weighed }, each point with the phrase that backs it.
   'alter table earnings_releases add column drivers text',
+  // Free cash flow as the company states it (2026-10-29): the quarter, the
+  // same quarter a year earlier, and the company's own name for it ('' when
+  // the release was read for it and gives none; null before it was asked for).
+  'alter table earnings_releases add column fcf real',
+  'alter table earnings_releases add column fcf_prior real',
+  'alter table earnings_releases add column fcf_label text',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -3059,7 +3065,8 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['guide_kind', 'guideKind'], ['guide_period', 'guidePeriod'], ['guide_low', 'guideLow'], ['guide_high', 'guideHigh'], ['guide_mid', 'guideMid'], ['guide_pm', 'guidePm'], ['guide_unit', 'guideUnit'], ['guide_sentence', 'guideSentence'],
   ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt'],
   ['sec_form', 'secForm'], ['sec_filed', 'secFiled'], ['sec_revenue', 'secRevenue'], ['sec_net_income', 'secNetIncome'], ['sec_eps', 'secEps'], ['sec_check', 'secCheck'], ['sec_differs', 'secDiffers'], ['sec_checked_at', 'secCheckedAt'],
-  ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior'], ['drivers', 'drivers']];
+  ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior'], ['drivers', 'drivers'],
+  ['fcf', 'fcf'], ['fcf_prior', 'fcfPrior'], ['fcf_label', 'fcfLabel']];
 function erOut(x) {
   const o = {};
   for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
