@@ -1,0 +1,1267 @@
+{
+ "builtAt": "2026-10-29T12:51:00.900Z",
+ "releasesSince": "2025-07-01",
+ "releases": 5942,
+ "matched": 5672,
+ "companies": 1258,
+ "withReleases": 1129,
+ "timing": {
+  "tdMedianDays": 6,
+  "tdP90Days": 16,
+  "tdN": 148,
+  "filingSameDayPct": 47.9,
+  "filingMedianDays": 1,
+  "filingP90Days": 13
+ },
+ "fromFilings": [
+  "Margin change (Profitability)",
+  "Working capital (Financial position)",
+  "Buyback yield (Dividends and returns)",
+  "Shares chg 1Y (Ownership)",
+  "every Long run column",
+  "13F holders and 13F shares chg",
+  "Insider net, Short build, Last 8-K and 5% filing"
+ ],
+ "rows": [
+  {
+   "signal": true,
+   "group": "Info",
+   "label": "Market Cap",
+   "field": "marketCap",
+   "source": "/statistics valuations_metrics.market_capitalization",
+   "status": "Partly",
+   "equivalent": "Diluted shares (weighted average) × price",
+   "shown": "Not shown",
+   "note": "The release gives the quarter’s weighted-average diluted shares, not shares outstanding today, so this is near, not equal. Market value is the one money figure reliably in dollars; the Signal reads it.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 1039,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 837,
+    "close": 54.1,
+    "median": 1.7,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Diluted shares",
+    "pairs": 4032,
+    "within05": 97.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "Revenue TTM",
+   "field": "revenueTtm",
+   "source": "/statistics income_statement.revenue_ttm",
+   "status": "Yes",
+   "equivalent": "Revenue, four releases summed",
+   "shown": "Quarter only: Last Earning AI Extracted › Revenue",
+   "note": "Banks and insurers headline net revenue where the filings and Twelve Data total it: most of the disagreement.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 990,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 799,
+    "close": 88.5,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Revenue",
+    "pairs": 5175,
+    "within05": 90.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "Gross profit",
+   "field": "grossProfitTtm",
+   "source": "/statistics income_statement.gross_profit_ttm",
+   "status": "Yes",
+   "equivalent": "Gross profit as printed, else revenue less cost of revenue, four releases summed",
+   "shown": "Quarter margin: Last Earning AI Extracted › Gross margin; stock page strip",
+   "note": "Only about 44% of releases print gross profit as a line; with cost of revenue it reaches more. Banks have none.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 638,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 532,
+    "close": 74.2,
+    "median": 0.1,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Gross profit",
+    "pairs": 2402,
+    "within05": 98.5
+   }
+  },
+  {
+   "signal": true,
+   "group": "Scale",
+   "label": "Net income",
+   "field": "netIncomeTtm",
+   "source": "/statistics income_statement.net_income_to_common_ttm",
+   "status": "Yes",
+   "equivalent": "Net income attributable to the company, four releases summed",
+   "shown": "Quarter only: Last Earning AI Extracted › Net income",
+   "note": "A Signal input. Gaps are mostly non-controlling interests or preferred dividends in or out.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 1050,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 848,
+    "close": 84.3,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Net income",
+    "pairs": 5554,
+    "within05": 90.3
+   }
+  },
+  {
+   "signal": true,
+   "group": "Scale",
+   "label": "FCF TTM",
+   "field": "fcfTtm",
+   "source": "/statistics cash_flow.levered_free_cash_flow_ttm",
+   "status": "Partly",
+   "equivalent": "Free cash flow: the company’s own, else operating cash flow less capex, four releases summed",
+   "shown": "Quarter only: Last Earning AI Extracted › FCF; stock page card",
+   "note": "A different measure: Twelve Data’s is LEVERED free cash flow, computed by the provider after interest. Microsoft $16.5B against $60.0B from its releases ($67.0B in its 10-K). A Signal input.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 687,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 565,
+    "close": 2.5,
+    "median": 32.5,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "FCF worked out (ours)",
+    "pairs": 2501,
+    "within05": 93.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "EBITDA",
+   "field": "ebitda",
+   "source": "/statistics income_statement.ebitda",
+   "status": "Partly",
+   "equivalent": "EBITDA as the company prints it (usually adjusted), four releases summed",
+   "shown": "Not shown (stored)",
+   "note": "Only where the release prints it, and then usually the company’s ADJUSTED EBITDA under its own name. No filing figure to check against.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 490,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 393,
+    "close": 12.5,
+    "median": 11.3,
+    "unit": "%",
+    "tol": 2
+   }
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "Operating cash",
+   "field": "operatingCashFlowTtm",
+   "source": "/statistics cash_flow.operating_cash_flow_ttm",
+   "status": "Yes",
+   "equivalent": "Net cash from operating activities, the quarter (or the year to date less the release before), four summed",
+   "shown": "Not shown (stored)",
+   "note": "Fewer releases print a cash flow statement (about 40% read for it), so coverage is the limit, not accuracy.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 689,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 561,
+    "close": 92,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Operating cash flow",
+    "pairs": 1815,
+    "within05": 96.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "Revenue / employee",
+   "field": "revenuePerEmployee",
+   "source": "/profile employees, with revenue TTM",
+   "status": "No",
+   "equivalent": "Revenue yes; employees no",
+   "shown": "—",
+   "note": "Releases do not give a head count; the 10-K does, once a year.",
+   "kind": "money"
+  },
+  {
+   "signal": false,
+   "group": "Scale",
+   "label": "Enterprise value",
+   "field": "enterpriseValue",
+   "source": "/statistics valuations_metrics.enterprise_value",
+   "status": "Partly",
+   "equivalent": "Market value + debt lines − cash and short-term investments",
+   "shown": "Not shown",
+   "note": "Rides on the debt definition, which differs (leases, commercial paper, other borrowings).",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 791,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 626,
+    "close": 41.5,
+    "median": 2.8,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": true,
+   "group": "Valuation",
+   "label": "Fwd P/E",
+   "field": "forwardPe",
+   "source": "/statistics valuations_metrics.forward_pe",
+   "status": "No",
+   "equivalent": "None: needs analysts’ estimates",
+   "shown": "—",
+   "note": "Analysts’ forecasts are sold by data vendors; no filing has them. A Signal input (company type).",
+   "kind": "mult"
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "Trailing P/E",
+   "field": "trailingPe",
+   "source": "/statistics valuations_metrics.trailing_pe",
+   "status": "Yes",
+   "equivalent": "Price / GAAP diluted EPS of four releases",
+   "shown": "Quarter EPS: Last Earning AI Extracted › EPS GAAP",
+   "note": "Twelve Data computes it at the price of its own last pull, up to a week old (within 6% of today’s for 80% of companies): most of the gap is the price, not the EPS (Live P/E, on today’s price, agrees far better). A split inside the four quarters breaks the EPS sum.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1162,
+    "rel": 892,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 712,
+    "close": 48.2,
+    "median": 2.1,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Diluted EPS",
+    "pairs": 4360,
+    "within05": 98.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "Live P/E",
+   "field": "peLive",
+   "source": "today’s price / Twelve Data diluted EPS TTM",
+   "status": "Yes",
+   "equivalent": "Today’s price / GAAP diluted EPS of four releases",
+   "shown": "Not shown",
+   "note": "As Trailing P/E: the price is the same on both sides, so the gap is the EPS.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1042,
+    "rel": 892,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 711,
+    "close": 79.7,
+    "median": 0.3,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Diluted EPS",
+    "pairs": 4360,
+    "within05": 98.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "P/E vs peers",
+   "field": "peerPe",
+   "source": "forward P/E against the industry’s",
+   "status": "No",
+   "equivalent": "None: built on forward P/E",
+   "shown": "—",
+   "note": "Follows forward P/E.",
+   "kind": "mult"
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "PEG",
+   "field": "peg",
+   "source": "/statistics valuations_metrics.peg_ratio",
+   "status": "No",
+   "equivalent": "None: needs forecast growth",
+   "shown": "—",
+   "note": "Analysts’ growth forecasts.",
+   "kind": "mult"
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "P/B",
+   "field": "priceToBook",
+   "source": "/statistics valuations_metrics.price_to_book_mrq",
+   "status": "Yes",
+   "equivalent": "Market value / equity at the quarter’s end",
+   "shown": "Equity: stock page strip",
+   "note": "Equity in the release is the company’s share (non-controlling interests apart); the market value comes from Twelve Data either way.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1197,
+    "rel": 931,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 739,
+    "close": 59.3,
+    "median": 1.3,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Equity",
+    "pairs": 4868,
+    "within05": 95.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "P/S",
+   "field": "priceToSales",
+   "source": "/statistics valuations_metrics.price_to_sales_ttm",
+   "status": "Yes",
+   "equivalent": "Market value / revenue of four releases",
+   "shown": "Not shown",
+   "note": "As Revenue TTM.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1248,
+    "rel": 990,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 799,
+    "close": 68.3,
+    "median": 0.9,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Revenue",
+    "pairs": 5175,
+    "within05": 90.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "EV / sales",
+   "field": "evToSales",
+   "source": "enterprise value / revenue TTM",
+   "status": "Partly",
+   "equivalent": "As Enterprise value, over revenue of four releases",
+   "shown": "Not shown",
+   "note": "Carries the debt definition.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1215,
+    "rel": 732,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 578,
+    "close": 40.1,
+    "median": 3.1,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "EV/EBITDA",
+   "field": "evToEbitda",
+   "source": "/statistics valuations_metrics.enterprise_to_ebitda",
+   "status": "Partly",
+   "equivalent": "Enterprise value over the company’s EBITDA, where printed",
+   "shown": "Not shown",
+   "note": "Two definitions in one: debt, and the company’s adjusted EBITDA.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1054,
+    "rel": 387,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 292,
+    "close": 9.9,
+    "median": 11.6,
+    "unit": "%",
+    "tol": 2
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "P / op cash",
+   "field": "priceToOcf",
+   "source": "market value / operating cash flow TTM",
+   "status": "Yes",
+   "equivalent": "Market value / operating cash flow of four releases",
+   "shown": "Not shown",
+   "note": "As Operating cash.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1122,
+    "rel": 657,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 532,
+    "close": 91.2,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Operating cash flow",
+    "pairs": 1815,
+    "within05": 96.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "Earnings yield",
+   "field": "earningsYield",
+   "source": "Twelve Data EPS TTM / price",
+   "status": "Yes",
+   "equivalent": "GAAP EPS of four releases / price",
+   "shown": "Not shown",
+   "note": "As Trailing P/E.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1258,
+    "rel": 1040,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 839,
+    "close": 94,
+    "median": 0,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Diluted EPS",
+    "pairs": 4360,
+    "within05": 98.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Valuation",
+   "label": "FCF yield",
+   "field": "fcfYield",
+   "source": "levered FCF TTM / market value",
+   "status": "Partly",
+   "equivalent": "Free cash flow of four releases / market value",
+   "shown": "Not shown",
+   "note": "Levered against unlevered: a different measure, as FCF TTM.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1258,
+    "rel": 687,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 565,
+    "close": 42.1,
+    "median": 1.2,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "FCF worked out (ours)",
+    "pairs": 2501,
+    "within05": 93.8
+   }
+  },
+  {
+   "signal": true,
+   "group": "Profitability",
+   "label": "Gross margin",
+   "field": "grossMargin",
+   "source": "gross profit TTM / revenue TTM",
+   "status": "Yes",
+   "equivalent": "Gross profit / revenue, four releases",
+   "shown": "Quarter: Last Earning AI Extracted › Gross margin; stock page strip",
+   "note": "A Signal input.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1248,
+    "rel": 638,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 532,
+    "close": 79.7,
+    "median": 0,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Gross profit",
+    "pairs": 2402,
+    "within05": 98.5
+   }
+  },
+  {
+   "signal": false,
+   "group": "Profitability",
+   "label": "Operating margin",
+   "field": "operatingMargin",
+   "source": "/statistics financials.operating_margin",
+   "status": "Yes",
+   "equivalent": "Income from operations / revenue, four releases",
+   "shown": "Quarter: Last Earning AI Extracted › Op. margin; stock page strip",
+   "note": "Twelve Data’s is mostly the latest QUARTER’s, not twelve months’: it is within a point of the release’s quarter margin for 62% (2026-10-29) against 27% for the twelve months. Banks print no operating income.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1257,
+    "rel": 812,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 665,
+    "close": 26.5,
+    "median": 2.6,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Operating income",
+    "pairs": 4313,
+    "within05": 98.2
+   }
+  },
+  {
+   "signal": true,
+   "group": "Profitability",
+   "label": "Profit margin",
+   "field": "profitMargin",
+   "source": "net income TTM / revenue TTM",
+   "status": "Yes",
+   "equivalent": "Net income / revenue, four releases",
+   "shown": "Not shown as twelve months",
+   "note": "A Signal input.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1248,
+    "rel": 977,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 786,
+    "close": 90.3,
+    "median": 0,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Net income",
+    "pairs": 5554,
+    "within05": 90.3
+   }
+  },
+  {
+   "signal": true,
+   "group": "Profitability",
+   "label": "FCF margin",
+   "field": "fcfMargin",
+   "source": "levered FCF TTM / revenue TTM",
+   "status": "Partly",
+   "equivalent": "Free cash flow / revenue, four releases",
+   "shown": "Not shown",
+   "note": "Levered against unlevered. A Signal input.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1248,
+    "rel": 675,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 553,
+    "close": 17.4,
+    "median": 3.3,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "FCF worked out (ours)",
+    "pairs": 2501,
+    "within05": 93.8
+   }
+  },
+  {
+   "signal": true,
+   "group": "Profitability",
+   "label": "ROE",
+   "field": "roe",
+   "source": "/statistics financials.return_on_equity_ttm",
+   "status": "Yes",
+   "equivalent": "Net income of four releases / equity at the quarter’s end",
+   "shown": "Not shown",
+   "note": "Twelve Data divides by average equity; the release gives only the quarter-end figure, so expect a gap where equity moved. A Signal input (company type).",
+   "kind": "pct",
+   "coverage": {
+    "td": 1257,
+    "rel": 875,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 695,
+    "close": 51.2,
+    "median": 0.9,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Equity",
+    "pairs": 4868,
+    "within05": 95.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Profitability",
+   "label": "ROA",
+   "field": "roa",
+   "source": "/statistics financials.return_on_assets_ttm",
+   "status": "Yes",
+   "equivalent": "Net income of four releases / total assets at the quarter’s end",
+   "shown": "Total assets: stock page strip",
+   "note": "Average against quarter-end assets, as ROE.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1257,
+    "rel": 905,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 724,
+    "close": 40.5,
+    "median": 1.4,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Total assets",
+    "pairs": 4813,
+    "within05": 99.6
+   }
+  },
+  {
+   "signal": true,
+   "group": "Growth",
+   "label": "Rev grth Q YoY",
+   "field": "revenueGrowthYoY",
+   "source": "/statistics income_statement.quarterly_revenue_growth",
+   "status": "Yes",
+   "equivalent": "Revenue against the same quarter a year earlier, both printed in the release",
+   "shown": "Last Earning AI Extracted › Rev YoY",
+   "note": "The same definition on both sides. A Signal input.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1246,
+    "rel": 1057,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 846,
+    "close": 89.6,
+    "median": 0,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Revenue",
+    "pairs": 5175,
+    "within05": 90.6
+   }
+  },
+  {
+   "signal": true,
+   "group": "Growth",
+   "label": "Earn grth Q YoY",
+   "field": "earningsGrowthYoY",
+   "source": "/statistics income_statement.quarterly_earnings_growth_yoy",
+   "status": "Yes",
+   "equivalent": "Net income against the same quarter a year earlier",
+   "shown": "Last Earning AI Extracted › Net income YoY",
+   "note": "Off a loss there is no rate on our side; Twelve Data sometimes gives one. A Signal input.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1206,
+    "rel": 934,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 736,
+    "close": 84.1,
+    "median": 0,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Net income",
+    "pairs": 5554,
+    "within05": 90.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Growth",
+   "label": "EPS TTM",
+   "field": "dilutedEpsTtm",
+   "source": "/statistics income_statement.diluted_eps_ttm",
+   "status": "Yes",
+   "equivalent": "GAAP diluted EPS, four releases summed",
+   "shown": "Quarter: Last Earning AI Extracted › EPS GAAP",
+   "note": "A split inside the four quarters breaks the sum; quarter EPS do not add exactly.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1258,
+    "rel": 1040,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 839,
+    "close": 76,
+    "median": 0.3,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Diluted EPS",
+    "pairs": 4360,
+    "within05": 98.6
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Cash",
+   "field": "totalCash",
+   "source": "/statistics balance_sheet.total_cash_mrq",
+   "status": "Yes",
+   "equivalent": "Cash and equivalents with short-term investments, quarter end",
+   "shown": "Last Earning AI Extracted › Cash; stock page strip",
+   "note": "Restricted cash and long-dated investments sit in or out depending on the company.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 956,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 760,
+    "close": 83.4,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Cash",
+    "pairs": 4720,
+    "within05": 94.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Debt",
+   "field": "totalDebt",
+   "source": "/statistics balance_sheet.total_debt_mrq",
+   "status": "Partly",
+   "equivalent": "The current and long-term debt lines as printed",
+   "shown": "Stock page strip",
+   "note": "Definitions differ a lot (leases, commercial paper, other borrowings): it agreed with the filings’ total in only about 38%. Not a reliable swap.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 805,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 637,
+    "close": 20.7,
+    "median": 9.2,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Net cash",
+   "field": "netCash",
+   "source": "total cash − total debt",
+   "status": "Partly",
+   "equivalent": "Cash and short-term investments − the debt lines",
+   "shown": "Not shown",
+   "note": "Carries the debt definition.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 791,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 626,
+    "close": 18.1,
+    "median": 12.9,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Net cash / share",
+   "field": "netCashPerShare",
+   "source": "net cash / shares outstanding",
+   "status": "Partly",
+   "equivalent": "As Net cash, over diluted shares",
+   "shown": "Not shown",
+   "note": "Debt definition and diluted against outstanding shares.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 764,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 607,
+    "close": 13.2,
+    "median": 14.4,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Debt / equity",
+   "field": "debtToEquity",
+   "source": "/statistics balance_sheet.total_debt_to_equity_mrq",
+   "status": "Partly",
+   "equivalent": "Debt lines / equity at the quarter’s end",
+   "shown": "Not shown",
+   "note": "Twelve Data states it in percent (78 for 0.78); compared as a ratio here. Carries the debt definition.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1258,
+    "rel": 751,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 592,
+    "close": 18.9,
+    "median": 10.2,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Current ratio",
+   "field": "currentRatio",
+   "source": "/statistics balance_sheet.current_ratio_mrq",
+   "status": "Yes",
+   "equivalent": "Current assets / current liabilities at the quarter’s end",
+   "shown": "Not shown",
+   "note": "Banks and insurers do not split current from long-term.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1196,
+    "rel": 775,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 622,
+    "close": 95.5,
+    "median": 0,
+    "unit": "%",
+    "tol": 2
+   }
+  },
+  {
+   "signal": false,
+   "group": "Financial position",
+   "label": "Net cash %",
+   "field": "netCashPct",
+   "source": "net cash / market value",
+   "status": "Partly",
+   "equivalent": "As Net cash, over market value",
+   "shown": "Not shown",
+   "note": "Carries the debt definition.",
+   "kind": "pct",
+   "coverage": {
+    "td": 1258,
+    "rel": 791,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 626,
+    "close": 38.8,
+    "median": 1.8,
+    "unit": "pts",
+    "tol": 1
+   },
+   "vs10q": {
+    "figure": "Debt (current + long-term)",
+    "pairs": 2883,
+    "within05": 38.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Dividend yield",
+   "field": "divYield",
+   "source": "/statistics dividends_and_splits.forward_annual_dividend_yield",
+   "status": "No",
+   "equivalent": "Not read (some releases announce the dividend)",
+   "shown": "—",
+   "note": "A forward rate. The dividend a release declares could be read; the reader does not ask for it today.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Payout ratio",
+   "field": "payoutRatio",
+   "source": "/statistics dividends_and_splits.payout_ratio",
+   "status": "No",
+   "equivalent": "Not read",
+   "shown": "—",
+   "note": "Would follow a dividend reading.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Shareholder yield",
+   "field": "shareholderYield",
+   "source": "Twelve Data dividend yield + buyback yield (filings)",
+   "status": "No",
+   "equivalent": "Buybacks from the filings already; dividend yield is Twelve Data’s",
+   "shown": "—",
+   "note": "Half from the filings already.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Dividend rate",
+   "field": "divRate",
+   "source": "/statistics dividends_and_splits.forward_annual_dividend_rate",
+   "status": "No",
+   "equivalent": "Not read",
+   "shown": "—",
+   "note": "As Dividend yield.",
+   "kind": "money"
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Ex-dividend",
+   "field": "exDivDate",
+   "source": "/statistics dividends_and_splits.ex_dividend_date",
+   "status": "No",
+   "equivalent": "Not read",
+   "shown": "—",
+   "note": "Dividend declarations come in their own 8-Ks or the release; not read.",
+   "kind": null
+  },
+  {
+   "signal": false,
+   "group": "Dividends and returns",
+   "label": "Dividend paid",
+   "field": "divPayDate",
+   "source": "/statistics dividends_and_splits.dividend_date",
+   "status": "No",
+   "equivalent": "Not read",
+   "shown": "—",
+   "note": "As Ex-dividend.",
+   "kind": null
+  },
+  {
+   "signal": false,
+   "group": "Reporting",
+   "label": "Period",
+   "field": "mostRecentQuarter",
+   "source": "/statistics financials.most_recent_quarter",
+   "status": "Yes",
+   "equivalent": "The quarter’s end, as the release states it",
+   "shown": "Last Earning AI Extracted › Quarter end",
+   "note": "The release names the newer quarter days before Twelve Data does: a median of 6 days in the measurement (90th percentile 16).",
+   "kind": null
+  },
+  {
+   "signal": true,
+   "group": "Reporting",
+   "label": "Reported",
+   "field": "lastEarningsDate",
+   "source": "/earnings (report dates)",
+   "status": "Yes",
+   "equivalent": "The day the results 8-K was filed",
+   "shown": "Last Earning AI Extracted › Reported",
+   "note": "Ours is the SEC filing day. A Signal input (with the next report date for Earnings soon).",
+   "kind": null
+  },
+  {
+   "signal": false,
+   "group": "Reporting",
+   "label": "Last split",
+   "field": "lastSplitDate",
+   "source": "/statistics dividends_and_splits.last_split_date",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "Splits come from the price provider.",
+   "kind": null
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Shares out",
+   "field": "sharesOutstanding",
+   "source": "/statistics stock_statistics.shares_outstanding",
+   "status": "Partly",
+   "equivalent": "Weighted-average diluted shares for the quarter",
+   "shown": "Stock page strip",
+   "note": "Weighted diluted for the quarter against outstanding today: near, not the same. The 10-Q cover page has the outstanding count.",
+   "kind": "money",
+   "coverage": {
+    "td": 1258,
+    "rel": 1039,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 837,
+    "close": 72.9,
+    "median": 1,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Diluted shares",
+    "pairs": 4032,
+    "within05": 97.8
+   }
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Book value/share",
+   "field": "bookValuePerShare",
+   "source": "/statistics balance_sheet.book_value_per_share_mrq",
+   "status": "Yes",
+   "equivalent": "Equity / diluted shares",
+   "shown": "Not shown",
+   "note": "Diluted against outstanding shares.",
+   "kind": "mult",
+   "coverage": {
+    "td": 1258,
+    "rel": 948,
+    "of": 1258
+   },
+   "vsTd": {
+    "n": 757,
+    "close": 66.2,
+    "median": 1.2,
+    "unit": "%",
+    "tol": 2
+   },
+   "vs10q": {
+    "figure": "Equity",
+    "pairs": 4868,
+    "within05": 95.3
+   }
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Float",
+   "field": "floatShares",
+   "source": "/statistics stock_statistics.float_shares",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "Filings give public float once a year (10-K cover), in dollars.",
+   "kind": "money"
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Short ratio",
+   "field": "shortRatio",
+   "source": "/statistics stock_statistics.short_ratio",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "FINRA short interest is already read (Short build, days to cover); float is the missing half.",
+   "kind": "mult"
+  },
+  {
+   "signal": true,
+   "group": "Ownership",
+   "label": "Short % float",
+   "field": "shortPctFloat",
+   "source": "/statistics stock_statistics.shares_short / float_shares",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "A Signal input (a guard). Needs float.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Short % out",
+   "field": "shortPctOutstanding",
+   "source": "/statistics stock_statistics.short_percent_of_shares_outstanding",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "FINRA short interest over shares outstanding could replace it.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Insiders",
+   "field": "insiderPct",
+   "source": "/statistics stock_statistics.percent_held_by_insiders",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "The proxy statement has it once a year.",
+   "kind": "pct"
+  },
+  {
+   "signal": false,
+   "group": "Ownership",
+   "label": "Institutions",
+   "field": "institutionPct",
+   "source": "/statistics stock_statistics.percent_held_by_institutions",
+   "status": "No",
+   "equivalent": "None",
+   "shown": "—",
+   "note": "The 13F load already counts institutional holders; a percent needs shares outstanding.",
+   "kind": "pct"
+  },
+  {
+   "signal": true,
+   "group": "Scores",
+   "label": "Qual.",
+   "field": "qualityRating",
+   "source": "our score, built from Twelve Data’s fields",
+   "status": "Partly",
+   "equivalent": "Its inputs: margins, growth, ROE, net cash, from the releases where they exist",
+   "shown": "—",
+   "note": "Not a Twelve Data figure but made of them; it would move with its inputs. A Signal input.",
+   "kind": null
+  }
+ ]
+}

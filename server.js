@@ -864,7 +864,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
-                      '/backtest.html': '/backtest', '/quality.html': '/quality',
+                      '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
                       '/adjustedbacktest.html': '/adjustedbacktest',
@@ -976,6 +976,24 @@ app.get('/recon', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'recon');
   res.sendFile(path.join(__dirname, 'private', 'recon.html'));
+}));
+// TWELVE DATA AND THE RELEASES (2026-10-29): every screener column fed by
+// Twelve Data beside its equivalent from the results releases, with the
+// measured agreement. Admin only; the data is td-release-map.json, built
+// offline by td-release-map.js and kept outside private/ so no member can
+// fetch it as a file.
+app.get('/sources', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  logAct(req, 'page', 'sources');
+  res.sendFile(path.join(__dirname, 'private', 'sources.html'));
+}));
+let tdMapMemo;
+app.get('/api/sources', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(403).json({ error: 'Admin only.' });
+  if (tdMapMemo === undefined) { try { tdMapMemo = require('./td-release-map.json'); } catch { tdMapMemo = null; } }
+  if (!tdMapMemo) return res.status(404).json({ error: 'Not built yet: run td-release-map.js.' });
+  res.set('Cache-Control', 'private, no-store');
+  res.json(tdMapMemo);
 }));
 app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
