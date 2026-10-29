@@ -336,7 +336,7 @@ async function cashflowPass() {
     if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
     if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
     const todo = all.filter((r) => (STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
-    console.log(`[${new Date().toISOString()}] ${STATEMENTS ? 'statements' : 'cash flow'} re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? 'COMMIT (cash flow columns only)' : 'DRY RUN'));
+    console.log(`[${new Date().toISOString()}] ${STATEMENTS ? 'statements' : 'cash flow'} re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? (STATEMENTS ? 'COMMIT (statement columns, and cash flow where never read)' : 'COMMIT (cash flow columns only)') : 'DRY RUN'));
     let done = 0, stated = 0, lines = 0, sheets = 0, failed = 0, stop = null;
     const inflight = new Set();
     const one = async (r, text) => {
