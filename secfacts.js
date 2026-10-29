@@ -76,6 +76,11 @@ const CONCEPTS = {
   // owner chose for them (the total stays in `revenue`).
   depreciation: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'Depreciation'],
   netRevenue: ['RevenuesNetOfInterestExpense'],
+  // A bank's net revenue as most banks file it (traced 2026-10-29: only 15 of
+  // 153 financial companies file the tag above): net interest income plus
+  // non-interest income, added in fill() where the direct tag is missing.
+  netInterestIncome: ['InterestIncomeExpenseNet'],
+  noninterestIncome: ['NoninterestIncome'],
   // Positions. Short-term investments, so cash can be read as Twelve Data
   // reads it. THE DEBT LINES, kept apart because the tags overlap (DebtCurrent
   // already holds short-term borrowings and the current portion; LongTermDebt
@@ -144,6 +149,8 @@ const IFRS_CONCEPTS = {
   currentLiabilities: ['CurrentLiabilities'],
   depreciation: ['DepreciationAndAmortisationExpense'],
   netRevenue: [],
+  netInterestIncome: [],
+  noninterestIncome: [],
   shortTermInvestments: ['CurrentInvestments'],
   ltdCurrent: ['CurrentPortionOfLongtermBorrowings'],
   ltdNoncurrent: ['NoncurrentPortionOfNoncurrentBorrowings', 'LongtermBorrowings'],
@@ -222,7 +229,7 @@ function currencyOf(facts) {
 // margins, being a ratio inside one period, are untouched.
 const FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'netIncome',
   'epsDiluted', 'operatingCashFlow', 'capex', 'buybacks', 'dividendsPaid', 'stockComp',
-  'dividendsPerShare', 'interestExpense', 'depreciation', 'netRevenue'];
+  'dividendsPerShare', 'interestExpense', 'depreciation', 'netRevenue', 'netInterestIncome', 'noninterestIncome'];
 function toDollars(rows, currency, fx) {
   const out = [];
   for (const r of rows) {
@@ -394,6 +401,9 @@ function fill(r) {
   }
   r.freeCashFlow = (r.operatingCashFlow != null && r.capex != null)
     ? r.operatingCashFlow - r.capex : null;
+  if (r.netRevenue == null && r.netInterestIncome != null && r.noninterestIncome != null) {
+    r.netRevenue = r.netInterestIncome + r.noninterestIncome;
+  }
   return r;
 }
 
@@ -436,29 +446,36 @@ const NO_DIFF = new Set([...INSTANT, 'sharesDiluted', 'epsDiluted', 'dividendsPe
 // else LongTermDebt less the current portion when that is known, else
 // LongTermDebt as filed. Null when no line is filed at all, never zero.
 function totalDebt(r) {
+  const p = debtParts(r);
+  return p ? p.total : null;
+}
+// The parts, and whether a finance-lease line had to stand in. THE LONG-TERM
+// PART, in order: LongTermDebtNoncurrent; else the lease-inclusive noncurrent
+// line (traced 2026-10-29: NXP, Corning and Micron file DebtCurrent beside
+// LongTermDebtAndCapitalLeaseObligations and nothing plainer, and that pair
+// equals their release's debt exactly); else LongTermDebt less the current
+// portion when known (LongTermDebt holds it), else as filed. THE CURRENT PART:
+// DebtCurrent; else the current portion plus short-term borrowings (commercial
+// paper where no short-term borrowings line is filed); else the lease-inclusive
+// current line. Null when nothing is filed.
+function debtParts(r) {
   if (!r) return null;
   const has = (k) => r[k] != null && Number.isFinite(Number(r[k]));
-  const cur = has('debtCurrent') ? Number(r.debtCurrent)
-    : (has('ltdCurrent') || has('stBorrowings') || has('commercialPaper'))
-      ? (has('ltdCurrent') ? Number(r.ltdCurrent) : 0) + (has('stBorrowings') ? Number(r.stBorrowings) : has('commercialPaper') ? Number(r.commercialPaper) : 0) : null;
-  const lt = has('ltdNoncurrent') ? Number(r.ltdNoncurrent)
-    // LongTermDebt holds the current portion, which the current part already
-    // counts: it comes off whenever it is known. Unknown, LongTermDebt is
-    // taken as filed (it may then hold a current portion counted twice where
-    // DebtCurrent is also filed: rare, and said so).
-    : has('ltdTotal') ? Number(r.ltdTotal) - (has('ltdCurrent') ? Number(r.ltdCurrent) : 0) : null;
-  if (cur == null && lt == null) {
-    if (!has('ltdLeaseNoncurrent') && !has('ltdLeaseCurrent')) return null;
-    return (has('ltdLeaseNoncurrent') ? Number(r.ltdLeaseNoncurrent) : 0) + (has('ltdLeaseCurrent') ? Number(r.ltdLeaseCurrent) : 0)
-      + (has('stBorrowings') ? Number(r.stBorrowings) : has('commercialPaper') ? Number(r.commercialPaper) : 0);
-  }
-  return (cur || 0) + (lt || 0);
+  const v = (k) => Number(r[k]);
+  let leases = false;
+  let cur = null;
+  if (has('debtCurrent')) cur = v('debtCurrent');
+  else if (has('ltdCurrent') || has('stBorrowings') || has('commercialPaper')) cur = (has('ltdCurrent') ? v('ltdCurrent') : 0) + (has('stBorrowings') ? v('stBorrowings') : has('commercialPaper') ? v('commercialPaper') : 0);
+  else if (has('ltdLeaseCurrent')) { cur = v('ltdLeaseCurrent'); leases = true; }
+  let lt = null;
+  if (has('ltdNoncurrent')) lt = v('ltdNoncurrent');
+  else if (has('ltdLeaseNoncurrent')) { lt = v('ltdLeaseNoncurrent'); leases = true; }
+  else if (has('ltdTotal')) lt = v('ltdTotal') - (has('ltdCurrent') ? v('ltdCurrent') : 0);
+  if (cur == null && lt == null) return null;
+  return { current: cur, longTerm: lt, total: (cur || 0) + (lt || 0), leases };
 }
-// Whether totalDebt fell back to the lines that include finance leases.
-function debtWithLeases(r) {
-  const has = (k) => r && r[k] != null && Number.isFinite(Number(r[k]));
-  return !!r && !['debtCurrent', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal'].some(has) && (has('ltdLeaseNoncurrent') || has('ltdLeaseCurrent'));
-}
+// Whether totalDebt took a line that includes finance leases.
+function debtWithLeases(r) { const p = debtParts(r); return !!(p && p.leases); }
 
 function deriveQuarters(rows) {
   // The filing that speaks for each distinct (start, end) — a restatement
@@ -654,7 +671,7 @@ const FILLABLE = ['periodStart', 'revenue', 'costOfRevenue', 'grossProfit',
   'freeCashFlow', 'assets', 'liabilities', 'equity', 'cash', 'debt',
   'sharesDiluted', 'buybacks', 'dividendsPaid', 'stockComp',
   'dividendsPerShare', 'interestExpense', 'currentAssets', 'currentLiabilities',
-  'depreciation', 'netRevenue', 'shortTermInvestments', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal', 'debtCurrent',
+  'depreciation', 'netRevenue', 'netInterestIncome', 'noninterestIncome', 'shortTermInvestments', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal', 'debtCurrent',
   'stBorrowings', 'commercialPaper', 'ltdLeaseNoncurrent', 'ltdLeaseCurrent', 'sharesOutstanding', 'employees', 'publicFloat'];
 
 function latestFilled(rows) {
@@ -1053,7 +1070,7 @@ function newestResults(recent) {
 }
 
 module.exports = {
-  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF, IFRS_CONCEPTS, COVER, totalDebt, debtWithLeases, taxonomyOf, currencyOf, toDollars,
+  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF, IFRS_CONCEPTS, COVER, totalDebt, debtParts, debtWithLeases, taxonomyOf, currencyOf, toDollars,
   periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, ttmSeries, MIN_REVENUE, FILLABLE,
   reconcile, newestResults,

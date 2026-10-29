@@ -31,6 +31,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const store = require('./db.js');
+const SecFacts = require('./secfacts.js');
+const finSector = (s) => /^financial/i.test(String((s && s.sector) || ''));
 
 const OUT = path.join(__dirname, 'td-release-map.json');
 const DAY = 86400000;
@@ -107,7 +109,7 @@ const COLS = [
   { group: 'Scale', label: 'Revenue / employee', field: 'revenuePerEmployee', src: '/profile employees, with revenue TTM', status: 'No', kind: 'money',
     rel: 'Revenue yes; employees no', shown: '—', td: null, relv: null, q10: null,
     note: 'Releases do not give a head count; the 10-K does, once a year.' },
-  { group: 'Scale', label: 'Enterprise value', field: 'enterpriseValue', src: '/statistics valuations_metrics.enterprise_value', status: 'Partly', kind: 'money',
+  { group: 'Scale', label: 'Enterprise value', field: 'enterpriseValue', src: '/statistics valuations_metrics.enterprise_value', status: 'Yes', kind: 'money',
     rel: 'Market value + debt lines − cash and short-term investments', shown: 'Not shown',
     td: (s) => n(s.enterpriseValue), relv: (s, c) => (usd(s) && n(s.marketCap) != null && c.debt != null && c.cash != null ? n(s.marketCap) + c.debt - c.cash : null), q10: 'Debt (current + long-term)',
     note: 'Rides on the debt definition, which differs (leases, commercial paper, other borrowings).' },
@@ -133,7 +135,7 @@ const COLS = [
   { group: 'Valuation', label: 'P/S', field: 'priceToSales', src: '/statistics valuations_metrics.price_to_sales_ttm', status: 'Yes', kind: 'mult',
     rel: 'Market value / revenue of four releases', shown: 'Not shown',
     td: (s) => pos(n(s.priceToSales)), relv: (s, c) => (usd(s) && pos(n(s.marketCap)) && pos(c.ttm.revenue) ? n(s.marketCap) / c.ttm.revenue : null), q10: 'Revenue', note: 'As Revenue TTM.' },
-  { group: 'Valuation', label: 'EV / sales', field: 'evToSales', src: 'enterprise value / revenue TTM', status: 'Partly', kind: 'mult',
+  { group: 'Valuation', label: 'EV / sales', field: 'evToSales', src: 'enterprise value / revenue TTM', status: 'Yes', kind: 'mult',
     rel: 'As Enterprise value, over revenue of four releases', shown: 'Not shown',
     td: (s) => (usd(s) && pos(n(s.enterpriseValue)) && pos(n(s.revenueTtm)) ? n(s.enterpriseValue) / n(s.revenueTtm) : null),
     relv: (s, c) => (usd(s) && n(s.marketCap) != null && c.debt != null && c.cash != null && pos(c.ttm.revenue) ? (n(s.marketCap) + c.debt - c.cash) / c.ttm.revenue : null), q10: 'Debt (current + long-term)',
@@ -189,18 +191,18 @@ const COLS = [
   { group: 'Financial position', label: 'Cash', field: 'totalCash', src: '/statistics balance_sheet.total_cash_mrq', status: 'Yes', kind: 'money',
     rel: 'Cash and equivalents with short-term investments, quarter end', shown: 'Last Earning AI Extracted › Cash; stock page strip',
     td: (s) => n(s.totalCash), relv: (s, c) => c.cash, q10: 'Cash', note: 'Restricted cash and long-dated investments sit in or out depending on the company.' },
-  { group: 'Financial position', label: 'Debt', field: 'totalDebt', src: '/statistics balance_sheet.total_debt_mrq', status: 'Partly', kind: 'money',
+  { group: 'Financial position', label: 'Debt', field: 'totalDebt', src: '/statistics balance_sheet.total_debt_mrq', status: 'Yes', kind: 'money',
     rel: 'The current and long-term debt lines as printed', shown: 'Stock page strip',
     td: (s) => n(s.totalDebt), relv: (s, c) => c.debt, q10: 'Debt (current + long-term)',
     note: 'Definitions differ a lot (leases, commercial paper, other borrowings): it agreed with the filings’ total in only about 38%. Not a reliable swap.' },
-  { group: 'Financial position', label: 'Net cash', field: 'netCash', src: 'total cash − total debt', status: 'Partly', kind: 'money',
+  { group: 'Financial position', label: 'Net cash', field: 'netCash', src: 'total cash − total debt', status: 'Yes', kind: 'money',
     rel: 'Cash and short-term investments − the debt lines', shown: 'Not shown',
     td: (s) => n(s.netCash), relv: (s, c) => (c.cash != null && c.debt != null ? c.cash - c.debt : null), q10: 'Debt (current + long-term)', note: 'Carries the debt definition.' },
-  { group: 'Financial position', label: 'Net cash / share', field: 'netCashPerShare', src: 'net cash / shares outstanding', status: 'Partly', kind: 'money',
+  { group: 'Financial position', label: 'Net cash / share', field: 'netCashPerShare', src: 'net cash / shares outstanding', status: 'Yes', kind: 'money',
     rel: 'As Net cash, over diluted shares', shown: 'Not shown',
     td: (s) => (usd(s) && n(s.netCash) != null && pos(n(s.sharesOutstanding)) ? n(s.netCash) / n(s.sharesOutstanding) : null), relv: (s, c) => (usd(s) && c.cash != null && c.debt != null && pos(c.shares) ? (c.cash - c.debt) / c.shares : null), q10: 'Debt (current + long-term)',
     note: 'Debt definition and diluted against outstanding shares.' },
-  { group: 'Financial position', label: 'Debt / equity', field: 'debtToEquity', src: '/statistics balance_sheet.total_debt_to_equity_mrq', status: 'Partly', kind: 'mult',
+  { group: 'Financial position', label: 'Debt / equity', field: 'debtToEquity', src: '/statistics balance_sheet.total_debt_to_equity_mrq', status: 'Yes', kind: 'mult',
     rel: 'Debt lines / equity at the quarter’s end', shown: 'Not shown',
     td: (s) => (n(s.debtToEquity) == null ? null : n(s.debtToEquity) / 100), relv: (s, c) => (c.debt != null && pos(c.equity) ? c.debt / c.equity : null), q10: 'Debt (current + long-term)',
     note: 'Twelve Data states it in percent (78 for 0.78); compared as a ratio here. Carries the debt definition.' },
@@ -208,7 +210,7 @@ const COLS = [
     rel: 'Current assets / current liabilities at the quarter’s end', shown: 'Not shown',
     td: (s) => pos(n(s.currentRatio)), relv: (s, c) => (pos(c.curA) && pos(c.curL) ? c.curA / c.curL : null), q10: null,
     note: 'Banks and insurers do not split current from long-term.' },
-  { group: 'Financial position', label: 'Net cash %', field: 'netCashPct', src: 'net cash / market value', status: 'Partly', kind: 'pct',
+  { group: 'Financial position', label: 'Net cash %', field: 'netCashPct', src: 'net cash / market value', status: 'Yes', kind: 'pct',
     rel: 'As Net cash, over market value', shown: 'Not shown',
     td: (s) => n(s.netCashPct), relv: (s, c) => (usd(s) && pos(n(s.marketCap)) && c.cash != null && c.debt != null ? (c.cash - c.debt) / n(s.marketCap) * 100 : null), q10: 'Debt (current + long-term)', note: 'Carries the debt definition.' },
   { group: 'Dividends and returns', label: 'Dividend yield', field: 'divYield', src: '/statistics dividends_and_splits.forward_annual_dividend_yield', status: 'No', kind: 'pct',
@@ -281,29 +283,39 @@ function secContext(qs, others) {
     grossProfit: ttmOf((q) => (q.gross_profit != null ? q.gross_profit : q.cost_of_revenue != null && q.revenue != null ? q.revenue - Math.abs(q.cost_of_revenue) : null)),
     ocf: ttmOf((q) => q.operating_cash_flow), fcf: ttmOf((q) => (q.operating_cash_flow == null || q.capex == null ? null : q.operating_cash_flow - Math.abs(q.capex))),
     dps: ttmOf((q) => q.dividends_per_share), divPaid: ttmOf((q) => (q.dividends_paid == null ? null : Math.abs(q.dividends_paid))),
+    ebitda: ttmOf((q) => (q.operating_income == null || q.depreciation == null ? null : q.operating_income + q.depreciation)),
+    netRevenue: ttmOf((q) => q.net_revenue),
   };
   const yearAgo = qs.find((q) => { const g = (t(last.period_end) - t(q.period_end)) / DAY; return g >= 350 && g <= 380; });
   Object.assign(x, { yearAgo, assets: last.assets, equity: last.equity, cash: last.cash, debt: last.debt, curA: last.current_assets, curL: last.current_liabilities, shares: last.shares_diluted });
+  // The new items (2026-10-29): total debt to the owner's definition, cash with short-term investments, the cover page.
+  const dl = { debtCurrent: last.debt_current, ltdCurrent: last.ltd_current, ltdNoncurrent: last.ltd_noncurrent, ltdTotal: last.ltd_total, stBorrowings: last.st_borrowings, commercialPaper: last.commercial_paper, ltdLeaseNoncurrent: last.ltd_lease_noncurrent, ltdLeaseCurrent: last.ltd_lease_current };
+  x.totalDebt = SecFacts.totalDebt(dl); x.debtLeases = SecFacts.debtWithLeases(dl);
+  x.cashSti = last.cash == null && last.short_term_investments == null ? null : (last.cash || 0) + (last.short_term_investments || 0);
+  x.sharesOut = last.shares_outstanding != null && last.shares_outstanding > 0 ? last.shares_outstanding : null;
+  const emp = [...qs, ...(others || [])].filter((r) => r.employees != null && r.employees > 0).sort((a, b) => (a.period_end < b.period_end ? 1 : -1))[0];
+  x.employees = emp ? emp.employees : null;
+  x.yearAgoNet = yearAgo ? yearAgo.net_revenue : null;
   return x;
 }
 // Per column: status (Yes / Partly / No), the SEC line, and its value.
 const SEC = {
-  'Market Cap': { st: 'Partly', eq: 'Diluted shares for the quarter \u00d7 price', v: (s, x) => (usd(s) && pos(n(s.price)) && x.shares ? n(s.price) * x.shares : null) },
-  'Revenue TTM': { st: 'Yes', eq: 'Revenue, four quarters', v: (s, x) => x.ttm.revenue },
+  'Market Cap': { st: 'Yes', eq: 'Cover-page shares outstanding \u00d7 today\u2019s price', v: (s, x) => (usd(s) && pos(n(s.price)) && x.sharesOut ? n(s.price) * x.sharesOut : null) },
+  'Revenue TTM': { st: 'Yes', eq: 'Revenue, four quarters (net revenue for banks and insurers where filed)', v: (s, x) => (finSector(s) && x.ttm.netRevenue != null ? x.ttm.netRevenue : x.ttm.revenue) },
   'Gross profit': { st: 'Yes', eq: 'Gross profit (or revenue less cost of revenue), four quarters', v: (s, x) => x.ttm.grossProfit },
   'Net income': { st: 'Yes', eq: 'Net income, four quarters', v: (s, x) => x.ttm.netIncome },
   'FCF TTM': { st: 'Yes', eq: 'Operating cash flow less capex, four quarters', v: (s, x) => x.ttm.fcf },
-  'EBITDA': { st: 'No', eq: 'Not stored (needs depreciation)' },
+  'EBITDA': { st: 'Yes', eq: 'Operating income plus depreciation and amortization, four quarters', v: (s, x) => x.ttm.ebitda },
   'Operating cash': { st: 'Yes', eq: 'Net cash from operating activities, four quarters', v: (s, x) => x.ttm.ocf },
-  'Revenue / employee': { st: 'No', eq: 'Head count is in the 10-K text, not the data' },
-  'Enterprise value': { st: 'Partly', eq: 'Market value + debt \u2212 cash', v: (s, x) => (usd(s) && n(s.marketCap) != null && x.debt != null && x.cash != null ? n(s.marketCap) + x.debt - x.cash : null) },
+  'Revenue / employee': { st: 'Partly', eq: 'Revenue over employees, where the filer tags its head count (few do)', v: (s, x) => (x.employees && pos(x.ttm.revenue) ? x.ttm.revenue / x.employees : null) },
+  'Enterprise value': { st: 'Yes', eq: 'Market value + total debt (borrowings) \u2212 cash and short-term investments', v: (s, x) => (usd(s) && n(s.marketCap) != null && (x.totalDebt) != null && (x.cashSti) != null ? n(s.marketCap) + (x.totalDebt) - (x.cashSti) : null) },
   'Fwd P/E': { st: 'No', eq: 'None: estimates' }, 'P/E vs peers': { st: 'No', eq: 'None' }, 'PEG': { st: 'No', eq: 'None: estimates' },
   'Trailing P/E': { st: 'Yes', eq: 'Price / diluted EPS of four quarters', v: (s, x) => (pos(n(s.price)) && pos(x.ttm.eps) ? n(s.price) / x.ttm.eps : null) },
   'Live P/E': { st: 'Yes', eq: 'Today\u2019s price / diluted EPS of four quarters', v: (s, x) => (pos(n(s.price)) && pos(x.ttm.eps) ? n(s.price) / x.ttm.eps : null) },
   'P/B': { st: 'Yes', eq: 'Market value / equity', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.equity) ? n(s.marketCap) / x.equity : null) },
-  'P/S': { st: 'Yes', eq: 'Market value / revenue of four quarters', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.ttm.revenue) ? n(s.marketCap) / x.ttm.revenue : null) },
-  'EV / sales': { st: 'Partly', eq: 'As Enterprise value, over revenue', v: (s, x) => (usd(s) && n(s.marketCap) != null && x.debt != null && x.cash != null && pos(x.ttm.revenue) ? (n(s.marketCap) + x.debt - x.cash) / x.ttm.revenue : null) },
-  'EV/EBITDA': { st: 'No', eq: 'No EBITDA in the data' },
+  'P/S': { st: 'Yes', eq: 'Market value / revenue of four quarters', v: (s, x) => { const r = finSector(s) && x.ttm.netRevenue != null ? x.ttm.netRevenue : x.ttm.revenue; return usd(s) && pos(n(s.marketCap)) && pos(r) ? n(s.marketCap) / r : null; } },
+  'EV / sales': { st: 'Yes', eq: 'Enterprise value over revenue of four quarters', v: (s, x) => (usd(s) && n(s.marketCap) != null && (x.totalDebt) != null && (x.cashSti) != null && pos(x.ttm.revenue) ? (n(s.marketCap) + (x.totalDebt) - (x.cashSti)) / x.ttm.revenue : null) },
+  'EV/EBITDA': { st: 'Yes', eq: 'Enterprise value over EBITDA (operating income plus depreciation), four quarters', v: (s, x) => (usd(s) && n(s.marketCap) != null && (x.totalDebt) != null && (x.cashSti) != null && pos(x.ttm.ebitda) ? (n(s.marketCap) + (x.totalDebt) - (x.cashSti)) / x.ttm.ebitda : null) },
   'P / op cash': { st: 'Yes', eq: 'Market value / operating cash flow of four quarters', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.ttm.ocf) ? n(s.marketCap) / x.ttm.ocf : null) },
   'Earnings yield': { st: 'Yes', eq: 'Diluted EPS of four quarters / price', v: (s, x) => (pos(n(s.price)) && x.ttm.eps != null ? x.ttm.eps / n(s.price) * 100 : null) },
   'FCF yield': { st: 'Yes', eq: 'Operating cash flow less capex / market value', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && x.ttm.fcf != null ? x.ttm.fcf / n(s.marketCap) * 100 : null) },
@@ -316,13 +328,13 @@ const SEC = {
   'Rev grth Q YoY': { st: 'Yes', eq: 'The quarter\u2019s revenue against the same quarter a year earlier', v: (s, x) => (x.yearAgo && x.last.revenue != null && pos(x.yearAgo.revenue) ? (x.last.revenue / x.yearAgo.revenue - 1) * 100 : null) },
   'Earn grth Q YoY': { st: 'Yes', eq: 'The quarter\u2019s net income against the same quarter a year earlier', v: (s, x) => (x.yearAgo && x.last.net_income != null && pos(x.yearAgo.net_income) ? (x.last.net_income / x.yearAgo.net_income - 1) * 100 : null) },
   'EPS TTM': { st: 'Yes', eq: 'Diluted EPS, four quarters', v: (s, x) => x.ttm.eps },
-  'Cash': { st: 'Partly', eq: 'Cash and equivalents (short-term investments apart)', v: (s, x) => x.cash },
-  'Debt': { st: 'Partly', eq: 'Debt, one definition from the filing data', v: (s, x) => x.debt },
-  'Net cash': { st: 'Partly', eq: 'Cash \u2212 debt', v: (s, x) => (x.cash != null && x.debt != null ? x.cash - x.debt : null) },
-  'Net cash / share': { st: 'Partly', eq: 'Cash \u2212 debt, over diluted shares', v: (s, x) => (usd(s) && x.cash != null && x.debt != null && pos(x.shares) ? (x.cash - x.debt) / x.shares : null) },
-  'Debt / equity': { st: 'Partly', eq: 'Debt / equity', v: (s, x) => (x.debt != null && pos(x.equity) ? x.debt / x.equity : null) },
+  'Cash': { st: 'Yes', eq: 'Cash and equivalents plus short-term investments', v: (s, x) => (x.cashSti) },
+  'Debt': { st: 'Yes', eq: 'Total debt, the owner\u2019s definition: borrowings, leases apart (secfacts.js totalDebt)', v: (s, x) => (x.totalDebt) },
+  'Net cash': { st: 'Yes', eq: 'Cash and short-term investments \u2212 total debt', v: (s, x) => ((x.cashSti) != null && (x.totalDebt) != null ? (x.cashSti) - (x.totalDebt) : null) },
+  'Net cash / share': { st: 'Yes', eq: 'Net cash over cover-page shares outstanding', v: (s, x) => (usd(s) && (x.cashSti) != null && (x.totalDebt) != null && x.sharesOut ? ((x.cashSti) - (x.totalDebt)) / x.sharesOut : null) },
+  'Debt / equity': { st: 'Yes', eq: 'Total debt over equity', v: (s, x) => ((x.totalDebt) != null && pos(x.equity) ? (x.totalDebt) / x.equity : null) },
   'Current ratio': { st: 'Yes', eq: 'Current assets / current liabilities', v: (s, x) => (pos(x.curA) && pos(x.curL) ? x.curA / x.curL : null) },
-  'Net cash %': { st: 'Partly', eq: 'Cash \u2212 debt, over market value', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && x.cash != null && x.debt != null ? (x.cash - x.debt) / n(s.marketCap) * 100 : null) },
+  'Net cash %': { st: 'Yes', eq: 'Net cash over market value', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && (x.cashSti) != null && (x.totalDebt) != null ? ((x.cashSti) - (x.totalDebt)) / n(s.marketCap) * 100 : null) },
   'Dividend yield': { st: 'Partly', eq: 'Dividends per share of four quarters / price (trailing, not forward)', v: (s, x) => (usd(s) && pos(n(s.price)) && x.ttm.dps != null ? x.ttm.dps / n(s.price) * 100 : null) },
   'Payout ratio': { st: 'Partly', eq: 'Dividends paid / net income, four quarters', v: (s, x) => (x.ttm.divPaid != null && pos(x.ttm.netIncome) ? x.ttm.divPaid / x.ttm.netIncome * 100 : null) },
   'Shareholder yield': { st: 'Partly', eq: 'Buybacks already from the filings; dividends from the filings too (trailing)' },
@@ -331,8 +343,8 @@ const SEC = {
   'Period': { st: 'Yes', eq: 'The quarter\u2019s end in the 10-Q or 10-K' },
   'Reported': { st: 'Partly', eq: 'The 10-Q\u2019s filing day, not the release\u2019s' },
   'Last split': { st: 'No', eq: 'None' },
-  'Shares out': { st: 'Partly', eq: 'Diluted shares for the quarter (the cover page\u2019s outstanding count is not stored)', v: (s, x) => pos(x.shares) },
-  'Book value/share': { st: 'Yes', eq: 'Equity / diluted shares', v: (s, x) => (pos(x.shares) && x.equity != null ? x.equity / x.shares : null) },
+  'Shares out': { st: 'Yes', eq: 'Shares outstanding from the 10-Q or 10-K cover page (share classes filed apart are missing: Alphabet)', v: (s, x) => x.sharesOut },
+  'Book value/share': { st: 'Yes', eq: 'Equity over cover-page shares outstanding', v: (s, x) => (x.sharesOut && x.equity != null ? x.equity / x.sharesOut : null) },
   'Float': { st: 'No', eq: 'Once a year in dollars (10-K cover)' }, 'Short ratio': { st: 'No', eq: 'None' }, 'Short % float': { st: 'No', eq: 'None' }, 'Short % out': { st: 'No', eq: 'None (FINRA short interest is a separate source)' },
   'Insiders': { st: 'No', eq: 'None' }, 'Institutions': { st: 'No', eq: 'None (13F is a separate source)' },
   'Qual.': { st: 'Partly', eq: 'Its inputs, from the filings where they exist' },
@@ -340,12 +352,7 @@ const SEC = {
 // BEST SOURCE: worked out from the measures (bestOf below) except where the
 // answer is a judgment, not a measurement. These say so in their reason.
 const BEST = {
-  'Market Cap': ['Twelve Data', 'Shares outstanding today times the price; the filings give the quarter\u2019s diluted average, which lags buybacks and issuance.'],
 
-  'Debt': ['Twelve Data, until the SEC lines are in', 'Owner\u2019s decision 2026-10-29: total debt is borrowings (short-term borrowings, commercial paper, current and long-term debt), leases apart. The SEC data stores long-term debt only today, so this waits for the missing lines; then the owner\u2019s rule applies.'],
-  'Net cash': ['Twelve Data', 'As Debt.'], 'Net cash / share': ['Twelve Data', 'As Debt.'], 'Debt / equity': ['Twelve Data', 'As Debt.'], 'Net cash %': ['Twelve Data', 'As Debt.'],
-  'Enterprise value': ['Twelve Data', 'As Debt.'], 'EV / sales': ['Twelve Data', 'As Debt.'],
-  'Shares out': ['Twelve Data', 'Outstanding today; the filings give the quarter\u2019s diluted average.'],
   'Dividend yield': ['Twelve Data', 'Forward, from the declared rate; the filings give trailing dividends.'], 'Dividend rate': ['Twelve Data', 'As Dividend yield.'],
   'Payout ratio': ['Twelve Data', 'Twelve Data\u2019s is on the declared dividend; the filings\u2019 is trailing. Either is defensible.'],
   'Shareholder yield': ['Twelve Data', 'Half is already from the filings (buybacks); the dividend half follows Dividend yield.'],
@@ -417,7 +424,8 @@ function bestOf(o) {
 }
 const num = (v) => Number(v).toLocaleString('en-US');
 const kindMoney = (k) => k === 'money' || k === 'mult';
-const NO_TD_FALLBACK = new Set(['FCF TTM', 'FCF margin', 'FCF yield']);
+// Twelve Data on another definition is no fallback: free cash flow (levered), and total debt and all built on it (its total counts leases; the owner chose borrowings, leases apart).
+const NO_TD_FALLBACK = new Set(['FCF TTM', 'FCF margin', 'FCF yield', 'Debt', 'Net cash', 'Net cash / share', 'Debt / equity', 'Net cash %', 'Enterprise value', 'EV / sales', 'EV/EBITDA']);
 
 // ---- THE PROPOSALS (2026-10-29, the owner: "I want you propose everything in
 // this page ... If a new data item needs to be extracted highlight that also")
@@ -567,7 +575,7 @@ const PLAN = [
   { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.', status: 'decided', note: 'Decided 2026-10-29: operating cash flow less capex.' },
   { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.', status: 'decided', note: 'Decided 2026-10-29: borrowings, leases apart; waits for the SEC debt lines.' },
   { t: 'Add the missing statement columns', d: 'Operating income, capex, interest cover (from data already stored); EBITDA margin, ROIC and FCF per share once their new data is extracted. Listed below.', status: 'open' },
-  { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.', status: 'open' },
+  { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.', status: 'done', note: 'SEC items done 2026-10-29 (secfacts.js, one re-read of every company): depreciation, cover-page shares outstanding, short-term investments, the debt lines, banks’ net revenue, employees, public float. Open: the declared dividend from the releases.' },
 ];
 
 // THE DECISIONS, dated, newest first (the owner, 2026-10-29: "Always keep the
@@ -575,6 +583,7 @@ const PLAN = [
 // decision or change to the data sources, the periods, the groups or the
 // definitions adds a line here in the same commit, and its PLAN step's status.
 const DECISIONS = [
+  { d: '2026-10-29', who: 'Built', t: 'The new SEC data items extracted', x: 'Depreciation and amortization, banks’ net revenue, short-term investments, the debt lines (total debt to the owner’s definition, leases apart), and from the cover page shares outstanding, employees and public float; every company re-read once, no API credits. Debt and all built on it, cash, EBITDA, shares outstanding and market cap now follow the owner’s rule on this page. Open: the declared dividend.' },
   { d: '2026-10-29', who: 'Built', t: 'The stock page, hover card, phone and tiles regrouped', x: 'The same groups as the screener. Five field keys moved (size|FCF TTM, size|Operating cash, growth|EPS TTM, size|Enterprise value, own|Book value/share); saved tile and phone setups follow them through FIELD_KEY_MOVED. Neither saved setup in production used a moved key.' },
   { d: '2026-10-29', who: 'Owner', t: 'Free cash flow is operating cash flow less capex', x: 'Not Twelve Data\u2019s levered figure. The FCF columns run release \u2192 SEC; Twelve Data\u2019s figure is another measure, so it is no fallback. The Signal\u2019s two free cash flow inputs stay on Twelve Data until the owner decides the Signal separately.' },
   { d: '2026-10-29', who: 'Owner', t: 'Total debt is borrowings, leases apart', x: 'Short-term borrowings, commercial paper, current and long-term debt; lease liabilities excluded. Needs the missing SEC debt lines extracted.' },
@@ -629,6 +638,17 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
   }
   const sctx = new Map();
   for (const s of rows) { const x = secContext(secBy.get(s.symbol), secOther.get(s.symbol)); if (x) sctx.set(s.symbol, x); }
+  // How far each new SEC item reaches (2026-10-29): companies with a value in their newest quarter (twelve months for EBITDA; the newest 10-K for the float).
+  const fin = rows.filter((s) => finSector(s) && sctx.has(s.symbol));
+  const COVERED = {
+    da: [...sctx.values()].filter((x) => x.ttm.ebitda != null).length,
+    shout: [...sctx.values()].filter((x) => x.sharesOut).length,
+    sti: [...sctx.values()].filter((x) => x.last.short_term_investments != null).length,
+    debt: [...sctx.values()].filter((x) => x.totalDebt != null).length,
+    banknet: fin.filter((s) => sctx.get(s.symbol).ttm.netRevenue != null).length + ' of ' + fin.length + ' financial companies',
+    emp: [...sctx.values()].filter((x) => x.employees).length,
+    float: [...secOther.values()].filter((l) => l.some((r) => r.period_type === 'FY' && r.public_float != null && (Date.now() - t(r.period_end)) / DAY < 450)).length,
+  };
   const ctx = new Map();
   for (const s of rows) { const c = context(rel.get(s.symbol) || []); if (c) ctx.set(s.symbol, c); }
   { const d = (cmp.timing || []).map((x) => x.d).sort((a, b) => a - b); if (d.length) FILING = { median: d[d.length >> 1], p90: d[Math.floor(0.9 * d.length)] }; }
@@ -669,6 +689,14 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
       gaps.sort((x, y) => x - y);
       const tol = col.kind === 'pct' ? 1 : 2;
       o.sec.coverage = secN;
+      // Against the release on the same quarter: the fair test where Twelve
+      // Data's definition differs (debt: it counts leases).
+      if (col.relv) {
+        const g2 = [];
+        for (const s of rows) { const x = sctx.get(s.symbol), c = ctx.get(s.symbol); if (!x || !c) continue; if (Math.abs(t(x.last.period_end) - t(c.r.period_end)) > 7 * DAY) continue; const a = col.relv(s, c), b = sm.v(s, x); if (a == null || b == null) continue; g2.push(col.kind === 'pct' ? Math.abs(b - a) : Math.abs(b - a) / Math.max(Math.abs(a), 1e-9) * 100); }
+        g2.sort((p, q) => p - q);
+        o.sec.vsRel = g2.length ? { n: g2.length, close: Math.round(1000 * g2.filter((g) => g <= tol).length / g2.length) / 10, median: Math.round(g2[g2.length >> 1] * 10) / 10, unit: col.kind === 'pct' ? 'pts' : '%', tol } : null;
+      }
       o.sec.vsTd = gaps.length ? { n: gaps.length, close: Math.round(1000 * gaps.filter((g) => g <= tol).length / gaps.length) / 10, median: Math.round(gaps[gaps.length >> 1] * 10) / 10, unit: col.kind === 'pct' ? 'pts' : '%', tol } : null;
     }
     if (col.q10 && cmp.fields[col.q10]) {
@@ -698,13 +726,17 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
         const c = ctx.get(s.symbol), x = sctx.get(s.symbol);
         const rv = relIn && c ? col.relv(s, c) : null;
         const sv = secIn && x && sm.v ? sm.v(s, x) : null;
-        const tv = tdIn ? col.td(s) : null;
+        // Twelve Data on another definition is no fallback, but it still votes:
+        // where the release and it agree and the SEC agrees with neither, the
+        // SEC figure is set aside (NXP's debt: release and Twelve Data $10.98B).
+        const tvVote = col.td(s);
+        const tv = tdIn ? tvVote : null;
         let use = null;
         if (sv != null) {
           const sameQ = !c || Math.abs(t(x.last.period_end) - t(c.r.period_end)) <= 7 * DAY || t(x.last.period_end) > t(c.r.period_end);
           if (!sameQ && rv != null) { aside.waiting++; use = 'release'; }
           else if (kindMoney(col.kind) && (rv != null || tv != null) && (rv == null || off20(sv, rv)) && (tv == null || off20(sv, tv))) { aside.scale++; if (eg.scale.length < 5) eg.scale.push(s.symbol + ' SEC ' + big(sv) + ', release ' + (rv == null ? '—' : big(rv)) + ', Twelve Data ' + (tv == null ? '—' : big(tv))); use = rv != null ? 'release' : tv != null ? 'td' : null; }
-          else if (rv != null && tv != null && close(rv, tv) && !close(sv, rv) && !close(sv, tv)) { aside.outvoted++; if (eg.outvoted.length < 5) eg.outvoted.push(s.symbol + ' SEC ' + big(sv) + ', release ' + big(rv) + ', Twelve Data ' + big(tv)); use = 'release'; }
+          else if (rv != null && tvVote != null && close(rv, tvVote) && !close(sv, rv) && !close(sv, tvVote)) { aside.outvoted++; if (eg.outvoted.length < 5) eg.outvoted.push(s.symbol + ' SEC ' + big(sv) + ', release ' + big(rv) + ', Twelve Data ' + big(tvVote)); use = 'release'; }
           else use = 'sec';
         } else if (rv != null) use = 'release';
         else if (tv != null) use = 'td';
@@ -731,7 +763,7 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
       filingSameDayPct: filingLag.length ? Math.round(1000 * filingLag.filter((d) => d === 0).length / filingLag.length) / 10 : null,
       filingMedianDays: filingLag.length ? filingLag[filingLag.length >> 1] : null, filingP90Days: filingLag.length ? filingLag[Math.floor(0.9 * filingLag.length)] : null },
     fromFilings: FROM_FILINGS, decisions: DECISIONS, plan: PLAN, tradingview: TRADINGVIEW, groups: GROUPS, additions: ADDITIONS,
-    extracts: Object.entries(EXTRACT).map(([id, e]) => Object.assign({ id, columns: out.filter((r) => r.proposal && r.proposal.extract === id).map((r) => r.label) }, e)), rows: out };
+    extracts: Object.entries(EXTRACT).map(([id, e]) => Object.assign({ id, status: id === 'divdecl' ? 'open' : 'done', coverage: COVERED[id] == null ? null : (typeof COVERED[id] === 'number' ? COVERED[id] + ' of ' + sctx.size + ' companies with SEC data' : COVERED[id]), columns: out.filter((r) => r.proposal && r.proposal.extract === id).map((r) => r.label) }, e)), rows: out };
   fs.writeFileSync(OUT, JSON.stringify(doc, null, 1));
   const c = (st) => out.filter((r) => r.status === st).length;
   console.log(`written ${OUT}: ${out.length} columns (Yes ${c('Yes')}, Partly ${c('Partly')}, No ${c('No')}); ${ctx.size} of ${rows.length} companies with a release in the last 130 days`);

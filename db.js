@@ -1719,6 +1719,8 @@ const ADDED_COLUMNS = [
   // employees and public float.
   "alter table sec_facts add column depreciation real",
   "alter table sec_facts add column net_revenue real",
+  "alter table sec_facts add column net_interest_income real",
+  "alter table sec_facts add column noninterest_income real",
   "alter table sec_facts add column short_term_investments real",
   "alter table sec_facts add column ltd_current real",
   "alter table sec_facts add column ltd_noncurrent real",
@@ -3404,7 +3406,7 @@ const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
   'currency', 'fx_avg', 'fx_end',
   'buybacks', 'dividends_paid', 'stock_comp',
   'dividends_per_share', 'interest_expense', 'current_assets', 'current_liabilities',
-  'depreciation', 'net_revenue', 'short_term_investments', 'ltd_current', 'ltd_noncurrent', 'ltd_total',
+  'depreciation', 'net_revenue', 'net_interest_income', 'noninterest_income', 'short_term_investments', 'ltd_current', 'ltd_noncurrent', 'ltd_total',
   'debt_current', 'st_borrowings', 'commercial_paper', 'ltd_lease_noncurrent', 'ltd_lease_current',
   'shares_outstanding', 'employees', 'public_float'];
 // camelCase on the row -> snake_case in the table, named once.
@@ -3418,7 +3420,7 @@ const SEC_FIELD = {
   dividends_paid: 'dividendsPaid', stock_comp: 'stockComp',
   dividends_per_share: 'dividendsPerShare', interest_expense: 'interestExpense',
   current_assets: 'currentAssets', current_liabilities: 'currentLiabilities',
-  net_revenue: 'netRevenue', short_term_investments: 'shortTermInvestments', ltd_current: 'ltdCurrent',
+  net_revenue: 'netRevenue', net_interest_income: 'netInterestIncome', noninterest_income: 'noninterestIncome', short_term_investments: 'shortTermInvestments', ltd_current: 'ltdCurrent',
   ltd_noncurrent: 'ltdNoncurrent', ltd_total: 'ltdTotal', debt_current: 'debtCurrent', st_borrowings: 'stBorrowings',
   commercial_paper: 'commercialPaper', ltd_lease_noncurrent: 'ltdLeaseNoncurrent', ltd_lease_current: 'ltdLeaseCurrent', shares_outstanding: 'sharesOutstanding', public_float: 'publicFloat',
 };
