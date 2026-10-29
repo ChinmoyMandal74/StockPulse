@@ -77,3 +77,12 @@ On 2026-10-29, over the 21 columns: **the release 5,497 company-columns (21%), t
 ### Done (2026-10-29)
 
 **Step 1, period tags and the regrouping**, in the screener table: see `column-groups.md`. The `/sources` page shows each plan step's status (done, open, decided, your decision), a dated decisions log (`DECISIONS` in `td-release-map.js`), and "Moved to" on the three columns moved. The catalogue behind the stock page, hover card, phone and tiles is not regrouped yet (its keys are stored).
+
+### The owner's answers (2026-10-29)
+
+- **Free cash flow is operating cash flow less capex**, not Twelve Data's levered figure. The FCF columns follow the rule from the release (our operating cash flow less capex, not the company's own stated free cash flow, whose definitions vary) and the SEC data; Twelve Data's figure is another measure, so it is **no fallback**. Simulated: release 144, SEC 839, and **275 companies blank** (banks and insurers, for which it is not worked out, and companies with no cash flow lines in either source), where today they show Twelve Data's levered figure. The Signal's two free cash flow inputs stay on Twelve Data until the owner decides the Signal.
+- **Total debt is borrowings, leases apart**: short-term borrowings, commercial paper, current and long-term debt. Waits for the missing SEC lines (`EXTRACT.debt`); Twelve Data until then.
+- **Banks' revenue is net revenue**: the release headlines it; the SEC data needs its net revenue concept (`EXTRACT.banknet`, RevenuesNetOfInterestExpense first for financial companies).
+- **Regroup the catalogue too**: the stock page, hover card, phone and tiles into the screener's groups, saved setups carried through `FIELD_KEY_MOVED`.
+
+All four are on `/sources` (`DECISIONS`, the plan's statuses, the FCF and Debt rows, the new extraction item).
