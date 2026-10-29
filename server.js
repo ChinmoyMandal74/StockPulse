@@ -11081,14 +11081,24 @@ function peersFor(stock, stocks, links) {
   // way in this table and another way on the row it came from. It also keeps
   // the payload to ~1KB: six whole snapshot rows would be ~18KB for six cells
   // each.
-  const CELLS = ['info|Price', 'short|Today', 'long|1Y', 'info|Market Cap',
+  // REVENUE, NET INCOME AND PROFIT MARGIN IN PLACE OF PRICE (2026-10-28, the
+  // owner: "remove the price and add Revenue, Net Income and Profit margin").
+  // A share price says nothing about one company beside another; the size and
+  // profitability of the business do. All three are the catalogue's own
+  // fields, so they read as they do on the screener.
+  const CELLS = ['short|Today', 'long|1Y', 'info|Market Cap',
+    'size|Revenue TTM', 'size|Net income', 'profit|Profit margin',
     'value|Live P/E', 'value|Fwd P/E', 'act|Signal'];
+  // Green and red mean price up and down on this page, so a loss or a
+  // negative margin keeps its minus sign and loses the colour the catalogue
+  // gives it.
+  const PLAIN = new Set(['Revenue TTM', 'Net income', 'Profit margin']);
   const peerRow = (x) => {
     const v = RowCard.fieldValues(x);
     const out = { symbol: x.symbol, name: x.shortName || x.name || x.symbol, why: x.actionFlag || '' };
     for (const k of CELLS) {
-      const c = v[k];
-      out[k.slice(k.indexOf('|') + 1)] = c ? { t: c.t, c: c.c || '' } : null;
+      const c = v[k], label = k.slice(k.indexOf('|') + 1);
+      out[label] = c ? { t: c.t, c: PLAIN.has(label) ? '' : (c.c || '') } : null;
     }
     // A MULTIPLE OFF A LOSS IS ARITHMETIC, NOT CHEAPNESS — the Size card's
     // rule and the Bubble card's, met a third time and for the sharpest

@@ -44,3 +44,11 @@ The first version showed the vendor's trailing P/E under the heading "P/E". The 
 The owner, on DELL: "Live PE is not showing for most stocks in the peer section." Only the stock itself had one. Live P/E is not stored: `stampCapDerived` works it out on the way out (price over trailing EPS), and `/api/stock` applied that stamp to the anchor row alone, while the Similar stocks table is drawn from the whole snapshot list. It now stamps the whole list (1,280 rows of arithmetic, no read). Checked on a local read-only server: DELL's six peers and MSFT's six all carry it, Cloudflare (a loss) keeps its dash.
 
 - **Any new read path that draws other companies' rows must stamp THOSE rows**, not only the one it is about. CLAUDE.md's stamp-set rule says "any new read path applies all of them"; this route applied them, to the wrong set.
+
+## Revenue, net income and profit margin in place of price (2026-10-28)
+
+The owner, on SG: "On similar stocks, can you remove the price and add Revenue, Net Income and Profit margin." Price is gone. Three columns sit between Market cap and Live P/E: **Revenue** (`size|Revenue TTM`), **Net income** (`size|Net income`) and **Profit margin** (`profit|Profit margin`), all the catalogue's own fields through `RowCard.fieldValues`, so they read as they do on the screener. They were already on every snapshot row; no new data, nothing near the Signal.
+
+- **Uncoloured here.** The catalogue colours a negative net income and a margin red and a positive margin green. On this page green and red mean price up and down, so `peerRow` drops the class for these three (`PLAIN`) and a loss keeps only its minus sign.
+- **Revenue and net income are in each company's reporting currency** (a Brazilian filer prints `R$`); the note under the table says so. They are shown side by side, never summed.
+- Checked with a 15-check harness on a seeded Restaurants group at 1600px and 390px (headers in order, every drawn figure equals the payload's, plain colour, no sideways page scroll). Proved by reverting: the old code fails the payload checks, and dropping `PLAIN` fails the three colour checks.
