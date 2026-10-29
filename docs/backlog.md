@@ -636,7 +636,7 @@ cannot does not.
 
 ## 14. Getting the scheduled jobs off the laptop — 2026-09-28
 
-*Area: Refresh and jobs · Status: Open*
+*Area: Refresh and jobs · Status: Partly done · Note: the nightly, intraday and headlines jobs moved to Fly.io on 2026-10-28; the releases loader is entry 53*
 
 The owner's question: **as the number of refresh jobs grows, how is the laptop
 dependency removed — is a cloud machine the answer?** Recommendation below;
@@ -2534,6 +2534,55 @@ Measured with `/api/diag/serve-timing` the same day: the snapshot read is
   the plain row and read only when its stamp is the version, so every reader
   is unchanged. The per-symbol rows remain open, if the cold read is still
   too slow once measured.
+
+Nothing here touches the Signal.
+
+## 53. Moving the Earnings releases loader to Fly.io — 2026-10-28
+
+*Area: Refresh and jobs · Status: Open · Note: waiting until a few nightlies have run cleanly on Fly*
+
+On 2026-10-28 the nightly, intraday and headlines jobs moved from the
+laptop's Task Scheduler to one Fly.io machine (`tickrlab-jobs`, `fly/cron.js`;
+see scheduled-jobs.md). The owner agreed to move `release-load.js` next, but
+only after the Fly nightlies had proved themselves. The first, at 16:00 that
+day, ran 73 minutes and exited 0.
+
+**Why it is not just one more line in `schedule.js`.** The three jobs that
+moved are pings: plain HTTP calls to the deployed app, needing nothing beyond
+Node, so the image holds four files and no `node_modules`. The releases loader
+is a different kind of job:
+
+- **It writes to Turso itself** through `db.js`, so the image needs
+  `package.json`, an `npm ci` (for `@libsql/client` and `dotenv`), `db.js` and
+  `releases.js`. Fly would then hold the production `TURSO_DATABASE_URL` and
+  `TURSO_AUTH_TOKEN`, a second copy of the keys beside the laptop's `.env`.
+  This is the cost entry 14 named.
+- **It calls the Anthropic API itself:** `ANTHROPIC_API_KEY` as a Fly secret,
+  and `RELEASE_MODEL` if it is ever set. The spend cap ($2 a run) lives in the
+  loader, so it moves unchanged.
+- **It reads sec.gov directly** (each 8-K's Exhibit 99.1, and the 10-Q
+  check). This address has already had a 429 then a 403 from the SEC. A Fly
+  machine's outbound address is new to the SEC and may be shared with other
+  tenants, so how it is treated is unknown. `SEC_UA` (or `REPORT_TO` /
+  `MAIL_FROM`, from which the user agent is built) must be set there too.
+- **It sends three mails** (the digest, the Earnings results mailing, and
+  Reporting today) through the app's routes with `CRON_SECRET`, which Fly
+  already holds.
+
+**The steps:**
+1. A read-only probe from the machine (`fly ssh console`): fetch one known
+   Exhibit 99.1 with the declared user agent, and confirm a 200.
+2. Widen the Dockerfile and `.dockerignore`; stage the secrets with
+   `fly secrets import` (the owner runs it); set `host: 'fly'` and a `limit` on
+   the `releases` job in `schedule.js`; extend `schedule-test.js`.
+3. Run one by hand from Fly on a weekday evening, compare its `/news-runs` entry
+   with the laptop's last, then disable `TickrLab earnings releases` (kept as
+   the way back, as the others were).
+
+**What would make it a bad idea:** the probe returning 403. In that case,
+keep the job on the laptop. Article tone has the same open question about
+Yahoo Finance and needs its own probe. The schedule report stays on the laptop
+by design, since it reports what the laptop's Task Scheduler holds.
 
 Nothing here touches the Signal.
 
