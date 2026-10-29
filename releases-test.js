@@ -515,6 +515,14 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('stmt: a share count no scale fits is refused', r.row.dilShares === null && r.problems.some((p) => /diluted shares/.test(p)), r.problems);
   r = Rel.toRow(stA({ gross_profit: { printed: '92,279', prior_printed: '', unit: 'billions' } }, {}), t3, mref);
   check('stmt: gross profit above revenue is refused', r.row.grossProfit === null && r.problems.some((p) => /income lines do not fit/.test(p)), r.problems);
+  r = Rel.toRow(stA({ cost_of_revenue: { printed: '(29,720)', prior_printed: '(24,043)', unit: 'millions' } }, {}), t3, mref);
+  check('stmt: cost of revenue printed as a deduction is stored positive', r.row.costRev === 29720e6 && r.row.costRevPrior === 24043e6, [r.row.costRev, r.row.costRevPrior]);
+  // No revenue kept: the twelve months' revenue from the price data is the reference.
+  const noRev = (bs) => Object.assign(stA({}, bs), { revenue: { printed: '', prior_printed: '', unit: 'millions' } });
+  r = Rel.toRow(noRev({ unit: 'billions' }), t3, Object.assign({}, m, { ref: { shares: 7.43e9, revenueTtm: 350e9 } }));
+  check('stmt: without the quarter’s revenue, a balance-sheet slip is refused against the twelve months', r.row.revenue === null && r.row.bsAssets === null && r.problems.some((p) => /total assets/.test(p)), r.problems);
+  r = Rel.toRow(noRev({}), t3, Object.assign({}, m, { ref: { shares: 7.43e9, revenueTtm: 350e9 } }));
+  check('stmt: without the quarter’s revenue, a right one is kept', r.row.bsAssets === 779403e6 && r.row.grossProfit === 62559e6, r.problems);
   r = Rel.toRow(base, t3, m);
   check('stmt: not read is null, not zero', r.row.stmtRead === null && r.row.bsAssets === undefined && r.row.grossProfit === undefined);
 

@@ -47,6 +47,10 @@ const TABLES = [
   // company), never a distinct over sec_facts, which would scan it.
   { name: 'sec_facts', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state' },
   { name: 'splits', dated: false, bySymbol: false, optIn: '--sec' },
+  // The AI readings of the results releases (2026-10-29, for comparing them
+  // with the 10-Q and the price provider): ~42,000 wide rows, copied a company
+  // at a time on the (symbol, filed) index, with --sec.
+  { name: 'earnings_releases', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state' },
 ];
 
 // Re-pull this many days on top of what is already local. The archive rewrites

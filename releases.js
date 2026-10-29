@@ -353,8 +353,17 @@ function toRow(ans, text, meta) {
   const IM = A.income_more, BS = A.balance_sheet;
   const stmt = { stmtRead: isRes && IM && BS ? 1 : null };
   if (stmt.stmtRead) {
-    let [gp, gpPrior] = money('gross profit', IM.gross_profit), [cor, corPrior] = money('cost of revenue', IM.cost_of_revenue), [eb, ebPrior] = money('EBITDA', IM.ebitda);
-    const over = (v, rev, k) => v != null && rev > 0 && Math.abs(v) > rev * k;
+    let [gp, gpPrior] = money('gross profit', IM.gross_profit), [eb, ebPrior] = money('EBITDA', IM.ebitda);
+    // Cost of revenue as a positive amount (the comparison, 2026-10-29: 218
+    // stored negative, printed in parentheses as a deduction), as capex is.
+    let [cor, corPrior] = money('cost of revenue', IM.cost_of_revenue).map((v) => (v == null ? null : Math.abs(v)));
+    // THE REFERENCE WHEN THE QUARTER'S REVENUE IS NOT KEPT (the comparison:
+    // AIRO's revenue refused, so nothing checked its equity, stored $680
+    // billion for $680 million): a quarter of the twelve months' revenue from
+    // the price data, with the bands three times looser, as it is only near.
+    const refQ = ref.revenueTtm > 0 ? ref.revenueTtm / 4 : null;
+    const baseOf = (rev) => (rev > 0 ? { r: rev, k: 1 } : refQ ? { r: refQ, k: 3 } : null);
+    const over = (v, rev, k) => { const b = baseOf(rev); return v != null && !!b && Math.abs(v) > b.r * k * b.k; };
     if (over(gp, revenueG, 1.05) || over(cor, revenueG, 5) || over(eb, revenueG, 5)) { problems.push('income lines do not fit the quarter’s revenue (scale doubtful)'); gp = cor = eb = null; }
     if (over(gpPrior, revenuePriorG, 1.05) || over(corPrior, revenuePriorG, 5) || over(ebPrior, revenuePriorG, 5)) { problems.push('income lines a year earlier do not fit that quarter’s revenue (scale doubtful)'); gpPrior = corPrior = ebPrior = null; }
     let [sh, shPrior] = money('diluted shares', { printed: (IM.diluted_shares || {}).printed, prior_printed: (IM.diluted_shares || {}).prior_printed, unit: IM.diluted_shares_unit });
@@ -384,7 +393,8 @@ function toRow(ans, text, meta) {
     let bsOk = ['cash', 'short_term_investments', 'current_assets', 'current_liabilities', 'equity', 'debt_current', 'debt_long_term'].every((k) => inside(bs[k]))
       && (bs.cash == null || bs.current_assets == null || bs.cash <= bs.current_assets * 1.001);
     if (!bsOk) problems.push('balance sheet lines do not add up (a line larger than total assets, or cash larger than current assets)');
-    if (bsOk && ta != null && revenueG > 0 && (ta < revenueG * 0.1 || ta > revenueG * 2000)) { problems.push('total assets ' + ta + ' do not fit the quarter’s revenue (scale doubtful)'); bsOk = false; }
+    const tb = baseOf(revenueG);
+    if (bsOk && ta != null && tb && (ta < tb.r * 0.1 / tb.k || ta > tb.r * 2000 * tb.k)) { problems.push('total assets ' + ta + ' do not fit the quarter’s revenue (scale doubtful)'); bsOk = false; }
     const asOf = blankStr(BS.as_of);
     Object.assign(stmt, { grossProfit: gp, grossProfitPrior: gpPrior, costRev: cor, costRevPrior: corPrior, ebitda: eb, ebitdaPrior: ebPrior,
       ebitdaLabel: eb != null || ebPrior != null ? blankStr(IM.ebitda_label) : null, dilShares: sh, dilSharesPrior: shPrior,

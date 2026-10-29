@@ -115,7 +115,12 @@ const DRIVERS = flag('--drivers');
 // only the releases read for the statements whose diluted shares are blank, and
 // write the share counts alone (the rest of the stored reading is kept).
 const RESHARES = flag('--reshares');
-const STATEMENTS = flag('--statements') || RESHARES;
+// --restmt: after the comparison's two fixes (cost of revenue stored positive;
+// the twelve months' revenue as the scale reference when the quarter's is not
+// kept), read the statements again for the releases they touch: a negative
+// cost of revenue, or no revenue kept. Statement columns only.
+const RESTMT = flag('--restmt');
+const STATEMENTS = flag('--statements') || RESHARES || RESTMT;
 const CASHFLOW = flag('--cashflow') || STATEMENTS;
 const DERIVE_ONLY = flag('--derive-only');
 const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since', '') : STATEMENTS ? '2025-07-01' : '2026-04-01';
@@ -339,7 +344,7 @@ async function cashflowPass() {
   if (!DERIVE_ONLY) {
     if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
     if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
-    const todo = all.filter((r) => (RESHARES ? r.stmtRead === 1 && r.dilShares == null && r.dilSharesPrior == null : STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
+    const todo = all.filter((r) => (RESHARES ? r.stmtRead === 1 && r.dilShares == null && r.dilSharesPrior == null : RESTMT ? r.stmtRead === 1 && (r.costRev < 0 || r.costRevPrior < 0 || r.revenue == null) : STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
     console.log(`[${new Date().toISOString()}] ${STATEMENTS ? 'statements' : 'cash flow'} re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? (STATEMENTS ? 'COMMIT (statement columns, and cash flow where never read)' : 'COMMIT (cash flow columns only)') : 'DRY RUN'));
     let done = 0, stated = 0, lines = 0, sheets = 0, failed = 0, stop = null;
     const inflight = new Set();
