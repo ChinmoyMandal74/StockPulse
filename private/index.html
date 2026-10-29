@@ -2661,8 +2661,13 @@
 
     function earningsCell(s, cacheTitle) {
       const cls = 'grp-info';
-      const d = s.nextEarningsDate;
-      if (!d) return `<td class="na ${cls}"${attr(cacheTitle)}>—</td>`;
+      // Only a date still ahead, and never for a fund (RowCard.nextEarn).
+      const d = RowCard.nextEarn(s);
+      if (!d) {
+        const lapsed = s.nextEarningsDate && !RowCard.isFund(s)
+          ? `Our estimated report date (${String(s.nextEarningsDate).slice(0, 10)}) has passed with no newer report on file, so the next date is not known yet.` : '';
+        return `<td class="na ${cls}"${attr(lapsed || cacheTitle)}>—</td>`;
+      }
       const est = s.nextEarningsEstimated;
       const days = Math.round((new Date(d) - new Date()) / 86400000);
       const soon = days >= 0 && days <= 7; // reporting within a week = catalyst/risk

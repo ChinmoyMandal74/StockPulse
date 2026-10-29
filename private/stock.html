@@ -2060,7 +2060,12 @@
         // landed on the SAME DAY — the +91 estimate from 4 May is 3 Aug, and
         // the 10-Q really was filed 3 Aug — so the line read as a
         // contradiction. Where the filing is known, it is the better fact.
-        else if (!filedClause) parts.push('due ' + about + next + ', not yet recorded');
+        // An ESTIMATE that lapsed is not a report that is late (2026-10-28,
+        // the owner on Rio Tinto, which reports twice a year): it is our
+        // last-report-plus-a-quarter guess running out. Say only that the
+        // next date is not known; a CONFIRMED day that passed unrecorded
+        // still says so.
+        else if (!filedClause) parts.push(s.nextEarningsEstimated ? 'next date not known yet' : 'due ' + next + ', not yet recorded');
       }
       const pulled = pulledAt;
       if (pulled) {

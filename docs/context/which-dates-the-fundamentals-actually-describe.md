@@ -151,3 +151,13 @@ After the snapshot above, the owner chose "use the confirmed date when the calen
 **What is unchanged:** the Signal's code. `daysToEarnings` still ignores a past date. Only the date it is handed changed.
 
 **Copy:** the Next Earn header says "confirmed when the earnings calendar lists it". `/privacy` lists Alpha Vantage and Nasdaq among the services contacted; nothing about a user reaches them.
+
+## A passed next date is drawn as a dash (2026-10-28)
+
+The owner, on Rio Tinto: "earning date is not correct, it is already passed, I think it only posts annually." RIO showed `~23 Sep`: our estimate, the last report the feed recorded (29 June) plus 91 days. Rio Tinto reports twice a year (full year in February, half year at the end of July), and the provider's report dates for it are not its real results days (2025-09-24, 2025-11-04, 2026-01-08, 2026-03-18, 2026-06-10, 2026-06-29), so the estimate had nothing true to stand on.
+
+On the day, **93 stocks carried a next date already passed, all of them our estimates**: about 60 US companies that had just reported and were waiting for the rotation or the report-triggered re-pull; 23 funds (QQQ, SMH, the XL sector funds), which report no earnings; and foreign filers whose dates the feed does not track (RIO, BTI, HSBC, UL, NVS, NOK, CX, FER, IPX).
+
+- **`RowCard.nextEarn(s)`** returns the date only while it is today or later, and never for a fund. The screener's Next Earn cell (a dash, with a tooltip saying the estimate lapsed), the catalogue field (hover card, phone, compare), the column filter (blank, so `..14` stops matching reports due weeks ago) and the At a glance card all use it. The stock page's caption says "next date not known yet" for a lapsed estimate, and still "due …, not yet recorded" for a confirmed day.
+- **Display only.** `action.js` `daysToEarnings` already reads a passed date as no date, so no verdict moved; nothing stored changed.
+- **Not done, the owner's call:** funds still get an estimated date stored, and the Signal's Earnings soon rule reads it (a fund can show Neutral, Earnings soon, ahead of a report it will never make). Stopping that at source changes a verdict input. Twice-yearly filers get a quarterly estimate until their date appears on the earnings calendar (Alpha Vantage lists about three months ahead).

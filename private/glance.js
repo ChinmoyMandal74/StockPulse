@@ -51,6 +51,10 @@
     const t = new Date(String(iso).slice(0, 10) + 'T12:00:00');
     return isNaN(t.getTime()) ? null : t;
   };
+  // The next report date only while it is still ahead: RowCard.nextEarn,
+  // loaded beside this module on the server and the page. Without it (a
+  // bare test), the stored date as before.
+  const nextDue = (s) => (typeof RowCard !== 'undefined' && RowCard.nextEarn ? RowCard.nextEarn(s) : s.nextEarningsDate) || null;
   const shortDay = (iso) => {
     const t = day(iso);
     return t ? t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
@@ -283,9 +287,9 @@
         if (ey != null) ch.push((num(rel.erEpsYoY) != null ? 'EPS ' : 'adjusted EPS ') + move(ey));
         bits.push('Reported ' + (rel.erPeriodLabel ? rel.erPeriodLabel + ' ' : '') + 'on ' + shortDay(rel.erFiled) + (ch.length ? ': ' + ch.join(', ') + ' on a year ago.' : '.'));
         if (rel.erVsEstWord) bits.push('EPS came in ' + (rel.erVsEstWord === 'In line' ? 'in line with' : rel.erVsEstWord.toLowerCase()) + ' the estimate.');
-        if (s.nextEarningsDate && s.nextEarningsDate > rel.erFiled) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
+        if (nextDue(s) && nextDue(s) > rel.erFiled) bits.push('Next report ' + shortDay(nextDue(s)) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
       } else {
-        if (s.nextEarningsDate) bits.push('Next report ' + shortDay(s.nextEarningsDate) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
+        if (nextDue(s)) bits.push('Next report ' + shortDay(nextDue(s)) + (s.nextEarningsEstimated ? ' (estimated).' : '.'));
         if (sur != null) bits.push('Last report ' + (sur > 0 ? 'beat' : sur < 0 ? 'missed' : 'met') + ' the estimate' + (sur ? ' by ' + pct(sur) : '') + '.');
       }
       const vw = rel && rel.erVsEstWord;
@@ -440,7 +444,7 @@
       case 'earn': {
         // With a release: the EPS against the estimate in a word, else the day it reported.
         if (s.erFiled) return s.erVsEstWord ? k(String(s.erVsEstWord), 'vs the estimate, ' + shortDay(s.erFiled)) : k(shortDay(s.erFiled), 'reported' + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : ''));
-        if (s.nextEarningsDate) return k(shortDay(s.nextEarningsDate), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
+        if (nextDue(s)) return k(shortDay(nextDue(s)), s.nextEarningsEstimated ? 'next report, estimated' : 'next report');
         const sur = n('lastSurprise'); return sur != null ? k(signed(sur), 'last surprise') : null; }
       case 'capret': { const dy = n('divYield'), by = n('buybackYield');
         return dy != null && by != null ? k(pct(dy + by), 'shareholder yield') : dy != null ? k(pct(dy), 'dividend yield') : null; }

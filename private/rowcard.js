@@ -282,8 +282,8 @@
                                 }],
     ['info',  'Tone 7D',        (s) => (s.toneAvg == null || !isFinite(s.toneAvg) ? null
                                   : { t: (s.toneAvg > 0 ? '+' : s.toneAvg < 0 ? '\u2212' : '') + Math.abs(s.toneAvg).toFixed(2) + (s.toneN ? ' · ' + s.toneN + ' read' : ''), c: '' })],
-    ['info',  'Next Earn',      (s) => s.nextEarningsDate
-                                  ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(s.nextEarningsDate), c: '' } : null],
+    ['info',  'Next Earn',      (s) => nextEarn(s)
+                                  ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(nextEarn(s)), c: '' } : null],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
     ['act',   'Type',           (s) => V.text(s.companyType)],
     ['act',   'Trend',          (s) => V.text(s.actionTrend)],
@@ -1340,6 +1340,23 @@
 
   function isFund(s) { return !!s && s.instrumentType === 'ETF'; }
 
+  // THE NEXT REPORT DATE, ONLY WHILE IT IS STILL AHEAD (2026-10-28, the owner
+  // on Rio Tinto: "earning date is not correct, it is already passed"). Our
+  // estimate is the last report plus a quarter, so when the feed records no
+  // newer report the estimate simply lapses: 93 stocks carried a passed date
+  // that day, among them companies that report twice a year (Rio Tinto, BAT,
+  // Unilever), companies that reported days ago and have not been re-pulled,
+  // and funds, which report no earnings at all. A passed date is not a next
+  // date, so every surface draws a dash. Display only: the Signal already
+  // reads a passed date as no date (action.js daysToEarnings).
+  function nextEarn(s, now) {
+    if (!s || !s.nextEarningsDate || isFund(s)) return null;
+    const d = String(s.nextEarningsDate).slice(0, 10);
+    const t = new Date(now || Date.now());
+    const today = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    return d >= today ? d : null;
+  }
+
   function notApplicable(g, label, s) {
     return isFund(s) && FUND_NA_GROUPS.indexOf(g) >= 0
       && !FUND_HAS.has(g + '|' + label);
@@ -1760,7 +1777,7 @@
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
     GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, fieldName, NOW_WORD,
-    fieldCatalogue, fieldValues, fieldProps, isFund,
+    fieldCatalogue, fieldValues, fieldProps, isFund, nextEarn,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 // Loadable in Node as well as the browser (2026-09-16): the server asks

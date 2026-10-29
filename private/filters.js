@@ -173,7 +173,13 @@
         Object.keys(mine).filter((n) => (mine[n] || []).includes(x.symbol))).join(' · ');
     }
     if (key === 'nextEarningsDate') {
-      return x.nextEarningsDate ? Math.round((new Date(x.nextEarningsDate) - new Date()) / 86400000) : null;
+      // Days until the report. A date already passed is not a next date (the
+      // screener draws a dash for it, RowCard.nextEarn), so it is blank here
+      // too and "..14" no longer matches reports that were due weeks ago.
+      // A fund reports no earnings.
+      if (!x.nextEarningsDate || x.instrumentType === 'ETF') return null;
+      const days = Math.round((new Date(String(x.nextEarningsDate).slice(0, 10) + 'T12:00:00') - new Date(new Date().toDateString() + ' 12:00')) / 86400000);
+      return days >= 0 ? days : null;
     }
     if (key === 'pricedAt') {
       // Hours since this stock's price was fetched. >24 is "not refreshed for
