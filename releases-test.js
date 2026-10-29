@@ -448,7 +448,7 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '', prior_printed: '', unit: 'millions', label: '' } }), t, m);
   check('fcf: none given is null with an empty label, not zero', r.row.fcf === null && r.row.fcfPrior === null && r.row.fcfLabel === '', r.row);
   r = Rel.toRow(base, t, m);
-  check('fcf: an answer without the field is none given', r.row.fcf === null && r.row.fcfLabel === '', r.row);
+  check('fcf: an answer without the cash flow reading is not read (null), not none given', r.row.fcf === null && r.row.fcfLabel === null, r.row);
   r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '35,000', prior_printed: '', unit: 'millions', label: 'Free cash flow' } }), t, m);
   check('fcf: a worked-out figure not in the release is refused', r.row.fcf === null && r.problems.some((p) => /free cash flow "35,000"/.test(p)), r.problems);
   r = Rel.toRow(Object.assign({}, base, { free_cash_flow: { printed: '24,463', prior_printed: '', unit: 'billions', label: '' } }), t, m);
@@ -463,6 +463,43 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('fcfSub: off a negative prior, the prior instead of a percentage', /^a year ago /.test(RV.fcfSub({ fcf: 120, fcfPrior: -100, fcfLabel: 'Free cash flow' }, sub)));
   check('fcfSub: none given', /^none given/.test(RV.fcfSub({ fcf: null, fcfPrior: null, fcfLabel: '' }, sub)));
   check('fcfSub: read before it was asked for', /^not read/.test(RV.fcfSub({ fcf: null, fcfPrior: null, fcfLabel: null }, sub)));
+
+  // ---- the cash flow lines, and free cash flow worked out from them ----
+  const t2 = 'Revenues | 127,580 | 102,346 | Nine months ended | Net cash provided by operating activities | 112,500 | 96,000 | Purchases of property and equipment | (90,000) | (60,000) | in millions';
+  const cfa = (cf) => Object.assign({}, base, { cash_flow: Object.assign({ months: '9', operating_printed: '112,500', operating_prior_printed: '96,000', capex_printed: '(90,000)', capex_prior_printed: '(60,000)', capex_label: 'Purchases of property and equipment', unit: 'millions' }, cf) });
+  r = Rel.toRow(cfa({}), t2, m);
+  check('cf: lines kept, capex as a positive amount, months', r.row.cfMonths === 9 && r.row.ocf === 112500e6 && r.row.ocfPrior === 96000e6 && r.row.capex === 90000e6 && r.row.capexPrior === 60000e6 && /property/.test(r.row.capexLabel) && !r.problems.length, [r.row, r.problems]);
+  r = Rel.toRow(cfa({ operating_printed: '112,000' }), t2, m);
+  check('cf: a line not in the release is refused', r.row.ocf === null && r.problems.some((p) => /operating cash flow "112,000"/.test(p)), r.problems);
+  r = Rel.toRow(cfa({ unit: 'billions' }), t2, m);
+  check('cf: a scale slip against revenue (scaled to nine months) is refused', r.row.ocf === null && r.row.capex === null && r.problems.some((p) => /cash flow lines do not fit/.test(p)), r.problems);
+  r = Rel.toRow(cfa({ months: 'none', operating_printed: '', operating_prior_printed: '', capex_printed: '', capex_prior_printed: '' }), t2, m);
+  check('cf: none given is null, not zero', r.row.cfMonths === null && r.row.ocf === null && r.row.capex === null && r.row.capexLabel === null, r.row);
+
+  const D = Rel.deriveFcf, Q = { isResults: true };
+  let d = D(Object.assign({}, Q, { cfMonths: 3, ocf: 50, capex: 20, ocfPrior: 40, capexPrior: 25 }), null);
+  check('derive: a quarter statement directly', d.fcfCalc === 30 && d.fcfCalcPrior === 15 && d.fcfCalcFrom === 'quarter', d);
+  const q3 = Object.assign({}, Q, { accn: 'c', periodEnd: '2026-09-30', cfMonths: 9, ocf: 300, capex: 120, ocfPrior: 240, capexPrior: 100 });
+  const q2 = Object.assign({}, Q, { accn: 'b', periodEnd: '2026-06-30', filed: '2026-07-28', cfMonths: 6, ocf: 190, capex: 70, ocfPrior: 150, capexPrior: 60 });
+  const q1 = Object.assign({}, Q, { accn: 'a', periodEnd: '2026-03-31', filed: '2026-04-28', cfMonths: 3, ocf: 80, capex: 30, ocfPrior: 70, capexPrior: 30 });
+  check('derive: prevRelease picks the period before', Rel.prevRelease(q3, [q1, q3, q2]).accn === 'b' && Rel.prevRelease(q1, [q2, q3]) === null);
+  d = D(q3, q2);
+  check('derive: nine months less six', d.fcfCalc === (300 - 120) - (190 - 70) && d.fcfCalcPrior === (240 - 100) - (150 - 60) && d.fcfCalcFrom === 'ytd', d);
+  d = D(q2, q1);
+  check('derive: six months less a quarter statement', d.fcfCalc === 120 - 50 && d.fcfCalcPrior === 90 - 40, d);
+  check('derive: a year to date without the release before is withheld', D(q3, null).fcfCalc === null && D(q3, q1).fcfCalc === null, [D(q3, null), D(q3, q1)]);
+  check('derive: a period gap that is not a quarter is withheld', D(q3, Object.assign({}, q2, { periodEnd: '2026-03-31' })).fcfCalc === null);
+  d = D(q3, Object.assign({}, q2, { ocfPrior: null }));
+  check('derive: one missing line withholds that side only, never a zero', d.fcfCalc === 60 && d.fcfCalcPrior === null, d);
+  check('derive: never for a financial company', D(q3, q2, { financial: true }).fcfCalc === null && Rel.isFinancial('Financial Services') && !Rel.isFinancial('Technology') && !Rel.isFinancial(null));
+  check('derive: not a results release, or no lines', D(Object.assign({}, q3, { isResults: false }), q2).fcfCalc === null && D(Object.assign({}, q3, { cfMonths: null }), q2).fcfCalc === null);
+
+  // The card: the company's figure first, ours marked, none.
+  check('fcfValue: the company figure wins over ours', RV.fcfValue({ fcf: 5e9, fcfCalc: 7e9, fcfLabel: 'Free cash flow' }) === '$5.00B');
+  check('fcfValue: ours where none is stated', RV.fcfValue({ fcf: null, fcfCalc: 7e9, fcfLabel: '' }) === '$7.00B');
+  check('fcfSub: ours is marked worked out, with the change', /^worked out: \+40\.0% on a year ago\|.*states no free cash flow.*9 months to date less the previous release’s 6/.test(RV.fcfSub({ fcf: null, fcfCalc: 7e9, fcfCalcPrior: 5e9, fcfCalcFrom: 'ytd', cfMonths: 9, fcfLabel: '' }, sub)));
+  check('fcfSub: ours for the quarter says so', /for the quarter/.test(RV.fcfSub({ fcf: null, fcfCalc: 7e9, fcfCalcPrior: null, fcfCalcFrom: 'quarter', cfMonths: 3, fcfLabel: '' }, sub)));
+  check('fcfSub: neither is none given', /^none given/.test(RV.fcfSub({ fcf: null, fcfCalc: null, fcfCalcPrior: null, fcfLabel: '' }, sub)));
 }
 
 console.log(`${ran} checks, ${failed} failed`);

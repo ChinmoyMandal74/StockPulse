@@ -1804,6 +1804,20 @@ const ADDED_COLUMNS = [
   'alter table earnings_releases add column fcf real',
   'alter table earnings_releases add column fcf_prior real',
   'alter table earnings_releases add column fcf_label text',
+  // The cash flow statement's two lines as copied (for the months they cover,
+  // often the year to date), and free cash flow worked out from them where the
+  // release states none (releases.js deriveFcf): the quarter, the year-earlier
+  // quarter, and how ('quarter' or 'ytd', the year to date less the previous
+  // release's). Ours, and always shown as ours.
+  'alter table earnings_releases add column cf_months integer',
+  'alter table earnings_releases add column ocf real',
+  'alter table earnings_releases add column ocf_prior real',
+  'alter table earnings_releases add column capex real',
+  'alter table earnings_releases add column capex_prior real',
+  'alter table earnings_releases add column capex_label text',
+  'alter table earnings_releases add column fcf_calc real',
+  'alter table earnings_releases add column fcf_calc_prior real',
+  'alter table earnings_releases add column fcf_calc_from text',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -3066,7 +3080,9 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['summary', 'summary'], ['url', 'url'], ['exhibit', 'exhibit'], ['problems', 'problems'], ['model', 'model'], ['in_tok', 'inTok'], ['out_tok', 'outTok'], ['usd', 'usd'], ['read_at', 'readAt'],
   ['sec_form', 'secForm'], ['sec_filed', 'secFiled'], ['sec_revenue', 'secRevenue'], ['sec_net_income', 'secNetIncome'], ['sec_eps', 'secEps'], ['sec_check', 'secCheck'], ['sec_differs', 'secDiffers'], ['sec_checked_at', 'secCheckedAt'],
   ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior'], ['drivers', 'drivers'],
-  ['fcf', 'fcf'], ['fcf_prior', 'fcfPrior'], ['fcf_label', 'fcfLabel']];
+  ['fcf', 'fcf'], ['fcf_prior', 'fcfPrior'], ['fcf_label', 'fcfLabel'],
+  ['cf_months', 'cfMonths'], ['ocf', 'ocf'], ['ocf_prior', 'ocfPrior'], ['capex', 'capex'], ['capex_prior', 'capexPrior'], ['capex_label', 'capexLabel'],
+  ['fcf_calc', 'fcfCalc'], ['fcf_calc_prior', 'fcfCalcPrior'], ['fcf_calc_from', 'fcfCalcFrom']];
 function erOut(x) {
   const o = {};
   for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
@@ -3090,6 +3106,24 @@ async function readReleasesToCheck(sinceDay) {
   await init();
   const r = await db.execute({ sql: 'select * from earnings_releases where filed >= ? and is_results = 1 and sec_check is null', args: [String(sinceDay)] });
   return r.rows.map(erOut);
+}
+// THE CASH FLOW RE-READ (release-load.js --cashflow, 2026-10-29): the stated
+// free cash flow and the two cash flow lines, set beside a reading made before
+// they were asked for. Nothing else in the row is touched.
+async function writeReleaseCashFlow(accn, c) {
+  await init();
+  await db.execute({
+    sql: 'update earnings_releases set fcf = ?, fcf_prior = ?, fcf_label = ?, cf_months = ?, ocf = ?, ocf_prior = ?, capex = ?, capex_prior = ?, capex_label = ? where accn = ?',
+    args: [c.fcf ?? null, c.fcfPrior ?? null, c.fcfLabel ?? null, c.cfMonths ?? null, c.ocf ?? null, c.ocfPrior ?? null, c.capex ?? null, c.capexPrior ?? null, c.capexLabel ?? null, String(accn)],
+  });
+}
+// Free cash flow worked out (releases.js deriveFcf), set beside the reading.
+async function writeReleaseFcfCalc(accn, c) {
+  await init();
+  await db.execute({
+    sql: 'update earnings_releases set fcf_calc = ?, fcf_calc_prior = ?, fcf_calc_from = ? where accn = ?',
+    args: [c.fcfCalc ?? null, c.fcfCalcPrior ?? null, c.fcfCalcFrom ?? null, String(accn)],
+  });
 }
 // The 10-Q's figures and the comparison, set beside the reading (never over it).
 async function writeReleaseCheck(accn, c) {
@@ -8469,7 +8503,7 @@ module.exports = {
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readGroupYears, writeGroupYears, readGroupDays, writeGroupDays, readFigure,
-  writeEarningsRelease, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
+  writeEarningsRelease, writeReleaseCashFlow, writeReleaseFcfCalc, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
   readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,

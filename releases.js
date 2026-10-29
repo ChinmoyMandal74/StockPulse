@@ -57,7 +57,7 @@ const FIG = (what) => ({ type: 'object', additionalProperties: false, required: 
   prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
   unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in, from the table heading or the sentence (e.g. "In millions").' } } });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'free_cash_flow', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'drivers', 'summary'],
+  required: ['is_results_release', 'period_label', 'period_end', 'currency', 'revenue', 'operating_income', 'net_income', 'eps_gaap_diluted', 'eps_adjusted', 'guidance', 'guidance_items', 'guidance_change', 'drivers', 'summary'],
   properties: {
     is_results_release: { type: 'boolean', description: 'True if this document reports the company’s financial results for a completed quarter, whatever it is called (a press release, a shareholder letter, a quarterly "Update"). False for a preliminary estimate of results, a contract or deal announcement, or anything without the completed quarter’s figures.' },
     period_label: { type: 'string', description: 'The company’s own name for the quarter, e.g. "Third Quarter 2026".' },
@@ -66,16 +66,6 @@ const SCHEMA = { type: 'object', additionalProperties: false,
     revenue: FIG('Total revenue (or net sales, total net revenue) for the three months, not year to date.'),
     operating_income: FIG('GAAP income (loss) from operations for the three months.'),
     net_income: FIG('GAAP net income (loss) attributable to the company for the three months.'),
-    // FREE CASH FLOW (2026-10-29, the owner): only the company's own stated
-    // figure. Never worked out from operating cash flow less capital spending,
-    // and never a year-to-date or twelve-month one passed off as the quarter.
-    free_cash_flow: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed', 'unit', 'label'],
-      description: 'Free cash flow for the three months, ONLY where the release itself prints a figure it calls free cash flow (or its own close name for it, e.g. "Free cash flow (non-GAAP)", "Adjusted free cash flow"). Never compute it from operating cash flow and capital expenditures. All empty strings if the release gives no such figure for the three months (a year-to-date or twelve-month figure alone is not one).',
-      properties: {
-        printed: { type: 'string', description: 'This quarter, exactly as printed (parentheses for a negative), no $ sign. Empty string if not given.' },
-        prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
-        unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in.' },
-        label: { type: 'string', description: 'The company’s own name for the figure, e.g. "Free cash flow". Empty string if none given.' } } },
     eps_gaap_diluted: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed'], description: 'GAAP diluted earnings (loss) per share for the three months.',
       properties: { printed: { type: 'string' }, prior_printed: { type: 'string' } } },
     eps_adjusted: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed', 'label', 'excludes'],
@@ -141,6 +131,51 @@ const SYSTEM = 'You read a company’s quarterly results press release and copy 
 // 6000, not 3000 (the history backfill, 2026-10-23): a hundred releases with
 // long outlooks (Intuit, J&J, Cigna, Danaher) stopped at the limit and were
 // left unread. Paid only when used: at most about $0.0015 more a release.
+// ---- CASH FLOW: A SECOND, SMALL READING (2026-10-29) -----------------------
+// The free cash flow the company states, and the cash flow statement's two
+// lines that ours is worked out from. A request of its own: added to SCHEMA
+// they made the answer's grammar larger than the API compiles ("The compiled
+// grammar is too large"), so the main reading keeps its proven schema. The
+// quarter's revenue is asked again so toRow's scale guards have it. Its answer
+// is merged into the main one before toRow; the same checks apply.
+const CF_SCHEMA = { type: 'object', additionalProperties: false, required: ['revenue', 'free_cash_flow', 'cash_flow'],
+  properties: {
+    revenue: FIG('Total revenue (or net sales, total net revenue) for the three months, not year to date.'),
+    // FREE CASH FLOW (2026-10-29, the owner): only the company's own stated
+    // figure. Never worked out from operating cash flow less capital spending,
+    // and never a year-to-date or twelve-month one passed off as the quarter.
+    free_cash_flow: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed', 'unit', 'label'],
+      description: 'Free cash flow for the three months, ONLY where the release itself prints a figure it calls free cash flow (or its own close name for it, e.g. "Free cash flow (non-GAAP)", "Adjusted free cash flow"). Never compute it from operating cash flow and capital expenditures. All empty strings if the release gives no such figure for the three months (a year-to-date or twelve-month figure alone is not one).',
+      properties: {
+        printed: { type: 'string', description: 'This quarter, exactly as printed (parentheses for a negative), no $ sign. Empty string if not given.' },
+        prior_printed: { type: 'string', description: 'The same quarter a year earlier, exactly as printed. Empty string if not given.' },
+        unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in.' },
+        label: { type: 'string', description: 'The company’s own name for the figure, e.g. "Free cash flow". Empty string if none given.' } } },
+    // THE CASH FLOW STATEMENT'S TWO LINES (2026-10-29, the owner: "also work
+    // on the derived logic"): where a release prints no free cash flow, ours
+    // is worked out from these (deriveFcf), and always shown as ours. Copied
+    // for the period the statement covers, which is often the year to date;
+    // the quarter is then the year to date less the previous release's.
+    cash_flow: { type: 'object', additionalProperties: false, required: ['months', 'operating_printed', 'operating_prior_printed', 'capex_printed', 'capex_prior_printed', 'capex_label', 'unit'],
+      description: 'From the cash flow statement (or a cash flow reconciliation table) in the release: net cash provided by (used in) operating activities, and capital expenditures (the purchases of property and equipment line in investing activities). The three months if the release gives them; otherwise the year to date it gives. All empty strings and months "none" if the release has no such figures.',
+      properties: {
+        months: { type: 'string', enum: ['3', '6', '9', '12', 'none'], description: 'How many months the copied figures cover: 3 for the quarter, 6, 9 or 12 for a year to date (12 for a full fiscal year in a fourth-quarter release).' },
+        operating_printed: { type: 'string', description: 'Net cash provided by (used in) operating activities, this period, exactly as printed (parentheses for negative). Empty if not given.' },
+        operating_prior_printed: { type: 'string', description: 'The same, for the same period a year earlier, exactly as printed. Empty if not given.' },
+        capex_printed: { type: 'string', description: 'Capital expenditures (purchases of property and equipment, or property, plant and equipment), this period, exactly as printed, parentheses kept. Only that one line. Empty if not given.' },
+        capex_prior_printed: { type: 'string', description: 'The same line for the same period a year earlier, exactly as printed. Empty if not given.' },
+        capex_label: { type: 'string', description: 'The line’s name as printed, e.g. "Purchases of property and equipment".' },
+        unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in.' } } },
+  } };
+const CF_SYSTEM = 'You read a company’s quarterly results press release and copy cash flow figures out of it into fixed fields. '
+  + 'Copy each number EXACTLY as printed in the document; never compute, round, convert or derive one. If a figure is not in the document, give an empty string. '
+  + 'Free cash flow only as the company itself states it for the three months. The cash flow statement lines for the three months if given, otherwise for the year to date given, with its length in months. '
+  + 'Report what the document says; add nothing.';
+function cfRequest(text, model) {
+  return { model: model || MODEL, max_tokens: 1500, system: CF_SYSTEM,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: CF_SCHEMA } },
+    messages: [{ role: 'user', content: '<release>\n' + String(text).slice(0, MAX_CHARS) + '\n</release>' }] };
+}
 function request(text, model) {
   return { model: model || MODEL, max_tokens: 6000, system: SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
@@ -219,6 +254,12 @@ function toRow(ans, text, meta) {
   const [opIncome, opIncomePrior] = isRes ? money('operating income', A.operating_income) : [null, null];
   const [netIncome, netIncomePrior] = isRes ? money('net income', A.net_income) : [null, null];
   const [fcf, fcfPrior] = isRes ? money('free cash flow', A.free_cash_flow) : [null, null];
+  const CF = A.cash_flow || {};
+  const cfMonths = isRes && ['3', '6', '9', '12'].includes(String(CF.months)) ? Number(CF.months) : null;
+  const cfFig = (p, q) => ({ printed: p, prior_printed: q, unit: CF.unit });
+  let [ocf, ocfPrior] = cfMonths ? money('operating cash flow', cfFig(CF.operating_printed, CF.operating_prior_printed)) : [null, null];
+  // Capital spending as a positive amount: printed as an outflow, in parentheses or not.
+  let [capex, capexPrior] = cfMonths ? money('capital expenditures', cfFig(CF.capex_printed, CF.capex_prior_printed)).map((v) => (v == null ? null : Math.abs(v))) : [null, null];
   const E = A.eps_gaap_diluted || {}, J = A.eps_adjusted || {}, G = A.guidance || {};
   const epsGaap = isRes ? num(keep('GAAP EPS', E.printed)) : null;
   const epsGaapPrior = isRes ? num(keep('GAAP EPS a year earlier', E.prior_printed)) : null;
@@ -270,9 +311,14 @@ function toRow(ans, text, meta) {
   let fcfG = fcf, fcfPriorG = fcfPrior;
   if (fcf != null && revenueG > 0 && Math.abs(fcf) > revenueG * 5) { problems.push('free cash flow ' + fcf + ' does not fit the quarter’s revenue (scale doubtful)'); fcfG = null; }
   if (fcfPrior != null && revenuePriorG > 0 && Math.abs(fcfPrior) > revenuePriorG * 5) { problems.push('free cash flow a year earlier ' + fcfPrior + ' does not fit that quarter’s revenue (scale doubtful)'); fcfPriorG = null; }
+  // The cash flow lines against revenue, scaled to the months they cover.
+  const cfCap = (v, rev) => v != null && rev > 0 && Math.abs(v) > rev * 5 * (cfMonths / 3);
+  if (cfCap(ocf, revenueG) || cfCap(capex, revenueG)) { problems.push('cash flow lines do not fit the quarter’s revenue (scale doubtful)'); ocf = null; capex = null; }
+  if (cfCap(ocfPrior, revenuePriorG) || cfCap(capexPrior, revenuePriorG)) { problems.push('cash flow lines a year earlier do not fit that quarter’s revenue (scale doubtful)'); ocfPrior = null; capexPrior = null; }
   // The label: the company's name for it, or '' when the release was read for
-  // it and gives none (null is a reading made before it was asked for).
-  const fcfLabel = !isRes ? null : fcfG == null && fcfPriorG == null ? '' : blankStr((A.free_cash_flow || {}).label) || 'Free cash flow';
+  // it and gives none (null when the cash flow reading was not made: before it
+  // was asked for, or its call failed).
+  const fcfLabel = !isRes || !A.free_cash_flow ? null : fcfG == null && fcfPriorG == null ? '' : blankStr((A.free_cash_flow || {}).label) || 'Free cash flow';
   // Every guidance item, each figure found in the text; and the stated change.
   const guides = isRes ? guideItems(A.guidance_items, keep) : [];
   const ch = isRes ? guideChange(A.guidance_change, norm, problems) : { change: null, quote: null };
@@ -281,7 +327,9 @@ function toRow(ans, text, meta) {
   const row = {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
     isResults: isRes, periodEnd: pe && /^\d{4}-\d{2}-\d{2}$/.test(pe) ? pe : null, periodLabel: blankStr(A.period_label), currency: blankStr(A.currency),
-    revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, fcf: fcfG, fcfPrior: fcfPriorG, fcfLabel, epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
+    revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, fcf: fcfG, fcfPrior: fcfPriorG, fcfLabel,
+    cfMonths: cfMonths && (ocf != null || ocfPrior != null) ? cfMonths : null, ocf, ocfPrior, capex, capexPrior, capexLabel: capex != null || capexPrior != null ? blankStr(CF.capex_label) : null,
+    epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
     epsAdjLabel: epsAdj != null ? blankStr(J.label) : null, epsAdjExcludes: epsAdj != null ? blankStr(J.excludes) : null,
     guideKind: gKind, guidePeriod: gKind ? blankStr(G.period_label) : null, guideLow, guideHigh, guideMid, guidePm,
     guideUnit: gKind ? gUnit : null, guideSentence: gKind ? blankStr(G.sentence) : null, summary,
@@ -291,6 +339,39 @@ function toRow(ans, text, meta) {
   };
   return { row, problems };
 }
+
+// ---- FREE CASH FLOW WORKED OUT (2026-10-29) --------------------------------
+// Where a release states no free cash flow, ours: operating cash flow less
+// capital expenditures, the two lines copied from its cash flow statement.
+// A statement for the quarter gives it directly. A year-to-date statement (6,
+// 9 or 12 months) gives the quarter only less the previous release's year to
+// date three months shorter, whose period ended 75 to 105 days before; the
+// year-earlier quarter the same way from both releases' prior columns. Each
+// side needs all four lines; one missing withholds it, never a zero.
+// Withheld for banks, insurers and other financial companies (opts.financial):
+// their operating cash flow carries lending and trading, not the business's
+// cash. Returns { fcfCalc, fcfCalcPrior, fcfCalcFrom } ('quarter' or 'ytd'),
+// nulls when nothing can be worked out.
+const DAY_MS = 86400000;
+function deriveFcf(row, prev, opts) {
+  const none = { fcfCalc: null, fcfCalcPrior: null, fcfCalcFrom: null };
+  if (!row || !row.isResults || !row.cfMonths || (opts && opts.financial)) return none;
+  const f = (o, p) => (o == null || p == null ? null : o - p);
+  const now = f(row.ocf, row.capex), prior = f(row.ocfPrior, row.capexPrior);
+  if (row.cfMonths === 3) return now == null && prior == null ? none : { fcfCalc: now, fcfCalcPrior: prior, fcfCalcFrom: 'quarter' };
+  if (!prev || prev.cfMonths !== row.cfMonths - 3 || !row.periodEnd || !prev.periodEnd) return none;
+  const gap = (new Date(row.periodEnd + 'T12:00:00') - new Date(prev.periodEnd + 'T12:00:00')) / DAY_MS;
+  if (!(gap >= 75 && gap <= 105)) return none;
+  const c = now == null ? null : f(now, f(prev.ocf, prev.capex)), p = prior == null ? null : f(prior, f(prev.ocfPrior, prev.capexPrior));
+  return c == null && p == null ? none : { fcfCalc: c, fcfCalcPrior: p, fcfCalcFrom: 'ytd' };
+}
+// The release before this one, for the subtraction: the company's results
+// reading whose period ended last before this one's.
+function prevRelease(row, list) {
+  return (list || []).filter((r) => r && r.isResults && r.accn !== row.accn && r.periodEnd && row.periodEnd && r.periodEnd < row.periodEnd)
+    .sort((a, b) => (a.periodEnd < b.periodEnd ? 1 : a.periodEnd > b.periodEnd ? -1 : a.filed < b.filed ? 1 : -1))[0] || null;
+}
+const isFinancial = (sector) => /^financial/i.test(String(sector || ''));
 
 // ---- GUIDANCE ITEMS AND THE STATED CHANGE (2026-10-23) ---------------------
 // Each item: metric, period, its figures as numbers (revenue scaled to units,
@@ -833,4 +914,4 @@ function trackRecord(rows) {
     revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
 }
 
-module.exports = { changeFromPrevious, changeFromHistory, saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { CF_SCHEMA, CF_SYSTEM, cfRequest, deriveFcf, prevRelease, isFinancial, changeFromPrevious, changeFromHistory, saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

@@ -54,16 +54,28 @@
     return '<span class="rv-amb" title="The release’s figure is shown as the company printed it; the 10-Q’s line can be a different one (continuing operations, service revenue).">The '
       + form + ' has ' + esc(said.join(', ')) + '.</span>';
   }
-  // FREE CASH FLOW'S LINE UNDER THE FIGURE (2026-10-29): the change on a year
-  // ago, with the company's own name for it as the hover; "none given" when the
-  // release was read for it and states none, and "not read" for a reading made
-  // before it was asked for. `sub(text, title)` is the page's own line maker.
+  // FREE CASH FLOW (2026-10-29): the company's own figure where the release
+  // states one; otherwise ours, worked out from its cash flow statement
+  // (releases.js deriveFcf) and always marked so. Which one a card shows:
+  const fcfOwn = (r) => r.fcf != null || (r.fcfCalc == null && r.fcfPrior != null);
+  const fcfValue = (r) => money(fcfOwn(r) ? r.fcf : r.fcfCalc, r.currency);
+  // The line under the figure: the change on a year ago, "worked out" before
+  // it for ours, "none given", or "not read" for a reading made before it was
+  // asked for. The hover says where the figure comes from. `sub(text, title)`
+  // is the page's own line maker.
   function fcfSub(r, sub) {
     if (r.fcfLabel == null) return sub('not read for this release', 'This release was read before free cash flow was asked for.');
-    if (r.fcf == null) return sub(r.fcfPrior != null ? 'a year ago ' + money(r.fcfPrior, r.currency) : 'none given',
-      'Only a free cash flow the company itself states for the quarter is shown; it is never worked out here.');
-    const c = chg(r.fcf, r.fcfPrior);
-    return sub(c || (r.fcfPrior != null ? 'a year ago ' + money(r.fcfPrior, r.currency) : r.fcfLabel), 'The company’s own figure: “' + r.fcfLabel + '”');
+    const yr = (a, b) => chg(a, b) || (b != null ? 'a year ago ' + money(b, r.currency) : '');
+    if (fcfOwn(r)) {
+      if (r.fcf == null) return sub('a year ago ' + money(r.fcfPrior, r.currency), 'The company states free cash flow only for the year-earlier quarter.');
+      return sub(yr(r.fcf, r.fcfPrior) || r.fcfLabel, 'The company’s own figure: “' + r.fcfLabel + '”');
+    }
+    if (r.fcfCalc == null && r.fcfCalcPrior == null) return sub('none given',
+      'The release states no free cash flow, and its cash flow statement does not give the quarter (or the company is a bank or insurer, for which it is not worked out).');
+    const how = 'The release states no free cash flow. Worked out here: operating cash flow less capital expenditures'
+      + (r.capexLabel ? ' (“' + r.capexLabel + '”)' : '') + (r.fcfCalcFrom === 'ytd' ? ', the ' + r.cfMonths + ' months to date less the previous release’s ' + (r.cfMonths - 3) + ' months' : ', for the quarter') + '.';
+    if (r.fcfCalc == null) return sub('worked out: a year ago ' + money(r.fcfCalcPrior, r.currency), how);
+    return sub('worked out' + (yr(r.fcfCalc, r.fcfCalcPrior) ? ': ' + yr(r.fcfCalc, r.fcfCalcPrior) : ''), how);
   }
   // Figures the release did not contain as given (the summary's own note is not one).
   const refused = (r) => (r.problems || []).filter((p) => !/^summary/.test(p));
@@ -221,5 +233,5 @@
       guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
       tenQ: r.secCheck || null };
   }
-  root.ReleaseView = { esc, money, eps, chg, fcfSub, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
+  root.ReleaseView = { esc, money, eps, chg, fcfValue, fcfSub, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);
