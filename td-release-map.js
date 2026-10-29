@@ -355,18 +355,55 @@ const BEST = {
   'Operating margin': ['SEC filings', 'Twelve Data\u2019s is mostly the latest quarter\u2019s, not twelve months\u2019; the filings give the twelve months exactly.'],
   'Qual.': ['Follows its inputs', 'A score of ours; its source is whatever its inputs use.'],
 };
+// WHY TWELVE DATA PARTS FROM THE FILINGS, where it does, as traced while
+// building this (the comments above say the same at more length): appended to
+// the agreement figure so a reason names the cause, not just the number.
+const DISAGREE = {
+  'Revenue TTM': 'most of the rest is banks and insurers (net revenue against total)', 'Net income': 'non-controlling interests or preferred dividends in or out',
+  'Gross profit': 'what each counts in cost of revenue', 'Gross margin': 'what each counts in cost of revenue', 'Profit margin': 'non-controlling interests in or out',
+  'Trailing P/E': 'Twelve Data’s price is its own last pull, up to a week old', 'Live P/E': 'quarter EPS do not add exactly to a year’s',
+  'EPS TTM': 'quarter EPS do not add exactly to a year’s', 'Earnings yield': 'quarter EPS do not add exactly to a year’s',
+  'P/B': 'equity with or without non-controlling interests', 'P/S': 'as Revenue TTM', 'ROE': 'Twelve Data divides by average equity, the filings give the quarter end',
+  'ROA': 'Twelve Data divides by average assets, the filings give the quarter end', 'Book value/share': 'diluted average against outstanding shares',
+  'Rev grth Q YoY': 'restated year-earlier quarters, and banks’ revenue line', 'Earn grth Q YoY': 'no rate off a loss on our side; Twelve Data sometimes gives one',
+  'Operating cash': 'restated cash flow statements', 'Cash': 'Twelve Data’s total includes short-term investments; the filing data’s cash line does not', 'P / op cash': 'as Operating cash', 'Current ratio': 'rounding',
+};
+// The timing the reasons quote, from release-compare.js (set before the loop).
+let FILING = { median: null, p90: null };
+const pctTxt = (m) => m.close + '% within ' + m.tol + (m.unit === 'pts' ? ' pt' : '%') + ' (median gap ' + m.median + (m.unit === 'pts' ? (m.median === 1 ? ' pt' : ' pts') : '%') + ')';
+// The evidence, in words: the SEC data's coverage and its agreement with
+// Twelve Data on the same quarter; the release's match with the 10-Q and how
+// much sooner it comes.
+function secEvidence(o) {
+  if (o.sec.coverage == null) return '';
+  return 'SEC filings carry it for ' + num(o.sec.coverage) + ' companies'
+    + (o.sec.vsTd ? '; Twelve Data agrees on ' + pctTxt(o.sec.vsTd) + (DISAGREE[o.label] && o.sec.vsTd.close < 97 ? ', ' + DISAGREE[o.label] : '') : '') + '.';
+}
+function releaseEvidence(o) {
+  if (o.status === 'No') return '';
+  const parts = [];
+  if (o.vs10q) parts.push('matches the 10-Q ' + o.vs10q.within05 + '% within 0.5%');
+  if (FILING.median != null) parts.push('a median ' + FILING.median + ' day' + (FILING.median === 1 ? '' : 's') + ' before the 10-Q (' + FILING.p90 + ' for the slowest tenth)');
+  return parts.length ? 'The release ' + parts.join(', ') + '.' : '';
+}
 function bestOf(o) {
-  if (BEST[o.label]) return { source: BEST[o.label][0], why: BEST[o.label][1] };
+  if (BEST[o.label]) {
+    // A judgment, said in words, with the measures behind it where there are any.
+    const ev = [];
+    if (o.sec.vsTd) ev.push('SEC agrees with Twelve Data on ' + o.sec.vsTd.close + '%');
+    if (o.vsTd) ev.push('the release on ' + o.vsTd.close + '%');
+    return { source: BEST[o.label][0], why: BEST[o.label][1] + (ev.length ? ' Measured: ' + ev.join(', ') + '.' : '') };
+  }
   const td = o.coverage ? o.coverage.td : null;
   const secOk = o.sec.status === 'Yes' && o.sec.coverage != null && td != null && o.sec.coverage >= 0.8 * td;
   const relOk = o.status === 'Yes' && o.coverage && td != null && o.coverage.rel >= 0.8 * td;
   if (secOk) return { source: o.status === 'Yes' ? 'SEC filings, release first' : 'SEC filings',
-    why: 'Exact filing data, ' + num(o.sec.coverage) + ' companies' + (o.status === 'Yes' ? '; the release while the 10-Q is pending.' : '.') };
+    why: 'The filing itself, so exact. ' + secEvidence(o) + (o.status === 'Yes' ? ' ' + releaseEvidence(o) + ' Use it until the 10-Q is in.' : '') };
   if (o.sec.status === 'Yes' && o.sec.coverage != null && td) return { source: 'SEC filings, Twelve Data where missing',
-    why: 'Exact for ' + num(o.sec.coverage) + ' of ' + num(td) + ' companies; Twelve Data for the rest.' };
-  if (relOk) return { source: 'Release', why: 'The release carries it for ' + num(o.coverage.rel) + ' companies.' };
-  if (o.status === 'No' && o.sec.status === 'No') return { source: 'Twelve Data', why: 'The only source.' };
-  return { source: 'Twelve Data', why: 'The filing sources carry it only in part or on another definition.' };
+    why: 'The filing itself, so exact, but for ' + num(o.sec.coverage) + ' of ' + num(td) + ' companies; Twelve Data for the rest. ' + secEvidence(o).replace(/^SEC filings carry it for [\d,]+ companies; /, '') };
+  if (relOk) return { source: 'Release', why: 'The release carries it for ' + num(o.coverage.rel) + ' companies. ' + releaseEvidence(o) };
+  if (o.status === 'No' && o.sec.status === 'No') return { source: 'Twelve Data', why: 'The only source: neither the release nor the filing data has it.' };
+  return { source: 'Twelve Data', why: 'The filing sources have it only in part or on another definition. ' + (secEvidence(o) || releaseEvidence(o)) };
 }
 const num = (v) => Number(v).toLocaleString('en-US');
 
@@ -416,6 +453,7 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
   for (const s of rows) { const x = secContext(secBy.get(s.symbol), secOther.get(s.symbol)); if (x) sctx.set(s.symbol, x); }
   const ctx = new Map();
   for (const s of rows) { const c = context(rel.get(s.symbol) || []); if (c) ctx.set(s.symbol, c); }
+  { const d = (cmp.timing || []).map((x) => x.d).sort((a, b) => a - b); if (d.length) FILING = { median: d[d.length >> 1], p90: d[Math.floor(0.9 * d.length)] }; }
   const out = [];
   for (const col of COLS) {
     const o = { signal: SIGNAL[col.field] || null, signalIndirect: SIGNAL_INDIRECT[col.field] || null, group: col.group, label: col.label, field: col.field, source: col.src, status: col.status, equivalent: col.rel, shown: col.shown, note: col.note, kind: col.kind };

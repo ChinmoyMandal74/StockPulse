@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T14:13:35.670Z",
+ "builtAt": "2026-10-29T15:22:04.612Z",
  "secCompanies": 1150,
  "secSameQuarter": 78.9,
  "secSameQuarterN": 1125,
@@ -45,8 +45,8 @@
    },
    "vsTd": {
     "n": 837,
-    "close": 42.8,
-    "median": 2.4,
+    "close": 35.5,
+    "median": 2.9,
     "unit": "%",
     "tol": 2
    },
@@ -56,8 +56,8 @@
     "coverage": 1055,
     "vsTd": {
      "n": 891,
-     "close": 40.2,
-     "median": 2.6,
+     "close": 35.6,
+     "median": 3.1,
      "unit": "%",
      "tol": 2
     }
@@ -69,7 +69,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance."
+    "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance. Measured: SEC agrees with Twelve Data on 35.6%, the release on 35.5%."
    }
   },
   {
@@ -115,7 +115,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,076 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,076 companies; Twelve Data agrees on 83.1% within 2% (median gap 0%), most of the rest is banks and insurers (net revenue against total). The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -161,7 +161,7 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "Exact for 695 of 1,258 companies; Twelve Data for the rest."
+    "why": "The filing itself, so exact, but for 695 of 1,258 companies; Twelve Data for the rest. Twelve Data agrees on 73.2% within 2% (median gap 0.1%), what each counts in cost of revenue."
    }
   },
   {
@@ -207,7 +207,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,122 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,122 companies; Twelve Data agrees on 76.6% within 2% (median gap 0%), non-controlling interests or preferred dividends in or out. The release matches the 10-Q 90.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -253,7 +253,7 @@
    },
    "best": {
     "source": "Your decision",
-    "why": "Two measures: Twelve Data’s levered free cash flow, or operating cash flow less capex (SEC filings, exact; the release until the 10-Q). The Signal reads Twelve Data’s today."
+    "why": "Two measures: Twelve Data’s levered free cash flow, or operating cash flow less capex (SEC filings, exact; the release until the 10-Q). The Signal reads Twelve Data’s today. Measured: SEC agrees with Twelve Data on 3.2%, the release on 2.5%."
    }
   },
   {
@@ -288,7 +288,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The filing sources carry it only in part or on another definition."
+    "why": "The filing sources have it only in part or on another definition. The release a median 1 day before the 10-Q (13 for the slowest tenth)."
    }
   },
   {
@@ -334,7 +334,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,120 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,120 companies; Twelve Data agrees on 90.4% within 2% (median gap 0%), restated cash flow statements. The release matches the 10-Q 96.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -357,7 +357,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -403,7 +403,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 28.8%, the release on 41.5%."
    }
   },
   {
@@ -426,7 +426,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -448,8 +448,8 @@
    },
    "vsTd": {
     "n": 712,
-    "close": 42.4,
-    "median": 2.6,
+    "close": 36.2,
+    "median": 3,
     "unit": "%",
     "tol": 2
    },
@@ -459,8 +459,8 @@
     "coverage": 855,
     "vsTd": {
      "n": 712,
-     "close": 41.9,
-     "median": 2.7,
+     "close": 36.4,
+     "median": 3,
      "unit": "%",
      "tol": 2
     }
@@ -472,7 +472,7 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "Exact for 855 of 1,162 companies; Twelve Data for the rest."
+    "why": "The filing itself, so exact, but for 855 of 1,162 companies; Twelve Data for the rest. Twelve Data agrees on 36.4% within 2% (median gap 3%), Twelve Data’s price is its own last pull, up to a week old."
    }
   },
   {
@@ -518,7 +518,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 855 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 855 companies; Twelve Data agrees on 81.1% within 2% (median gap 0.1%), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -541,7 +541,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -564,7 +564,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -610,7 +610,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,081 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,081 companies; Twelve Data agrees on 58.2% within 2% (median gap 1.4%), equity with or without non-controlling interests. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -656,7 +656,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,074 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,074 companies; Twelve Data agrees on 62.4% within 2% (median gap 1.1%), as Revenue TTM. The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -702,7 +702,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 27.4%, the release on 40.1%."
    }
   },
   {
@@ -737,7 +737,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The filing sources carry it only in part or on another definition."
+    "why": "The filing sources have it only in part or on another definition. The release a median 1 day before the 10-Q (13 for the slowest tenth)."
    }
   },
   {
@@ -783,7 +783,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,016 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,016 companies; Twelve Data agrees on 90.7% within 2% (median gap 0%), as Operating cash. The release matches the 10-Q 96.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -829,7 +829,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,026 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,026 companies; Twelve Data agrees on 92.5% within 1 pt (median gap 0 pts), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -875,7 +875,7 @@
    },
    "best": {
     "source": "Your decision",
-    "why": "As FCF TTM."
+    "why": "As FCF TTM. Measured: SEC agrees with Twelve Data on 40.6%, the release on 42.1%."
    }
   },
   {
@@ -921,7 +921,7 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "Exact for 695 of 1,248 companies; Twelve Data for the rest."
+    "why": "The filing itself, so exact, but for 695 of 1,248 companies; Twelve Data for the rest. Twelve Data agrees on 75.8% within 1 pt (median gap 0.1 pts), what each counts in cost of revenue."
    }
   },
   {
@@ -967,7 +967,7 @@
    },
    "best": {
     "source": "SEC filings",
-    "why": "Twelve Data’s is mostly the latest quarter’s, not twelve months’; the filings give the twelve months exactly."
+    "why": "Twelve Data’s is mostly the latest quarter’s, not twelve months’; the filings give the twelve months exactly. Measured: SEC agrees with Twelve Data on 24.4%, the release on 26.5%."
    }
   },
   {
@@ -1013,7 +1013,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,070 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,070 companies; Twelve Data agrees on 81.4% within 1 pt (median gap 0 pts), non-controlling interests in or out. The release matches the 10-Q 90.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1059,7 +1059,7 @@
    },
    "best": {
     "source": "Your decision",
-    "why": "As FCF TTM."
+    "why": "As FCF TTM. Measured: SEC agrees with Twelve Data on 14.9%, the release on 17.4%."
    }
   },
   {
@@ -1105,7 +1105,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,055 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,055 companies; Twelve Data agrees on 51.5% within 1 pt (median gap 1 pt), Twelve Data divides by average equity, the filings give the quarter end. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1151,7 +1151,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,120 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,120 companies; Twelve Data agrees on 39.7% within 1 pt (median gap 1.4 pts), Twelve Data divides by average assets, the filings give the quarter end. The release matches the 10-Q 99.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1197,7 +1197,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,100 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,100 companies; Twelve Data agrees on 83.6% within 1 pt (median gap 0 pts), restated year-earlier quarters, and banks’ revenue line. The release matches the 10-Q 90.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1243,7 +1243,7 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "Exact for 960 of 1,206 companies; Twelve Data for the rest."
+    "why": "The filing itself, so exact, but for 960 of 1,206 companies; Twelve Data for the rest. Twelve Data agrees on 81.3% within 1 pt (median gap 0 pts), no rate off a loss on our side; Twelve Data sometimes gives one."
    }
   },
   {
@@ -1289,7 +1289,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,026 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,026 companies; Twelve Data agrees on 77.3% within 2% (median gap 0.1%), quarter EPS do not add exactly to a year’s. The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1335,7 +1335,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The filing sources carry it only in part or on another definition."
+    "why": "The filing sources have it only in part or on another definition. SEC filings carry it for 1,140 companies; Twelve Data agrees on 56.1% within 2% (median gap 0.3%), Twelve Data’s total includes short-term investments; the filing data’s cash line does not."
    }
   },
   {
@@ -1381,7 +1381,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "Every source draws debt differently; none agrees with another often enough to swap. Keep one definition throughout."
+    "why": "Every source draws debt differently; none agrees with another often enough to swap. Keep one definition throughout. Measured: SEC agrees with Twelve Data on 12.3%, the release on 20.7%."
    }
   },
   {
@@ -1427,7 +1427,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 10.5%, the release on 18.1%."
    }
   },
   {
@@ -1473,7 +1473,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 7.5%, the release on 13.2%."
    }
   },
   {
@@ -1519,7 +1519,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 11.1%, the release on 18.9%."
    }
   },
   {
@@ -1560,7 +1560,7 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "Exact for 903 of 1,196 companies; Twelve Data for the rest."
+    "why": "The filing itself, so exact, but for 903 of 1,196 companies; Twelve Data for the rest. Twelve Data agrees on 96.8% within 2% (median gap 0%), rounding."
    }
   },
   {
@@ -1606,7 +1606,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "As Debt."
+    "why": "As Debt. Measured: SEC agrees with Twelve Data on 23.7%, the release on 38.8%."
    }
   },
   {
@@ -1721,7 +1721,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1744,7 +1744,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1813,7 +1813,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1859,7 +1859,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "Outstanding today; the filings give the quarter’s diluted average."
+    "why": "Outstanding today; the filings give the quarter’s diluted average. Measured: SEC agrees with Twelve Data on 73.2%, the release on 72.9%."
    }
   },
   {
@@ -1905,7 +1905,7 @@
    },
    "best": {
     "source": "SEC filings, release first",
-    "why": "Exact filing data, 1,054 companies; the release while the 10-Q is pending."
+    "why": "The filing itself, so exact. SEC filings carry it for 1,054 companies; Twelve Data agrees on 66.9% within 2% (median gap 1.2%), diluted average against outstanding shares. The release matches the 10-Q 95.3% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth). Use it until the 10-Q is in."
    }
   },
   {
@@ -1928,7 +1928,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1951,7 +1951,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1974,7 +1974,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -1997,7 +1997,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -2020,7 +2020,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
@@ -2043,7 +2043,7 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "The only source."
+    "why": "The only source: neither the release nor the filing data has it."
    }
   },
   {
