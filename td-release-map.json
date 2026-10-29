@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T12:51:00.900Z",
+ "builtAt": "2026-10-29T13:06:57.483Z",
  "releasesSince": "2025-07-01",
  "releases": 5942,
  "matched": 5672,
@@ -24,7 +24,8 @@
  ],
  "rows": [
   {
-   "signal": true,
+   "signal": "Company type (size)",
+   "signalIndirect": null,
    "group": "Info",
    "label": "Market Cap",
    "field": "marketCap",
@@ -53,7 +54,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Revenue TTM",
    "field": "revenueTtm",
@@ -82,7 +84,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Gross profit",
    "field": "grossProfitTtm",
@@ -111,7 +114,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (profitability); Fundamentals",
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Net income",
    "field": "netIncomeTtm",
@@ -140,7 +144,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (free cash flow); Fundamentals",
+   "signalIndirect": null,
    "group": "Scale",
    "label": "FCF TTM",
    "field": "fcfTtm",
@@ -169,7 +174,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "EBITDA",
    "field": "ebitda",
@@ -193,7 +199,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Operating cash",
    "field": "operatingCashFlowTtm",
@@ -222,7 +229,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Revenue / employee",
    "field": "revenuePerEmployee",
@@ -234,7 +242,8 @@
    "kind": "money"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Scale",
    "label": "Enterprise value",
    "field": "enterpriseValue",
@@ -263,7 +272,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (priced on earnings; no P/E and no Quality reads as a fund)",
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "Fwd P/E",
    "field": "forwardPe",
@@ -275,7 +285,8 @@
    "kind": "mult"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "Trailing P/E",
    "field": "trailingPe",
@@ -304,7 +315,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "Live P/E",
    "field": "peLive",
@@ -333,7 +345,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "P/E vs peers",
    "field": "peerPe",
@@ -345,7 +358,8 @@
    "kind": "mult"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "PEG",
    "field": "peg",
@@ -357,7 +371,8 @@
    "kind": "mult"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "P/B",
    "field": "priceToBook",
@@ -386,7 +401,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "P/S",
    "field": "priceToSales",
@@ -415,7 +431,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "EV / sales",
    "field": "evToSales",
@@ -444,7 +461,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "EV/EBITDA",
    "field": "evToEbitda",
@@ -468,7 +486,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "P / op cash",
    "field": "priceToOcf",
@@ -497,7 +516,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "Earnings yield",
    "field": "earningsYield",
@@ -526,7 +546,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Valuation",
    "label": "FCF yield",
    "field": "fcfYield",
@@ -555,7 +576,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Fundamentals",
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "Gross margin",
    "field": "grossMargin",
@@ -584,7 +606,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "Operating margin",
    "field": "operatingMargin",
@@ -613,7 +636,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (profitability); Fundamentals",
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "Profit margin",
    "field": "profitMargin",
@@ -642,7 +666,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (free cash flow); Fundamentals",
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "FCF margin",
    "field": "fcfMargin",
@@ -671,7 +696,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Company type (the seventh point when Quality is off)",
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "ROE",
    "field": "roe",
@@ -700,7 +726,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Profitability",
    "label": "ROA",
    "field": "roa",
@@ -729,7 +756,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Fundamentals",
+   "signalIndirect": null,
    "group": "Growth",
    "label": "Rev grth Q YoY",
    "field": "revenueGrowthYoY",
@@ -758,7 +786,8 @@
    }
   },
   {
-   "signal": true,
+   "signal": "Fundamentals",
+   "signalIndirect": null,
    "group": "Growth",
    "label": "Earn grth Q YoY",
    "field": "earningsGrowthYoY",
@@ -787,7 +816,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Growth",
    "label": "EPS TTM",
    "field": "dilutedEpsTtm",
@@ -816,7 +846,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Cash",
    "field": "totalCash",
@@ -845,7 +876,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Debt",
    "field": "totalDebt",
@@ -874,7 +906,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Net cash",
    "field": "netCash",
@@ -903,7 +936,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Net cash / share",
    "field": "netCashPerShare",
@@ -932,7 +966,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Debt / equity",
    "field": "debtToEquity",
@@ -961,7 +996,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Current ratio",
    "field": "currentRatio",
@@ -985,7 +1021,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Financial position",
    "label": "Net cash %",
    "field": "netCashPct",
@@ -1014,7 +1051,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Dividend yield",
    "field": "divYield",
@@ -1026,7 +1064,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Payout ratio",
    "field": "payoutRatio",
@@ -1038,7 +1077,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Shareholder yield",
    "field": "shareholderYield",
@@ -1050,7 +1090,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Dividend rate",
    "field": "divRate",
@@ -1062,7 +1103,8 @@
    "kind": "money"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Ex-dividend",
    "field": "exDivDate",
@@ -1074,7 +1116,8 @@
    "kind": null
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Dividends and returns",
    "label": "Dividend paid",
    "field": "divPayDate",
@@ -1086,7 +1129,8 @@
    "kind": null
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Reporting",
    "label": "Period",
    "field": "mostRecentQuarter",
@@ -1098,7 +1142,8 @@
    "kind": null
   },
   {
-   "signal": true,
+   "signal": null,
+   "signalIndirect": "Indirect: the last report date feeds our next-report estimate (earndate.js), which the Earnings soon rule reads when no announced date is listed",
    "group": "Reporting",
    "label": "Reported",
    "field": "lastEarningsDate",
@@ -1106,11 +1151,12 @@
    "status": "Yes",
    "equivalent": "The day the results 8-K was filed",
    "shown": "Last Earning AI Extracted › Reported",
-   "note": "Ours is the SEC filing day. A Signal input (with the next report date for Earnings soon).",
+   "note": "Ours is the SEC filing day. Not read by the Signal itself; it feeds the next-report estimate behind Earnings soon.",
    "kind": null
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Reporting",
    "label": "Last split",
    "field": "lastSplitDate",
@@ -1122,7 +1168,8 @@
    "kind": null
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Shares out",
    "field": "sharesOutstanding",
@@ -1151,7 +1198,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Book value/share",
    "field": "bookValuePerShare",
@@ -1180,7 +1228,8 @@
    }
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Float",
    "field": "floatShares",
@@ -1192,7 +1241,8 @@
    "kind": "money"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Short ratio",
    "field": "shortRatio",
@@ -1204,7 +1254,8 @@
    "kind": "mult"
   },
   {
-   "signal": true,
+   "signal": "Fundamentals; the heavy-short guard",
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Short % float",
    "field": "shortPctFloat",
@@ -1216,7 +1267,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Short % out",
    "field": "shortPctOutstanding",
@@ -1228,7 +1280,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Insiders",
    "field": "insiderPct",
@@ -1240,7 +1293,8 @@
    "kind": "pct"
   },
   {
-   "signal": false,
+   "signal": null,
+   "signalIndirect": null,
    "group": "Ownership",
    "label": "Institutions",
    "field": "institutionPct",
@@ -1252,7 +1306,8 @@
    "kind": "pct"
   },
   {
-   "signal": true,
+   "signal": "Company type (the seventh point); Fundamentals",
+   "signalIndirect": null,
    "group": "Scores",
    "label": "Qual.",
    "field": "qualityRating",

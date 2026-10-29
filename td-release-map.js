@@ -224,7 +224,7 @@ const COLS = [
     note: 'The release names the newer quarter days before Twelve Data does: a median of 6 days in the measurement (90th percentile 16).' },
   { group: 'Reporting', label: 'Reported', field: 'lastEarningsDate', src: '/earnings (report dates)', status: 'Yes', kind: null,
     rel: 'The day the results 8-K was filed', shown: 'Last Earning AI Extracted › Reported', td: null, relv: null, q10: null,
-    note: 'Ours is the SEC filing day. A Signal input (with the next report date for Earnings soon).' },
+    note: 'Ours is the SEC filing day. Not read by the Signal itself; it feeds the next-report estimate behind Earnings soon.' },
   { group: 'Reporting', label: 'Last split', field: 'lastSplitDate', src: '/statistics dividends_and_splits.last_split_date', status: 'No', kind: null, rel: 'None', shown: '—', td: null, relv: null, q10: null, note: 'Splits come from the price provider.' },
   { group: 'Ownership', label: 'Shares out', field: 'sharesOutstanding', src: '/statistics stock_statistics.shares_outstanding', status: 'Partly', kind: 'money',
     rel: 'Weighted-average diluted shares for the quarter', shown: 'Stock page strip',
@@ -243,8 +243,21 @@ const COLS = [
     rel: 'Its inputs: margins, growth, ROE, net cash, from the releases where they exist', shown: '—', td: null, relv: null, q10: null,
     note: 'Not a Twelve Data figure but made of them; it would move with its inputs. A Signal input.' },
 ];
-// The Signal's fundamental inputs among them (private/action.js reads these).
-const SIGNAL = new Set(['marketCap', 'netIncomeTtm', 'fcfTtm', 'forwardPe', 'grossMargin', 'profitMargin', 'fcfMargin', 'roe', 'revenueGrowthYoY', 'earningsGrowthYoY', 'lastEarningsDate', 'shortPctFloat', 'qualityRating']);
+// THE SIGNAL'S USE OF EACH (private/action.js, read 2026-10-29): which step
+// reads the field. Company type is classify() (size, profitability, free cash
+// flow, priced on earnings, quality or ROE); Fundamentals is fundamentals()
+// (the strong / ok / weak bucket); the guard is definitions()' heavy short.
+// lastEarningsDate is not read by action.js: it only feeds the next report
+// estimate (earndate.js) behind Earnings soon, so it is marked indirect.
+const SIGNAL = {
+  marketCap: 'Company type (size)', forwardPe: 'Company type (priced on earnings; no P/E and no Quality reads as a fund)',
+  netIncomeTtm: 'Company type (profitability); Fundamentals', profitMargin: 'Company type (profitability); Fundamentals',
+  fcfTtm: 'Company type (free cash flow); Fundamentals', fcfMargin: 'Company type (free cash flow); Fundamentals',
+  roe: 'Company type (the seventh point when Quality is off)', qualityRating: 'Company type (the seventh point); Fundamentals',
+  revenueGrowthYoY: 'Fundamentals', earningsGrowthYoY: 'Fundamentals', grossMargin: 'Fundamentals',
+  shortPctFloat: 'Fundamentals; the heavy-short guard',
+};
+const SIGNAL_INDIRECT = { lastEarningsDate: 'Indirect: the last report date feeds our next-report estimate (earndate.js), which the Earnings soon rule reads when no announced date is listed' };
 // Columns that look like Twelve Data's but already come from the filings.
 const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financial position)', 'Buyback yield (Dividends and returns)', 'Shares chg 1Y (Ownership)',
   'every Long run column', '13F holders and 13F shares chg', 'Insider net, Short build, Last 8-K and 5% filing'];
@@ -267,7 +280,7 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
   for (const s of rows) { const c = context(rel.get(s.symbol) || []); if (c) ctx.set(s.symbol, c); }
   const out = [];
   for (const col of COLS) {
-    const o = { signal: SIGNAL.has(col.field), group: col.group, label: col.label, field: col.field, source: col.src, status: col.status, equivalent: col.rel, shown: col.shown, note: col.note, kind: col.kind };
+    const o = { signal: SIGNAL[col.field] || null, signalIndirect: SIGNAL_INDIRECT[col.field] || null, group: col.group, label: col.label, field: col.field, source: col.src, status: col.status, equivalent: col.rel, shown: col.shown, note: col.note, kind: col.kind };
     if (col.td) {
       let tdN = 0, relN = 0; const gaps = [];
       for (const s of rows) {

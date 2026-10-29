@@ -47,13 +47,17 @@
     .sm-bar input[type=search]::placeholder { color: var(--faint); }
 
     .sm-wrap { overflow-x: auto; }
-    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1180px; }
+    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1340px; }
     .sm-wrap th, .sm-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; line-height: 1.45; }
     .sm-wrap thead th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; position: sticky; top: 0; background: var(--surface); }
     .sm-wrap tr.sm-g td { padding-top: 18px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); border-bottom-color: var(--hair-2); }
     .sm-col b { display: block; font-weight: 600; color: var(--text); font-size: 13px; }
     .sm-col code { display: block; margin-top: 3px; font: 11px var(--mono); color: var(--faint); white-space: normal; word-break: break-word; }
-    .sm-sig { display: inline-block; margin-top: 5px; font: 500 10px var(--sans); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; padding: 1px 7px; }
+    /* Orange, not the accent: the Status column's Yes is accent, and the two answer different questions. */
+    .sm-sig { display: inline-block; margin-bottom: 4px; font: 600 11px var(--sans); color: var(--orange); border: 1px solid color-mix(in srgb, var(--orange) 50%, transparent); background: color-mix(in srgb, var(--orange) 9%, transparent); border-radius: 999px; padding: 2px 9px; }
+    .sm-sig.ind { color: var(--muted); border-color: var(--hair-2); background: none; }
+    .sm-use { color: var(--muted); min-width: 150px; max-width: 26ch; }
+    .sm-use .na { color: var(--faint); }
     .sm-st { display: inline-block; font: 600 11px var(--sans); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--hair-2); margin-bottom: 4px; }
     .sm-st.yes { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
     .sm-st.partly { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, transparent); background: color-mix(in srgb, var(--blue) 9%, transparent); }
@@ -121,15 +125,16 @@
 
     function render() {
       const q = $('q').value.trim().toLowerCase();
-      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal)
+      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal || r.signalIndirect)
         && (!q || (r.label + ' ' + r.group + ' ' + r.field + ' ' + r.source + ' ' + r.equivalent).toLowerCase().includes(q)));
       if (!rows.length) { $('tbl').innerHTML = '<div class="sm-empty">No column matches.</div>'; return; }
-      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th title="Whether the Signal (private/action.js) reads this field, and in which step">Signal input</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
       let g = null;
       for (const r of rows) {
-        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="5">${esc(g)}</td></tr>`; }
+        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="6">${esc(g)}</td></tr>`; }
         html += `<tr>
-          <td class="sm-col"><b>${esc(r.label)}</b><code>${esc(r.source)}</code>${r.signal ? '<span class="sm-sig" title="private/action.js reads this field">Signal input</span>' : ''}</td>
+          <td class="sm-col"><b>${esc(r.label)}</b><code>${esc(r.source)}</code></td>
+          <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
           <td class="sm-shown">${esc(r.shown)}</td>
           <td><div class="sm-q">${quality(r)}</div></td>
@@ -152,11 +157,11 @@
         DOC = await r.json();
       } catch (e) { $('tbl').innerHTML = '<div class="sm-empty">' + esc('Could not read the map: ' + e.message) + '</div>'; return; }
       const T = DOC.timing || {}, c = (s) => DOC.rows.filter((r) => r.status === s).length;
-      const sig = DOC.rows.filter((r) => r.signal);
+      const sig = DOC.rows.filter((r) => r.signal), ind = DOC.rows.filter((r) => r.signalIndirect).length;
       const tile = (k, v, s) => `<div class="bezel sm-tile"><div class="core"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div></div>`;
       $('tiles').innerHTML = [
         tile('Twelve Data columns', DOC.rows.length, `${c('Yes')} with an equivalent, ${c('Partly')} partly, ${c('No')} none`),
-        tile('Signal inputs', sig.length, `${sig.filter((r) => r.status === 'Yes').length} with an equivalent, ${sig.filter((r) => r.status === 'Partly').length} partly, ${sig.filter((r) => r.status === 'No').length} none`),
+        tile('Signal inputs', sig.length, `${ind ? '+' + ind + ' indirect; ' : ''}${sig.filter((r) => r.status === 'Yes').length} with an equivalent, ${sig.filter((r) => r.status === 'Partly').length} partly, ${sig.filter((r) => r.status === 'No').length} none`),
         tile('Companies with a release', num(DOC.withReleases), `of ${num(DOC.companies)}, in the last 130 days (funds left out)`),
         tile('Release ahead of Twelve Data', T.tdMedianDays != null ? T.tdMedianDays + ' days' : '—', `median; 90th percentile ${T.tdP90Days ?? '—'} days (${num(T.tdN || 0)} releases, twelve-month revenue)`),
         tile('Release ahead of the 10-Q', T.filingMedianDays != null ? T.filingMedianDays + ' day' + (T.filingMedianDays === 1 ? '' : 's') : '—', `median; same day ${T.filingSameDayPct ?? '—'}%, 90th percentile ${T.filingP90Days ?? '—'} days`),
