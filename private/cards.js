@@ -14134,7 +14134,127 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Stock Signal: one company's Signal and why (2026-10-29) --------------
+  //
+  // The owner: "create a new card under Stock Spotlight called Stock Signal, It
+  // shoud show the signal details and possibly the reason for it". The word,
+  // the one rule that fired, that rule's conditions with this stock's values
+  // against their thresholds, and the four readings behind it (trend, entry,
+  // fundamentals, guards).
+  //
+  // ONE ENGINE. Everything comes from ActionRules.explain over the row the
+  // host holds, the same call the stock page's Signal panel and the intro
+  // card's ladder make; nothing here re-derives a rule. The row is the one the
+  // screener is served (the source rule's figures laid over Twelve Data's), so
+  // the card and the screener read the same Signal.
+  //
+  // A READING, NOT AN INSTRUCTION. Six words of strength, the rule always beside
+  // the word, and the note says what the card is. The Signal word keeps its
+  // tint; nothing else on the card is green or red.
+  let sigCfg = null;
+  const sigRules = () => (sigCfg = sigCfg || ActionRules.resolve({}).cfg);
+  // A condition's value as the rules hold it: percent, days, or a plain number
+  // (RSI, Quality).
+  function sigVal(g) {
+    if (!g || g.value == null || !isFinite(g.value)) return '\u2014';
+    const v = Number(g.value);
+    if (g.unit === '%') return (v > 0 ? '+' : v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(1) + '%';
+    if (g.unit === 'd') return Math.round(v) + (Math.round(v) === 1 ? ' day' : ' days');
+    return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  }
+  // The rules write thresholds with a hyphen; the card prints a minus.
+  const sigLabel = (t) => String(t || '').replace(/(^|[\s(])-(\d)/g, '$1\u2212$2');
+  // A gauge: the scale, the zone that passes shaded, a dot at the value.
+  function sigGauge(g, met) {
+    if (!g || !g.domain) return '<span class="sg-gauge sg-nog"></span>';
+    const [lo, hi] = g.domain, w = hi - lo || 1;
+    const at = (x) => Math.max(0, Math.min(100, ((x - lo) / w) * 100));
+    const b0 = at(g.band[0]), b1 = at(g.band[1]);
+    const dot = g.value == null || !isFinite(g.value) ? '' : '<i class="sg-dot' + (met ? ' sg-dmet' : '') + '" style="left:' + at(g.value).toFixed(1) + '%"></i>';
+    return '<span class="sg-gauge"><span class="sg-band" style="left:' + b0.toFixed(1) + '%;width:' + Math.max(0.8, b1 - b0).toFixed(1) + '%"></span>' + dot + '</span>';
+  }
+  function sigCondRows(conds, depth, fundTxt) {
+    let out = '';
+    for (const c of conds || []) {
+      if (c.any) {
+        out += '<div class="sg-c sg-grp' + (c.met ? ' sg-met' : '') + '"><span class="sg-m"></span><span class="sg-l">' + esc(sigLabel(c.label)) + '<em>any one of</em></span><span class="sg-v"></span><span class="sg-gauge sg-nog"></span></div>';
+        out += sigCondRows(c.any, depth + 1, fundTxt);
+      } else {
+        out += '<div class="sg-c' + (depth ? ' sg-sub' : '') + (c.met ? ' sg-met' : '') + '"><span class="sg-m"></span><span class="sg-l">' + esc(sigLabel(c.label)) + '</span>'
+          + '<span class="sg-v">' + esc(c.gauge ? sigVal(c.gauge) : /fundamental/i.test(c.label) && fundTxt ? fundTxt : '') + '</span>' + sigGauge(c.gauge, c.met) + '</div>';
+      }
+    }
+    return out;
+  }
+  function tplStockSignal() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const sym = O.sigSym || (stocks[0] && stocks[0].symbol);
+    const row = stocks.find((x) => x && x.symbol === sym);
+    if (!row) return shell('Nothing to show', 'No row', 'for ' + (sym || 'that symbol'), 'That symbol is not on this screen.');
+    const n = nameOf(row);
+    let e = null;
+    try { e = ActionRules.explain(row, sigRules()); } catch (err) { e = null; }
+    if (!e || !e.action || !e.rungs || e.firedIndex < 0) return shell(sym, n, 'signal', 'No signal for ' + sym + ' yet.');
+    const canon = (w) => (ActionRules.canon ? ActionRules.canon(w) : w);
+    const word = canon(e.action);
+    const tint = pal.tints[word] || pal.flat;
+    const g = e.rungs[e.firedIndex];
+    // The four readings, each the label its own ladder lit.
+    const lit = (list) => { const x = (list || []).find((r) => r.fired); return x || null; };
+    const metOf = (r) => {
+      const out = [];
+      const walk = (cs) => { for (const c of cs || []) { if (c.any) walk(c.any); else if (c.met) out.push(sigLabel(c.label)); } };
+      if (r && !r.fallback) walk(r.conds);
+      return out.slice(0, 2).join(' \u00b7 ');
+    };
+    const F = e.families || {};
+    const tr = lit(F.trend), en = lit(F.entry), fu = lit(F.fund);
+    const guards = (F.guards || []).filter((x) => x.fired).map((x) => x.label);
+    const fundWord = (lab) => (!lab || lab === '\u2014' || /^none$/i.test(lab) ? 'No case either way' : lab);
+    const readings = [
+      ['Trend', tr ? tr.label : (e.states && e.states.trend) || '\u2014', metOf(tr) || 'Where the price stands against its averages'],
+      ['Entry', en ? en.label : (e.states && e.states.entry) || '\u2014', metOf(en) || 'Whether the price is stretched'],
+    ];
+    if (e.type !== 'ETF') readings.push(['Fundamentals', fundWord(fu ? fu.label : e.states && e.states.fund), metOf(fu) || 'Earnings, revenue, margins and Quality made no case']);
+    readings.push(['Guards', guards.length ? guards.join(', ') : 'Clear', guards.length ? 'A guard caps the reading' : 'No thin history, no report too close']);
+    const tiles = readings.map(([k, v, why]) => '<div class="sg-r"><span class="sg-rk">' + esc(k) + '</span><b>' + esc(v) + '</b><span class="sg-rw">' + esc(why) + '</span></div>').join('');
+    // How long it has read this way, and what it read the session before.
+    const prev = row.advicePrev ? canon(row.advicePrev) : null;
+    const days = row.adviceDays != null && isFinite(row.adviceDays) ? Number(row.adviceDays) : null;
+    const since = prev && prev !== word ? 'Changed today, from ' + prev
+      : days != null && days > 1 ? (row.adviceExact === false ? 'At least ' : '') + days + ' sessions at this reading' + (row.adviceSince ? ', since ' + ddDay(row.adviceSince) : '')
+        : '';
+    const typeTxt = e.type ? e.type + ' rulebook' : '';
+    const why = g.fallback
+      ? '<p class="sg-fb">No rule above it matched, so ' + esc(sym) + ' takes the ' + esc(word) + ' reading, the one the ' + esc(typeTxt || 'rulebook') + ' gives when nothing else applies.</p>'
+      : '<div class="sg-conds">' + sigCondRows(g.conds, 0, e.type === 'ETF' ? '' : fundWord(fu ? fu.label : e.states && e.states.fund)) + '</div>';
+    const priceStr = row.price != null && isFinite(row.price) ? '$' + Number(row.price).toFixed(2) : null;
+    const tp = row.todayPct != null && isFinite(row.todayPct) ? Number(row.todayPct) : null;
+    const kick = [row.sector, row.industry].filter(Boolean).join(' \u00b7 ') || 'One stock';
+    const note = 'The Signal is a mechanical reading of strength from the Balanced rule set after the latest close, not an instruction to trade. '
+      + 'The rules are an ordered list and the first that matches decides: the conditions shown are that rule\u2019s, with ' + sym + '\u2019s values, the shaded part of each scale the zone that passes.';
+    return chromeTop()
+      + '<div class="s-body"><div class="sg-in" style="--sg:' + tint + '">'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title"><span class="mh-name' + (n.length > 30 ? ' mh-l2' : n.length > 18 ? ' mh-l1' : '') + '">' + esc(n) + '</span>'
+      + '<span class="dim">signal</span></h2>'
+      + '<div class="sp-sub">' + esc(sym) + (priceStr ? ' \u00b7 ' + esc(priceStr) : '')
+      + (tp != null ? ' \u00b7 <span class="' + (tp >= 0 ? 'sp-up' : 'sp-dn') + '">' + esc((tp >= 0 ? '+' : '\u2212') + Math.abs(tp).toFixed(2) + '% today') + '</span>' : '')
+      + '</div>'
+      + '<div class="sg-hero"><b class="sg-word">' + esc(word) + '</b>'
+      + '<span class="sg-rule">because <q>' + esc(ActionRules.canonFlag ? ActionRules.canonFlag(g.flag) : g.flag) + '</q> fired first</span>'
+      + '<span class="sg-meta">' + esc([typeTxt, since].filter(Boolean).join(' \u00b7 ')) + '</span></div>'
+      + '<div class="sg-h">The rule, condition by condition</div>' + why
+      + '<div class="sg-h">The readings behind it</div><div class="sg-rs">' + tiles + '</div>'
+      + '<p class="s-sub wide sg-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
+    stksignal: tplStockSignal,
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
@@ -16061,6 +16181,65 @@
     .sz-story .gc-tile { padding: 24px 26px; }
     .sz-story .gc-h { font-size: 17px; }
     .s-art.th-light .gc-tile { background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 12%, transparent), rgba(13, 16, 23, 0.04) 62%); }
+    /* Stock Signal (2026-10-29): one company's Signal, the rule that fired and
+       its conditions, the readings behind it. The verdict's tint is --sg. */
+    .sg-in { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+    .sg-hero { margin-top: 22px; padding: 22px 26px; border-radius: 18px; border-left: 6px solid var(--sg);
+               background: linear-gradient(160deg, color-mix(in srgb, var(--sg) 16%, transparent), rgba(255, 255, 255, 0.03) 70%);
+               display: flex; flex-direction: column; gap: 6px; }
+    .sg-word { font: 800 70px var(--sans); letter-spacing: -0.03em; line-height: 1; color: var(--sg); }
+    .sg-rule { font: 500 26px var(--sans); color: var(--text); }
+    .sg-rule q { quotes: none; font-weight: 700; color: var(--sg); }
+    .sg-meta { font: 500 18px var(--mono); color: var(--muted); }
+    .sg-h { margin-top: 28px; font: 600 16px var(--mono); text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); }
+    .sg-conds { margin-top: 14px; display: flex; flex-direction: column; gap: 13px; }
+    .sg-c { display: grid; grid-template-columns: 18px minmax(0, 1fr) 150px 32%; align-items: center; gap: 14px; font: 500 22px var(--sans); color: var(--muted); }
+    .sg-c.sg-met { color: var(--text); }
+    .sg-c.sg-sub { padding-left: 26px; }
+    .sg-c.sg-sub .sg-m { margin-left: 0; }
+    .sg-m { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--hair-2); }
+    .sg-met > .sg-m { background: var(--accent); border-color: var(--accent); }
+    .sg-l em { font-style: normal; font-size: 0.8em; color: var(--faint); margin-left: 10px; }
+    .sg-v { font: 700 22px var(--mono); text-align: right; white-space: nowrap; }
+    .sg-gauge { position: relative; height: 10px; border-radius: 6px; background: var(--hair); }
+    .sg-gauge.sg-nog { background: none; }
+    .sg-band { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: color-mix(in srgb, var(--accent) 40%, transparent); }
+    .sg-dot { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
+              background: var(--muted); border: 2px solid var(--bg); }
+    .sg-dot.sg-dmet { background: var(--text); }
+    .sg-fb { margin-top: 14px; font: 500 24px var(--sans); color: var(--text); line-height: 1.4; }
+    .sg-rs { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .sg-r { min-width: 0; padding: 16px 20px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hair);
+            display: flex; flex-direction: column; gap: 4px; }
+    .sg-rk { font: 600 15px var(--mono); text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); }
+    .sg-r b { font: 700 27px var(--sans); color: var(--text); }
+    .sg-rw { font: 400 17px var(--sans); color: var(--muted); line-height: 1.3; }
+    .sg-note { margin-top: auto; padding-top: 18px; }
+    .s-art.th-light .sg-r { background: rgba(13, 16, 23, 0.035); }
+    .sz-square .sg-hero { margin-top: 14px; padding: 14px 18px; }
+    .sz-square .sg-word { font-size: 52px; }
+    .sz-square .sg-rule { font-size: 20px; }
+    .sz-square .sg-meta { font-size: 13px; }
+    .sz-square .sg-h { margin-top: 14px; font-size: 12px; }
+    .sz-square .sg-conds { gap: 9px; margin-top: 8px; }
+    .sz-square .sg-c { font-size: 18px; grid-template-columns: 14px minmax(0, 1fr) 100px 30%; gap: 10px; }
+    .sz-square .sg-v { font-size: 18px; }
+    .sz-square .sg-rs { gap: 8px; margin-top: 8px; }
+    .sz-square .sg-r { padding: 10px 14px; }
+    .sz-square .sg-r b { font-size: 21px; }
+    .sz-square .sg-rw { font-size: 14px; }
+    .sz-square .sg-note { padding-top: 10px; }
+    .sz-story .sg-hero { margin-top: 34px; padding: 30px 32px; }
+    .sz-story .sg-word { font-size: 100px; }
+    .sz-story .sg-rule { font-size: 34px; }
+    .sz-story .sg-h { margin-top: 52px; font-size: 20px; }
+    .sz-story .sg-conds { gap: 26px; margin-top: 22px; }
+    .sz-story .sg-c { font-size: 30px; grid-template-columns: 20px minmax(0, 1fr) 180px 30%; }
+    .sz-story .sg-v { font-size: 30px; }
+    .sz-story .sg-rs { gap: 16px; margin-top: 16px; }
+    .sz-story .sg-r { padding: 26px 28px; }
+    .sz-story .sg-r b { font-size: 38px; }
+    .sz-story .sg-rw { font-size: 23px; }
     /* Filed yesterday (2026-10-20): one day's 13D/13G and 8-K filings. */
     .fd-in { height: 100%; display: flex; flex-direction: column; }
     .fd-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }

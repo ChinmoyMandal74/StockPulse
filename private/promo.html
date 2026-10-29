@@ -2143,6 +2143,13 @@
       </div>
       <!-- Month by month: one company's returns, year by month. The card IS
            its own scope, so no sector, industry, size or screen pickers. -->
+      <!-- Stock Signal (2026-10-29): one company's Signal and why. -->
+      <div id="sigBox">
+        <label>Stock</label>
+        <select id="sigSym"></select>
+        <p class="hint">The Signal word, the one rule that fired with each of its conditions against the stock's own values,
+          and the trend, entry, fundamentals and guard readings behind it, from the same engine as the screener.</p>
+      </div>
       <!-- At a glance (2026-10-21): the stock page's topic cards for one company. -->
       <div id="glcBox">
         <label>Stock</label>
@@ -2584,6 +2591,7 @@
       { id: 'days', name: 'Day by day', note: 'One company over the last eight weeks, a row a week — each cell that session’s return' },
       { id: 'months', name: 'Month by month', note: 'One company, year by month — each cell that month’s return' },
       { id: 'glance', name: 'At a glance', note: 'One company topic by topic, as the top of its stock page sums it up' },
+      { id: 'stksignal', name: 'Stock Signal', note: 'One company’s Signal: the rule that fired, its conditions against the stock’s values, and the readings behind it' },
       { id: 'stkresults', name: 'Quarterly results', note: 'One company’s newest results release: the figures, the guidance and what the company says helped and weighed' },
       { id: 'stktrack', name: 'Earnings track record', note: 'One company’s results releases since 2017: what it said about its outlook, and what it then reported' },
       { id: 'evolution', name: 'Evolution', note: 'What the business did, and what the market paid for it \u2014 from the filings' },
@@ -2656,6 +2664,7 @@
     const SPOT_NAME = 'Stock spotlight';
     const SPOT_VIEWS = [
       ['spotlight', 'Overview', 'spotSym'],
+      ['stksignal', 'Stock Signal', 'sigSym'],
       ['perf', 'Growth and profitability', 'prfSym'],
       ['peertrend', 'Against its peers', 'ptrSym'],
       ['months', 'Month by month', 'monSym'],
@@ -3705,7 +3714,7 @@
       'spotSym', 'spotWin', 'spotProf',
       'ptrSym', 'ptrMetric', 'ptrView', 'tgrName', 'tgrMetric', 'tgrView',
       'prfSym', 'prfPeriod', 'prfCount',
-      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick', 'srsSym', 'trkSym',
+      'monSym', 'monView', 'dbdSym', 'dbdView', 'glcSym', 'glcPick', 'srsSym', 'trkSym', 'sigSym',
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
@@ -4687,6 +4696,7 @@
       $('evtBox').style.display = tpl === 'evo2' ? 'block' : 'none';
       $('monBox').style.display = tpl === 'months' ? 'block' : 'none';
       $('glcBox').style.display = tpl === 'glance' ? 'block' : 'none';
+      $('sigBox').style.display = tpl === 'stksignal' ? 'block' : 'none';
       $('srBox').style.display = tpl === 'stkresults' ? 'block' : 'none';
       $('tkBox').style.display = tpl === 'stktrack' ? 'block' : 'none';
       $('cvBox').hidden = !(canAnnounce && window.CardVideo && CardVideo.has(tpl));
@@ -5160,6 +5170,7 @@
     // Month by month: its own listener list, and its view picker filled from
     // the module so it cannot offer a value the card does not know.
     $('glcSym').addEventListener('change', () => { if (tpl === 'glance') render(); });
+    $('sigSym').addEventListener('change', () => { if (tpl === 'stksignal') render(); });
     $('srsSym').addEventListener('change', () => { if (tpl === 'stkresults') render(); });
     $('trkSym').addEventListener('change', () => { if (tpl === 'stktrack') render(); });
     $('glcDefault').addEventListener('click', () => { $('glcPick').value = Cards.glanceDefault().join('|'); if (tpl === 'glance') render(); });
@@ -6120,6 +6131,8 @@
           if ([...$('trkSym').options].some((o) => o.value === keep)) $('trkSym').value = keep; }
         { const keep = $('glcSym').value; $('glcSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('glcSym').options].some((o) => o.value === keep)) $('glcSym').value = keep; }
+        { const keep = $('sigSym').value; $('sigSym').innerHTML = $('chtSym').innerHTML;
+          if ([...$('sigSym').options].some((o) => o.value === keep)) $('sigSym').value = keep; }
         $('evoSym').innerHTML = $('chtSym').innerHTML;
         { const keep = $('inSym').value; $('inSym').innerHTML = $('chtSym').innerHTML;
           if ([...$('inSym').options].some((o) => o.value === keep)) $('inSym').value = keep; }
