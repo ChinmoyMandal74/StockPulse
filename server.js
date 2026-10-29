@@ -1040,6 +1040,8 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Period proposed', 22, (r) => (r.proposal ? r.proposal.to : null)],
     ['Period changes', 10, (r) => (r.proposal ? (r.proposal.periodChange ? 'Yes' : 'No') : null)],
     ['Proposed header', 30, (r) => (r.proposal ? r.proposal.header : null)],
+    ['Proposed group', 22, (r) => (r.proposal ? r.proposal.group : null)],
+    ['Group moves', 10, (r) => (r.proposal ? (r.proposal.groupMoves ? 'Yes' : 'No') : null)],
     ['Proposal', 70, (r) => (r.proposal ? r.proposal.text : null)],
     ['New data to extract', 36, (r) => { const e = r.proposal && r.proposal.extract ? (D.extracts || []).find((x) => x.id === r.proposal.extract) : null; return e ? e.item : null; }],
     ['Comments', 80, (r) => r.note],
@@ -1087,7 +1089,12 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
   const plan = [[{ v: 'The proposal, in order', s: X.S.title }], [], [{ v: 'Step', s: X.S.head }, { v: 'What', s: X.S.head }],
     ...(D.plan || []).map((p, i) => [(i + 1) + '. ' + p.t, p.d]), [],
     [{ v: 'New data to extract', s: X.S.label }], [{ v: 'Item', s: X.S.head }, { v: 'Where from', s: X.S.head }, { v: 'Cost', s: X.S.head }, { v: 'For the columns', s: X.S.head }],
-    ...(D.extracts || []).map((e) => [e.item, e.from, e.cost, e.columns.join(', ')])];
+    ...(D.extracts || []).map((e) => [e.item, e.from, e.cost, e.columns.join(', ')]), [],
+    [{ v: 'Proposed groups, by statement', s: X.S.label }], [{ v: 'Group', s: X.S.head }, { v: 'Period', s: X.S.head }, { v: 'From today\u2019s groups', s: X.S.head }, { v: 'Holds', s: X.S.head }, { v: 'Group id', s: X.S.head }],
+    ...(D.groups || []).map((g) => [g.name, g.period, g.from, g.note, g.id]), [],
+    [{ v: 'Columns to add', s: X.S.label }], [{ v: 'Column', s: X.S.head }, { v: 'Group', s: X.S.head }, { v: 'From', s: X.S.head }, { v: 'New data needed', s: X.S.head }],
+    ...(D.additions || []).map((a) => [a.label, a.group, a.from, a.extract ? ((D.extracts || []).find((e) => e.id === a.extract) || {}).item || a.extract : null]), [],
+    [{ v: 'What TradingView does', s: X.S.label }], ...(D.tradingview || []).map((x) => [x.t, x.d])];
   const planXml = X.sheetXml(plan, { widths: [44, 90, 50, 60] });
   const buf = X.workbook([{ name: 'Columns', xml: main }, { name: 'Proposal', xml: planXml }, { name: 'About', xml: aboutXml }]);
   logAct(req, 'export', 'sources.xlsx');

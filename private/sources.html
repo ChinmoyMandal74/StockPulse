@@ -72,6 +72,22 @@
     .sm-prop .hdr { display: block; font: 600 12px var(--mono); color: var(--text); margin-bottom: 3px; }
     .sm-new { display: inline-block; margin-top: 6px; font: 600 11px var(--sans); color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); background: color-mix(in srgb, var(--amber) 10%, transparent); border-radius: 999px; padding: 2px 9px; }
     @media (max-width: 1000px) { .sm-plan { grid-template-columns: 1fr; } }
+    /* After TradingView (2026-10-29): what it does, the groups proposed, the columns to add. */
+    .sm-tv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; margin: 0 0 16px; }
+    .sm-tv .core { padding: 16px 18px; }
+    .sm-tv h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+    .sm-tv ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+    .sm-tv ul b { color: var(--text); font-weight: 600; }
+    .sm-grp { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .sm-grp th, .sm-grp td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--hair); line-height: 1.45; }
+    .sm-grp th { font-weight: 500; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); }
+    .sm-grp td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+    .sm-grp td { color: var(--muted); }
+    .sm-grp code { font: 11px var(--mono); color: var(--faint); }
+    .sm-add { margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .sm-add b { color: var(--text); }
+    .sm-mv { display: inline-block; margin-top: 6px; margin-right: 6px; font: 600 11px var(--sans); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 50%, transparent); border-radius: 999px; padding: 2px 9px; }
+    @media (max-width: 1000px) { .sm-tv { grid-template-columns: 1fr; } }
     .sm-best div { color: var(--muted); max-width: 52ch; }
     .sm-bar select { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
     .sm-wrap th, .sm-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; line-height: 1.45; }
@@ -129,6 +145,7 @@
 
     <div class="sm-tiles" id="tiles"></div>
     <div class="sm-plan" id="plan"></div>
+    <div class="sm-tv" id="tv"></div>
     <div class="sm-bar">
       <span id="chips"></span>
       <button class="sm-chip" id="newOnly" type="button" aria-pressed="false">Needs new data</button>
@@ -173,7 +190,7 @@
           <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
           <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b><div>${esc(r.best.why)}</div></td>
           <td class="sm-per${r.proposal && r.proposal.periodChange ? ' chg' : ''}">${r.proposal ? esc(r.proposal.now) + (r.proposal.periodChange ? '<span class="to">\u2192 ' + esc(r.proposal.to) + '</span>' : '<span class="to">Keep</span>') : ''}</td>
-          <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + (r.proposal.extract ? '<br><span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
+          <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + '<br><span class="sm-mv" title="The proposed group (see Proposed groups above)">' + (r.proposal.groupMoves ? 'Moves to ' : 'Group: ') + esc(r.proposal.group) + '</span>' + (r.proposal.extract ? '<span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
           <td class="sm-shown">${esc(r.shown)}</td>
           <td><span class="sm-st ${r.sec.status.toLowerCase()}">${esc(r.sec.status)}</span><div class="sm-eq">${esc(r.sec.equivalent)}</div></td>
@@ -209,6 +226,10 @@
       ].join('');
       $('plan').innerHTML = '<div class="bezel"><div class="core"><h2>The proposal, in order</h2><ol>' + (DOC.plan || []).map((p) => '<li><b>' + esc(p.t) + '.</b> ' + esc(p.d) + '</li>').join('') + '</ol></div></div>'
         + '<div class="bezel"><div class="core"><h2>New data to extract (' + (DOC.extracts || []).length + ')</h2><div class="sm-ex">' + (DOC.extracts || []).map((e) => '<div><b>' + esc(e.item) + '.</b> ' + esc(e.from) + '. ' + esc(e.cost) + ' <span class="cols">For: ' + esc(e.columns.join(', ')) + '.</span></div>').join('') + '</div></div></div>';
+      $('tv').innerHTML = '<div class="bezel"><div class="core"><h2>What TradingView does</h2><ul>' + (DOC.tradingview || []).map((x) => '<li><b>' + esc(x.t) + '.</b> ' + esc(x.d) + '</li>').join('') + '</ul></div></div>'
+        + '<div class="bezel"><div class="core"><h2>Proposed groups, by statement</h2><div style="overflow-x:auto"><table class="sm-grp"><thead><tr><th>Group</th><th>Period</th><th>From today\u2019s groups</th><th>Holds</th></tr></thead><tbody>'
+        + (DOC.groups || []).map((g) => '<tr><td>' + esc(g.name) + ' <code>' + esc(g.id) + '</code></td><td>' + esc(g.period) + '</td><td>' + esc(g.from) + '</td><td>' + esc(g.note) + '</td></tr>').join('') + '</tbody></table></div>'
+        + '<div class="sm-add"><b>Columns to add, as TradingView has them:</b> ' + (DOC.additions || []).map((a) => '<b>' + esc(a.label) + '</b> (' + esc(a.group) + '; ' + esc(a.from) + (a.extract ? '; needs ' + esc(exOf(a.extract).item.toLowerCase()) : '') + ')').join('; ') + '.</div></div></div>';
       $('newOnly').addEventListener('click', () => { newOnly = !newOnly; $('newOnly').classList.toggle('on', newOnly); $('newOnly').setAttribute('aria-pressed', String(newOnly)); render(); });
       chips();
       const bc = {}; for (const r of DOC.rows) bc[r.best.source] = (bc[r.best.source] || 0) + 1;

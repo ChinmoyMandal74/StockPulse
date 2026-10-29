@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T15:43:01.979Z",
+ "builtAt": "2026-10-29T16:22:58.272Z",
  "secCompanies": 1150,
  "secSameQuarter": 78.9,
  "secSameQuarterN": 1125,
@@ -27,16 +27,20 @@
  ],
  "plan": [
   {
-   "t": "One period rule for the screener",
-   "d": "Twelve months (TTM) for size, valuation, margins and returns; the quarter on the same quarter a year earlier for growth and the Last Earning AI Extracted group; at quarter end for the balance sheet; today for anything on the price; forward only for analysts’ figures."
+   "t": "Regroup the screener by statement",
+   "d": "As TradingView does: Overview, Signal, Performance, Technicals, Valuation, Income statement, Profitability, Growth, Balance sheet, a new Cash flow group, Dividends, Latest quarter (the release group), Reporting, Ownership, Long run, Reactions. Group ids stay; moved fields go into FIELD_KEY_MOVED so saved tiles and phone setups follow them."
   },
   {
-   "t": "Say the period in every header and hover",
-   "d": "Display text only, as the Proposed header shows; the stored group|label keys behind tiles and the phone keep their names."
+   "t": "One period a column, said in its header",
+   "d": "A period tag on every header, TradingView-style: TTM, Q YoY, Q end, Now, Fwd. The group banner says the group’s period too (Income statement · TTM). Display text only; stored keys keep their names. A per-column period selector, as TradingView has, is a larger build and is left out."
+  },
+  {
+   "t": "Half-yearly reporters on their own period",
+   "d": "Twelve months from the halves (the SEC data’s H and FY rows already allow it) and growth on the half a year earlier, marked as half-yearly in the hover, instead of a quarter they do not report."
   },
   {
    "t": "Fix Operating margin",
-   "d": "Twelve Data’s is mostly one quarter’s, beside twelve-month margins. Twelve months from the SEC data. Not a Signal input."
+   "d": "Twelve months from the SEC data; Twelve Data’s is mostly one quarter’s. Not a Signal input."
   },
   {
    "t": "Take the statement figures from the SEC data, the release first",
@@ -51,8 +55,193 @@
    "d": "Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted."
   },
   {
+   "t": "Add the missing statement columns",
+   "d": "Operating income, capex, interest cover (from data already stored); EBITDA margin, ROIC and FCF per share once their new data is extracted. Listed below."
+  },
+  {
    "t": "Extract the new data items",
    "d": "Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field."
+  }
+ ],
+ "tradingview": [
+  {
+   "t": "Columns grouped by statement",
+   "d": "Twelve column sets: Overview, Performance, Technicals, Extended hours, Forecasts, Valuation, Dividends, Profitability, Income statement, Balance sheet, Cash flow, Per share. A reader finds a figure where the financial statements put it."
+  },
+  {
+   "t": "Every financial column carries its period",
+   "d": "Fields are named by period (total_revenue_ttm, _fq for the fiscal quarter, _fh for the fiscal half, _fy for the year, price_earnings_current, dividend_amount_upcoming), and each screener column has a period selector: TTM, quarterly, semiannual, annual."
+  },
+  {
+   "t": "Half-yearly reporters are first-class",
+   "d": "The _fh fields keep companies that report twice a year (foreign filers such as Rio Tinto) on a period they actually report, rather than a quarter they do not have."
+  },
+  {
+   "t": "Forecasts are a set of their own",
+   "d": "Estimates (EPS, revenue, EBITDA, free cash flow, next twelve months) sit apart from reported figures, so a forward number is never read as a reported one."
+  },
+  {
+   "t": "More of each statement",
+   "d": "Operating income, EBITDA and its margin, capex, ROIC, interest cover and per-share and per-employee versions sit beside the headline lines."
+  }
+ ],
+ "groups": [
+  {
+   "id": "info",
+   "name": "Overview",
+   "period": "Now",
+   "from": "Info, unchanged (Market cap stays here)",
+   "note": "Name, price, classification, size band, news, next report."
+  },
+  {
+   "id": "act",
+   "name": "Signal",
+   "period": "",
+   "from": "Signal and Scores (Qual.) together",
+   "note": "The verdict and the score it reads, side by side."
+  },
+  {
+   "id": "short",
+   "name": "Performance",
+   "period": "Price",
+   "from": "Short-term %, Long-term % and Forward, kept as three ids side by side",
+   "note": "Returns over every horizon in one run."
+  },
+  {
+   "id": "trend",
+   "name": "Technicals",
+   "period": "Price",
+   "from": "Trend, Range and level, Risk, side by side",
+   "note": "Moving averages, oscillators, range, volatility and drawdown."
+  },
+  {
+   "id": "value",
+   "name": "Valuation",
+   "period": "Now (price) over TTM",
+   "from": "Valuation, plus Enterprise value from Scale",
+   "note": "Every multiple: price over a twelve-month figure, or book at quarter end."
+  },
+  {
+   "id": "size",
+   "name": "Income statement · TTM",
+   "period": "TTM",
+   "from": "Scale, less Enterprise value and the cash flow lines; plus EPS TTM from Growth; plus Operating income TTM (new column)",
+   "note": "Revenue, gross profit, operating income, EBITDA, net income, diluted EPS, revenue per employee."
+  },
+  {
+   "id": "profit",
+   "name": "Profitability · TTM",
+   "period": "TTM",
+   "from": "Profitability, Operating margin made twelve months",
+   "note": "Margins, ROE and ROA on average equity and assets, margin change."
+  },
+  {
+   "id": "growth",
+   "name": "Growth · Q YoY",
+   "period": "Q YoY",
+   "from": "Growth, less EPS TTM",
+   "note": "The quarter against the same quarter a year earlier (the half for half-yearly reporters)."
+  },
+  {
+   "id": "finpos",
+   "name": "Balance sheet · Q end",
+   "period": "Q end",
+   "from": "Financial position, plus Book value/share from Ownership and Interest cover from Long run",
+   "note": "Cash and short-term investments, total debt, net cash, working capital, ratios, book value per share."
+  },
+  {
+   "id": "cflow",
+   "name": "Cash flow · TTM (new id)",
+   "period": "TTM",
+   "from": "Operating cash and FCF TTM from Scale; FCF margin and FCF yield stay where they are; plus Capex TTM (new column)",
+   "note": "Operating cash flow, capex, free cash flow. A new group id: ids are never renamed, new ones may be added."
+  },
+  {
+   "id": "divs",
+   "name": "Dividends and returns",
+   "period": "Fwd and TTM, each said",
+   "from": "Unchanged",
+   "note": "Forward yield and rate (or the declared dividend from the releases), trailing payout, buyback and shareholder yield."
+  },
+  {
+   "id": "aier",
+   "name": "Latest quarter · from the release",
+   "period": "Q (and Q YoY)",
+   "from": "Last Earning AI Extracted, renamed in the banner only",
+   "note": "The newest quarter as the company reported it, the day it reports: the one group that is a single quarter by design."
+  },
+  {
+   "id": "fwd",
+   "name": "Forecasts (Forward, Fwd P/E, PEG)",
+   "period": "Fwd",
+   "from": "Fwd P/E, PEG and P/E vs peers could sit together here, as TradingView sets estimates apart",
+   "note": "Optional: today they sit in Valuation, labelled Fwd."
+  },
+  {
+   "id": "report",
+   "name": "Reporting",
+   "period": "Dates",
+   "from": "Unchanged",
+   "note": "Which quarter the figures describe, when results came out, what is stale."
+  },
+  {
+   "id": "own",
+   "name": "Ownership",
+   "period": "Latest",
+   "from": "Ownership, less Book value/share",
+   "note": "Shares, float, short interest, insiders, institutions, 13F, options."
+  },
+  {
+   "id": "lrun",
+   "name": "Long run",
+   "period": "3, 5, 10 years",
+   "from": "Unchanged, less Interest cover",
+   "note": "Growth and records over years, from the filings."
+  },
+  {
+   "id": "react",
+   "name": "Reactions",
+   "period": "Events",
+   "from": "Unchanged",
+   "note": "Selloffs, rallies, short build, insiders, 8-Ks."
+  }
+ ],
+ "additions": [
+  {
+   "label": "Operating income · TTM",
+   "group": "Income statement",
+   "from": "SEC data four quarters, the release first; stored already",
+   "extract": null
+  },
+  {
+   "label": "Capex · TTM",
+   "group": "Cash flow",
+   "from": "SEC data four quarters (stored already); the release where its cash flow statement has it",
+   "extract": null
+  },
+  {
+   "label": "EBITDA margin · TTM",
+   "group": "Profitability",
+   "from": "Operating income plus depreciation over revenue",
+   "extract": "da"
+  },
+  {
+   "label": "ROIC · TTM",
+   "group": "Profitability",
+   "from": "Operating income after tax over debt plus equity less cash",
+   "extract": "debt"
+  },
+  {
+   "label": "Interest cover · TTM",
+   "group": "Balance sheet",
+   "from": "Operating income over interest expense, four quarters (the Long run column is ten years of annual reports)",
+   "extract": null
+  },
+  {
+   "label": "FCF per share · TTM",
+   "group": "Cash flow",
+   "from": "Free cash flow over cover-page shares",
+   "extract": "shout"
   }
  ],
  "extracts": [
@@ -161,7 +350,7 @@
    },
    "vsTd": {
     "n": 837,
-    "close": 35.5,
+    "close": 36.1,
     "median": 2.9,
     "unit": "%",
     "tol": 2
@@ -172,8 +361,8 @@
     "coverage": 1055,
     "vsTd": {
      "n": 891,
-     "close": 35.6,
-     "median": 3.1,
+     "close": 36.5,
+     "median": 2.9,
      "unit": "%",
      "tol": 2
     }
@@ -185,15 +374,17 @@
    },
    "best": {
     "source": "Twelve Data",
-    "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance. Measured: SEC agrees with Twelve Data on 35.6%, the release on 35.5%."
+    "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance. Measured: SEC agrees with Twelve Data on 36.5%, the release on 36.1%."
    },
    "proposal": {
     "now": "Today",
     "to": "Today",
     "periodChange": false,
-    "header": "Market cap",
+    "header": "Market cap · Now",
     "text": "Keep Twelve Data until shares outstanding are extracted; then price × the cover-page count is an exact alternative. A Signal input: changing its source is the owner’s decision.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Overview",
+    "groupMoves": false
    }
   },
   {
@@ -245,9 +436,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Revenue TTM",
+    "header": "Revenue · TTM",
     "text": "SEC four quarters, the release while the 10-Q is pending; Twelve Data where neither has it.",
-    "extract": null
+    "extract": null,
+    "group": "Income statement",
+    "groupMoves": false
    }
   },
   {
@@ -299,9 +492,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Gross profit TTM",
+    "header": "Gross profit · TTM",
     "text": "Say TTM in the header. SEC where it carries it (695 companies), Twelve Data for the rest.",
-    "extract": null
+    "extract": null,
+    "group": "Income statement",
+    "groupMoves": false
    }
   },
   {
@@ -353,9 +548,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Net income TTM",
+    "header": "Net income · TTM",
     "text": "Say TTM in the header. SEC four quarters, the release first; say “attributable to the company” in the hover. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Income statement",
+    "groupMoves": false
    }
   },
   {
@@ -407,9 +604,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "FCF TTM",
+    "header": "FCF · TTM",
     "text": "Decide the measure first: levered (Twelve Data) or operating cash flow less capex (SEC, release first). If unlevered, call it “FCF TTM” and add “Levered FCF” as its own column if wanted. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Cash flow",
+    "groupMoves": true
    }
   },
   {
@@ -450,9 +649,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "EBITDA TTM",
+    "header": "EBITDA · TTM",
     "text": "Build it as operating income plus depreciation and amortization from the filings, twelve months; until then keep Twelve Data. The companies’ adjusted EBITDA stays a release-only figure, labelled as theirs.",
-    "extract": "da"
+    "extract": "da",
+    "group": "Income statement",
+    "groupMoves": false
    }
   },
   {
@@ -504,9 +705,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Op. cash flow TTM",
+    "header": "Op. cash flow · TTM",
     "text": "Say TTM. SEC four quarters, the release first.",
-    "extract": null
+    "extract": null,
+    "group": "Cash flow",
+    "groupMoves": true
    }
   },
   {
@@ -535,9 +738,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Revenue / employee",
+    "header": "Revenue / employee · TTM",
     "text": "Keep Twelve Data’s head count unless a filing source covers enough companies.",
-    "extract": "emp"
+    "extract": "emp",
+    "group": "Income statement",
+    "groupMoves": false
    }
   },
   {
@@ -589,9 +794,11 @@
     "now": "Today",
     "to": "Today",
     "periodChange": false,
-    "header": "Enterprise value",
+    "header": "Enterprise value · Now",
     "text": "Keep Twelve Data until the debt lines are extracted; then market value + total debt − cash and short-term investments from the filings.",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Valuation",
+    "groupMoves": true
    }
   },
   {
@@ -622,7 +829,9 @@
     "periodChange": false,
     "header": "Fwd P/E",
     "text": "Keep Twelve Data: analysts’ estimates have no filing source. Say “next twelve months” in the hover. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -644,7 +853,7 @@
    },
    "vsTd": {
     "n": 712,
-    "close": 36.2,
+    "close": 37.4,
     "median": 3,
     "unit": "%",
     "tol": 2
@@ -655,7 +864,7 @@
     "coverage": 855,
     "vsTd": {
      "n": 712,
-     "close": 36.4,
+     "close": 37.5,
      "median": 3,
      "unit": "%",
      "tol": 2
@@ -668,15 +877,17 @@
    },
    "best": {
     "source": "SEC filings, Twelve Data where missing",
-    "why": "The filing itself, so exact, but for 855 of 1,162 companies; Twelve Data for the rest. Twelve Data agrees on 36.4% within 2% (median gap 3%), Twelve Data’s price is its own last pull, up to a week old."
+    "why": "The filing itself, so exact, but for 855 of 1,162 companies; Twelve Data for the rest. Twelve Data agrees on 37.5% within 2% (median gap 3%), Twelve Data’s price is its own last pull, up to a week old."
    },
    "proposal": {
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Trailing P/E",
+    "header": "Trailing P/E · TTM",
     "text": "Merge with Live P/E or drop: Twelve Data’s uses its own week-old price. Live P/E on the SEC’s twelve-month EPS says the same thing better.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -728,9 +939,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "P/E (TTM, today’s price)",
+    "header": "P/E · TTM",
     "text": "Today’s price over twelve-month diluted EPS from the SEC (release first).",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -761,7 +974,9 @@
     "periodChange": false,
     "header": "Fwd P/E vs peers",
     "text": "Keep; say forward in the header, as it is built on forward P/E.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -790,9 +1005,11 @@
     "now": "Forward (next twelve months)",
     "to": "Forward (next twelve months)",
     "periodChange": false,
-    "header": "PEG",
+    "header": "PEG · Fwd",
     "text": "Keep Twelve Data: forecast growth.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -844,9 +1061,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "P/B",
+    "header": "P/B · Q end",
     "text": "Market value over equity at quarter end from the SEC (release first). Say “book at quarter end” in the hover.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -898,9 +1117,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "P/S (TTM)",
+    "header": "P/S · TTM",
     "text": "Market value over SEC twelve-month revenue.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -952,9 +1173,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "EV / sales (TTM)",
+    "header": "EV / sales · TTM",
     "text": "After the debt lines: filing enterprise value over SEC twelve-month revenue.",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -995,9 +1218,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "EV / EBITDA (TTM)",
+    "header": "EV / EBITDA · TTM",
     "text": "After depreciation and the debt lines: both from the filings.",
-    "extract": "da"
+    "extract": "da",
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -1049,9 +1274,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "P / op cash (TTM)",
+    "header": "P / op cash · TTM",
     "text": "Market value over SEC twelve-month operating cash flow.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -1103,9 +1330,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Earnings yield (TTM)",
+    "header": "Earnings yield · TTM",
     "text": "SEC twelve-month EPS over today’s price.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -1157,9 +1386,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "FCF yield (TTM)",
+    "header": "FCF yield · TTM",
     "text": "Follows the free cash flow decision.",
-    "extract": null
+    "extract": null,
+    "group": "Valuation",
+    "groupMoves": false
    }
   },
   {
@@ -1211,9 +1442,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Gross margin TTM",
+    "header": "Gross margin · TTM",
     "text": "Say TTM. SEC where it carries gross profit or cost of revenue; Twelve Data for the rest. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1265,9 +1498,11 @@
     "now": "Mixed",
     "to": "Twelve months",
     "periodChange": true,
-    "header": "Op. margin TTM",
+    "header": "Op. margin · TTM",
     "text": "FIX: Twelve Data’s is mostly the latest quarter’s, beside twelve-month gross and profit margins. Make it twelve months from the SEC (operating income over revenue); the values will move. Not a Signal input.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1319,9 +1554,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Profit margin TTM",
+    "header": "Profit margin · TTM",
     "text": "Say TTM. SEC four quarters, release first. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1373,9 +1610,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "FCF margin TTM",
+    "header": "FCF margin · TTM",
     "text": "Follows the free cash flow decision. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1427,9 +1666,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "ROE (TTM, avg equity)",
+    "header": "ROE · TTM",
     "text": "Twelve-month net income over AVERAGE equity (this quarter end and the same quarter a year earlier, both stored in the SEC data), to match the usual definition. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1481,9 +1722,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "ROA (TTM, avg assets)",
+    "header": "ROA · TTM",
     "text": "As ROE, over average total assets.",
-    "extract": null
+    "extract": null,
+    "group": "Profitability",
+    "groupMoves": false
    }
   },
   {
@@ -1535,9 +1778,11 @@
     "now": "Quarter, on a year earlier",
     "to": "Quarter, on a year earlier",
     "periodChange": false,
-    "header": "Rev growth (Q on Q a year ago)",
+    "header": "Rev growth · Q YoY",
     "text": "Keep the quarter. The release first (it is out days before the 10-Q), the SEC once filed. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Growth",
+    "groupMoves": false
    }
   },
   {
@@ -1589,9 +1834,11 @@
     "now": "Quarter, on a year earlier",
     "to": "Quarter, on a year earlier",
     "periodChange": false,
-    "header": "Net income growth (Q on Q a year ago)",
+    "header": "Net income growth · Q YoY",
     "text": "Keep the quarter; name it net income growth, which is what both sides measure. Release first, then SEC. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Growth",
+    "groupMoves": false
    }
   },
   {
@@ -1643,9 +1890,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "EPS TTM (diluted)",
+    "header": "EPS · TTM",
     "text": "SEC: four quarters, or the year, or last year plus this year to date less last year’s; release first.",
-    "extract": null
+    "extract": null,
+    "group": "Income statement",
+    "groupMoves": true
    }
   },
   {
@@ -1697,9 +1946,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Cash + ST inv. (Q end)",
+    "header": "Cash + ST inv. · Q end",
     "text": "Say “at quarter end” and whether short-term investments are in. After extracting them, the SEC total; the release has it already.",
-    "extract": "sti"
+    "extract": "sti",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -1751,9 +2002,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Total debt (Q end)",
+    "header": "Total debt · Q end",
     "text": "Define total debt once (current + long-term borrowings, leases apart), extract the missing lines, then take it from the filings everywhere.",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -1805,9 +2058,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Net cash (Q end)",
+    "header": "Net cash · Q end",
     "text": "Follows Cash and Debt.",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -1859,9 +2114,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Net cash / share (Q end)",
+    "header": "Net cash / share · Q end",
     "text": "Follows Cash and Debt, over cover-page shares.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -1913,9 +2170,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Debt / equity (Q end)",
+    "header": "Debt / equity · Q end",
     "text": "Follows Debt; show it as a ratio (0.78), not Twelve Data’s percent (78).",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -1962,9 +2221,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Current ratio (Q end)",
+    "header": "Current ratio · Q end",
     "text": "SEC current assets over current liabilities (96.8% already agree); Twelve Data for banks and insurers, which do not split them.",
-    "extract": null
+    "extract": null,
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -2016,9 +2277,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Net cash % of mkt cap",
+    "header": "Net cash % of mkt cap · Q end",
     "text": "Follows Net cash.",
-    "extract": "debt"
+    "extract": "debt",
+    "group": "Balance sheet",
+    "groupMoves": false
    }
   },
   {
@@ -2047,9 +2310,11 @@
     "now": "Forward (next twelve months)",
     "to": "Forward (next twelve months)",
     "periodChange": false,
-    "header": "Dividend yield (forward)",
+    "header": "Dividend yield · Fwd",
     "text": "Keep Twelve Data’s forward rate unless the declared dividend is extracted from the releases; a trailing yield from the SEC could sit beside it as its own column.",
-    "extract": "divdecl"
+    "extract": "divdecl",
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2078,9 +2343,11 @@
     "now": "Twelve months",
     "to": "Twelve months",
     "periodChange": false,
-    "header": "Payout ratio (TTM)",
+    "header": "Payout ratio · TTM",
     "text": "SEC dividends paid over net income, twelve months, or keep Twelve Data’s; say which in the hover.",
-    "extract": null
+    "extract": null,
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2109,9 +2376,11 @@
     "now": "Mixed",
     "to": "Twelve months",
     "periodChange": true,
-    "header": "Shareholder yield (TTM)",
+    "header": "Shareholder yield · TTM",
     "text": "Make both halves twelve months from the filings (dividends paid and buybacks), so it is one period, not forward plus trailing.",
-    "extract": null
+    "extract": null,
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2140,9 +2409,11 @@
     "now": "Forward (next twelve months)",
     "to": "Forward (next twelve months)",
     "periodChange": false,
-    "header": "Dividend rate (forward)",
+    "header": "Dividend rate · Fwd",
     "text": "As Dividend yield.",
-    "extract": "divdecl"
+    "extract": "divdecl",
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2173,7 +2444,9 @@
     "periodChange": false,
     "header": "Ex-dividend",
     "text": "Keep Twelve Data unless the declared-dividend dates are extracted.",
-    "extract": "divdecl"
+    "extract": "divdecl",
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2204,7 +2477,9 @@
     "periodChange": false,
     "header": "Dividend paid",
     "text": "As Ex-dividend.",
-    "extract": "divdecl"
+    "extract": "divdecl",
+    "group": "Dividends and returns",
+    "groupMoves": false
    }
   },
   {
@@ -2235,7 +2510,9 @@
     "periodChange": false,
     "header": "Figures to",
     "text": "Take the newest quarter from the release; it names it first.",
-    "extract": null
+    "extract": null,
+    "group": "Reporting",
+    "groupMoves": false
    }
   },
   {
@@ -2266,7 +2543,9 @@
     "periodChange": false,
     "header": "Last results out",
     "text": "The results 8-K’s filing day. Not read by the Signal; its next-report estimate is fed by it.",
-    "extract": null
+    "extract": null,
+    "group": "Reporting",
+    "groupMoves": false
    }
   },
   {
@@ -2297,7 +2576,9 @@
     "periodChange": false,
     "header": "Last split",
     "text": "Keep Twelve Data.",
-    "extract": null
+    "extract": null,
+    "group": "Reporting",
+    "groupMoves": false
    }
   },
   {
@@ -2351,7 +2632,9 @@
     "periodChange": false,
     "header": "Shares out",
     "text": "After extracting the cover-page count, take it from the filings; keep the quarter’s diluted average apart.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2403,9 +2686,11 @@
     "now": "At quarter end",
     "to": "At quarter end",
     "periodChange": false,
-    "header": "Book value / share (Q end)",
+    "header": "Book value / share · Q end",
     "text": "Equity at quarter end over cover-page shares.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Balance sheet",
+    "groupMoves": true
    }
   },
   {
@@ -2436,7 +2721,9 @@
     "periodChange": false,
     "header": "Float",
     "text": "Keep Twelve Data: the filings give float once a year in dollars.",
-    "extract": "float"
+    "extract": "float",
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2467,7 +2754,9 @@
     "periodChange": false,
     "header": "Short ratio",
     "text": "Keep Twelve Data, or use FINRA short interest (already read) over average volume.",
-    "extract": null
+    "extract": null,
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2498,7 +2787,9 @@
     "periodChange": false,
     "header": "Short % float",
     "text": "Keep Twelve Data: needs float. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2529,7 +2820,9 @@
     "periodChange": false,
     "header": "Short % out",
     "text": "FINRA short interest (already read) over cover-page shares outstanding.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2560,7 +2853,9 @@
     "periodChange": false,
     "header": "Insiders %",
     "text": "Keep Twelve Data.",
-    "extract": null
+    "extract": null,
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2591,7 +2886,9 @@
     "periodChange": false,
     "header": "Institutions %",
     "text": "Keep Twelve Data, or 13F shares (already loaded) over cover-page shares, quarterly.",
-    "extract": "shout"
+    "extract": "shout",
+    "group": "Ownership",
+    "groupMoves": false
    }
   },
   {
@@ -2622,7 +2919,9 @@
     "periodChange": false,
     "header": "Qual.",
     "text": "Moves with its inputs; no change of its own. A Signal input: changing its source is the owner’s decision.",
-    "extract": null
+    "extract": null,
+    "group": "Signal",
+    "groupMoves": true
    }
   }
  ]

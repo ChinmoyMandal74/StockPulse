@@ -486,13 +486,80 @@ const PROPOSE = {
   'Qual.': P('score', 'score', 'Qual.', 'Moves with its inputs; no change of its own.' + SIG),
 };
 // The plan in order, for the panel above the table.
-const PLAN = [
+const PLAN_V1_UNUSED = [
   { t: 'One period rule for the screener', d: 'Twelve months (TTM) for size, valuation, margins and returns; the quarter on the same quarter a year earlier for growth and the Last Earning AI Extracted group; at quarter end for the balance sheet; today for anything on the price; forward only for analysts\u2019 figures.' },
   { t: 'Say the period in every header and hover', d: 'Display text only, as the Proposed header shows; the stored group|label keys behind tiles and the phone keep their names.' },
   { t: 'Fix Operating margin', d: 'Twelve Data\u2019s is mostly one quarter\u2019s, beside twelve-month margins. Twelve months from the SEC data. Not a Signal input.' },
   { t: 'Take the statement figures from the SEC data, the release first', d: 'The columns marked SEC filings below, display only. Signal inputs among them wait for the owner.' },
   { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.' },
   { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.' },
+  { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.' },
+];
+
+// ---- REFINED AFTER TRADINGVIEW (2026-10-29, the owner: "look at what Trading
+// view has done ... and refine your thoughts", "May be we should regroup the
+// columns too") ------------------------------------------------------------
+// What was read: TradingView's help page on the stock screener (twelve column
+// sets) and its screener's field list (scanner.tradingview.com metainfo, 3,786
+// fields, read 2026-10-29), where every financial field carries its period.
+const TRADINGVIEW = [
+  { t: 'Columns grouped by statement', d: 'Twelve column sets: Overview, Performance, Technicals, Extended hours, Forecasts, Valuation, Dividends, Profitability, Income statement, Balance sheet, Cash flow, Per share. A reader finds a figure where the financial statements put it.' },
+  { t: 'Every financial column carries its period', d: 'Fields are named by period (total_revenue_ttm, _fq for the fiscal quarter, _fh for the fiscal half, _fy for the year, price_earnings_current, dividend_amount_upcoming), and each screener column has a period selector: TTM, quarterly, semiannual, annual.' },
+  { t: 'Half-yearly reporters are first-class', d: 'The _fh fields keep companies that report twice a year (foreign filers such as Rio Tinto) on a period they actually report, rather than a quarter they do not have.' },
+  { t: 'Forecasts are a set of their own', d: 'Estimates (EPS, revenue, EBITDA, free cash flow, next twelve months) sit apart from reported figures, so a forward number is never read as a reported one.' },
+  { t: 'More of each statement', d: 'Operating income, EBITDA and its margin, capex, ROIC, interest cover and per-share and per-employee versions sit beside the headline lines.' },
+];
+// What we take from it: our columns keep ONE period each (a selector per
+// column is a larger build and splits the stored keys), stated in the header.
+const PERIOD_TAG = { ttm: 'TTM', q: 'Q YoY', qe: 'Q end', today: 'Now', fwd: 'Fwd', date: '', latest: '', score: '', mixed: 'TTM' };
+// THE GROUPS, proposed: by statement, as TradingView sets them, keeping our
+// group ids where a group survives (ids are stored keys and never renamed)
+// and adding new ids only where a group is new. Moving a field between groups
+// changes its group|label key: every move goes into FIELD_KEY_MOVED
+// (server.js), as the 2026-10 split of the fundamentals group did for 48 keys.
+const GROUPS = [
+  { id: 'info', name: 'Overview', period: 'Now', from: 'Info, unchanged (Market cap stays here)', note: 'Name, price, classification, size band, news, next report.' },
+  { id: 'act', name: 'Signal', period: '', from: 'Signal and Scores (Qual.) together', note: 'The verdict and the score it reads, side by side.' },
+  { id: 'short', name: 'Performance', period: 'Price', from: 'Short-term %, Long-term % and Forward, kept as three ids side by side', note: 'Returns over every horizon in one run.' },
+  { id: 'trend', name: 'Technicals', period: 'Price', from: 'Trend, Range and level, Risk, side by side', note: 'Moving averages, oscillators, range, volatility and drawdown.' },
+  { id: 'value', name: 'Valuation', period: 'Now (price) over TTM', from: 'Valuation, plus Enterprise value from Scale', note: 'Every multiple: price over a twelve-month figure, or book at quarter end.' },
+  { id: 'size', name: 'Income statement \u00b7 TTM', period: 'TTM', from: 'Scale, less Enterprise value and the cash flow lines; plus EPS TTM from Growth; plus Operating income TTM (new column)', note: 'Revenue, gross profit, operating income, EBITDA, net income, diluted EPS, revenue per employee.' },
+  { id: 'profit', name: 'Profitability \u00b7 TTM', period: 'TTM', from: 'Profitability, Operating margin made twelve months', note: 'Margins, ROE and ROA on average equity and assets, margin change.' },
+  { id: 'growth', name: 'Growth \u00b7 Q YoY', period: 'Q YoY', from: 'Growth, less EPS TTM', note: 'The quarter against the same quarter a year earlier (the half for half-yearly reporters).' },
+  { id: 'finpos', name: 'Balance sheet \u00b7 Q end', period: 'Q end', from: 'Financial position, plus Book value/share from Ownership and Interest cover from Long run', note: 'Cash and short-term investments, total debt, net cash, working capital, ratios, book value per share.' },
+  { id: 'cflow', name: 'Cash flow \u00b7 TTM (new id)', period: 'TTM', from: 'Operating cash and FCF TTM from Scale; FCF margin and FCF yield stay where they are; plus Capex TTM (new column)', note: 'Operating cash flow, capex, free cash flow. A new group id: ids are never renamed, new ones may be added.' },
+  { id: 'divs', name: 'Dividends and returns', period: 'Fwd and TTM, each said', from: 'Unchanged', note: 'Forward yield and rate (or the declared dividend from the releases), trailing payout, buyback and shareholder yield.' },
+  { id: 'aier', name: 'Latest quarter \u00b7 from the release', period: 'Q (and Q YoY)', from: 'Last Earning AI Extracted, renamed in the banner only', note: 'The newest quarter as the company reported it, the day it reports: the one group that is a single quarter by design.' },
+  { id: 'fwd', name: 'Forecasts (Forward, Fwd P/E, PEG)', period: 'Fwd', from: 'Fwd P/E, PEG and P/E vs peers could sit together here, as TradingView sets estimates apart', note: 'Optional: today they sit in Valuation, labelled Fwd.' },
+  { id: 'report', name: 'Reporting', period: 'Dates', from: 'Unchanged', note: 'Which quarter the figures describe, when results came out, what is stale.' },
+  { id: 'own', name: 'Ownership', period: 'Latest', from: 'Ownership, less Book value/share', note: 'Shares, float, short interest, insiders, institutions, 13F, options.' },
+  { id: 'lrun', name: 'Long run', period: '3, 5, 10 years', from: 'Unchanged, less Interest cover', note: 'Growth and records over years, from the filings.' },
+  { id: 'react', name: 'Reactions', period: 'Events', from: 'Unchanged', note: 'Selloffs, rallies, short build, insiders, 8-Ks.' },
+];
+// Where each Twelve Data column would sit (by FIELD_SPEC label).
+const GROUP_OF = {
+  'Market Cap': 'Overview', 'Revenue TTM': 'Income statement', 'Gross profit': 'Income statement', 'Net income': 'Income statement', 'EBITDA': 'Income statement', 'Revenue / employee': 'Income statement', 'EPS TTM': 'Income statement',
+  'FCF TTM': 'Cash flow', 'Operating cash': 'Cash flow', 'Enterprise value': 'Valuation', 'Book value/share': 'Balance sheet',
+};
+const groupFor = (label, group) => GROUP_OF[label] || ({ Valuation: 'Valuation', Profitability: 'Profitability', Growth: 'Growth', 'Financial position': 'Balance sheet', 'Dividends and returns': 'Dividends and returns', Reporting: 'Reporting', Ownership: 'Ownership', Scores: 'Signal', Info: 'Overview', Scale: 'Income statement' })[group] || group;
+// Columns TradingView has and the screener does not, worth adding.
+const ADDITIONS = [
+  { label: 'Operating income \u00b7 TTM', group: 'Income statement', from: 'SEC data four quarters, the release first; stored already', extract: null },
+  { label: 'Capex \u00b7 TTM', group: 'Cash flow', from: 'SEC data four quarters (stored already); the release where its cash flow statement has it', extract: null },
+  { label: 'EBITDA margin \u00b7 TTM', group: 'Profitability', from: 'Operating income plus depreciation over revenue', extract: 'da' },
+  { label: 'ROIC \u00b7 TTM', group: 'Profitability', from: 'Operating income after tax over debt plus equity less cash', extract: 'debt' },
+  { label: 'Interest cover \u00b7 TTM', group: 'Balance sheet', from: 'Operating income over interest expense, four quarters (the Long run column is ten years of annual reports)', extract: null },
+  { label: 'FCF per share \u00b7 TTM', group: 'Cash flow', from: 'Free cash flow over cover-page shares', extract: 'shout' },
+];
+const PLAN = [
+  { t: 'Regroup the screener by statement', d: 'As TradingView does: Overview, Signal, Performance, Technicals, Valuation, Income statement, Profitability, Growth, Balance sheet, a new Cash flow group, Dividends, Latest quarter (the release group), Reporting, Ownership, Long run, Reactions. Group ids stay; moved fields go into FIELD_KEY_MOVED so saved tiles and phone setups follow them.' },
+  { t: 'One period a column, said in its header', d: 'A period tag on every header, TradingView-style: TTM, Q YoY, Q end, Now, Fwd. The group banner says the group\u2019s period too (Income statement \u00b7 TTM). Display text only; stored keys keep their names. A per-column period selector, as TradingView has, is a larger build and is left out.' },
+  { t: 'Half-yearly reporters on their own period', d: 'Twelve months from the halves (the SEC data\u2019s H and FY rows already allow it) and growth on the half a year earlier, marked as half-yearly in the hover, instead of a quarter they do not report.' },
+  { t: 'Fix Operating margin', d: 'Twelve months from the SEC data; Twelve Data\u2019s is mostly one quarter\u2019s. Not a Signal input.' },
+  { t: 'Take the statement figures from the SEC data, the release first', d: 'The columns marked SEC filings below, display only. Signal inputs among them wait for the owner.' },
+  { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.' },
+  { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.' },
+  { t: 'Add the missing statement columns', d: 'Operating income, capex, interest cover (from data already stored); EBITDA margin, ROIC and FCF per share once their new data is extracted. Listed below.' },
   { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.' },
 ];
 
@@ -588,7 +655,9 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     }
     o.best = bestOf(o);
     const pr = PROPOSE[col.label];
-    o.proposal = pr ? { now: PERIOD[pr.now], to: PERIOD[pr.to], periodChange: pr.now !== pr.to, header: pr.header, text: pr.text, extract: pr.ex } : null;
+    const tag = pr ? PERIOD_TAG[pr.to] : '';
+    const hdr = pr ? pr.header.replace(/\s*\((TTM|Q end|forward|TTM, today\u2019s price|TTM, avg equity|TTM, avg assets|diluted|Q on Q a year ago)\)$/, '').replace(/\s+TTM$/, '') + (tag && !/^Fwd/.test(pr.header) ? ' \u00b7 ' + tag : '') : '';
+    o.proposal = pr ? { now: PERIOD[pr.now], to: PERIOD[pr.to], periodChange: pr.now !== pr.to, header: hdr, text: pr.text, extract: pr.ex, group: groupFor(col.label, col.group), groupMoves: groupFor(col.label, col.group) !== ({ Info: 'Overview', 'Financial position': 'Balance sheet', Scale: 'Income statement' }[col.group] || col.group) } : null;
     out.push(o);
   }
   // How current the filings are: of the companies with a release in the last
@@ -602,7 +671,7 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     timing: { tdMedianDays: lags.length ? lags[lags.length >> 1] : null, tdP90Days: lags.length ? lags[Math.floor(0.9 * lags.length)] : null, tdN: lags.length,
       filingSameDayPct: filingLag.length ? Math.round(1000 * filingLag.filter((d) => d === 0).length / filingLag.length) / 10 : null,
       filingMedianDays: filingLag.length ? filingLag[filingLag.length >> 1] : null, filingP90Days: filingLag.length ? filingLag[Math.floor(0.9 * filingLag.length)] : null },
-    fromFilings: FROM_FILINGS, plan: PLAN,
+    fromFilings: FROM_FILINGS, plan: PLAN, tradingview: TRADINGVIEW, groups: GROUPS, additions: ADDITIONS,
     extracts: Object.entries(EXTRACT).map(([id, e]) => Object.assign({ id, columns: out.filter((r) => r.proposal && r.proposal.extract === id).map((r) => r.label) }, e)), rows: out };
   fs.writeFileSync(OUT, JSON.stringify(doc, null, 1));
   const c = (st) => out.filter((r) => r.status === st).length;
