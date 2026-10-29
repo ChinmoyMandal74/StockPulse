@@ -30,9 +30,9 @@
   // beside the list it answers to. Every key on KEYS has its row here.
   const FIELD_OF = {
     'size|Revenue TTM': 'revenueTtm', 'size|Gross profit': 'grossProfitTtm', 'size|Net income': 'netIncomeTtm',
-    'size|Operating cash': 'operatingCashFlowTtm', 'size|FCF TTM': 'fcfTtm', 'divs|Buyback yield': 'buybackYield',
+    'cflow|Operating cash': 'operatingCashFlowTtm', 'cflow|FCF TTM': 'fcfTtm', 'divs|Buyback yield': 'buybackYield',
     'profit|Gross margin': 'grossMargin', 'profit|Operating margin': 'operatingMargin', 'profit|Profit margin': 'profitMargin',
-    'profit|Margin change': 'netMarginChg', 'profit|FCF margin': 'fcfMargin', 'growth|EPS TTM': 'dilutedEpsTtm',
+    'profit|Margin change': 'netMarginChg', 'profit|FCF margin': 'fcfMargin', 'size|EPS TTM': 'dilutedEpsTtm',
     'value|Trailing P/E': 'trailingPe', 'value|Live P/E': 'peLive', 'value|P/S': 'priceToSales', 'value|P/B': 'priceToBook',
     'own|Short % float': 'shortPctFloat', 'own|Short % out': 'shortPctOutstanding', 'own|Short ratio': 'shortRatio',
     'report|Reported': 'lastEarningsDate',

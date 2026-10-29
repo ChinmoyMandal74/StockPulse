@@ -545,7 +545,7 @@ const GROUP_OF = {
   'Market Cap': 'Overview', 'Revenue TTM': 'Income statement', 'Gross profit': 'Income statement', 'Net income': 'Income statement', 'EBITDA': 'Income statement', 'Revenue / employee': 'Income statement', 'EPS TTM': 'Income statement',
   'FCF TTM': 'Cash flow', 'Operating cash': 'Cash flow', 'Enterprise value': 'Valuation', 'Book value/share': 'Balance sheet',
 };
-const MOVED = new Set(['FCF TTM', 'Operating cash', 'EPS TTM']);   // done 2026-10-29, the screener table
+const MOVED = new Set(['FCF TTM', 'Operating cash', 'EPS TTM', 'Enterprise value', 'Book value/share']);   // done 2026-10-29, the screener table
 const groupFor = (label, group) => GROUP_OF[label] || ({ Valuation: 'Valuation', Profitability: 'Profitability', Growth: 'Growth', 'Financial position': 'Balance sheet', 'Dividends and returns': 'Dividends and returns', Reporting: 'Reporting', Ownership: 'Ownership', Scores: 'Signal', Info: 'Overview', Scale: 'Income statement' })[group] || group;
 // Columns TradingView has and the screener does not, worth adding.
 const ADDITIONS = [
@@ -557,7 +557,7 @@ const ADDITIONS = [
   { label: 'FCF per share \u00b7 TTM', group: 'Cash flow', from: 'Free cash flow over cover-page shares', extract: 'shout' },
 ];
 const PLAN = [
-  { t: 'Regroup the stock page, hover card, phone and tiles the same way', d: 'The field catalogue (FIELD_SPEC) into the same groups as the screener, saved tile and phone setups carried to the new keys through FIELD_KEY_MOVED.', status: 'decided', note: 'Decided 2026-10-29: yes.' },
+  { t: 'Regroup the stock page, hover card, phone and tiles the same way', d: 'The field catalogue (FIELD_SPEC) into the same groups as the screener, saved tile and phone setups carried to the new keys through FIELD_KEY_MOVED.', status: 'done', note: 'Done 2026-10-29: FIELD_SPEC regrouped (Cash flow group; EPS TTM into Income statement; Enterprise value into Valuation; Book value/share into Balance sheet; Trend beside Range and level). Saved tile and phone setups carried through FIELD_KEY_MOVED, five new entries.' },
   { t: 'Banks\u2019 revenue on one line', d: 'Net revenue for banks and insurers, from the release and, once extracted, the SEC data\u2019s net revenue concept.', status: 'decided', note: 'Decided 2026-10-29: net revenue.' },
   { t: 'Regroup the screener by statement', d: 'As TradingView does: Overview, Signal, Performance, Technicals, Valuation, Income statement, Profitability, Growth, Balance sheet, a new Cash flow group, Dividends, Latest quarter (the release group), Reporting, Ownership, Long run, Reactions. Group ids stay; moved fields go into FIELD_KEY_MOVED so saved tiles and phone setups follow them.', status: 'done', note: 'Done 2026-10-29 in the screener table: Trend beside Range and level, Income statement \u00b7 TTM (EPS TTM moved in), a new Cash flow \u00b7 TTM group (Op cash and FCF TTM moved in), Growth \u00b7 Q YoY, Balance sheet \u00b7 Q end, Latest quarter \u00b7 from the release. Not yet: the stock page and hover-card catalogue (FIELD_SPEC, whose keys back saved tiles and phone setups), Qual. into Signal, a Forecasts group.' },
   { t: 'One period a column, said in its header', d: 'A period tag on every header, TradingView-style: TTM, Q YoY, Q end, Now, Fwd. The group banner says the group\u2019s period too (Income statement \u00b7 TTM). Display text only; stored keys keep their names. A per-column period selector, as TradingView has, is a larger build and is left out.', status: 'done', note: 'Done 2026-10-29: a period tag under the name of all 39 company-figure columns (Op margin says latest Q until it is fixed), and the period in the group banners. Header text only; no stored key changed.' },
@@ -575,6 +575,7 @@ const PLAN = [
 // decision or change to the data sources, the periods, the groups or the
 // definitions adds a line here in the same commit, and its PLAN step's status.
 const DECISIONS = [
+  { d: '2026-10-29', who: 'Built', t: 'The stock page, hover card, phone and tiles regrouped', x: 'The same groups as the screener. Five field keys moved (size|FCF TTM, size|Operating cash, growth|EPS TTM, size|Enterprise value, own|Book value/share); saved tile and phone setups follow them through FIELD_KEY_MOVED. Neither saved setup in production used a moved key.' },
   { d: '2026-10-29', who: 'Owner', t: 'Free cash flow is operating cash flow less capex', x: 'Not Twelve Data\u2019s levered figure. The FCF columns run release \u2192 SEC; Twelve Data\u2019s figure is another measure, so it is no fallback. The Signal\u2019s two free cash flow inputs stay on Twelve Data until the owner decides the Signal separately.' },
   { d: '2026-10-29', who: 'Owner', t: 'Total debt is borrowings, leases apart', x: 'Short-term borrowings, commercial paper, current and long-term debt; lease liabilities excluded. Needs the missing SEC debt lines extracted.' },
   { d: '2026-10-29', who: 'Owner', t: 'Banks\u2019 revenue is net revenue', x: 'What banks and insurers headline. The release has it; the SEC data needs its net revenue concept extracted.' },

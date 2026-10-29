@@ -12433,7 +12433,7 @@ const FIELD_KEY_MOVED = {
   'fund|EV/EBITDA': 'value|EV/EBITDA',
   'fund|Operating margin': 'profit|Operating margin',
   'fund|ROA': 'profit|ROA',
-  'fund|EPS TTM': 'growth|EPS TTM',
+  'fund|EPS TTM': 'size|EPS TTM',
   'fund|Debt / equity': 'finpos|Debt / equity',
   'fund|Current ratio': 'finpos|Current ratio',
   'fund|FCF yield': 'value|FCF yield',
@@ -12444,12 +12444,20 @@ const FIELD_KEY_MOVED = {
   'fund|Ex-dividend': 'divs|Ex-dividend',
   'fund|Dividend paid': 'divs|Dividend paid',
   'fund|Last split': 'report|Last split',
+  // The regrouping by statement (owner, 2026-10-29, docs/context/data-sources.md):
+  // a Cash flow group, EPS TTM into Income statement, Enterprise value into
+  // Valuation, Book value/share into the balance sheet.
+  'size|FCF TTM': 'cflow|FCF TTM',
+  'size|Operating cash': 'cflow|Operating cash',
+  'growth|EPS TTM': 'size|EPS TTM',
+  'size|Enterprise value': 'value|Enterprise value',
+  'own|Book value/share': 'finpos|Book value/share',
 };
 const fieldKeyNow = (f) => (Object.prototype.hasOwnProperty.call(FIELD_KEY_MOVED, f) ? FIELD_KEY_MOVED[f] : f);
 // `lrun` is the Long run group, 2026-10-19.
 // Option A's groups (2026-10-19) replace `fund`; a stored `fund|…` key is
 // translated by fieldKeyNow before it is tested here.
-const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|risk|react|trend|size|value|profit|growth|finpos|divs|report|lrun|own|aier)\|[^|]{1,32}$/;
+const TILE_FIELD_RE = /^(info|rank|act|chart|short|long|rel|risk|react|trend|size|value|profit|growth|finpos|cflow|divs|report|lrun|own|aier)\|[^|]{1,32}$/;
 const TILE_SPARK_DAYS = [0, 21, 63, 126, 252];
 const TILE_FIELDS_MAX = 6;   // six reads as a tile; eight reads as a table cell
 const TILE_HEIGHTS = [44, 72, 110];

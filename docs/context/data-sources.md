@@ -86,3 +86,5 @@ On 2026-10-29, over the 21 columns: **the release 5,497 company-columns (21%), t
 - **Regroup the catalogue too**: the stock page, hover card, phone and tiles into the screener's groups, saved setups carried through `FIELD_KEY_MOVED`.
 
 All four are on `/sources` (`DECISIONS`, the plan's statuses, the FCF and Debt rows, the new extraction item).
+
+**The catalogue regrouped too (2026-10-29)**: the stock page, hover card, /compare, phone and tiles use the screener's groups; five keys moved through `FIELD_KEY_MOVED` (see `column-groups.md`). Marked done on `/sources`.

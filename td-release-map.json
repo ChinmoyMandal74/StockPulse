@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T17:53:22.809Z",
+ "builtAt": "2026-10-29T18:01:55.136Z",
  "secCompanies": 1150,
  "secSameQuarter": 78.9,
  "secSameQuarterN": 1125,
@@ -26,6 +26,12 @@
   "Insider net, Short build, Last 8-K and 5% filing"
  ],
  "decisions": [
+  {
+   "d": "2026-10-29",
+   "who": "Built",
+   "t": "The stock page, hover card, phone and tiles regrouped",
+   "x": "The same groups as the screener. Five field keys moved (size|FCF TTM, size|Operating cash, growth|EPS TTM, size|Enterprise value, own|Book value/share); saved tile and phone setups follow them through FIELD_KEY_MOVED. Neither saved setup in production used a moved key."
+  },
   {
    "d": "2026-10-29",
    "who": "Owner",
@@ -73,8 +79,8 @@
   {
    "t": "Regroup the stock page, hover card, phone and tiles the same way",
    "d": "The field catalogue (FIELD_SPEC) into the same groups as the screener, saved tile and phone setups carried to the new keys through FIELD_KEY_MOVED.",
-   "status": "decided",
-   "note": "Decided 2026-10-29: yes."
+   "status": "done",
+   "note": "Done 2026-10-29: FIELD_SPEC regrouped (Cash flow group; EPS TTM into Income statement; Enterprise value into Valuation; Book value/share into Balance sheet; Trend beside Range and level). Saved tile and phone setups carried through FIELD_KEY_MOVED, five new entries."
   },
   {
    "t": "Banks’ revenue on one line",
@@ -1015,7 +1021,7 @@
     "text": "Keep Twelve Data until the debt lines are extracted; then market value + total debt − cash and short-term investments from the filings.",
     "extract": "debt",
     "group": "Valuation",
-    "moved": false,
+    "moved": true,
     "groupMoves": true
    }
   },
@@ -3398,7 +3404,7 @@
     "text": "Equity at quarter end over cover-page shares.",
     "extract": "shout",
     "group": "Balance sheet",
-    "moved": false,
+    "moved": true,
     "groupMoves": true
    }
   },

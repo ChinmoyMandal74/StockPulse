@@ -442,14 +442,13 @@
     ['size',  'Revenue TTM',    (s) => V.money(s.revenueTtm, s.currency)],
     ['size',  'Gross profit',   (s) => V.money(s.grossProfitTtm, s.currency)],
     ['size',  'Net income',     (s) => V.money(s.netIncomeTtm, s.currency)],
-    ['size',  'FCF TTM',        (s) => V.money(s.fcfTtm, s.currency)],
+    ['cflow', 'FCF TTM',        (s) => V.money(s.fcfTtm, s.currency)],
     ['size',  'EBITDA',         (s) => V.money(s.ebitda, s.currency)],
-    ['size',  'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
+    ['cflow', 'Operating cash', (s) => V.money(s.operatingCashFlowTtm, s.currency)],
     ['size',  'Revenue / employee', (s) => V.money(s.revenuePerEmployee, s.currency || 'USD')],
     // Market cap plus debt, less cash — what the whole business costs rather
     // than what the equity costs. Stored since the profile call started being
     // kept in full and never surfaced.
-    ['size',  'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
     ['value', 'Fwd P/E',        (s) => V.num(s.forwardPe)],
     ['value', 'Trailing P/E',   (s) => V.num(s.trailingPe)],
     // Deliberately NOT in FUND_HAS: a fund's EPS is not something we hold, so
@@ -478,6 +477,7 @@
     // reason the refresh email excludes them from its moved-fields list. Fine
     // to read, misleading to watch for changes.
     ['value', 'FCF yield',      (s) => V.lvl(s.fcfYield)],
+    ['value', 'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
     ['profit', 'Gross margin',   (s) => V.lvl(s.grossMargin)],
     ['profit', 'Operating margin',(s) => V.pct(s.operatingMargin)],
     ['profit', 'Profit margin',  (s) => V.pct(s.profitMargin)],
@@ -489,7 +489,7 @@
     ['profit', 'ROA',            (s) => V.pct(s.roa)],
     ['growth', 'Rev grth Q YoY', (s) => V.pct(s.revenueGrowthYoY)],
     ['growth', 'Earn grth Q YoY',(s) => V.pct(s.earningsGrowthYoY)],
-    ['growth', 'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
+    ['size',  'EPS TTM',        (s) => V.num(s.dilutedEpsTtm, 2)],
     ['finpos', 'Cash',           (s) => V.money(s.totalCash, s.currency)],
     ['finpos', 'Debt',           (s) => V.money(s.totalDebt, s.currency)],
     ['finpos', 'Net cash',       (s) => V.signedMoney(s.netCash, s.currency)],
@@ -593,7 +593,7 @@
     // dilution when it rises, buybacks net of issuance when it falls.
     ['own',   'Shares chg 1Y',  (s) => V.smag(s.sharesChg)],
     ['own',   'Float',          (s) => V.count(s.floatShares)],
-    ['own',   'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
+    ['finpos', 'Book value/share',(s) => V.num(s.bookValuePerShare, 2)],
     ['own',   'Short ratio',    (s) => V.num(s.shortRatio)],
     // It was in Fundamentals and is not a fact about the business: it is the
     // share register, and the Float it divides by is two rows up. Its two
@@ -617,7 +617,9 @@
 
   // Option A (owner, 2026-10-19): Relative split into Range and level (id
   // kept) and Risk; Fundamentals into six. The screener's group list matches.
-  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'rel', 'risk', 'react', 'trend', 'size', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'own', 'aier'];
+  // By statement, as the screener (2026-10-29, docs/context/data-sources.md): Trend
+  // beside Range and level, and a Cash flow group after the balance sheet.
+  const GROUP_ORDER = ['info', 'rank', 'act', 'short', 'long', 'fwd', 'trend', 'rel', 'risk', 'react', 'size', 'value', 'profit', 'growth', 'finpos', 'cflow', 'divs', 'report', 'lrun', 'own', 'aier'];
   // The palette lives here because this file already owns GROUP_ORDER and
   // FIELD_SPEC. index.html keeps its own copy — it also colours the table's
   // group banners and the columns menu — so those two must stay in step.
@@ -631,16 +633,16 @@
     rel: 'var(--cyan, #22d3ee)', react: 'var(--pink, #f472b6)', trend: 'var(--amber, #fbbf24)',
     size: 'var(--steel, #94a3b8)', lrun: 'var(--sand, #d6c58b)', own: 'var(--orchid, #f0abfc)',
     risk: 'var(--peach, #fdba74)', value: 'var(--red, #fb7185)', profit: 'var(--indigo, #818cf8)', growth: 'var(--sky, #38bdf8)',
-    finpos: 'var(--lilac, #c4b5fd)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)', aier: 'var(--azure, #93c5fd)',
+    finpos: 'var(--lilac, #c4b5fd)', cflow: 'var(--aqua, #67e8f9)', divs: 'var(--yellow, #facc15)', report: 'var(--dim, #8b93a7)', aier: 'var(--azure, #93c5fd)',
   };
-  // `size` is labelled Scale because there is a Size COLUMN in Info (the cap
-  // band). The group ID is unchanged, so every saved key that names it still
+  // `size` was labelled Scale because there is a Size COLUMN in Info (the cap
+  // band); since 2026-10-29 it is Income statement \u00b7 TTM, which cannot be confused with it. The group ID is unchanged, so every saved key that names it still
   // resolves — a label is free to change in a way a group id is not.
   const GROUP_LABELS = {
     info: 'Info', rank: 'Scores', act: 'Signal', short: 'Short-term %', long: 'Long-term %', fwd: 'Forward',
-    rel: 'Range and level', risk: 'Risk', react: 'Reactions', trend: 'Trend', size: 'Scale', value: 'Valuation', profit: 'Profitability',
-    growth: 'Growth', finpos: 'Financial position', divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
-    aier: 'Last Earning AI Extracted',
+    rel: 'Range and level', risk: 'Risk', react: 'Reactions', trend: 'Trend', size: 'Income statement \u00b7 TTM', value: 'Valuation', profit: 'Profitability \u00b7 TTM',
+    growth: 'Growth \u00b7 Q YoY', finpos: 'Balance sheet \u00b7 Q end', cflow: 'Cash flow \u00b7 TTM', divs: 'Dividends and returns', report: 'Reporting', lrun: 'Long run', own: 'Ownership',
+    aier: 'Latest quarter \u00b7 from the release',
   };
 
   // ---- price history -------------------------------------------------------
@@ -1336,7 +1338,7 @@
   // XLK 41.5). A distribution yield is one of the most-read numbers about an
   // ETF; NA there would destroy a true figure to satisfy a rule about the
   // group it happens to sit in.
-  const FUND_NA_GROUPS = ['size', 'own', 'value', 'profit', 'growth', 'finpos', 'divs', 'report', 'lrun', 'aier'];
+  const FUND_NA_GROUPS = ['size', 'own', 'value', 'profit', 'growth', 'finpos', 'cflow', 'divs', 'report', 'lrun', 'aier'];
   const FUND_HAS = new Set([
     'value|Trailing P/E', 'divs|Dividend yield', 'divs|Dividend rate',
     'divs|Ex-dividend', 'report|Last split',
