@@ -367,7 +367,13 @@
     const v200 = num(s.vs200ma), v50 = num(s.vs50ma), rsi = num(s.rsi);
     const m1 = num(s.oneMonthPct), m3 = num(s.threeMonthPct);
     const fh = num(s.pctFromHigh), vol = num(s.volTrend), sf = num(s.shortPctFloat);
-    const hist = num(s.historyDays), dte = daysToEarnings(s);
+    // A FUND REPORTS NO EARNINGS (2026-10-28, the owner: "exclude funds").
+    // The ETF rule list never asked for Earnings soon, so no verdict moves;
+    // what stops is the Guards column and the ladder showing "Earnings 3d"
+    // on a fund, from a date the feed or our estimate made up for it. Keyed
+    // on the provider's instrument type, not on `type`: the ETF rulebook also
+    // takes companies with no quality score and no P/E, and those do report.
+    const hist = num(s.historyDays), dte = s.instrumentType === 'ETF' ? null : daysToEarnings(s);
     const band = cfg.whipsaw.neutral_band_pct;
 
     // Inside the neutral band the stock is neither above nor below its 200D,

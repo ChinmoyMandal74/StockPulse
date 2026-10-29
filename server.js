@@ -5106,6 +5106,12 @@ async function fetchProfile(symbol) {
         const cal = await store.readEarningsCalendarNext(symbol, nyDay(now), nyDay(now - 3 * 86400000));
         if (cal) { out.nextEarningsDate = cal.d; out.nextEarningsEstimated = false; }
       } catch { /* the date worked out above stands */ }
+      // A FUND REPORTS NO EARNINGS (2026-10-28, the owner: "exclude funds").
+      // The feed lists report rows for some (QQQ, SMH, the sector funds) and
+      // our estimate ran on from them, so a fund carried a next report date
+      // it will never meet. None is stored; the Signal ignores one for a
+      // fund in any case (action.js definitions).
+      if (out.instrumentType === 'ETF') { out.nextEarningsDate = null; out.nextEarningsEstimated = null; }
     } catch {
       /* leave earnings null */
     }
