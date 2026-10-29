@@ -69,6 +69,31 @@ const CONCEPTS = {
   interestExpense: ['InterestExpense', 'InterestExpenseNonoperating', 'InterestExpenseDebt', 'InterestAndDebtExpense'],
   currentAssets: ['AssetsCurrent'],
   currentLiabilities: ['LiabilitiesCurrent'],
+  // THE SOURCE PLAN'S NEW ITEMS (2026-10-29, docs/context/data-sources.md).
+  // Depreciation and amortization, for EBITDA (operating income plus it); a
+  // cash-flow line, year to date in a 10-Q, so its quarter is subtracted like
+  // operating cash flow's. Banks' and insurers' net revenue, the line the
+  // owner chose for them (the total stays in `revenue`).
+  depreciation: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'Depreciation'],
+  netRevenue: ['RevenuesNetOfInterestExpense'],
+  // Positions. Short-term investments, so cash can be read as Twelve Data
+  // reads it. THE DEBT LINES, kept apart because the tags overlap (DebtCurrent
+  // already holds short-term borrowings and the current portion; LongTermDebt
+  // can hold the current portion): `totalDebt` below adds them by one stated
+  // precedence, borrowings only, leases apart (the owner, 2026-10-29). The old
+  // `debt` concept is unchanged so nothing that reads it moves.
+  shortTermInvestments: ['ShortTermInvestments', 'MarketableSecuritiesCurrent', 'AvailableForSaleSecuritiesDebtSecuritiesCurrent'],
+  ltdCurrent: ['LongTermDebtCurrent'],
+  ltdNoncurrent: ['LongTermDebtNoncurrent'],
+  ltdTotal: ['LongTermDebt'],
+  debtCurrent: ['DebtCurrent'],
+  stBorrowings: ['ShortTermBorrowings'],
+  commercialPaper: ['CommercialPaper'],
+  // A LAST RESORT, traced on Coca-Cola (2026-10-29): some companies file their
+  // debt only as "debt and finance lease obligations". Used by totalDebt only
+  // where no plain debt line is filed; debtWithLeases says when it was.
+  ltdLeaseNoncurrent: ['LongTermDebtAndCapitalLeaseObligations'],
+  ltdLeaseCurrent: ['LongTermDebtAndCapitalLeaseObligationsCurrent'],
 };
 const CONCEPT_KEYS = Object.keys(CONCEPTS);
 
@@ -117,6 +142,17 @@ const IFRS_CONCEPTS = {
   interestExpense: ['InterestExpense', 'FinanceCosts'],
   currentAssets: ['CurrentAssets'],
   currentLiabilities: ['CurrentLiabilities'],
+  depreciation: ['DepreciationAndAmortisationExpense'],
+  netRevenue: [],
+  shortTermInvestments: ['CurrentInvestments'],
+  ltdCurrent: ['CurrentPortionOfLongtermBorrowings'],
+  ltdNoncurrent: ['NoncurrentPortionOfNoncurrentBorrowings', 'LongtermBorrowings'],
+  ltdTotal: [],
+  debtCurrent: ['CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings'],
+  stBorrowings: ['ShorttermBorrowings'],
+  commercialPaper: [],
+  ltdLeaseNoncurrent: [],
+  ltdLeaseCurrent: [],
 };
 
 // Which taxonomy speaks for this company. US GAAP where it carries any of
@@ -186,7 +222,7 @@ function currencyOf(facts) {
 // margins, being a ratio inside one period, are untouched.
 const FLOWS = ['revenue', 'costOfRevenue', 'grossProfit', 'operatingIncome', 'netIncome',
   'epsDiluted', 'operatingCashFlow', 'capex', 'buybacks', 'dividendsPaid', 'stockComp',
-  'dividendsPerShare', 'interestExpense'];
+  'dividendsPerShare', 'interestExpense', 'depreciation', 'netRevenue'];
 function toDollars(rows, currency, fx) {
   const out = [];
   for (const r of rows) {
@@ -207,7 +243,15 @@ function toDollars(rows, currency, fx) {
 // start — where an income or cash-flow fact covers a span. They live in the
 // same filing and belong on the same row, so the instants are matched to the
 // duration row whose period ends on the same day.
-const INSTANT = new Set(['assets', 'liabilities', 'equity', 'cash', 'debt', 'currentAssets', 'currentLiabilities']);
+const INSTANT = new Set(['assets', 'liabilities', 'equity', 'cash', 'debt', 'currentAssets', 'currentLiabilities',
+  'shortTermInvestments', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal', 'debtCurrent', 'stBorrowings', 'commercialPaper',
+  'ltdLeaseNoncurrent', 'ltdLeaseCurrent']);
+// THE COVER PAGE (2026-10-29): facts under `dei`, filed once per report and
+// dated at the cover, not the period: shares outstanding (as at the cover
+// date), employees (few filers tag it) and the public float (the 10-K's, in
+// dollars, as at the last day of the second quarter). Each is attached to
+// every row of the filing that carries it; none is converted or subtracted.
+const COVER = { sharesOutstanding: 'EntityCommonStockSharesOutstanding', employees: 'EntityNumberOfEmployees', publicFloat: 'EntityPublicFloat' };
 
 // ---- how long is a period -------------------------------------------------
 //
@@ -291,6 +335,7 @@ function normalise(facts, symbol, opts) {
               periodStart: x.start, periodEnd: x.end, periodType: pt, derived: 0,
             };
             for (const c of CONCEPT_KEYS) row[c] = null;
+            for (const c of Object.keys(COVER)) row[c] = null;
             rows.set(k, row);
           }
           if (row[concept] == null) row[concept] = v;
@@ -300,6 +345,25 @@ function normalise(facts, symbol, opts) {
   }
 
   let out = [...rows.values()];
+  // The cover page's facts, by filing. Several values on one filing (share
+  // classes filed apart) are added up for shares; the first is kept otherwise.
+  const dei = (facts && facts.facts && facts.facts.dei) || {};
+  const cover = new Map();
+  for (const [key, tag] of Object.entries(COVER)) {
+    const f = dei[tag];
+    if (!f || !f.units) continue;
+    for (const unit of Object.keys(f.units)) for (const x of f.units[unit]) {
+      const v = num(x && x.val);
+      if (v == null || !x.accn) continue;
+      const bag = cover.get(x.accn) || cover.set(x.accn, { _seen: new Set() }).get(x.accn);
+      const id = key + '|' + (x.end || '') + '|' + v;
+      if (bag._seen.has(id)) continue;
+      bag._seen.add(id);
+      if (key === 'sharesOutstanding' && bag.sharesOutstanding != null && bag._sharesEnd === x.end) bag.sharesOutstanding += v;
+      else if (bag[key] == null) { bag[key] = v; if (key === 'sharesOutstanding') bag._sharesEnd = x.end; }
+    }
+  }
+  for (const r of out) { const b = cover.get(r.accn); if (b) for (const k of Object.keys(COVER)) if (b[k] != null) r[k] = b[k]; }
   // Attach each filing's balance sheet to the period it closes.
   for (const r of out) {
     const bag = instants.get(r.accn + '|' + r.periodEnd);
@@ -364,6 +428,37 @@ function fill(r) {
 // neither does a per-share figure computed on a different denominator each
 // quarter — those stay blank rather than being invented.
 const NO_DIFF = new Set([...INSTANT, 'sharesDiluted', 'epsDiluted', 'dividendsPerShare']);
+// TOTAL DEBT, the owner's definition (2026-10-29): borrowings, leases apart.
+// The current part: DebtCurrent where filed (short-term borrowings and the
+// current portion together), else the current portion plus short-term
+// borrowings (commercial paper where no short-term borrowings line is filed,
+// as it is usually inside it). The long-term part: LongTermDebtNoncurrent,
+// else LongTermDebt less the current portion when that is known, else
+// LongTermDebt as filed. Null when no line is filed at all, never zero.
+function totalDebt(r) {
+  if (!r) return null;
+  const has = (k) => r[k] != null && Number.isFinite(Number(r[k]));
+  const cur = has('debtCurrent') ? Number(r.debtCurrent)
+    : (has('ltdCurrent') || has('stBorrowings') || has('commercialPaper'))
+      ? (has('ltdCurrent') ? Number(r.ltdCurrent) : 0) + (has('stBorrowings') ? Number(r.stBorrowings) : has('commercialPaper') ? Number(r.commercialPaper) : 0) : null;
+  const lt = has('ltdNoncurrent') ? Number(r.ltdNoncurrent)
+    // LongTermDebt holds the current portion, which the current part already
+    // counts: it comes off whenever it is known. Unknown, LongTermDebt is
+    // taken as filed (it may then hold a current portion counted twice where
+    // DebtCurrent is also filed: rare, and said so).
+    : has('ltdTotal') ? Number(r.ltdTotal) - (has('ltdCurrent') ? Number(r.ltdCurrent) : 0) : null;
+  if (cur == null && lt == null) {
+    if (!has('ltdLeaseNoncurrent') && !has('ltdLeaseCurrent')) return null;
+    return (has('ltdLeaseNoncurrent') ? Number(r.ltdLeaseNoncurrent) : 0) + (has('ltdLeaseCurrent') ? Number(r.ltdLeaseCurrent) : 0)
+      + (has('stBorrowings') ? Number(r.stBorrowings) : has('commercialPaper') ? Number(r.commercialPaper) : 0);
+  }
+  return (cur || 0) + (lt || 0);
+}
+// Whether totalDebt fell back to the lines that include finance leases.
+function debtWithLeases(r) {
+  const has = (k) => r && r[k] != null && Number.isFinite(Number(r[k]));
+  return !!r && !['debtCurrent', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal'].some(has) && (has('ltdLeaseNoncurrent') || has('ltdLeaseCurrent'));
+}
 
 function deriveQuarters(rows) {
   // The filing that speaks for each distinct (start, end) — a restatement
@@ -558,7 +653,9 @@ const FILLABLE = ['periodStart', 'revenue', 'costOfRevenue', 'grossProfit',
   'operatingIncome', 'netIncome', 'epsDiluted', 'operatingCashFlow', 'capex',
   'freeCashFlow', 'assets', 'liabilities', 'equity', 'cash', 'debt',
   'sharesDiluted', 'buybacks', 'dividendsPaid', 'stockComp',
-  'dividendsPerShare', 'interestExpense', 'currentAssets', 'currentLiabilities'];
+  'dividendsPerShare', 'interestExpense', 'currentAssets', 'currentLiabilities',
+  'depreciation', 'netRevenue', 'shortTermInvestments', 'ltdCurrent', 'ltdNoncurrent', 'ltdTotal', 'debtCurrent',
+  'stBorrowings', 'commercialPaper', 'ltdLeaseNoncurrent', 'ltdLeaseCurrent', 'sharesOutstanding', 'employees', 'publicFloat'];
 
 function latestFilled(rows) {
   const list = Array.isArray(rows) ? rows : [];
@@ -956,7 +1053,7 @@ function newestResults(recent) {
 }
 
 module.exports = {
-  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF, IFRS_CONCEPTS, taxonomyOf, currencyOf, toDollars,
+  CONCEPTS, CONCEPT_KEYS, INSTANT, NO_DIFF, IFRS_CONCEPTS, COVER, totalDebt, debtWithLeases, taxonomyOf, currencyOf, toDollars,
   periodType, normalise, deriveQuarters, latestPerPeriod, latestFilled, visibleAsOf,
   filingUrl, isStatement, withRatios, ttm, ttmSeries, MIN_REVENUE, FILLABLE,
   reconcile, newestResults,

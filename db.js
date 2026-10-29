@@ -1713,6 +1713,24 @@ const ADDED_COLUMNS = [
   "alter table sec_facts add column interest_expense real",
   "alter table sec_facts add column current_assets real",
   "alter table sec_facts add column current_liabilities real",
+  // The source plan's new items (2026-10-29, docs/context/data-sources.md):
+  // depreciation and banks' net revenue (flows), short-term investments and
+  // the debt lines apart (positions), and the cover page's shares outstanding,
+  // employees and public float.
+  "alter table sec_facts add column depreciation real",
+  "alter table sec_facts add column net_revenue real",
+  "alter table sec_facts add column short_term_investments real",
+  "alter table sec_facts add column ltd_current real",
+  "alter table sec_facts add column ltd_noncurrent real",
+  "alter table sec_facts add column ltd_total real",
+  "alter table sec_facts add column debt_current real",
+  "alter table sec_facts add column st_borrowings real",
+  "alter table sec_facts add column commercial_paper real",
+  "alter table sec_facts add column ltd_lease_noncurrent real",
+  "alter table sec_facts add column ltd_lease_current real",
+  "alter table sec_facts add column shares_outstanding real",
+  "alter table sec_facts add column employees real",
+  "alter table sec_facts add column public_float real",
   // The newest STATEMENT filing (10-K/10-Q/20-F/40-F) we hold for a symbol,
   // recorded by writeSecFacts, which already has the rows. It exists so the
   // vendor-vs-filings staleness check never has to ask sec_facts for a
@@ -3385,7 +3403,10 @@ const SEC_COLS = ['symbol', 'cik', 'accn', 'form', 'filed', 'fy', 'fp',
   // toDollars). Null on every dollar filer, which is nearly all of them.
   'currency', 'fx_avg', 'fx_end',
   'buybacks', 'dividends_paid', 'stock_comp',
-  'dividends_per_share', 'interest_expense', 'current_assets', 'current_liabilities'];
+  'dividends_per_share', 'interest_expense', 'current_assets', 'current_liabilities',
+  'depreciation', 'net_revenue', 'short_term_investments', 'ltd_current', 'ltd_noncurrent', 'ltd_total',
+  'debt_current', 'st_borrowings', 'commercial_paper', 'ltd_lease_noncurrent', 'ltd_lease_current',
+  'shares_outstanding', 'employees', 'public_float'];
 // camelCase on the row -> snake_case in the table, named once.
 const SEC_FIELD = {
   cost_of_revenue: 'costOfRevenue', gross_profit: 'grossProfit',
@@ -3397,6 +3418,9 @@ const SEC_FIELD = {
   dividends_paid: 'dividendsPaid', stock_comp: 'stockComp',
   dividends_per_share: 'dividendsPerShare', interest_expense: 'interestExpense',
   current_assets: 'currentAssets', current_liabilities: 'currentLiabilities',
+  net_revenue: 'netRevenue', short_term_investments: 'shortTermInvestments', ltd_current: 'ltdCurrent',
+  ltd_noncurrent: 'ltdNoncurrent', ltd_total: 'ltdTotal', debt_current: 'debtCurrent', st_borrowings: 'stBorrowings',
+  commercial_paper: 'commercialPaper', ltd_lease_noncurrent: 'ltdLeaseNoncurrent', ltd_lease_current: 'ltdLeaseCurrent', shares_outstanding: 'sharesOutstanding', public_float: 'publicFloat',
 };
 const secVal = (row, col) => {
   const v = row[SEC_FIELD[col] || col];
