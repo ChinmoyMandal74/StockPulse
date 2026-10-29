@@ -243,6 +243,133 @@ const COLS = [
     rel: 'Its inputs: margins, growth, ROE, net cash, from the releases where they exist', shown: '—', td: null, relv: null, q10: null,
     note: 'Not a Twelve Data figure but made of them; it would move with its inputs. A Signal input.' },
 ];
+// ---- THE SEC FILINGS SIDE (2026-10-29, the owner: "yes add and I like the
+// best source") ---------------------------------------------------------------
+// sec_facts, the companies' own 10-Q and 10-K data (secfacts.js), a quarter at
+// a time. Each period's latest filing (a restatement replaces), quarters only;
+// twelve months are four in a row summed, the newest within 200 days. The
+// balance sheet is the newest quarter's.
+// TWELVE MONTHS, two ways (traced 2026-10-29: the 10-K's worked-out fourth
+// quarter carries no EPS, as EPS cannot be subtracted, and some banks give
+// revenue only for the year). Four quarters in a row summed when all four
+// carry the line; otherwise the year (when the newest quarter ends it), or
+// last year plus this year to date less last year to date, as the providers
+// work it.
+function secContext(qs, others) {
+  if (!qs || !qs.length) return null;
+  const last = qs[qs.length - 1];
+  if ((Date.now() - t(last.period_end)) / DAY > 200) return null;
+  const x = { last, ttm: {} };
+  const gapOk = (a, b) => { const g = (t(b.period_end) - t(a.period_end)) / DAY; return g >= 75 && g <= 105; };
+  const four = qs.slice(-4);
+  let chain = four.length === 4;
+  for (let k = 1; chain && k < 4; k++) if (!gapOk(four[k - 1], four[k])) chain = false;
+  const near = (a, b, d) => Math.abs(t(a) - t(b)) <= d * DAY;
+  const O = others || [];
+  const fyAt = O.find((r) => r.period_type === 'FY' && near(r.period_end, last.period_end, 7));
+  const ytd = O.find((r) => (r.period_type === 'H' || r.period_type === '9M') && near(r.period_end, last.period_end, 7));
+  const fyPrev = ytd ? O.filter((r) => r.period_type === 'FY' && t(r.period_end) < t(last.period_end) && (t(last.period_end) - t(r.period_end)) / DAY < 300).pop() : null;
+  const ytdPrev = ytd ? O.find((r) => r.period_type === ytd.period_type && Math.abs((t(last.period_end) - t(r.period_end)) / DAY - 364) <= 14) : null;
+  const ttmOf = (f) => {
+    if (chain) { let v = 0, ok = true; for (const q of four) { const y = f(q); if (y == null) { ok = false; break; } v += y; } if (ok) return v; }
+    if (fyAt) return f(fyAt);
+    if (fyPrev && ytd && ytdPrev) { const a = f(fyPrev), b = f(ytd), c = f(ytdPrev); if (a != null && b != null && c != null) return a + b - c; }
+    return null;
+  };
+  x.ttm = {
+    revenue: ttmOf((q) => q.revenue), netIncome: ttmOf((q) => q.net_income), opIncome: ttmOf((q) => q.operating_income), eps: ttmOf((q) => q.eps_diluted),
+    grossProfit: ttmOf((q) => (q.gross_profit != null ? q.gross_profit : q.cost_of_revenue != null && q.revenue != null ? q.revenue - Math.abs(q.cost_of_revenue) : null)),
+    ocf: ttmOf((q) => q.operating_cash_flow), fcf: ttmOf((q) => (q.operating_cash_flow == null || q.capex == null ? null : q.operating_cash_flow - Math.abs(q.capex))),
+    dps: ttmOf((q) => q.dividends_per_share), divPaid: ttmOf((q) => (q.dividends_paid == null ? null : Math.abs(q.dividends_paid))),
+  };
+  const yearAgo = qs.find((q) => { const g = (t(last.period_end) - t(q.period_end)) / DAY; return g >= 350 && g <= 380; });
+  Object.assign(x, { yearAgo, assets: last.assets, equity: last.equity, cash: last.cash, debt: last.debt, curA: last.current_assets, curL: last.current_liabilities, shares: last.shares_diluted });
+  return x;
+}
+// Per column: status (Yes / Partly / No), the SEC line, and its value.
+const SEC = {
+  'Market Cap': { st: 'Partly', eq: 'Diluted shares for the quarter \u00d7 price', v: (s, x) => (usd(s) && pos(n(s.price)) && x.shares ? n(s.price) * x.shares : null) },
+  'Revenue TTM': { st: 'Yes', eq: 'Revenue, four quarters', v: (s, x) => x.ttm.revenue },
+  'Gross profit': { st: 'Yes', eq: 'Gross profit (or revenue less cost of revenue), four quarters', v: (s, x) => x.ttm.grossProfit },
+  'Net income': { st: 'Yes', eq: 'Net income, four quarters', v: (s, x) => x.ttm.netIncome },
+  'FCF TTM': { st: 'Partly', eq: 'Operating cash flow less capex, four quarters', v: (s, x) => x.ttm.fcf },
+  'EBITDA': { st: 'No', eq: 'Not stored (needs depreciation)' },
+  'Operating cash': { st: 'Yes', eq: 'Net cash from operating activities, four quarters', v: (s, x) => x.ttm.ocf },
+  'Revenue / employee': { st: 'No', eq: 'Head count is in the 10-K text, not the data' },
+  'Enterprise value': { st: 'Partly', eq: 'Market value + debt \u2212 cash', v: (s, x) => (usd(s) && n(s.marketCap) != null && x.debt != null && x.cash != null ? n(s.marketCap) + x.debt - x.cash : null) },
+  'Fwd P/E': { st: 'No', eq: 'None: estimates' }, 'P/E vs peers': { st: 'No', eq: 'None' }, 'PEG': { st: 'No', eq: 'None: estimates' },
+  'Trailing P/E': { st: 'Yes', eq: 'Price / diluted EPS of four quarters', v: (s, x) => (pos(n(s.price)) && pos(x.ttm.eps) ? n(s.price) / x.ttm.eps : null) },
+  'Live P/E': { st: 'Yes', eq: 'Today\u2019s price / diluted EPS of four quarters', v: (s, x) => (pos(n(s.price)) && pos(x.ttm.eps) ? n(s.price) / x.ttm.eps : null) },
+  'P/B': { st: 'Yes', eq: 'Market value / equity', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.equity) ? n(s.marketCap) / x.equity : null) },
+  'P/S': { st: 'Yes', eq: 'Market value / revenue of four quarters', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.ttm.revenue) ? n(s.marketCap) / x.ttm.revenue : null) },
+  'EV / sales': { st: 'Partly', eq: 'As Enterprise value, over revenue', v: (s, x) => (usd(s) && n(s.marketCap) != null && x.debt != null && x.cash != null && pos(x.ttm.revenue) ? (n(s.marketCap) + x.debt - x.cash) / x.ttm.revenue : null) },
+  'EV/EBITDA': { st: 'No', eq: 'No EBITDA in the data' },
+  'P / op cash': { st: 'Yes', eq: 'Market value / operating cash flow of four quarters', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && pos(x.ttm.ocf) ? n(s.marketCap) / x.ttm.ocf : null) },
+  'Earnings yield': { st: 'Yes', eq: 'Diluted EPS of four quarters / price', v: (s, x) => (pos(n(s.price)) && x.ttm.eps != null ? x.ttm.eps / n(s.price) * 100 : null) },
+  'FCF yield': { st: 'Partly', eq: 'Operating cash flow less capex / market value', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && x.ttm.fcf != null ? x.ttm.fcf / n(s.marketCap) * 100 : null) },
+  'Gross margin': { st: 'Yes', eq: 'Gross profit / revenue, four quarters', v: (s, x) => (pos(x.ttm.revenue) && x.ttm.grossProfit != null ? x.ttm.grossProfit / x.ttm.revenue * 100 : null) },
+  'Operating margin': { st: 'Yes', eq: 'Operating income / revenue, four quarters', v: (s, x) => (pos(x.ttm.revenue) && x.ttm.opIncome != null ? x.ttm.opIncome / x.ttm.revenue * 100 : null) },
+  'Profit margin': { st: 'Yes', eq: 'Net income / revenue, four quarters', v: (s, x) => (pos(x.ttm.revenue) && x.ttm.netIncome != null ? x.ttm.netIncome / x.ttm.revenue * 100 : null) },
+  'FCF margin': { st: 'Partly', eq: 'Operating cash flow less capex / revenue', v: (s, x) => (pos(x.ttm.revenue) && x.ttm.fcf != null ? x.ttm.fcf / x.ttm.revenue * 100 : null) },
+  'ROE': { st: 'Yes', eq: 'Net income of four quarters / equity', v: (s, x) => (pos(x.equity) && x.ttm.netIncome != null ? x.ttm.netIncome / x.equity * 100 : null) },
+  'ROA': { st: 'Yes', eq: 'Net income of four quarters / total assets', v: (s, x) => (pos(x.assets) && x.ttm.netIncome != null ? x.ttm.netIncome / x.assets * 100 : null) },
+  'Rev grth Q YoY': { st: 'Yes', eq: 'The quarter\u2019s revenue against the same quarter a year earlier', v: (s, x) => (x.yearAgo && x.last.revenue != null && pos(x.yearAgo.revenue) ? (x.last.revenue / x.yearAgo.revenue - 1) * 100 : null) },
+  'Earn grth Q YoY': { st: 'Yes', eq: 'The quarter\u2019s net income against the same quarter a year earlier', v: (s, x) => (x.yearAgo && x.last.net_income != null && pos(x.yearAgo.net_income) ? (x.last.net_income / x.yearAgo.net_income - 1) * 100 : null) },
+  'EPS TTM': { st: 'Yes', eq: 'Diluted EPS, four quarters', v: (s, x) => x.ttm.eps },
+  'Cash': { st: 'Partly', eq: 'Cash and equivalents (short-term investments apart)', v: (s, x) => x.cash },
+  'Debt': { st: 'Partly', eq: 'Debt, one definition from the filing data', v: (s, x) => x.debt },
+  'Net cash': { st: 'Partly', eq: 'Cash \u2212 debt', v: (s, x) => (x.cash != null && x.debt != null ? x.cash - x.debt : null) },
+  'Net cash / share': { st: 'Partly', eq: 'Cash \u2212 debt, over diluted shares', v: (s, x) => (usd(s) && x.cash != null && x.debt != null && pos(x.shares) ? (x.cash - x.debt) / x.shares : null) },
+  'Debt / equity': { st: 'Partly', eq: 'Debt / equity', v: (s, x) => (x.debt != null && pos(x.equity) ? x.debt / x.equity : null) },
+  'Current ratio': { st: 'Yes', eq: 'Current assets / current liabilities', v: (s, x) => (pos(x.curA) && pos(x.curL) ? x.curA / x.curL : null) },
+  'Net cash %': { st: 'Partly', eq: 'Cash \u2212 debt, over market value', v: (s, x) => (usd(s) && pos(n(s.marketCap)) && x.cash != null && x.debt != null ? (x.cash - x.debt) / n(s.marketCap) * 100 : null) },
+  'Dividend yield': { st: 'Partly', eq: 'Dividends per share of four quarters / price (trailing, not forward)', v: (s, x) => (usd(s) && pos(n(s.price)) && x.ttm.dps != null ? x.ttm.dps / n(s.price) * 100 : null) },
+  'Payout ratio': { st: 'Partly', eq: 'Dividends paid / net income, four quarters', v: (s, x) => (x.ttm.divPaid != null && pos(x.ttm.netIncome) ? x.ttm.divPaid / x.ttm.netIncome * 100 : null) },
+  'Shareholder yield': { st: 'Partly', eq: 'Buybacks already from the filings; dividends from the filings too (trailing)' },
+  'Dividend rate': { st: 'Partly', eq: 'Dividends per share, four quarters (trailing)', v: (s, x) => x.ttm.dps },
+  'Ex-dividend': { st: 'No', eq: 'Not in the data' }, 'Dividend paid': { st: 'No', eq: 'Not in the data' },
+  'Period': { st: 'Yes', eq: 'The quarter\u2019s end in the 10-Q or 10-K' },
+  'Reported': { st: 'Partly', eq: 'The 10-Q\u2019s filing day, not the release\u2019s' },
+  'Last split': { st: 'No', eq: 'None' },
+  'Shares out': { st: 'Partly', eq: 'Diluted shares for the quarter (the cover page\u2019s outstanding count is not stored)', v: (s, x) => pos(x.shares) },
+  'Book value/share': { st: 'Yes', eq: 'Equity / diluted shares', v: (s, x) => (pos(x.shares) && x.equity != null ? x.equity / x.shares : null) },
+  'Float': { st: 'No', eq: 'Once a year in dollars (10-K cover)' }, 'Short ratio': { st: 'No', eq: 'None' }, 'Short % float': { st: 'No', eq: 'None' }, 'Short % out': { st: 'No', eq: 'None (FINRA short interest is a separate source)' },
+  'Insiders': { st: 'No', eq: 'None' }, 'Institutions': { st: 'No', eq: 'None (13F is a separate source)' },
+  'Qual.': { st: 'Partly', eq: 'Its inputs, from the filings where they exist' },
+};
+// BEST SOURCE: worked out from the measures (bestOf below) except where the
+// answer is a judgment, not a measurement. These say so in their reason.
+const BEST = {
+  'Market Cap': ['Twelve Data', 'Shares outstanding today times the price; the filings give the quarter\u2019s diluted average, which lags buybacks and issuance.'],
+  'FCF TTM': ['Your decision', 'Two measures: Twelve Data\u2019s levered free cash flow, or operating cash flow less capex (SEC filings, exact; the release until the 10-Q). The Signal reads Twelve Data\u2019s today.'],
+  'FCF margin': ['Your decision', 'As FCF TTM.'], 'FCF yield': ['Your decision', 'As FCF TTM.'],
+  'Debt': ['Twelve Data', 'Every source draws debt differently; none agrees with another often enough to swap. Keep one definition throughout.'],
+  'Net cash': ['Twelve Data', 'As Debt.'], 'Net cash / share': ['Twelve Data', 'As Debt.'], 'Debt / equity': ['Twelve Data', 'As Debt.'], 'Net cash %': ['Twelve Data', 'As Debt.'],
+  'Enterprise value': ['Twelve Data', 'As Debt.'], 'EV / sales': ['Twelve Data', 'As Debt.'],
+  'Shares out': ['Twelve Data', 'Outstanding today; the filings give the quarter\u2019s diluted average.'],
+  'Dividend yield': ['Twelve Data', 'Forward, from the declared rate; the filings give trailing dividends.'], 'Dividend rate': ['Twelve Data', 'As Dividend yield.'],
+  'Payout ratio': ['Twelve Data', 'Twelve Data\u2019s is on the declared dividend; the filings\u2019 is trailing. Either is defensible.'],
+  'Shareholder yield': ['Twelve Data', 'Half is already from the filings (buybacks); the dividend half follows Dividend yield.'],
+  'Period': ['Release', 'It names the newer quarter first: a median 1 day before the 10-Q and 6 days before Twelve Data.'],
+  'Reported': ['Release', 'The day the results 8-K was filed is the report day.'],
+  'Operating margin': ['SEC filings', 'Twelve Data\u2019s is mostly the latest quarter\u2019s, not twelve months\u2019; the filings give the twelve months exactly.'],
+  'Qual.': ['Follows its inputs', 'A score of ours; its source is whatever its inputs use.'],
+};
+function bestOf(o) {
+  if (BEST[o.label]) return { source: BEST[o.label][0], why: BEST[o.label][1] };
+  const td = o.coverage ? o.coverage.td : null;
+  const secOk = o.sec.status === 'Yes' && o.sec.coverage != null && td != null && o.sec.coverage >= 0.8 * td;
+  const relOk = o.status === 'Yes' && o.coverage && td != null && o.coverage.rel >= 0.8 * td;
+  if (secOk) return { source: o.status === 'Yes' ? 'SEC filings, release first' : 'SEC filings',
+    why: 'Exact filing data, ' + num(o.sec.coverage) + ' companies' + (o.status === 'Yes' ? '; the release while the 10-Q is pending.' : '.') };
+  if (o.sec.status === 'Yes' && o.sec.coverage != null && td) return { source: 'SEC filings, Twelve Data where missing',
+    why: 'Exact for ' + num(o.sec.coverage) + ' of ' + num(td) + ' companies; Twelve Data for the rest.' };
+  if (relOk) return { source: 'Release', why: 'The release carries it for ' + num(o.coverage.rel) + ' companies.' };
+  if (o.status === 'No' && o.sec.status === 'No') return { source: 'Twelve Data', why: 'The only source.' };
+  return { source: 'Twelve Data', why: 'The filing sources carry it only in part or on another definition.' };
+}
+const num = (v) => Number(v).toLocaleString('en-US');
+
 // THE SIGNAL'S USE OF EACH (private/action.js, read 2026-10-29): which step
 // reads the field. Company type is classify() (size, profitability, free cash
 // flow, priced on earnings, quality or ROE); Fundamentals is fundamentals()
@@ -276,6 +403,17 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     const l = rel.get(r.symbol);
     if (l.length && l[l.length - 1].period_end === r.period_end) l[l.length - 1] = r; else l.push(r);
   }
+  // The SEC quarters: each period's latest filing, quarters only, from mid-2024.
+  const secBy = new Map(), secOther = new Map();
+  for (const q of db.prepare("select * from sec_facts where period_type in ('Q', 'FY', 'H', '9M') and period_end >= '2024-01-01' and form in ('10-Q', '10-K', '10-Q/A', '10-K/A') order by symbol, period_end, filed").all()) {
+    const into = q.period_type === 'Q' ? secBy : secOther;
+    if (!into.has(q.symbol)) into.set(q.symbol, []);
+    const l = into.get(q.symbol);
+    const prev = l[l.length - 1];
+    if (prev && prev.period_type === q.period_type && Math.abs(t(prev.period_end) - t(q.period_end)) <= 7 * DAY) l[l.length - 1] = q; else l.push(q);
+  }
+  const sctx = new Map();
+  for (const s of rows) { const x = secContext(secBy.get(s.symbol), secOther.get(s.symbol)); if (x) sctx.set(s.symbol, x); }
   const ctx = new Map();
   for (const s of rows) { const c = context(rel.get(s.symbol) || []); if (c) ctx.set(s.symbol, c); }
   const out = [];
@@ -298,16 +436,40 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
       o.coverage = { td: tdN, rel: relN, of: rows.length };
       o.vsTd = gaps.length ? { n: gaps.length, close: Math.round(1000 * gaps.filter((g) => g <= tol).length / gaps.length) / 10, median: Math.round(gaps[gaps.length >> 1] * 10) / 10, unit: col.kind === 'pct' ? 'pts' : '%', tol } : null;
     }
+    // The SEC side: coverage, and against Twelve Data where Twelve Data's
+    // newest quarter is the filings' (its most recent quarter within a week).
+    const sm = SEC[col.label] || { st: 'No', eq: 'None' };
+    o.sec = { status: sm.st, equivalent: sm.eq, coverage: null, vsTd: null };
+    if (sm.v) {
+      let secN = 0; const gaps = [];
+      for (const s of rows) {
+        const x = sctx.get(s.symbol); if (!x) continue;
+        const b = sm.v(s, x); if (b == null) continue;
+        secN++;
+        const a = col.td ? col.td(s) : null; if (a == null) continue;
+        if (!s.mostRecentQuarter || Math.abs(t(x.last.period_end) - t(s.mostRecentQuarter)) > 7 * DAY) continue;
+        gaps.push(col.kind === 'pct' ? Math.abs(b - a) : Math.abs(b - a) / Math.max(Math.abs(a), 1e-9) * 100);
+      }
+      gaps.sort((x, y) => x - y);
+      const tol = col.kind === 'pct' ? 1 : 2;
+      o.sec.coverage = secN;
+      o.sec.vsTd = gaps.length ? { n: gaps.length, close: Math.round(1000 * gaps.filter((g) => g <= tol).length / gaps.length) / 10, median: Math.round(gaps[gaps.length >> 1] * 10) / 10, unit: col.kind === 'pct' ? 'pts' : '%', tol } : null;
+    }
     if (col.q10 && cmp.fields[col.q10]) {
       const f = cmp.fields[col.q10];
       o.vs10q = { figure: col.q10, pairs: f.pairs, within05: f.pairs ? Math.round(1000 * f.bands[1] / f.pairs) / 10 : null };
     }
+    o.best = bestOf(o);
     out.push(o);
   }
+  // How current the filings are: of the companies with a release in the last
+  // 130 days, how many have that same quarter in the SEC data already.
+  let fresh = 0, both = 0;
+  for (const [sym, c] of ctx) { const x = sctx.get(sym); if (!x) continue; both++; if (Math.abs(t(x.last.period_end) - t(c.r.period_end)) <= 7 * DAY) fresh++; }
   const lags = (cmp.twelveData && cmp.twelveData.revenue || []).filter((x) => x.lag != null).map((x) => x.lag).sort((a, b) => a - b);
   const filingLag = (cmp.timing || []).map((x) => x.d).sort((a, b) => a - b);
   const doc = {
-    builtAt: new Date().toISOString(), releasesSince: cmp.since, releases: cmp.releases, matched: cmp.matched, companies: rows.length, withReleases: ctx.size,
+    builtAt: new Date().toISOString(), secCompanies: sctx.size, secSameQuarter: both ? Math.round(1000 * fresh / both) / 10 : null, secSameQuarterN: both, releasesSince: cmp.since, releases: cmp.releases, matched: cmp.matched, companies: rows.length, withReleases: ctx.size,
     timing: { tdMedianDays: lags.length ? lags[lags.length >> 1] : null, tdP90Days: lags.length ? lags[Math.floor(0.9 * lags.length)] : null, tdN: lags.length,
       filingSameDayPct: filingLag.length ? Math.round(1000 * filingLag.filter((d) => d === 0).length / filingLag.length) / 10 : null,
       filingMedianDays: filingLag.length ? filingLag[filingLag.length >> 1] : null, filingP90Days: filingLag.length ? filingLag[Math.floor(0.9 * filingLag.length)] : null },

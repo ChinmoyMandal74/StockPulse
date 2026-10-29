@@ -1,5 +1,8 @@
 {
- "builtAt": "2026-10-29T13:06:57.483Z",
+ "builtAt": "2026-10-29T14:13:35.670Z",
+ "secCompanies": 1150,
+ "secSameQuarter": 78.9,
+ "secSameQuarterN": 1125,
  "releasesSince": "2025-07-01",
  "releases": 5942,
  "matched": 5672,
@@ -42,15 +45,31 @@
    },
    "vsTd": {
     "n": 837,
-    "close": 54.1,
-    "median": 1.7,
+    "close": 42.8,
+    "median": 2.4,
     "unit": "%",
     "tol": 2
+   },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Diluted shares for the quarter × price",
+    "coverage": 1055,
+    "vsTd": {
+     "n": 891,
+     "close": 40.2,
+     "median": 2.6,
+     "unit": "%",
+     "tol": 2
+    }
    },
    "vs10q": {
     "figure": "Diluted shares",
     "pairs": 4032,
     "within05": 97.8
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Shares outstanding today times the price; the filings give the quarter’s diluted average, which lags buybacks and issuance."
    }
   },
   {
@@ -77,10 +96,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Revenue, four quarters",
+    "coverage": 1076,
+    "vsTd": {
+     "n": 907,
+     "close": 83.1,
+     "median": 0,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Revenue",
     "pairs": 5175,
     "within05": 90.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,076 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -107,10 +142,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Gross profit (or revenue less cost of revenue), four quarters",
+    "coverage": 695,
+    "vsTd": {
+     "n": 596,
+     "close": 73.2,
+     "median": 0.1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Gross profit",
     "pairs": 2402,
     "within05": 98.5
+   },
+   "best": {
+    "source": "SEC filings, Twelve Data where missing",
+    "why": "Exact for 695 of 1,258 companies; Twelve Data for the rest."
    }
   },
   {
@@ -137,10 +188,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Net income, four quarters",
+    "coverage": 1122,
+    "vsTd": {
+     "n": 948,
+     "close": 76.6,
+     "median": 0,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Net income",
     "pairs": 5554,
     "within05": 90.3
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,122 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -167,10 +234,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Operating cash flow less capex, four quarters",
+    "coverage": 932,
+    "vsTd": {
+     "n": 788,
+     "close": 3.2,
+     "median": 34.5,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "FCF worked out (ours)",
     "pairs": 2501,
     "within05": 93.8
+   },
+   "best": {
+    "source": "Your decision",
+    "why": "Two measures: Twelve Data’s levered free cash flow, or operating cash flow less capex (SEC filings, exact; the release until the 10-Q). The Signal reads Twelve Data’s today."
    }
   },
   {
@@ -196,6 +279,16 @@
     "median": 11.3,
     "unit": "%",
     "tol": 2
+   },
+   "sec": {
+    "status": "No",
+    "equivalent": "Not stored (needs depreciation)",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The filing sources carry it only in part or on another definition."
    }
   },
   {
@@ -222,10 +315,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Net cash from operating activities, four quarters",
+    "coverage": 1120,
+    "vsTd": {
+     "n": 947,
+     "close": 90.4,
+     "median": 0,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Operating cash flow",
     "pairs": 1815,
     "within05": 96.8
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,120 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -239,7 +348,17 @@
    "equivalent": "Revenue yes; employees no",
    "shown": "—",
    "note": "Releases do not give a head count; the 10-K does, once a year.",
-   "kind": "money"
+   "kind": "money",
+   "sec": {
+    "status": "No",
+    "equivalent": "Head count is in the 10-K text, not the data",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -265,10 +384,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Market value + debt − cash",
+    "coverage": 695,
+    "vsTd": {
+     "n": 573,
+     "close": 28.8,
+     "median": 4.2,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -282,7 +417,17 @@
    "equivalent": "None: needs analysts’ estimates",
    "shown": "—",
    "note": "Analysts’ forecasts are sold by data vendors; no filing has them. A Signal input (company type).",
-   "kind": "mult"
+   "kind": "mult",
+   "sec": {
+    "status": "No",
+    "equivalent": "None: estimates",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -303,15 +448,31 @@
    },
    "vsTd": {
     "n": 712,
-    "close": 48.2,
-    "median": 2.1,
+    "close": 42.4,
+    "median": 2.6,
     "unit": "%",
     "tol": 2
+   },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Price / diluted EPS of four quarters",
+    "coverage": 855,
+    "vsTd": {
+     "n": 712,
+     "close": 41.9,
+     "median": 2.7,
+     "unit": "%",
+     "tol": 2
+    }
    },
    "vs10q": {
     "figure": "Diluted EPS",
     "pairs": 4360,
     "within05": 98.6
+   },
+   "best": {
+    "source": "SEC filings, Twelve Data where missing",
+    "why": "Exact for 855 of 1,162 companies; Twelve Data for the rest."
    }
   },
   {
@@ -338,10 +499,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Today’s price / diluted EPS of four quarters",
+    "coverage": 855,
+    "vsTd": {
+     "n": 710,
+     "close": 81.1,
+     "median": 0.1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Diluted EPS",
     "pairs": 4360,
     "within05": 98.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 855 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -355,7 +532,17 @@
    "equivalent": "None: built on forward P/E",
    "shown": "—",
    "note": "Follows forward P/E.",
-   "kind": "mult"
+   "kind": "mult",
+   "sec": {
+    "status": "No",
+    "equivalent": "None",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -368,7 +555,17 @@
    "equivalent": "None: needs forecast growth",
    "shown": "—",
    "note": "Analysts’ growth forecasts.",
-   "kind": "mult"
+   "kind": "mult",
+   "sec": {
+    "status": "No",
+    "equivalent": "None: estimates",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -394,10 +591,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Market value / equity",
+    "coverage": 1081,
+    "vsTd": {
+     "n": 912,
+     "close": 58.2,
+     "median": 1.4,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Equity",
     "pairs": 4868,
     "within05": 95.3
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,081 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -424,10 +637,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Market value / revenue of four quarters",
+    "coverage": 1074,
+    "vsTd": {
+     "n": 905,
+     "close": 62.4,
+     "median": 1.1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Revenue",
     "pairs": 5175,
     "within05": 90.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,074 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -454,10 +683,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "As Enterprise value, over revenue",
+    "coverage": 651,
+    "vsTd": {
+     "n": 532,
+     "close": 27.4,
+     "median": 4.4,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -483,6 +728,16 @@
     "median": 11.6,
     "unit": "%",
     "tol": 2
+   },
+   "sec": {
+    "status": "No",
+    "equivalent": "No EBITDA in the data",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The filing sources carry it only in part or on another definition."
    }
   },
   {
@@ -509,10 +764,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Market value / operating cash flow of four quarters",
+    "coverage": 1016,
+    "vsTd": {
+     "n": 848,
+     "close": 90.7,
+     "median": 0,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Operating cash flow",
     "pairs": 1815,
     "within05": 96.8
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,016 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -534,15 +805,31 @@
    },
    "vsTd": {
     "n": 839,
-    "close": 94,
+    "close": 94.3,
     "median": 0,
     "unit": "pts",
     "tol": 1
+   },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Diluted EPS of four quarters / price",
+    "coverage": 1026,
+    "vsTd": {
+     "n": 875,
+     "close": 92.5,
+     "median": 0,
+     "unit": "pts",
+     "tol": 1
+    }
    },
    "vs10q": {
     "figure": "Diluted EPS",
     "pairs": 4360,
     "within05": 98.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,026 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -569,10 +856,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Operating cash flow less capex / market value",
+    "coverage": 932,
+    "vsTd": {
+     "n": 788,
+     "close": 40.6,
+     "median": 1.4,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "FCF worked out (ours)",
     "pairs": 2501,
     "within05": 93.8
+   },
+   "best": {
+    "source": "Your decision",
+    "why": "As FCF TTM."
    }
   },
   {
@@ -599,10 +902,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Gross profit / revenue, four quarters",
+    "coverage": 695,
+    "vsTd": {
+     "n": 596,
+     "close": 75.8,
+     "median": 0.1,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Gross profit",
     "pairs": 2402,
     "within05": 98.5
+   },
+   "best": {
+    "source": "SEC filings, Twelve Data where missing",
+    "why": "Exact for 695 of 1,248 companies; Twelve Data for the rest."
    }
   },
   {
@@ -629,10 +948,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Operating income / revenue, four quarters",
+    "coverage": 884,
+    "vsTd": {
+     "n": 750,
+     "close": 24.4,
+     "median": 2.9,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Operating income",
     "pairs": 4313,
     "within05": 98.2
+   },
+   "best": {
+    "source": "SEC filings",
+    "why": "Twelve Data’s is mostly the latest quarter’s, not twelve months’; the filings give the twelve months exactly."
    }
   },
   {
@@ -659,10 +994,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Net income / revenue, four quarters",
+    "coverage": 1070,
+    "vsTd": {
+     "n": 901,
+     "close": 81.4,
+     "median": 0,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Net income",
     "pairs": 5554,
     "within05": 90.3
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,070 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -689,10 +1040,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Operating cash flow less capex / revenue",
+    "coverage": 908,
+    "vsTd": {
+     "n": 765,
+     "close": 14.9,
+     "median": 3.8,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "FCF worked out (ours)",
     "pairs": 2501,
     "within05": 93.8
+   },
+   "best": {
+    "source": "Your decision",
+    "why": "As FCF TTM."
    }
   },
   {
@@ -719,10 +1086,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Net income of four quarters / equity",
+    "coverage": 1055,
+    "vsTd": {
+     "n": 889,
+     "close": 51.5,
+     "median": 1,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Equity",
     "pairs": 4868,
     "within05": 95.3
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,055 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -749,10 +1132,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Net income of four quarters / total assets",
+    "coverage": 1120,
+    "vsTd": {
+     "n": 948,
+     "close": 39.7,
+     "median": 1.4,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Total assets",
     "pairs": 4813,
     "within05": 99.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,120 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -779,10 +1178,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "The quarter’s revenue against the same quarter a year earlier",
+    "coverage": 1100,
+    "vsTd": {
+     "n": 928,
+     "close": 83.6,
+     "median": 0,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Revenue",
     "pairs": 5175,
     "within05": 90.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,100 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -809,10 +1224,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "The quarter’s net income against the same quarter a year earlier",
+    "coverage": 960,
+    "vsTd": {
+     "n": 787,
+     "close": 81.3,
+     "median": 0,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Net income",
     "pairs": 5554,
     "within05": 90.3
+   },
+   "best": {
+    "source": "SEC filings, Twelve Data where missing",
+    "why": "Exact for 960 of 1,206 companies; Twelve Data for the rest."
    }
   },
   {
@@ -839,10 +1270,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Diluted EPS, four quarters",
+    "coverage": 1026,
+    "vsTd": {
+     "n": 875,
+     "close": 77.3,
+     "median": 0.1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Diluted EPS",
     "pairs": 4360,
     "within05": 98.6
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,026 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -869,10 +1316,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Cash and equivalents (short-term investments apart)",
+    "coverage": 1140,
+    "vsTd": {
+     "n": 964,
+     "close": 56.1,
+     "median": 0.3,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Cash",
     "pairs": 4720,
     "within05": 94.8
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The filing sources carry it only in part or on another definition."
    }
   },
   {
@@ -899,10 +1362,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Debt, one definition from the filing data",
+    "coverage": 702,
+    "vsTd": {
+     "n": 579,
+     "close": 12.3,
+     "median": 14.7,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Every source draws debt differently; none agrees with another often enough to swap. Keep one definition throughout."
    }
   },
   {
@@ -929,10 +1408,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Cash − debt",
+    "coverage": 695,
+    "vsTd": {
+     "n": 573,
+     "close": 10.5,
+     "median": 20.4,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -959,10 +1454,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Cash − debt, over diluted shares",
+    "coverage": 629,
+    "vsTd": {
+     "n": 517,
+     "close": 7.5,
+     "median": 22.1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -989,10 +1500,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Debt / equity",
+    "coverage": 649,
+    "vsTd": {
+     "n": 530,
+     "close": 11.1,
+     "median": 16,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -1018,6 +1545,22 @@
     "median": 0,
     "unit": "%",
     "tol": 2
+   },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Current assets / current liabilities",
+    "coverage": 903,
+    "vsTd": {
+     "n": 748,
+     "close": 96.8,
+     "median": 0,
+     "unit": "%",
+     "tol": 2
+    }
+   },
+   "best": {
+    "source": "SEC filings, Twelve Data where missing",
+    "why": "Exact for 903 of 1,196 companies; Twelve Data for the rest."
    }
   },
   {
@@ -1044,10 +1587,26 @@
     "unit": "pts",
     "tol": 1
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Cash − debt, over market value",
+    "coverage": 695,
+    "vsTd": {
+     "n": 573,
+     "close": 23.7,
+     "median": 2.8,
+     "unit": "pts",
+     "tol": 1
+    }
+   },
    "vs10q": {
     "figure": "Debt (current + long-term)",
     "pairs": 2883,
     "within05": 38.3
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Debt."
    }
   },
   {
@@ -1061,7 +1620,17 @@
    "equivalent": "Not read (some releases announce the dividend)",
    "shown": "—",
    "note": "A forward rate. The dividend a release declares could be read; the reader does not ask for it today.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Dividends per share of four quarters / price (trailing, not forward)",
+    "coverage": 456,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Forward, from the declared rate; the filings give trailing dividends."
+   }
   },
   {
    "signal": null,
@@ -1074,7 +1643,17 @@
    "equivalent": "Not read",
    "shown": "—",
    "note": "Would follow a dividend reading.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Dividends paid / net income, four quarters",
+    "coverage": 629,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Twelve Data’s is on the declared dividend; the filings’ is trailing. Either is defensible."
+   }
   },
   {
    "signal": null,
@@ -1087,7 +1666,17 @@
    "equivalent": "Buybacks from the filings already; dividend yield is Twelve Data’s",
    "shown": "—",
    "note": "Half from the filings already.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Buybacks already from the filings; dividends from the filings too (trailing)",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Half is already from the filings (buybacks); the dividend half follows Dividend yield."
+   }
   },
   {
    "signal": null,
@@ -1100,7 +1689,17 @@
    "equivalent": "Not read",
    "shown": "—",
    "note": "As Dividend yield.",
-   "kind": "money"
+   "kind": "money",
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Dividends per share, four quarters (trailing)",
+    "coverage": 456,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "As Dividend yield."
+   }
   },
   {
    "signal": null,
@@ -1113,7 +1712,17 @@
    "equivalent": "Not read",
    "shown": "—",
    "note": "Dividend declarations come in their own 8-Ks or the release; not read.",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "No",
+    "equivalent": "Not in the data",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1126,7 +1735,17 @@
    "equivalent": "Not read",
    "shown": "—",
    "note": "As Ex-dividend.",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "No",
+    "equivalent": "Not in the data",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1139,7 +1758,17 @@
    "equivalent": "The quarter’s end, as the release states it",
    "shown": "Last Earning AI Extracted › Quarter end",
    "note": "The release names the newer quarter days before Twelve Data does: a median of 6 days in the measurement (90th percentile 16).",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "Yes",
+    "equivalent": "The quarter’s end in the 10-Q or 10-K",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Release",
+    "why": "It names the newer quarter first: a median 1 day before the 10-Q and 6 days before Twelve Data."
+   }
   },
   {
    "signal": null,
@@ -1152,7 +1781,17 @@
    "equivalent": "The day the results 8-K was filed",
    "shown": "Last Earning AI Extracted › Reported",
    "note": "Ours is the SEC filing day. Not read by the Signal itself; it feeds the next-report estimate behind Earnings soon.",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "Partly",
+    "equivalent": "The 10-Q’s filing day, not the release’s",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Release",
+    "why": "The day the results 8-K was filed is the report day."
+   }
   },
   {
    "signal": null,
@@ -1165,7 +1804,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "Splits come from the price provider.",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "No",
+    "equivalent": "None",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1191,10 +1840,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Diluted shares for the quarter (the cover page’s outstanding count is not stored)",
+    "coverage": 1055,
+    "vsTd": {
+     "n": 891,
+     "close": 73.2,
+     "median": 1,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Diluted shares",
     "pairs": 4032,
     "within05": 97.8
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "Outstanding today; the filings give the quarter’s diluted average."
    }
   },
   {
@@ -1221,10 +1886,26 @@
     "unit": "%",
     "tol": 2
    },
+   "sec": {
+    "status": "Yes",
+    "equivalent": "Equity / diluted shares",
+    "coverage": 1054,
+    "vsTd": {
+     "n": 890,
+     "close": 66.9,
+     "median": 1.2,
+     "unit": "%",
+     "tol": 2
+    }
+   },
    "vs10q": {
     "figure": "Equity",
     "pairs": 4868,
     "within05": 95.3
+   },
+   "best": {
+    "source": "SEC filings, release first",
+    "why": "Exact filing data, 1,054 companies; the release while the 10-Q is pending."
    }
   },
   {
@@ -1238,7 +1919,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "Filings give public float once a year (10-K cover), in dollars.",
-   "kind": "money"
+   "kind": "money",
+   "sec": {
+    "status": "No",
+    "equivalent": "Once a year in dollars (10-K cover)",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1251,7 +1942,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "FINRA short interest is already read (Short build, days to cover); float is the missing half.",
-   "kind": "mult"
+   "kind": "mult",
+   "sec": {
+    "status": "No",
+    "equivalent": "None",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": "Fundamentals; the heavy-short guard",
@@ -1264,7 +1965,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "A Signal input (a guard). Needs float.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "No",
+    "equivalent": "None",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1277,7 +1988,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "FINRA short interest over shares outstanding could replace it.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "No",
+    "equivalent": "None (FINRA short interest is a separate source)",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1290,7 +2011,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "The proxy statement has it once a year.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "No",
+    "equivalent": "None",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": null,
@@ -1303,7 +2034,17 @@
    "equivalent": "None",
    "shown": "—",
    "note": "The 13F load already counts institutional holders; a percent needs shares outstanding.",
-   "kind": "pct"
+   "kind": "pct",
+   "sec": {
+    "status": "No",
+    "equivalent": "None (13F is a separate source)",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Twelve Data",
+    "why": "The only source."
+   }
   },
   {
    "signal": "Company type (the seventh point); Fundamentals",
@@ -1316,7 +2057,17 @@
    "equivalent": "Its inputs: margins, growth, ROE, net cash, from the releases where they exist",
    "shown": "—",
    "note": "Not a Twelve Data figure but made of them; it would move with its inputs. A Signal input.",
-   "kind": null
+   "kind": null,
+   "sec": {
+    "status": "Partly",
+    "equivalent": "Its inputs, from the filings where they exist",
+    "coverage": null,
+    "vsTd": null
+   },
+   "best": {
+    "source": "Follows its inputs",
+    "why": "A score of ours; its source is whatever its inputs use."
+   }
   }
  ]
 }

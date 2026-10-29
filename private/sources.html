@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Twelve Data and the releases — Tickr Lab</title>
+  <title>Twelve Data, the releases and the SEC — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <script src="/theme.js"></script>
@@ -34,7 +34,7 @@
     .lede { margin: 16px 0 0; max-width: 92ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
     .masthead { margin: 34px 0 22px; }
 
-    .sm-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+    .sm-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
     .sm-tile .core { padding: 14px 16px; }
     .sm-tile .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
     .sm-tile .v { margin-top: 6px; font: 600 24px var(--mono); letter-spacing: -0.02em; }
@@ -48,7 +48,13 @@
     .sm-xl { white-space: nowrap; }
 
     .sm-wrap { overflow-x: auto; }
-    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1340px; }
+    .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1720px; }
+    .sm-best b { display: inline-block; font: 600 11px var(--sans); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--hair-2); margin-bottom: 4px; color: var(--text); }
+    .sm-best b.b-sec { color: var(--sky); border-color: color-mix(in srgb, var(--sky) 55%, transparent); background: color-mix(in srgb, var(--sky) 9%, transparent); }
+    .sm-best b.b-rel { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    .sm-best b.b-dec { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
+    .sm-best div { color: var(--muted); max-width: 30ch; }
+    .sm-bar select { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
     .sm-wrap th, .sm-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; line-height: 1.45; }
     .sm-wrap thead th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; position: sticky; top: 0; background: var(--surface); }
     .sm-wrap tr.sm-g td { padding-top: 18px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); border-bottom-color: var(--hair-2); }
@@ -73,6 +79,7 @@
     .sm-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .sm-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 120ch; }
     .sm-foot b { color: var(--muted); }
+    @media (max-width: 1200px) { .sm-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 900px) { .page { padding: 0 16px; } .sm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hide-sm { display: none !important; } }
   </style>
 </head>
@@ -94,16 +101,18 @@
   <main class="page">
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Data sources · admin</span>
-      <h1>Twelve Data and the releases</h1>
+      <h1>Twelve Data, the releases and the SEC</h1>
       <p class="lede">Every screener column whose figure comes from Twelve Data, beside the same figure from the companies' own results
-        press releases as the AI model reads them: whether the release has an equivalent, where it is shown today, how well the two
-        agree, and what to know. The release figures are display only; the Signal reads Twelve Data's.</p>
+        press releases as the AI model reads them, and from their SEC EDGAR filing data (the 10-Q and 10-K): whether each has an
+        equivalent, where it is shown today, how well they agree, which source fits best, and what to know. Nothing here changes the
+        screener or the Signal, which reads Twelve Data's figures.</p>
     </header>
 
     <div class="sm-tiles" id="tiles"></div>
     <div class="sm-bar">
       <span id="chips"></span>
       <button class="sm-chip" id="sigOnly" type="button" aria-pressed="false">Signal inputs only</button>
+      <select id="best" aria-label="Best source"><option value="">Any best source</option></select>
       <input type="search" id="q" placeholder="Column or field" aria-label="Find a column" />
       <a class="btn sm-xl" id="xlsx" href="/api/sources.xlsx" download title="Every row, whatever the filters above, with each measure in its own column: sorts and filters in Excel. A second sheet says how it was measured.">Export to Excel</a>
     </div>
@@ -119,26 +128,31 @@
 
     function quality(r) {
       const out = [];
-      if (r.vs10q) out.push(`<span${r.vs10q.within05 < 80 ? ' class="low"' : ''} title="The release figure underneath (${esc(r.vs10q.figure)}) against the quarter's first 10-Q or 10-K: share of ${num(r.vs10q.pairs)} pairs within 0.5%.">10-Q: <b>${r.vs10q.within05}%</b> within 0.5%</span>`);
-      if (r.vsTd) out.push(`<span${r.vsTd.close < 50 ? ' class="low"' : ''} title="Companies whose Twelve Data figures are on the same report as the release (its last report date within five days): share within ${r.vsTd.tol}${r.vsTd.unit === 'pts' ? ' point' : '%'}, and the median gap.">Twelve Data: <b>${r.vsTd.close}%</b> within ${r.vsTd.tol}${r.vsTd.unit === 'pts' ? ' pt' : '%'} · median ${r.vsTd.median}${r.vsTd.unit === 'pts' ? ' pts' : '%'} · n ${num(r.vsTd.n)}</span>`);
-      if (r.coverage) out.push(`<span title="Companies with a value, of ${num(r.coverage.of)} (funds left out)">Coverage: Twelve Data ${num(r.coverage.td)} · release ${num(r.coverage.rel)}</span>`);
+      if (r.vs10q) out.push(`<span${r.vs10q.within05 < 80 ? ' class="low"' : ''} title="The release figure underneath (${esc(r.vs10q.figure)}) against the quarter's first 10-Q or 10-K: share of ${num(r.vs10q.pairs)} pairs within 0.5%.">Release vs 10-Q: <b>${r.vs10q.within05}%</b> within 0.5%</span>`);
+      if (r.vsTd) out.push(`<span${r.vsTd.close < 50 ? ' class="low"' : ''} title="Companies whose Twelve Data figures are on the same report as the release (its last report date within five days): share within ${r.vsTd.tol}${r.vsTd.unit === 'pts' ? ' point' : '%'}, and the median gap.">Release vs Twelve Data: <b>${r.vsTd.close}%</b> within ${r.vsTd.tol}${r.vsTd.unit === 'pts' ? ' pt' : '%'} · median ${r.vsTd.median}${r.vsTd.unit === 'pts' ? ' pts' : '%'} · n ${num(r.vsTd.n)}</span>`);
+      if (r.sec && r.sec.vsTd) out.push(`<span${r.sec.vsTd.close < 50 ? ' class="low"' : ''} title="The SEC filing data against Twelve Data's, where Twelve Data's most recent quarter is the filings' newest (within a week): share within ${r.sec.vsTd.tol}${r.sec.vsTd.unit === 'pts' ? ' point' : '%'}, and the median gap.">SEC vs Twelve Data: <b>${r.sec.vsTd.close}%</b> within ${r.sec.vsTd.tol}${r.sec.vsTd.unit === 'pts' ? ' pt' : '%'} · median ${r.sec.vsTd.median}${r.sec.vsTd.unit === 'pts' ? ' pts' : '%'} · n ${num(r.sec.vsTd.n)}</span>`);
+      if (r.coverage || (r.sec && r.sec.coverage != null)) out.push(`<span title="Companies with a value, of ${num(DOC.companies)} (funds left out)">Coverage: Twelve Data ${r.coverage ? num(r.coverage.td) : '—'} · release ${r.coverage ? num(r.coverage.rel) : '—'} · SEC ${r.sec && r.sec.coverage != null ? num(r.sec.coverage) : '—'}</span>`);
       return out.length ? out.join('') : '<span class="na">Not measured</span>';
     }
 
+    const bestCls = (b) => (/^SEC/.test(b) ? 'b-sec' : /^Release/.test(b) ? 'b-rel' : /decision/.test(b) ? 'b-dec' : '');
     function render() {
       const q = $('q').value.trim().toLowerCase();
-      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal || r.signalIndirect)
+      const bestSel = $('best').value;
+      const rows = DOC.rows.filter((r) => (!status || r.status === status) && (!sigOnly || r.signal || r.signalIndirect) && (!bestSel || r.best.source === bestSel)
         && (!q || (r.label + ' ' + r.group + ' ' + r.field + ' ' + r.source + ' ' + r.equivalent).toLowerCase().includes(q)));
       if (!rows.length) { $('tbl').innerHTML = '<div class="sm-empty">No column matches.</div>'; return; }
-      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th title="Whether the Signal (private/action.js) reads this field, and in which step">Signal input</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Twelve Data column in the screener</th><th title="Whether the Signal (private/action.js) reads this field, and in which step">Signal input</th><th>Best source</th><th>Equivalent in the release</th><th>Equivalent column from the release</th><th>Equivalent in SEC EDGAR data</th><th>Data quality</th><th>Comments</th></tr></thead><tbody>';
       let g = null;
       for (const r of rows) {
-        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="6">${esc(g)}</td></tr>`; }
+        if (r.group !== g) { g = r.group; html += `<tr class="sm-g"><td colspan="8">${esc(g)}</td></tr>`; }
         html += `<tr>
           <td class="sm-col"><b>${esc(r.label)}</b><code>${esc(r.source)}</code></td>
           <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
+          <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b><div>${esc(r.best.why)}</div></td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
           <td class="sm-shown">${esc(r.shown)}</td>
+          <td><span class="sm-st ${r.sec.status.toLowerCase()}">${esc(r.sec.status)}</span><div class="sm-eq">${esc(r.sec.equivalent)}</div></td>
           <td><div class="sm-q">${quality(r)}</div></td>
           <td class="sm-note">${esc(r.note)}</td></tr>`;
       }
@@ -166,17 +180,26 @@
         tile('Signal inputs', sig.length, `${ind ? '+' + ind + ' indirect; ' : ''}${sig.filter((r) => r.status === 'Yes').length} with an equivalent, ${sig.filter((r) => r.status === 'Partly').length} partly, ${sig.filter((r) => r.status === 'No').length} none`),
         tile('Companies with a release', num(DOC.withReleases), `of ${num(DOC.companies)}, in the last 130 days (funds left out)`),
         tile('Release ahead of Twelve Data', T.tdMedianDays != null ? T.tdMedianDays + ' days' : '—', `median; 90th percentile ${T.tdP90Days ?? '—'} days (${num(T.tdN || 0)} releases, twelve-month revenue)`),
+        tile('SEC filing data', num(DOC.secCompanies), `companies with a quarter in the last 200 days; ${DOC.secSameQuarter}% already have the quarter the newest release reports`),
         tile('Release ahead of the 10-Q', T.filingMedianDays != null ? T.filingMedianDays + ' day' + (T.filingMedianDays === 1 ? '' : 's') : '—', `median; same day ${T.filingSameDayPct ?? '—'}%, 90th percentile ${T.filingP90Days ?? '—'} days`),
       ].join('');
       chips();
+      const bc = {}; for (const r of DOC.rows) bc[r.best.source] = (bc[r.best.source] || 0) + 1;
+      $('best').innerHTML = '<option value="">Any best source</option>' + Object.entries(bc).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<option value="${esc(k)}">${esc(k)} (${v})</option>`).join('');
+      $('best').addEventListener('change', render);
       $('sigOnly').addEventListener('click', () => { sigOnly = !sigOnly; $('sigOnly').classList.toggle('on', sigOnly); $('sigOnly').setAttribute('aria-pressed', String(sigOnly)); render(); });
       $('q').addEventListener('input', render);
       render();
       const built = new Date(DOC.builtAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-      $('foot').innerHTML = `<b>Data quality</b> has three measures. <b>10-Q</b>: the release figure underneath against the quarter's first 10-Q or 10-K,
-        ${num(DOC.matched)} of ${num(DOC.releases)} results releases since ${esc(DOC.releasesSince)}. <b>Twelve Data</b>: the release-based column against Twelve Data's,
-        only where Twelve Data is on the same report, so a gap is a definition or a reading, not a lag. <b>Coverage</b>: companies with a value on each side.
-        Amber marks a measure under 80% (10-Q) or 50% (Twelve Data). Twelve months are four releases in a row summed, the newest within 130 days.
+      $('foot').innerHTML = `<b>Data quality</b>. <b>Release vs 10-Q</b>: the release figure underneath against the quarter's first 10-Q or 10-K,
+        ${num(DOC.matched)} of ${num(DOC.releases)} results releases since ${esc(DOC.releasesSince)}. <b>Release vs Twelve Data</b>: the release-based column against Twelve Data's,
+        only where Twelve Data is on the same report, so a gap is a definition or a reading, not a lag. <b>SEC vs Twelve Data</b>: the filing data's figure against
+        Twelve Data's, only where Twelve Data's most recent quarter is the filings' newest. <b>Coverage</b>: companies with a value from each source.
+        Amber marks a measure under 80% (10-Q) or 50% (against Twelve Data). Twelve months from the releases are four in a row summed, the newest within 130 days;
+        from the SEC data, four quarters summed, or the year, or last year plus this year to date less last year's, the newest within 200 days.
+        <b>Best source</b> is worked out: the SEC data where it is exact and covers at least four fifths of the companies Twelve Data does (the release first
+        while the 10-Q is pending, where the release has it); otherwise the release, otherwise Twelve Data. Rows where the answer is a judgment (a different
+        definition, a forward figure) say so in their reason.
         <b>Already from the filings, not Twelve Data:</b> ${DOC.fromFilings.map(esc).join('; ')}.
         Built ${esc(built)} by <code>td-release-map.js</code> on the local research copy; re-run it after a reporting season.`;
     })();

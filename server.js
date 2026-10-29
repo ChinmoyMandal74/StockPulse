@@ -1027,7 +1027,15 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Gap unit', 9, (r) => (r.vsTd ? (r.vsTd.unit === 'pts' ? 'points' : '%') : null)],
     ['Companies with a Twelve Data value', 14, (r) => (r.coverage ? num(r.coverage.td) : null)],
     ['Companies with a release value', 14, (r) => (r.coverage ? num(r.coverage.rel) : null)],
-    ['Companies (funds left out)', 14, (r) => (r.coverage ? num(r.coverage.of) : null)],
+    ['Companies (funds left out)', 14, (r) => num(D.companies)],
+    ['Equivalent in SEC EDGAR data', 14, (r) => (r.sec ? r.sec.status : null)],
+    ['SEC equivalent', 52, (r) => (r.sec ? r.sec.equivalent : null)],
+    ['SEC vs Twelve Data: companies compared', 14, (r) => (r.sec && r.sec.vsTd ? num(r.sec.vsTd.n) : null)],
+    ['SEC vs Twelve Data: within tolerance (%)', 14, (r) => (r.sec && r.sec.vsTd ? num(r.sec.vsTd.close) : null)],
+    ['SEC vs Twelve Data: median gap', 12, (r) => (r.sec && r.sec.vsTd ? num(r.sec.vsTd.median) : null)],
+    ['Companies with an SEC value', 14, (r) => (r.sec ? num(r.sec.coverage) : null)],
+    ['Best source', 30, (r) => (r.best ? r.best.source : null)],
+    ['Why', 70, (r) => (r.best ? r.best.why : null)],
     ['Comments', 80, (r) => r.note],
   ];
   const head = COLS.map(([h]) => ({ v: h, s: X.S.head }));
@@ -1037,7 +1045,7 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
   const T = D.timing || {};
   const built = String(D.builtAt || '').slice(0, 16).replace('T', ' ') + ' UTC';
   const about = [
-    [{ v: 'Twelve Data and the releases', s: X.S.title }],
+    [{ v: 'Twelve Data, the releases and the SEC', s: X.S.title }],
     [{ v: 'Built ' + built + ' by td-release-map.js on the local research copy. Admin only.', s: X.S.note }],
     [],
     [{ v: 'Figure', s: X.S.head }, { v: 'Value', s: X.S.head }],
@@ -1054,6 +1062,8 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Release ahead of Twelve Data, median days', num(T.tdMedianDays)],
     ['Release ahead of Twelve Data, 90th percentile days', num(T.tdP90Days)],
     ['  releases measured', num(T.tdN)],
+    ['Companies with SEC filing data in the last 200 days', num(D.secCompanies)],
+    ['  that already have the newest release\u2019s quarter (%)', num(D.secSameQuarter)],
     ['Release ahead of the 10-Q, median days', num(T.filingMedianDays)],
     ['Release and 10-Q on the same day (%)', num(T.filingSameDayPct)],
     ['Release ahead of the 10-Q, 90th percentile days', num(T.filingP90Days)],
@@ -1063,13 +1073,15 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Twelve Data', 'The release-based column against Twelve Data’s, only where Twelve Data is on the same report (its last report date within five days of the release), so a gap is a definition or a reading, not a lag: the share within 2% (money and multiples) or 1 point (percentages), and the median gap.'],
     ['Coverage', 'Companies with a value on each side.'],
     ['Twelve months', 'Four releases in a row summed (each period 75 to 105 days after the one before), the newest within 130 days.'],
+    ['SEC vs Twelve Data', 'The SEC filing data\u2019s figure against Twelve Data\u2019s, only where Twelve Data\u2019s most recent quarter is the filings\u2019 newest (within a week).'],
+    ['Best source', 'The SEC data where it is exact and covers at least four fifths of the companies Twelve Data does (the release first while the 10-Q is pending, where it has the figure); otherwise the release; otherwise Twelve Data. Judgment rows say so in Why.'],
     ['Already from the filings', (D.fromFilings || []).join('; ')],
   ];
   const aboutXml = X.sheetXml(about, { widths: [48, 110] });
   const buf = X.workbook([{ name: 'Columns', xml: main }, { name: 'About', xml: aboutXml }]);
   logAct(req, 'export', 'sources.xlsx');
   res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.set('Content-Disposition', 'attachment; filename="tickrlab-twelve-data-and-releases-' + String(D.builtAt || '').slice(0, 10) + '.xlsx"');
+  res.set('Content-Disposition', 'attachment; filename="tickrlab-twelve-data-releases-sec-' + String(D.builtAt || '').slice(0, 10) + '.xlsx"');
   res.set('Cache-Control', 'private, no-store');
   return res.send(buf);
 }));
