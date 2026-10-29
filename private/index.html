@@ -1696,7 +1696,7 @@
         <th class="grp-value" data-key="priceToOcf" title="Market value over trailing operating cash flow: the price of a dollar of cash from operations, before capital spending. Blank where operating cash flow was negative, and for a company reporting in another currency.">P /<br>Op Cash<span class="ptag">TTM</span></th>
         <th class="grp-value" data-key="earningsYield" title="Earnings yield: trailing earnings per share over the price, in percent, which is the P/E turned over. Unlike the P/E it reads for a loss-maker, as a negative figure, so loss-making companies sort where they belong rather than vanishing. A description, not a return.">Earn<br>Yield<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin<span class="ptag">TTM</span></th>
-        <th class="grp-profit" data-key="operatingMargin" title="Operating margin (TTM) — the cleanest read on the business itself: after the cost of running it, before financing and tax.">Op<br>Margin<span class="ptag">latest Q</span></th>
+        <th class="grp-profit" data-key="operatingMargin" title="Operating margin over twelve months, from the results release and the filings — the cleanest read on the business itself: after the cost of running it, before financing and tax. Where neither gives four quarters it is Twelve Data’s, which is mostly the latest quarter’s; the cell says which.">Op<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own SEC filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg<span class="ptag">TTM YoY</span></th>
@@ -3950,6 +3950,9 @@
               ? `Cached ${fmtDateTime(s.profileFetchedAt)} — auto-refreshes daily (Refresh All to force)`
               : 'Not fetched yet — backfills over the next refreshes');
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
+        // The owner's source rule (sourcerule.js): where the cell's figure came
+        // from, and what Twelve Data said, for the fields the rule sets.
+        const srcT = (k) => (!asOfDate && RowCard.srcNote(s, k)) || cacheTitle;
         // Read ONCE per row, not per cell: 36 of them ask.
         const isFund = RowCard.isFund(s);
         return `<tr style="--i:${i}">
@@ -4031,26 +4034,26 @@
           ${signedPctCell(s.insiderNet, 'grp-react', s.insiderSince ? (s.insiderBuyers || 0) + ' bought, ' + (s.insiderSellers || 0) + ' sold since ' + s.insiderSince + (s.insiderNet == null && (s.insiderBuyers || s.insiderSellers) ? ' — a filed value too large to be real' : '') : '', 2)}
           ${lastEventCell(s)}
           ${isFund ? naRun(6, 'grp-size') : `
-          ${capCell(s.revenueTtm, s.currency, 'grp-size', cacheTitle)}
-          ${capCell(s.grossProfitTtm, s.currency, 'grp-size', cacheTitle)}
+          ${capCell(s.revenueTtm, s.currency, 'grp-size', srcT('revenueTtm'))}
+          ${capCell(s.grossProfitTtm, s.currency, 'grp-size', srcT('grossProfitTtm'))}
           ${capCell(s.netIncomeTtm, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.ebitda, s.currency, 'grp-size', cacheTitle)}
           ${capCell(s.revenuePerEmployee, s.currency, 'grp-size', cacheTitle)}
-          ${numCell(s.dilutedEpsTtm, 'grp-size', cacheTitle)}`}
+          ${numCell(s.dilutedEpsTtm, 'grp-size', srcT('dilutedEpsTtm'))}`}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.forwardPe, 'grp-value', cacheTitle)}
           ${numCell(s.trailingPe, 'grp-value', cacheTitle)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.peLive, 'grp-value', liveTitle)}
           ${isFund ? naRun(1, 'grp-value') : peerCell(s, 'grp-value')}
           ${isFund ? naRun(1, 'grp-value') : pegCell(s.peg, 'grp-value', cacheTitle)}
-          ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToBook, 'grp-value', cacheTitle)}
-          ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToSales, 'grp-value', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToBook, 'grp-value', srcT('priceToBook'))}
+          ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToSales, 'grp-value', srcT('priceToSales'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.evToSales, 'grp-value', liveTitle)}
-          ${isFund ? naRun(1, 'grp-value') : numCell(s.evToEbitda, 'grp-value', cacheTitle)}
+          ${isFund ? naRun(1, 'grp-value') : numCell(s.evToEbitda, 'grp-value', srcT('evToEbitda'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToOcf, 'grp-value', liveTitle)}
           ${isFund ? naRun(1, 'grp-value') : signedPctCell(s.earningsYield, 'grp-value', liveTitle, 2)}
           ${isFund ? naRun(7, 'grp-profit') : `
           ${marginCell(s.grossMargin, 'grp-profit', cacheTitle)}
-          ${pctCell(s.operatingMargin, 'grp-profit', cacheTitle)}
+          ${pctCell(s.operatingMargin, 'grp-profit', srcT('operatingMargin'))}
           ${pctCell(s.profitMargin, 'grp-profit', cacheTitle)}
           ${marginCell(s.fcfMargin, 'grp-profit', cacheTitle)}
           ${marginChgCell(s)}
@@ -4060,15 +4063,15 @@
           ${pctCell(s.revenueGrowthYoY, 'grp-growth', cacheTitle)}
           ${pctCell(s.earningsGrowthYoY, 'grp-growth', cacheTitle)}`}
           ${isFund ? naRun(7, 'grp-finpos') : `
-          ${capCell(s.totalCash, s.currency, 'grp-finpos', cacheTitle)}
-          ${capCell(s.totalDebt, s.currency, 'grp-finpos', cacheTitle)}
-          ${netCashCell(s.netCash, s.currency, 'grp-finpos', cacheTitle)}
+          ${capCell(s.totalCash, s.currency, 'grp-finpos', srcT('totalCash'))}
+          ${capCell(s.totalDebt, s.currency, 'grp-finpos', srcT('totalDebt'))}
+          ${netCashCell(s.netCash, s.currency, 'grp-finpos', srcT('netCash'))}
           ${perShareCell(s.netCashPerShare, 'grp-finpos')}
           ${netCashCell(s.workingCapital, 'USD', 'grp-finpos', s.workingCapitalEnd ? 'Current assets less current liabilities at ' + s.workingCapitalEnd : '')}
-          ${numCell(s.debtToEquity, 'grp-finpos', cacheTitle)}
-          ${numCell(s.currentRatio, 'grp-finpos', cacheTitle)}`}
+          ${numCell(s.debtToEquity, 'grp-finpos', srcT('debtToEquity'))}
+          ${numCell(s.currentRatio, 'grp-finpos', srcT('currentRatio'))}`}
           ${isFund ? naRun(2, 'grp-cflow') : `
-          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-cflow', cacheTitle)}
+          ${capCell(s.operatingCashFlowTtm, s.currency, 'grp-cflow', srcT('operatingCashFlowTtm'))}
           ${capCell(s.fcfTtm, s.currency, 'grp-cflow', cacheTitle + ' Twelve Data\u2019s levered free cash flow.')}`}
           ${marginCell(s.divYield, 'grp-divs', cacheTitle)}
           ${isFund ? naRun(1, 'grp-divs') : marginCell(s.payoutRatio, 'grp-divs', cacheTitle)}
@@ -4090,7 +4093,7 @@
           ${fScoreCell(s)}
           ${crCells(s)}`}
           ${isFund ? naRun(13, 'grp-own') : `
-          ${bigNumCell(s.sharesOutstanding, null, 'grp-own', cacheTitle)}
+          ${bigNumCell(s.sharesOutstanding, null, 'grp-own', srcT('sharesOutstanding'))}
           ${signedPctCell(s.sharesChg, 'grp-own', 'Diluted share count against the fiscal year before')}
           ${bigNumCell(s.floatShares, null, 'grp-own', cacheTitle)}
           ${numCell(s.shortRatio, 'grp-own', cacheTitle)}

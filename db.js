@@ -3146,6 +3146,23 @@ async function readEarningsReleasesSince(sinceDay) {
   const r = await db.execute({ sql: 'select * from earnings_releases where filed >= ? and is_results = 1', args: [String(sinceDay)] });
   return r.rows.map(erOut);
 }
+// THE FIGURES ONLY, for the source rule (sourcerule.js): the same rows as
+// above without the summaries, guidance sentences and drivers, which are most
+// of the bytes. A range seek on the filing-day index.
+const ER_FIG = ['symbol', 'filed', 'is_results', 'period_end', 'period_label', 'currency', 'revenue', 'revenue_prior', 'op_income', 'op_income_prior',
+  'eps_gaap', 'eps_gaap_prior', 'cf_months', 'ocf', 'gross_profit', 'gross_profit_prior', 'cost_rev', 'cost_rev_prior',
+  'bs_cash', 'bs_sti', 'bs_debt_cur', 'bs_debt_lt', 'bs_cur_assets', 'bs_cur_liab', 'bs_equity'];
+async function readReleaseFiguresSince(sinceDay) {
+  await init();
+  const r = await db.execute({ sql: `select ${ER_FIG.join(',')} from earnings_releases where filed >= ? and is_results = 1`, args: [String(sinceDay)] });
+  const name = new Map(ER_COLS);
+  return r.rows.map((x) => {
+    const o = {};
+    for (const c of ER_FIG) o[name.get(c) || c] = x[c] == null ? null : x[c];
+    o.isResults = true;
+    return o;
+  });
+}
 // Results releases not yet compared with their 10-Q, filed on or after a day:
 // a range seek on the filing-day index of a small table.
 async function readReleasesToCheck(sinceDay) {
@@ -8566,7 +8583,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupYears, writeGroupYears, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, writeReleaseCashFlow, writeReleaseStatements, writeReleaseFcfCalc, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleaseFiguresSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,

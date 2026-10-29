@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T21:57:51.180Z",
+ "builtAt": "2026-10-29T22:38:12.846Z",
  "secCompanies": 1153,
  "secSameQuarter": 87.5,
  "secSameQuarterN": 1130,
@@ -26,6 +26,12 @@
   "Insider net, Short build, Last 8-K and 5% filing"
  ],
  "decisions": [
+  {
+   "d": "2026-10-29",
+   "who": "Built",
+   "t": "The display columns on the owner’s rule",
+   "x": "Revenue, gross profit, operating cash flow and EPS (twelve months, a quarter at a time), operating margin (now twelve months), cash, debt, net cash, debt to equity, current ratio, book value per share, shares outstanding, P/S, P/B, enterprise value, EV/EBITDA, net cash %; and what follows from them (live P/E, earnings yield, EV/sales, P/op cash, net cash per share). 1,153 companies; the hover says which source and what Twelve Data said. Dependable, as built: a quarter more than a tenth off its release is disputed and Twelve Data settles which; a later filing (a restatement) wins; an unconfirmed figure more than half again or under two thirds of Twelve Data’s is not used; twenty times off is a unit, never used. Same quarter as Twelve Data: revenue agrees 91.5%, operating cash flow 98.5%, current ratio 99%, shares 93%. The Signal inputs stay on Twelve Data; EBITDA too (another definition). The debt family is blank where neither source gives the lines (235 to 300 companies)."
+  },
   {
    "d": "2026-10-29",
    "who": "Built",
@@ -120,13 +126,14 @@
   {
    "t": "Fix Operating margin",
    "d": "Twelve months, by the owner’s rule; Twelve Data’s is mostly one quarter’s. Not a Signal input.",
-   "status": "open"
+   "status": "done",
+   "note": "Done 2026-10-29 with the display columns (sourcerule.js): operating income over revenue, four quarters, for 900 companies; Twelve Data’s quarter where neither the release nor the filings give four quarters. The header says TTM."
   },
   {
    "t": "Statement figures by the owner’s rule",
    "d": "The release while it is the newest, the SEC data once it has the quarter and is dependable (restatements included), Twelve Data where neither is (docs/context/data-sources.md). Each row shows what the rule would use today. Display first; Signal inputs wait for the owner.",
-   "status": "decided",
-   "note": "Rule set by the owner 2026-10-29 and simulated on this page; not yet applied to the screener."
+   "status": "done",
+   "note": "Built 2026-10-29 for the display columns the Signal does not read (sourcerule.js; the cell’s hover names the source and gives Twelve Data’s figure). Next, with the owner: the Signal inputs (net income, free cash flow, margins, ROE, growth)."
   },
   {
    "t": "Decide the free cash flow measure",

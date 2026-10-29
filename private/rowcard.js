@@ -1776,7 +1776,35 @@
     return n > 0 && Number.isInteger(n) ? `https://www.sec.gov/edgar/browse/?CIK=${n}` : null;
   }
 
+  // WHERE A FIGURE CAME FROM (the owner's source rule, 2026-10-29,
+  // sourcerule.js): the hover text for a cell the rule set, with what Twelve
+  // Data said beside it. '' when the rule did not touch the row, so a caller
+  // falls back to its own title. The server stamps row.src (the source code
+  // per field), row.srcQ (the newest quarter's end) and row.srcTd (Twelve
+  // Data's own figures).
+  const SRC_TTM = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, dilutedEpsTtm: 1, operatingMargin: 1, priceToSales: 1 };
+  const SRC_MONEY = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, totalCash: 1, totalDebt: 1, netCash: 1, enterpriseValue: 1 };
+  const SRC_PCT = { operatingMargin: 1, netCashPct: 1 };
+  function srcNote(s, key) {
+    const code = s && s.src ? s.src[key] : null;
+    if (!code) return '';
+    const q = s.srcQ || '';
+    const ttm = !!SRC_TTM[key];
+    const text = {
+      s: ttm ? 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings.' : 'At ' + q + ', from the company’s 10-Q or 10-K.',
+      r: ttm ? 'Four quarters to ' + q + ': the newest from the results release (its 10-Q not filed yet), the rest from the filings.' : 'At ' + q + ', from the results release (its 10-Q not filed yet).',
+      m: 'Four quarters to ' + q + ' from the filings, with a quarter the filings disagreed on taken from its results release.',
+      o: 'Four quarters to ' + q + ' from the results releases: the filings’ figure agreed with neither the releases nor Twelve Data, so it was set aside.',
+      n: 'No figure: the release and the filings give no debt lines, and Twelve Data’s total counts leases (here debt is borrowings only).',
+    }[code] || '';
+    const lead = key === 'sharesOutstanding' ? 'From the cover page of the company’s newest 10-Q or 10-K.' : text;
+    const td = s.srcTd ? s.srcTd[key] : null;
+    const tdTxt = !ok(td) ? '' : SRC_MONEY[key] ? fmtMktCap(td, s.currency) : SRC_PCT[key] ? td.toFixed(1) + '%' : key === 'sharesOutstanding' ? fmtMktCap(td, null).replace('$', '') : td.toFixed(2);
+    return lead + (tdTxt ? ' Twelve Data: ' + tdTxt + '.' : '');
+  }
+
   global.RowCard = {
+    srcNote,
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
     gfUrl, yfUrl, reutersUrl, mwUrl, secUrl, googleExchange, canHover,
     // used by the stock page

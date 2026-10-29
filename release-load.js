@@ -25,6 +25,7 @@
 require('dotenv').config({ override: true });
 const store = require('./db.js');
 const Rel = require('./releases.js');
+const SourceRule = require('./sourcerule.js');
 
 const argv = process.argv.slice(2);
 const flag = (k) => argv.includes(k);
@@ -196,6 +197,18 @@ async function writeColumn() {
   const rows = Rel.columnRows(rel, earnBy);
   await store.writeFigures({ releaseColumn: { at: Date.now(), days: COLUMN_DAYS, rows } });
   console.log('  screener column: ' + Object.keys(rows).length + ' companies written');
+}
+// THE SOURCE RULE (sourcerule.js) for the companies that just reported: a
+// release filed in the last four days is the newest quarter they have, and
+// the screener's display columns take it the same day rather than at the
+// next daily filings pass, which rebuilds every company.
+const SOURCED_DAYS = 4;
+async function writeSourced() {
+  const rel = await store.readReleaseFiguresSince(etDay(Date.now() - SOURCED_DAYS * 86400000));
+  const symbols = [...new Set(rel.map((r) => String(r.symbol).toUpperCase()))];
+  if (!symbols.length) return;
+  const out = await SourceRule.build(store, { symbols });
+  console.log('  source rule: ' + out.built + ' of ' + symbols.length + ' companies that just reported rebuilt (' + out.companies + ' held)');
 }
 // THE SIGNAL-INPUT RECON (/recon): each S&P 500 member's newest results
 // release beside Twelve Data's figures as they stand, one row per company
@@ -403,7 +416,7 @@ async function cashflowPass() {
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 
 (async () => {
-  if (COLUMN_ONLY) { await writeColumn(); await writeRecon(); process.exit(0); }
+  if (COLUMN_ONLY) { await writeColumn(); await writeSourced().catch((err) => console.log('  source rule failed: ' + String(err.message).slice(0, 120))); await writeRecon(); process.exit(0); }
   if (GUIDANCE) { await guidancePass(); process.exit(0); }
   if (DRIVERS) { await driversPass(); process.exit(0); }
   if (CASHFLOW || DERIVE_ONLY) { await cashflowPass(); process.exit(0); }
@@ -521,6 +534,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   }
   Object.assign(RUN, { checked, differs: differ });
   if (COMMIT) { try { await writeColumn(); } catch (err) { console.log('  screener column failed: ' + String(err.message).slice(0, 120)); } }
+  if (COMMIT) { try { await writeSourced(); } catch (err) { console.log('  source rule failed: ' + String(err.message).slice(0, 120)); } }
   if (COMMIT) { try { await writeRecon(); } catch (err) { console.log('  recon failed: ' + String(err.message).slice(0, 120)); } }
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
     + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);

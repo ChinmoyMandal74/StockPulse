@@ -4699,8 +4699,37 @@ async function stampAthDistance(rows) {
 // the foot of stampCapDerived for the measurement.
 const SHORT_PCT_MAX = 100;
 
+// THE OWNER'S SOURCE RULE ON THE DISPLAY COLUMNS (2026-10-29, sourcerule.js):
+// revenue, gross profit, operating cash flow and EPS over twelve months, the
+// balance sheet at the newest quarter's end, and what is worked out from them,
+// from the results release while it is the newest, the SEC data once it has
+// the quarter, Twelve Data otherwise. None is a Signal input. The figure is
+// built on the daily filings pass and by release-load.js; held per instance
+// for ten minutes. Every read path awaits sourcedNow() before the stamps run,
+// and stampCapDerived applies it first, so the figures it works out from these
+// (live P/E, earnings yield, EV/sales, P/op cash, net cash per share) follow.
+const SourceRule = require('./sourcerule.js');
+let sourcedHeld = null;
+async function sourcedNow() {
+  // Ten minutes for a figure; a minute for none, so the first build shows soon.
+  if (sourcedHeld && Date.now() - sourcedHeld.at < (sourcedHeld.fig ? 10 : 1) * 60 * 1000) return sourcedHeld.fig;
+  const fig = await store.readFigure('sourced').catch(() => null);
+  // A failed read keeps what was held rather than dropping to nothing.
+  if (fig || !sourcedHeld) sourcedHeld = { at: Date.now(), fig: fig && fig.v === SourceRule.V ? fig : null };
+  return sourcedHeld.fig;
+}
+function stampSources(rows) {
+  const fig = sourcedHeld && sourcedHeld.fig;
+  if (!fig || !fig.s || !Array.isArray(rows)) return;
+  for (const r of rows) {
+    if (!r || !r.symbol || r.error) continue;
+    try { SourceRule.apply(r, fig.s[String(r.symbol).toUpperCase()] || null); } catch (e) { /* the row keeps Twelve Data's */ }
+  }
+}
+
 function stampCapDerived(rows) {
   if (!Array.isArray(rows)) return;
+  stampSources(rows);
   for (const r of rows) {
     if (!r || !r.symbol) continue;
     r.capBand = Filters.capBandOf(r.marketCap);
@@ -6908,6 +6937,7 @@ async function stampFlows(rows) {
 }
 
 const serveStamps = (rows) => Promise.all([
+  sourcedNow().catch(() => null),
   stampFlows(rows).catch(() => {}),
   stampShortNames(rows).catch(() => {}),
   stampAdviceAge(rows).catch(() => {}),
@@ -11413,6 +11443,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
   // fields: stamped on the anchor alone, every peer's Live P/E was a dash
   // (the owner, on DELL: "Live PE is not showing for most stocks in the peer
   // section"). 1,280 rows of arithmetic.
+  await sourcedNow().catch(() => null);
   stampCapDerived(stocks);
   // AND THE ONE STAMP A SINGLE ROW CANNOT ANSWER. `P/E vs peers` is a ratio
   // to the stock's own industry, so `stampPeerValue([stock])` could only ever
@@ -12594,6 +12625,7 @@ async function mobileRows(req) {
   await stampAthDistance(rows);
   await stampSpMember(rows);
   await stampFlows(rows).catch(() => {});
+  await sourcedNow().catch(() => null);
   stampCapDerived(rows);
   return rows;
 }
@@ -12994,6 +13026,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
   await stampAthDistance(stocks);
   await stampSpMember(stocks);
   await stampFlows(stocks).catch(() => {});
+  await sourcedNow().catch(() => null);
   stampCapDerived(stocks);
   stampPeerValue(stocks);
   const myLists = await store.readUserPortfolios(await prefsKey(req));
@@ -14789,8 +14822,15 @@ async function marginChangeBuild(opts = {}) {
     if (!opts.dry && facts.size) await store.writeSecQuality({ at: Date.now(), summary: built.summary, rows: built.rows });
     quality = built.summary;
   } catch (e) { /* the margins are the payload */ }
+  // THE SOURCE RULE (sourcerule.js) rides the same pass: every company's
+  // filings are in hand, and the rule needs the newest two years of them.
+  let sourced = null;
+  try {
+    sourced = await SourceRule.build(store, { facts: wide, dry: !!opts.dry });
+    sourcedHeld = null;
+  } catch (e) { sourced = { error: String(e.message).slice(0, 120) }; }
   return { companies: Object.keys(m).length, universe: universe.length, returns: Object.keys(cr).length,
-    growth: Object.keys(lg).length, quality };
+    growth: Object.keys(lg).length, quality, sourced };
 }
 
 // THE LONG RUN FIGURES THAT NEED A COMPANY'S WHOLE HISTORY, a slice a night
@@ -15777,6 +15817,7 @@ async function summaryFacts(symbol) {
   const stocks = (snap && snap.stocks) || [];
   const stock = stocks.find((x) => x && !x.error && String(x.symbol).toUpperCase() === symbol);
   if (!stock) return null;
+  await sourcedNow().catch(() => null);
   stampCapDerived([stock]);
   stampPeerValue(stocks);
   await Promise.all([
@@ -16374,6 +16415,17 @@ app.get('/api/releases/track', requireAuth, route(async (req, res) => {
   if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
   if ((await isGuest(req)) && !guestSet.has(symbol)) return res.status(403).json({ error: 'The guest preview covers only a few stocks.' });
   res.json({ symbol, track: Releases.trackRecord(await store.readEarningsReleases(symbol, 120)) });
+}));
+// THE SOURCE RULE BY HAND (sourcerule.js): the whole universe, or ?symbols=
+// A,B. Reads the filings and releases and writes the one figure; no API
+// credits. The daily filings pass and release-load.js keep it current.
+app.post('/api/sources/build', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  if (await standAside(res)) return;
+  const symbols = String(req.query.symbols || '').split(',').map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z0-9.-]{1,15}$/.test(x));
+  const out = await SourceRule.build(store, { symbols: symbols.length ? symbols : null, dry: req.query.dry === '1' });
+  sourcedHeld = null;
+  res.json(Object.assign({ ok: true }, out));
 }));
 app.get('/api/releases/column', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -17685,6 +17737,7 @@ async function groupIndex() {
   // capBand is stamped on the way OUT, never stored, so a snapshot row may
   // not carry it — derive rather than read, or /size/<band> is empty until
   // something else happens to have stamped it.
+  await sourcedNow().catch(() => null);
   stampCapDerived(rows);
   const idx = {};
   for (const dim of Object.keys(GROUP_DIMS)) idx[dim] = new Map();
@@ -19907,6 +19960,7 @@ async function runAlertPass() {
   const rows = (snap && snap.stocks) || [];
   if (!rows.length) return { alerts: alerts.length, fired: 0, armed: 0, skipped: alerts.length };
   scoreActionInto(rows);
+  await sourcedNow().catch(() => null);
   stampCapDerived(rows);
   // No alert type reads it today. It is stamped anyway because the whole point
   // of re-scoring here is that an alert can never disagree with the screener,
