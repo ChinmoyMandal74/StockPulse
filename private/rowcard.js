@@ -1782,9 +1782,12 @@
   // falls back to its own title. The server stamps row.src (the source code
   // per field), row.srcQ (the newest quarter's end) and row.srcTd (Twelve
   // Data's own figures).
-  const SRC_TTM = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, dilutedEpsTtm: 1, operatingMargin: 1, priceToSales: 1 };
-  const SRC_MONEY = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, totalCash: 1, totalDebt: 1, netCash: 1, enterpriseValue: 1 };
-  const SRC_PCT = { operatingMargin: 1, netCashPct: 1 };
+  const SRC_TTM = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, dilutedEpsTtm: 1, operatingMargin: 1, priceToSales: 1,
+    netIncomeTtm: 1, fcfTtm: 1, grossMargin: 1, profitMargin: 1, fcfMargin: 1, roe: 1, fcfYield: 1 };
+  const SRC_MONEY = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, totalCash: 1, totalDebt: 1, netCash: 1, enterpriseValue: 1, netIncomeTtm: 1, fcfTtm: 1 };
+  const SRC_PCT = { operatingMargin: 1, netCashPct: 1, grossMargin: 1, profitMargin: 1, fcfMargin: 1, roe: 1, fcfYield: 1, revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
+  const SRC_GROWTH = { revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
+  const SRC_FCF = { fcfTtm: 1, fcfMargin: 1, fcfYield: 1 };
   function srcNote(s, key) {
     const code = s && s.src ? s.src[key] : null;
     if (!code) return '';
@@ -1795,9 +1798,12 @@
       r: ttm ? 'Four quarters to ' + q + ': the newest from the results release (its 10-Q not filed yet), the rest from the filings.' : 'At ' + q + ', from the results release (its 10-Q not filed yet).',
       m: 'Four quarters to ' + q + ' from the filings, with a quarter the filings disagreed on taken from its results release.',
       o: 'Four quarters to ' + q + ' from the results releases: the filings’ figure agreed with neither the releases nor Twelve Data, so it was set aside.',
-      n: 'No figure: the release and the filings give no debt lines, and Twelve Data’s total counts leases (here debt is borrowings only).',
+      n: SRC_FCF[key] ? 'No figure: neither the release nor the filings give operating cash flow and capex for four quarters, and Twelve Data’s figure is levered free cash flow, another measure (here it is operating cash flow less capex).'
+        : 'No figure: the release and the filings give no debt lines, and Twelve Data’s total counts leases (here debt is borrowings only).',
     }[code] || '';
-    const lead = key === 'sharesOutstanding' ? 'From the cover page of the company’s newest 10-Q or 10-K.' : text;
+    const growth = SRC_GROWTH[key] ? (code === 'r' ? 'The quarter to ' + q + ' against the same quarter a year earlier, as its results release printed both.' : 'The quarter to ' + q + ' against the same quarter a year earlier, from the company’s 10-Q and 10-K filings.')
+      + (s[key] == null ? ' No percentage: the year-earlier figure was a loss or nothing.' : '') : '';
+    const lead = key === 'sharesOutstanding' ? 'From the cover page of the company’s newest 10-Q or 10-K.' : growth || text;
     const td = s.srcTd ? s.srcTd[key] : null;
     const tdTxt = !ok(td) ? '' : SRC_MONEY[key] ? fmtMktCap(td, s.currency) : SRC_PCT[key] ? td.toFixed(1) + '%' : key === 'sharesOutstanding' ? fmtMktCap(td, null).replace('$', '') : td.toFixed(2);
     return lead + (tdTxt ? ' Twelve Data: ' + tdTxt + '.' : '');

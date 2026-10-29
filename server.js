@@ -6955,8 +6955,15 @@ function finishServe(rows, pf) {
   for (const x of rows) x.portfolios = membershipOf(x.symbol, pf);
 }
 
-function scoreActionInto(rows) {
+// THE SIGNAL READS THE SOURCE RULE'S INPUTS (the owner, 2026-10-29): net
+// income, free cash flow and its margin, gross and profit margin, ROE and
+// growth are laid over Twelve Data's (stampSources, from the held figure:
+// every caller awaits sourcedNow() first) and Quality is scored again from
+// them, so every path that scores a verdict scores the same one. `asOf` is
+// a rewound table and keeps the rows as they are.
+function scoreActionInto(rows, opts = {}) {
   if (!Array.isArray(rows) || !rows.length) return;
+  if (!opts.asOf) { stampSources(rows); applyScores(rows); }
   const results = Action.apply(rows, ACTION_CFG);
   for (let i = 0; i < rows.length; i++) {
     const r = results[i];
@@ -9655,7 +9662,13 @@ async function computeStocks(asOf, opts = {}) {
     // because the scores were once ranked across the universe; they are not, so the
     // pass is here only because the rows are built by now anyway.
     applyScores(stocks);
-    scoreActionInto(stocks);
+    if (!asOf) await sourcedNow().catch(() => null);
+    scoreActionInto(stocks, { asOf });
+    // The stored snapshot keeps Twelve Data's own figures and the Quality
+    // they give (fundamentals_history, /recon and /sources read them as
+    // Twelve Data's); the verdict just scored stays. Every read path lays the
+    // rule over them again on the way out.
+    if (!asOf) { for (const r of stocks) SourceRule.restore(r); applyScores(stocks); }
 
     // The trend ribbon's year, as dated runs, for the assistant. Bar-derived,
     // so honestly replayable — which is why it survived the cull that
@@ -12618,6 +12631,7 @@ async function mobileRows(req) {
   // and every phone row would read blank for a guest.
   stampPeerValue(rows);
   if (await isGuest(req)) rows = rows.filter((x) => guestSet.has(String(x.symbol).toUpperCase()));
+  await sourcedNow().catch(() => null);
   scoreActionInto(rows);
   await stampShortNames(rows);
   await stampAdviceAge(rows);
@@ -13019,6 +13033,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
 
   const snap = await readSnapshot();
   const stocks = ((snap && snap.stocks) || []);
+  await sourcedNow().catch(() => null);
   scoreActionInto(stocks);
   await stampShortNames(stocks);
   await stampAdviceAge(stocks);
@@ -19116,6 +19131,7 @@ app.get('/api/backtest', requireAdmin, route(async (req, res) => {
   const bars = await btLoadBars(universe);
   const snap = await readSnapshot();
   const stocks = (snap && snap.stocks) || [];
+  await sourcedNow().catch(() => null);
   scoreActionInto(stocks);
   await stampShortNames(stocks);
   const earnings = await store.readEarningsDates(asked, today);
@@ -19959,6 +19975,7 @@ async function runAlertPass() {
   const snap = await store.readSnapshot();
   const rows = (snap && snap.stocks) || [];
   if (!rows.length) return { alerts: alerts.length, fired: 0, armed: 0, skipped: alerts.length };
+  await sourcedNow().catch(() => null);
   scoreActionInto(rows);
   await sourcedNow().catch(() => null);
   stampCapDerived(rows);
@@ -21173,6 +21190,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // the whole universe, and it means a snapshot written before this feature
     // existed still carries the column, and a house-profile edit shows up on
     // the next load rather than after the nightly refresh.
+    await sourcedNow().catch(() => null);
     scoreActionInto(snap.stocks);
     // Display names are stamped on the way out for the same reason the Signal
     // columns are: they derive from data we already hold, so a snapshot

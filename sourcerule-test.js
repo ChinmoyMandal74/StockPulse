@@ -141,26 +141,82 @@ const row = (o) => Object.assign({ symbol: 'TST', currency: 'USD', sector: 'Tech
   eq(RowCard.srcNote({ revenueTtm: 1 }, 'revenueTtm'), '', 'no source: no hover text of ours');
 }
 
-// THE SIGNAL BOUNDARY, BEHAVIOURALLY. Real-shaped rows (the legacy snapshot
-// backup), scored with every field the rule writes absent, present and lying;
-// the verdicts must not move. And the written fields are none of the Signal's.
+// THE SIGNAL'S INPUTS (the owner, 2026-10-29: "just rebuild signal").
+// 13. Net income, free cash flow (operating cash flow less capex), the margins,
+// ROE on average equity, and growth from the release's own two columns.
 {
-  for (const k of S.FIELDS) ok(!S.SIGNAL_INPUTS.includes(k), 'not a Signal input: ' + k);
+  const s4 = ENDS.slice(1, 5).map((e, i) => sec(e, { revenue: 10e9, grossProfit: 4e9, netIncome: 1e9, operatingCashFlow: 2e9, capex: -0.5e9, equity: 20e9 }));
+  s4.unshift(sec(ENDS[0], { revenue: 9e9, netIncome: 0.8e9, equity: 18e9 }));
+  const r4 = ENDS.slice(1, 5).map((e) => rel(e, { revenue: 10e9, revenuePrior: 8e9, netIncome: 1e9, netIncomePrior: 0.8e9 }));
+  const e = S.forCompany(row({ revenueTtm: 40e9, netIncomeTtm: 4e9, grossMargin: 41, profitMargin: 9, roe: 21, revenueGrowthYoY: 20, earningsGrowthYoY: 20 }), s4, r4, TODAY);
+  eq(e && e.f.netIncomeTtm, [4e9, 's'], 'net income over four quarters');
+  eq(e.f.fcfTtm, [6e9, 's'], 'free cash flow is operating cash flow less capex');
+  eq([e.f.grossMargin, e.f.profitMargin, e.f.fcfMargin], [[40, 's'], [10, 's'], [15, 's']], 'the margins over our revenue');
+  eq(e.f.roe, [Math.round(4e9 / ((20e9 + 18e9) / 2) * 10000) / 100, 's'], 'ROE on average equity, now (0B) and a year earlier (8B)');
+  eq([e.f.revenueGrowthYoY, e.f.earningsGrowthYoY], [[25, 'r'], [25, 'r']], 'growth from the release\u2019s own two columns');
+  eq(e.f.fcfYield, [6, 's'], 'FCF yield over market value');
+}
+// 14. Growth off a loss is no percentage; past five hundred is not dependable.
+{
+  const s5 = ENDS.slice(1, 5).map((e) => sec(e, { revenue: 1e9, netIncome: 0.1e9 }));
+  const r5 = ENDS.slice(1, 5).map((e) => rel(e, { revenue: 1e9, revenuePrior: 1e9, netIncome: 0.1e9, netIncomePrior: -0.05e9 }));
+  const e = S.forCompany(row({ revenueTtm: 4e9, netIncomeTtm: 0.4e9, earningsGrowthYoY: 30 }), s5, r5, TODAY);
+  eq(e && e.f.earningsGrowthYoY, [null, 'r'], 'earnings growth off a year-ago loss: blank');
+  const r6 = r5.map((x) => Object.assign({}, x, { netIncomePrior: 0.0001e9 }));
+  const e6 = S.forCompany(row({ revenueTtm: 4e9, netIncomeTtm: 0.4e9, earningsGrowthYoY: 30 }), s5, r6, TODAY);
+  ok(e6 && !e6.f.earningsGrowthYoY, 'earnings growth of 99,900% off a tiny base: Twelve Data\u2019s kept');
+}
+// 15. A margin 25 points from Twelve Data's is a definition (CVS's gross margin).
+{
+  const s7 = ENDS.slice(1, 5).map((e) => sec(e, { revenue: 10e9, grossProfit: 4.5e9 }));
+  const r7 = ENDS.slice(1, 5).map((e) => rel(e, { revenue: 10e9, grossProfit: 4.5e9 }));
+  const e = S.forCompany(row({ revenueTtm: 40e9, grossProfitTtm: 18e9, grossMargin: 14 }), s7, r7, TODAY);
+  ok(e && e.f.grossProfitTtm && !e.f.grossMargin, 'gross margin 45% against Twelve Data\u2019s 14%: Twelve Data\u2019s kept');
+}
+// 16. No cash flow lines: free cash flow blank, never Twelve Data's levered one.
+{
+  const s8 = ENDS.slice(1, 5).map((e) => sec(e, { revenue: 1e9 }));
+  const e = S.forCompany(row({ revenueTtm: 4e9, fcfTtm: 0.7e9, fcfMargin: 17 }), s8, [], TODAY);
+  const r = row({ revenueTtm: 4e9, fcfTtm: 0.7e9, fcfMargin: 17 });
+  S.apply(r, e);
+  eq([r.fcfTtm, r.fcfMargin, r.src.fcfTtm], [null, null, 'n'], 'no cash flow lines: free cash flow blank, marked');
+}
+// 17. restore(): what the stored snapshot keeps is Twelve Data's own.
+{
+  const r = row({ netIncomeTtm: 5, revenueTtm: 10, grossMargin: 30 });
+  S.apply(r, { q: '2026-09-30', f: { netIncomeTtm: [7, 'r'], revenueTtm: [12, 'r'] } });
+  S.restore(r);
+  eq([r.netIncomeTtm, r.revenueTtm, r.grossMargin, 'srcTd' in r, 'src' in r], [5, 10, 30, false, false], 'restored: Twelve Data\u2019s figures, no marks');
+}
+
+// THE SIGNAL, BEHAVIOURALLY. Real-shaped rows (the legacy snapshot backup),
+// all six words among them. The rule's Signal inputs MOVE the verdict (lying
+// values change it); the display-only fields never do; market value, forward
+// P/E and short % of float are never touched.
+{
+  for (const k of S.SIGNAL_SET) ok(S.FIELDS.includes(k), 'a Signal input on the rule: ' + k);
+  for (const k of S.SIGNAL_KEPT) ok(!S.FIELDS.includes(k), 'kept Twelve Data\u2019s: ' + k);
   let rows = [];
   try { rows = (require('./snapshot.json').stocks || []).filter((x) => x && x.symbol && !x.error); } catch (e) { rows = []; }
   ok(rows.length >= 40, 'real-shaped rows to score (' + rows.length + ')');
   const cfg = (() => { const { cfg } = Action.resolve(null, 'Balanced'); cfg.__resolved = true; return cfg; })();
   const verdicts = (list) => Action.apply(list, cfg).map((x) => (x ? JSON.stringify([x.action, x.flag, x.fund, x.type, x.estScore]) : null));
   const base = rows.map((r) => Object.assign({}, r));
-  const absent = rows.map((r) => { const o = Object.assign({}, r); for (const k of S.FIELDS) delete o[k]; return o; });
-  const present = rows.map((r) => { const o = Object.assign({}, r); S.apply(o, { q: '2026-06-30', f: Object.fromEntries(S.FIELDS.map((k) => [k, [Number(r[k]) || 1, 's']])) }); return o; });
-  const lying = rows.map((r, i) => { const o = Object.assign({}, r); S.apply(o, { q: '2026-06-30', f: Object.fromEntries(S.FIELDS.map((k, j) => [k, [((i * 7 + j) % 2 ? -1 : 1) * 1e15, 'o']])) }); return o; });
   const v0 = verdicts(base);
   ok(v0.filter(Boolean).length >= 40 && new Set(Action.apply(base, cfg).filter(Boolean).map((x) => x.action)).size === 6, 'verdicts were scored, all six words among them');
-  eq(verdicts(absent), v0, 'verdicts with the fields absent');
-  eq(verdicts(present), v0, 'verdicts with the fields stamped');
-  eq(verdicts(lying), v0, 'verdicts with the fields lying');
-  for (const k of S.SIGNAL_INPUTS) ok(lying.every((o, i) => JSON.stringify(o[k]) === JSON.stringify(base[i][k])), 'stamp leaves the Signal input alone: ' + k);
+  const display = S.FIELDS.filter((k) => !S.SIGNAL_SET.includes(k));
+  const lie = (keys) => rows.map((r, i) => { const o = Object.assign({}, r); S.apply(o, { q: '2026-06-30', f: Object.fromEntries(keys.map((k, j) => [k, [((i * 7 + j) % 2 ? -1 : 1) * 1e15, 'o']])) }); return o; });
+  const lyingDisplay = lie(display);
+  // apply() blanks the no-fallback fields it is not given, two of them Signal
+  // inputs (free cash flow and its margin): hand those back for this check.
+  for (let i = 0; i < rows.length; i++) for (const k of S.SIGNAL_SET) lyingDisplay[i][k] = base[i][k];
+  eq(verdicts(lyingDisplay), v0, 'display-only fields lying: verdicts unmoved');
+  const truth = rows.map((r) => { const o = Object.assign({}, r); S.apply(o, { q: '2026-06-30', f: Object.fromEntries(S.SIGNAL_SET.map((k) => [k, [r[k] == null ? null : Number(r[k]), 's']])) }); return o; });
+  eq(verdicts(truth), v0, 'the rule giving the same inputs: the same verdicts');
+  const moved = verdicts(lie(S.SIGNAL_SET)).filter((v, i) => v !== v0[i]).length;
+  ok(moved >= 10, 'the rule\u2019s Signal inputs lying: verdicts move (' + moved + ' of ' + rows.length + ')');
+  const lyingAll = lie(S.FIELDS);
+  for (const k of S.SIGNAL_KEPT) ok(lyingAll.every((o, i) => JSON.stringify(o[k]) === JSON.stringify(base[i][k])), 'never touched: ' + k);
 }
 
 console.log(`${pass} passed, ${fail} failed`);

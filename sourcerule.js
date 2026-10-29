@@ -13,12 +13,19 @@
 // else its release figure (an older quarter's release figure restated by a
 // later release's year-ago column takes the restated one).
 //
-// DISPLAY ONLY. Every field written here is one the Signal does not read
-// (action.js reads market cap, forward P/E, net income, profit and gross
-// margin, free cash flow and its margin, ROE, revenue and earnings growth,
-// short % of float and Quality). Those stay on Twelve Data until the owner
-// decides the Signal. sourcerule-test.js proves the boundary by scoring with
-// and without this stamp.
+// THE SIGNAL READS IT TOO (the owner, 2026-10-29: "just rebuild signal"). Net
+// income, free cash flow and its margin, gross and profit margin, ROE, and
+// revenue and earnings growth come through this rule, and Quality is scored
+// again from them (applyScores) before the verdict. Market value, forward P/E
+// and short % of float stay Twelve Data's: no filing has them. The stored
+// snapshot keeps Twelve Data's own figures (fundamentals_history, /recon and
+// /sources read them as Twelve Data's); the rule is laid over them wherever
+// the Signal is scored (scoreActionInto) and on the way out.
+//
+// FREE CASH FLOW is operating cash flow less capex, the owner's definition;
+// Twelve Data's is levered, so it is no fallback: a company with no cash flow
+// lines in either source (banks and insurers, mostly) has none, and the
+// Signal's free cash flow rules do not fire for it.
 //
 // DEPENDABLE is mechanical, as data-sources.md states it:
 //   - the SEC value is missing, or the SEC data is not yet on the newest
@@ -42,7 +49,8 @@
 //
 // Twelve Data on ANOTHER DEFINITION is no fallback (the owner, 2026-10-29):
 // total debt counts leases there, borrowings only here, so the debt family
-// shows a dash where neither the release nor the SEC data gives the lines.
+// shows a dash where neither the release nor the SEC data gives the lines;
+// free cash flow is levered there, operating cash flow less capex here.
 //
 // Built whole on the daily filings pass (marginChangeBuild, which already
 // holds every company's filings), and for the companies that just reported by
@@ -51,7 +59,7 @@
 // snapshot is never written from.
 const SecFacts = require('./secfacts.js');
 
-const V = 1;
+const V = 2;
 const DAY = 86400000;
 const t = (d) => Date.parse(String(d).slice(0, 10) + 'T12:00:00Z');
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -72,15 +80,18 @@ const REL_SINCE_DAYS = 480;  // five releases: four quarters and one before for 
 // EBITDA is not on the list: ours (operating income plus depreciation) agreed
 // with Twelve Data's for 20% of companies on the same quarter, which leaves
 // impairments out (EchoStar -$15.6B against $2.2B). Another definition.
-const TTM_FIELDS = ['revenueTtm', 'grossProfitTtm', 'operatingCashFlowTtm', 'dilutedEpsTtm'];
+const TTM_FIELDS = ['revenueTtm', 'grossProfitTtm', 'operatingCashFlowTtm', 'dilutedEpsTtm', 'netIncomeTtm', 'fcfTtm'];
+// The newest quarter against the same quarter a year earlier, in percent.
+const GROWTH_FIELDS = ['revenueGrowthYoY', 'earningsGrowthYoY'];
 const QE_FIELDS = ['totalCash', 'totalDebt', 'netCash', 'debtToEquity', 'currentRatio', 'bookValuePerShare', 'sharesOutstanding'];
-const DERIVED = ['operatingMargin', 'priceToSales', 'priceToBook', 'enterpriseValue', 'evToEbitda', 'netCashPct'];
-const FIELDS = [...TTM_FIELDS, ...QE_FIELDS, ...DERIVED];
+const DERIVED = ['operatingMargin', 'grossMargin', 'profitMargin', 'fcfMargin', 'roe', 'fcfYield', 'priceToSales', 'priceToBook', 'enterpriseValue', 'evToEbitda', 'netCashPct'];
+const FIELDS = [...TTM_FIELDS, ...GROWTH_FIELDS, ...QE_FIELDS, ...DERIVED];
 // Twelve Data's figure is on another definition: no fallback.
-const NO_TD = new Set(['totalDebt', 'netCash', 'debtToEquity', 'enterpriseValue', 'evToEbitda', 'netCashPct']);
-// Never a Signal input; sourcerule-test.js checks this list against action.js's.
-const SIGNAL_INPUTS = ['marketCap', 'forwardPe', 'netIncomeTtm', 'profitMargin', 'fcfTtm', 'fcfMargin', 'roe',
-  'qualityRating', 'revenueGrowthYoY', 'earningsGrowthYoY', 'grossMargin', 'shortPctFloat'];
+const NO_TD = new Set(['totalDebt', 'netCash', 'debtToEquity', 'enterpriseValue', 'evToEbitda', 'netCashPct', 'fcfTtm', 'fcfMargin', 'fcfYield']);
+// The Signal's inputs this rule sets (the rest, market value, forward P/E,
+// short % of float, stay Twelve Data's); Quality is scored again from them.
+const SIGNAL_SET = ['netIncomeTtm', 'profitMargin', 'fcfTtm', 'fcfMargin', 'roe', 'revenueGrowthYoY', 'earningsGrowthYoY', 'grossMargin'];
+const SIGNAL_KEPT = ['marketCap', 'forwardPe', 'shortPctFloat'];
 
 const isFin = (row) => /^financial/i.test(String((row && row.sector) || ''));
 
@@ -98,6 +109,10 @@ const LINES = {
   opIncome: { field: () => 'operatingIncome', sec: (q) => num(q.operatingIncome), rel: (r) => num(r.opIncome), prior: (r) => num(r.opIncomePrior) },
   ocf: { field: () => 'operatingCashFlow', sec: (q) => num(q.operatingCashFlow), rel: null, prior: null },   // the release's quarter is worked out below
   eps: { field: () => 'epsDiluted', sec: (q) => num(q.epsDiluted), rel: (r) => num(r.epsGaap), prior: (r) => num(r.epsGaapPrior) },
+  // Net income attributable to the company, as both sources state it.
+  netIncome: { field: () => 'netIncome', sec: (q) => num(q.netIncome), rel: (r) => num(r.netIncome), prior: (r) => num(r.netIncomePrior) },
+  // Operating cash flow less capex, both from the same statement.
+  fcf: { field: () => 'operatingCashFlow', sec: (q) => (q.operatingCashFlow == null || q.capex == null ? null : num(q.operatingCashFlow) - Math.abs(num(q.capex))), rel: null, prior: null },
 };
 
 // One company's quarters, the SEC data's and the releases' on one timeline
@@ -119,14 +134,21 @@ function timeline(secQ, rels) {
   return out;
 }
 
-// The release's quarter of operating cash flow: a three-month statement, or a
+// The release's quarter of a cash flow line: a three-month statement, or a
 // year to date less the release before (three months shorter, a quarter back).
-function relOcf(tl, i) {
+function relCf(tl, i, key) {
   const x = tl[i] && tl[i].rel;
-  if (!x || x.ocf == null || !x.cfMonths) return null;
-  if (Number(x.cfMonths) === 3) return num(x.ocf);
+  if (!x || x[key] == null || !x.cfMonths) return null;
+  if (Number(x.cfMonths) === 3) return num(x[key]);
   const p = tl[i - 1] && tl[i - 1].rel;
-  return p && p.ocf != null && Number(p.cfMonths) === Number(x.cfMonths) - 3 && gapOk(tl[i - 1].end, tl[i].end) ? num(x.ocf) - num(p.ocf) : null;
+  return p && p[key] != null && Number(p.cfMonths) === Number(x.cfMonths) - 3 && gapOk(tl[i - 1].end, tl[i].end) ? num(x[key]) - num(p[key]) : null;
+}
+const relOcf = (tl, i) => relCf(tl, i, 'ocf');
+// Free cash flow from the release: its quarter of operating cash flow less its
+// quarter of capex (stored as a positive amount).
+function relFcf(tl, i) {
+  const o = relCf(tl, i, 'ocf'), c = relCf(tl, i, 'capex');
+  return o == null || c == null ? null : o - Math.abs(c);
 }
 
 // The release figure for quarter i: restated by a later release's year-ago
@@ -134,6 +156,7 @@ function relOcf(tl, i) {
 function relValue(tl, i, line) {
   const L = LINES[line];
   if (line === 'ocf') return relOcf(tl, i);
+  if (line === 'fcf') return relFcf(tl, i);
   if (!L.rel) return null;
   // A release that printed only the year (CleanSpark's and Versant's fourth
   // quarter) gives no quarter, and its year-ago column is a year too.
@@ -241,12 +264,15 @@ function forCompany(row, secRows, rels, today) {
   if (four) {
     // A split inside the window leaves the quarters' EPS on two share counts.
     const split = row.lastSplitDate && t(row.lastSplitDate) > t(tl[n - 3].end) - 92 * DAY;
-    const want = { revenueTtm: 'revenue', grossProfitTtm: 'grossProfit', operatingCashFlowTtm: 'ocf', dilutedEpsTtm: 'eps', _op: 'opIncome' };
+    const want = { revenueTtm: 'revenue', grossProfitTtm: 'grossProfit', operatingCashFlowTtm: 'ocf', dilutedEpsTtm: 'eps', netIncomeTtm: 'netIncome', fcfTtm: 'fcf', _op: 'opIncome' };
     for (const [field, line] of Object.entries(want)) {
       if (field === 'dilutedEpsTtm' && split) continue;
       // Operating income has no Twelve Data figure; its margin (mostly one
       // quarter's) over our revenue is near enough to settle a sign.
-      const td = field === '_op' ? (num(row.operatingMargin) != null && T.revenueTtm ? num(row.operatingMargin) / 100 * T.revenueTtm[0] : null) : num(row[field]);
+      // Free cash flow has none on our definition (Twelve Data's is levered):
+      // its disputes take the release, and no unconfirmed test applies.
+      const td = field === '_op' ? (num(row.operatingMargin) != null && T.revenueTtm ? num(row.operatingMargin) / 100 * T.revenueTtm[0] : null)
+        : field === 'fcfTtm' ? null : num(row[field]);
       const x = ttm(tl, four, line, fin, td);
       if (x.v == null) continue;
       // Twenty times off Twelve Data is a unit, not a company, whatever
@@ -260,6 +286,34 @@ function forCompany(row, secRows, rels, today) {
     }
   }
   for (const k of TTM_FIELDS) if (T[k]) f[k] = [k === 'dilutedEpsTtm' ? Math.round(T[k][0] * 100) / 100 : Math.round(T[k][0]), T[k][1]];
+  // GROWTH: the newest quarter against the same quarter a year earlier. The
+  // release's own two columns first (printed on one basis, a restatement
+  // already in its year-ago figure), unless the SEC data has that quarter and
+  // disputes the release's figure; then the SEC data's two quarters. A change
+  // off a loss or a zero is no percentage: blank, as everywhere on the site.
+  const yearAgoOf = (i) => tl.findIndex((p) => Math.abs((t(tl[i].end) - t(p.end)) / DAY - 364) <= 14);
+  const growth = (line) => {
+    const L = LINES[line];
+    const nr = newest.rel && !newest.rel.yearOnly ? newest.rel : null;
+    const ns = newest.sec ? L.sec(newest.sec, fin) : null;
+    const a = nr ? L.rel(nr) : null, b = nr ? L.prior(nr) : null;
+    if (a != null && b != null && !(ns != null && disputed(ns, a))) return b > 0 ? [Math.round((a / b - 1) * 10000) / 100, 'r'] : [null, 'r'];
+    const y = yearAgoOf(n);
+    const ys = y >= 0 && tl[y].sec ? L.sec(tl[y].sec, fin) : null;
+    if (ns != null && ys != null) return ys > 0 ? [Math.round((ns / ys - 1) * 10000) / 100, 's'] : [null, 's'];
+    return null;
+  };
+  // The release's own columns stand on their own; the SEC data's two quarters
+  // only where that line's twelve months passed the checks above (a wrong tag
+  // there is a wrong tag here).
+  const rg = growth('revenue');
+  // Beyond five hundred percent either way is a base too small to mean
+  // anything (Americold's net income: a loss against a year-ago $0.1M read
+  // -22,375%): not dependable, Twelve Data's is kept.
+  const sane = (g) => g && (g[0] == null || Math.abs(g[0]) <= 500);
+  if (sane(rg) && (rg[1] === 'r' || T.revenueTtm)) f.revenueGrowthYoY = rg;
+  const eg = growth('netIncome');
+  if (sane(eg) && (eg[1] === 'r' || T.netIncomeTtm)) f.earningsGrowthYoY = eg;
   // AT THE NEWEST QUARTER'S END: the SEC data's balance sheet when it is on
   // that quarter, else the release's; a line disputed by the release (a tenth
   // off) takes the release's, and an unconfirmed one far from Twelve Data's
@@ -309,7 +363,35 @@ function forCompany(row, secRows, rels, today) {
   // WORKED OUT. Operating margin over twelve months (Twelve Data's is mostly
   // one quarter's), in percent.
   if (T._op && T.revenueTtm && T.revenueTtm[0] > 0) f.operatingMargin = [Math.round(T._op[0] / T.revenueTtm[0] * 10000) / 100, code2(T._op, T.revenueTtm)];
+  // The Signal's margins, over twelve months, each line over OUR revenue: a
+  // margin is only worked out where both of its lines came through the rule
+  // (free cash flow over Twelve Data's revenue where ours is not set, since
+  // it has no fallback of its own).
+  const rev = T.revenueTtm && T.revenueTtm[0] > 0 ? T.revenueTtm : null;
+  const pctOf = (x) => Math.round(x * 10000) / 100;
+  // A margin or ROE more than 25 points from Twelve Data's is a definition
+  // or a tag, not a quarter's change (CVS's gross margin: 44% from a cost
+  // line that is not a health insurer's cost of revenue, against 14%): not
+  // dependable, Twelve Data's is kept.
+  const nearTd = (k, v) => { const td = num(row[k]); return td == null || Math.abs(v - td) <= 25; };
+  const setPct = (k, v, code) => { if (nearTd(k, v)) f[k] = [v, code]; };
+  if (T.grossProfitTtm && rev) setPct('grossMargin', pctOf(T.grossProfitTtm[0] / rev[0]), code2(T.grossProfitTtm, rev));
+  if (T.netIncomeTtm && rev) setPct('profitMargin', pctOf(T.netIncomeTtm[0] / rev[0]), code2(T.netIncomeTtm, rev));
+  if (T.fcfTtm) {
+    const r0 = rev ? rev[0] : num(row.revenueTtm);
+    if (r0 != null && r0 > 0) f.fcfMargin = [pctOf(T.fcfTtm[0] / r0), code2(T.fcfTtm, rev)];
+  }
+  // ROE: net income over twelve months against the average of equity now and
+  // a year earlier (the newest equity alone where the year-ago one is not
+  // filed). Negative equity gives no ROE.
+  if (T.netIncomeTtm && B.equity && B.equity[0] > 0) {
+    const y = yearAgoOf(n);
+    const ye = y >= 0 ? (tl[y].sec && num(tl[y].sec.equity) != null ? num(tl[y].sec.equity) : tl[y].rel ? num(tl[y].rel.bsEquity) : null) : null;
+    const avg = ye != null && ye > 0 ? (B.equity[0] + ye) / 2 : B.equity[0];
+    setPct('roe', pctOf(T.netIncomeTtm[0] / avg), code2(T.netIncomeTtm, B.equity));
+  }
   const cap = num(row.marketCap);
+  if (usd && cap > 0 && T.fcfTtm) f.fcfYield = [pctOf(T.fcfTtm[0] / cap), T.fcfTtm[1]];
   if (usd && cap > 0) {
     if (T.revenueTtm && T.revenueTtm[0] > 0) f.priceToSales = [Math.round(cap / T.revenueTtm[0] * 100) / 100, T.revenueTtm[1]];
     if (B.equity && B.equity[0] > 0) f.priceToBook = [Math.round(cap / B.equity[0] * 100) / 100, B.equity[1]];
@@ -373,12 +455,19 @@ function apply(row, entry) {
   const src = {};
   for (const k of FIELDS) {
     const x = entry && entry.f ? entry.f[k] : null;
-    if (x) { row[k] = x[0]; src[k] = x[1]; }
+    if (x) { row[k] = x[0] == null ? null : x[0]; src[k] = x[1]; }
     else if (NO_TD.has(k) && entry) { row[k] = null; src[k] = 'n'; }
     else row[k] = row.srcTd[k];
   }
   row.src = entry ? src : null;
   row.srcQ = entry ? entry.q : null;
 }
+// Twelve Data's own figures back on the row, and the marks gone: what the
+// stored snapshot keeps (computeStocks, after the Signal is scored).
+function restore(row) {
+  if (!row || !row.srcTd) return;
+  Object.assign(row, row.srcTd);
+  delete row.srcTd; delete row.src; delete row.srcQ;
+}
 
-module.exports = { V, FIELDS, TTM_FIELDS, QE_FIELDS, DERIVED, NO_TD, SIGNAL_INPUTS, forCompany, build, apply, timeline, SEC_SINCE_DAYS, REL_SINCE_DAYS };
+module.exports = { V, FIELDS, TTM_FIELDS, GROWTH_FIELDS, QE_FIELDS, DERIVED, NO_TD, SIGNAL_SET, SIGNAL_KEPT, forCompany, build, apply, restore, timeline, SEC_SINCE_DAYS, REL_SINCE_DAYS };

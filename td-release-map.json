@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T22:38:12.846Z",
+ "builtAt": "2026-10-29T22:57:19.129Z",
  "secCompanies": 1153,
  "secSameQuarter": 87.5,
  "secSameQuarterN": 1130,
@@ -26,6 +26,12 @@
   "Insider net, Short build, Last 8-K and 5% filing"
  ],
  "decisions": [
+  {
+   "d": "2026-10-29",
+   "who": "Owner",
+   "t": "The Signal reads the rule’s figures",
+   "x": "“Just rebuild signal, no need to re-run the measurement.” Net income, free cash flow (operating cash flow less capex, no Twelve Data fallback) and its margin, gross and profit margin, ROE (twelve months over average equity) and revenue and earnings growth (the newest quarter on a year earlier, the release’s own two columns first, reported GAAP figures, blank off a loss) come through the rule, and Quality is scored again from them, wherever a verdict is scored. Market value, forward P/E and short % of float stay Twelve Data’s. Dependable for these as well: a margin or ROE more than 25 points from Twelve Data’s, or growth beyond ±500%, keeps Twelve Data’s. The stored snapshot keeps Twelve Data’s own figures, so fundamentals_history, /recon and this page still read them as Twelve Data’s."
+  },
   {
    "d": "2026-10-29",
    "who": "Built",
@@ -133,7 +139,7 @@
    "t": "Statement figures by the owner’s rule",
    "d": "The release while it is the newest, the SEC data once it has the quarter and is dependable (restatements included), Twelve Data where neither is (docs/context/data-sources.md). Each row shows what the rule would use today. Display first; Signal inputs wait for the owner.",
    "status": "done",
-   "note": "Built 2026-10-29 for the display columns the Signal does not read (sourcerule.js; the cell’s hover names the source and gives Twelve Data’s figure). Next, with the owner: the Signal inputs (net income, free cash flow, margins, ROE, growth)."
+   "note": "Built 2026-10-29 (sourcerule.js; the cell’s hover names the source and gives Twelve Data’s figure): the display columns, then the same day the Signal’s inputs (the owner: “just rebuild signal”). Market value, forward P/E and short % of float stay Twelve Data’s."
   },
   {
    "t": "Decide the free cash flow measure",

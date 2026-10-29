@@ -3150,7 +3150,7 @@ async function readEarningsReleasesSince(sinceDay) {
 // above without the summaries, guidance sentences and drivers, which are most
 // of the bytes. A range seek on the filing-day index.
 const ER_FIG = ['symbol', 'filed', 'is_results', 'period_end', 'period_label', 'currency', 'revenue', 'revenue_prior', 'op_income', 'op_income_prior',
-  'eps_gaap', 'eps_gaap_prior', 'cf_months', 'ocf', 'gross_profit', 'gross_profit_prior', 'cost_rev', 'cost_rev_prior',
+  'net_income', 'net_income_prior', 'eps_gaap', 'eps_gaap_prior', 'cf_months', 'ocf', 'capex', 'gross_profit', 'gross_profit_prior', 'cost_rev', 'cost_rev_prior',
   'bs_cash', 'bs_sti', 'bs_debt_cur', 'bs_debt_lt', 'bs_cur_assets', 'bs_cur_liab', 'bs_equity'];
 async function readReleaseFiguresSince(sinceDay) {
   await init();
