@@ -494,6 +494,28 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('derive: never for a financial company', D(q3, q2, { financial: true }).fcfCalc === null && Rel.isFinancial('Financial Services') && !Rel.isFinancial('Technology') && !Rel.isFinancial(null));
   check('derive: not a results release, or no lines', D(Object.assign({}, q3, { isResults: false }), q2).fcfCalc === null && D(Object.assign({}, q3, { cfMonths: null }), q2).fcfCalc === null);
 
+  // ---- the rest of the statements (income lines, balance sheet) ----
+  const t3 = 'Revenue | 92,279 | 77,673 | Cost of revenue | 29,720 | 24,043 | Gross margin | 62,559 | 53,630 | Diluted | 7,446 | 7,466 | Cash and cash equivalents | 20,281 | Short-term investments | 44,228 | Total current assets | 186,137 | Current portion of long-term debt | 4,391 | Total current liabilities | 151,968 | Long-term debt | 31,090 | Total assets | 779,403 | Total stockholders’ equity | 470,509 | In millions';
+  const stA = (im, bs) => Object.assign({}, base, { revenue: { printed: '92,279', prior_printed: '77,673', unit: 'millions' },
+    income_more: Object.assign({ gross_profit: { printed: '62,559', prior_printed: '53,630', unit: 'millions' }, cost_of_revenue: { printed: '29,720', prior_printed: '24,043', unit: 'millions' },
+      ebitda: { printed: '', prior_printed: '', unit: 'millions' }, ebitda_label: '', diluted_shares: { printed: '7,446', prior_printed: '7,466' }, diluted_shares_unit: 'millions' }, im),
+    balance_sheet: Object.assign({ as_of: '2026-09-30', unit: 'millions', cash: '20,281', short_term_investments: '44,228', debt_current: '4,391', debt_long_term: '31,090',
+      current_assets: '186,137', current_liabilities: '151,968', total_assets: '779,403', equity: '470,509' }, bs) });
+  const mref = Object.assign({}, m, { ref: { shares: 7.43e9 } });
+  r = Rel.toRow(stA({}, {}), t3, mref);
+  check('stmt: income lines and balance sheet kept, scaled', r.row.stmtRead === 1 && r.row.grossProfit === 62559e6 && r.row.costRevPrior === 24043e6 && r.row.dilShares === 7446e6
+    && r.row.bsAssets === 779403e6 && r.row.bsEquity === 470509e6 && r.row.bsCash === 20281e6 && r.row.bsAsOf === '2026-09-30' && r.row.ebitda === null && !r.problems.length, [r.row, r.problems]);
+  r = Rel.toRow(stA({}, { cash: '779,403', total_assets: '186,137' }), t3, mref);
+  check('stmt: a balance sheet that does not add up is withheld whole', r.row.bsAssets === null && r.row.bsCash === null && r.row.grossProfit === 62559e6 && r.problems.some((p) => /do not add up/.test(p)), r.problems);
+  r = Rel.toRow(stA({}, { unit: 'billions' }), t3, mref);
+  check('stmt: a balance-sheet scale slip is refused against revenue', r.row.bsAssets === null && r.problems.some((p) => /total assets .* do not fit/.test(p)), r.problems);
+  r = Rel.toRow(stA({ diluted_shares_unit: 'thousands' }, {}), t3, mref);
+  check('stmt: a share count off the company is refused', r.row.dilShares === null && r.problems.some((p) => /diluted shares/.test(p)), r.problems);
+  r = Rel.toRow(stA({ gross_profit: { printed: '92,279', prior_printed: '', unit: 'billions' } }, {}), t3, mref);
+  check('stmt: gross profit above revenue is refused', r.row.grossProfit === null && r.problems.some((p) => /income lines do not fit/.test(p)), r.problems);
+  r = Rel.toRow(base, t3, m);
+  check('stmt: not read is null, not zero', r.row.stmtRead === null && r.row.bsAssets === undefined && r.row.grossProfit === undefined);
+
   // The card: the company's figure first, ours marked, none.
   check('fcfValue: the company figure wins over ours', RV.fcfValue({ fcf: 5e9, fcfCalc: 7e9, fcfLabel: 'Free cash flow' }) === '$5.00B');
   check('fcfValue: ours where none is stated', RV.fcfValue({ fcf: null, fcfCalc: 7e9, fcfLabel: '' }) === '$7.00B');

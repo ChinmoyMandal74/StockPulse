@@ -1818,6 +1818,30 @@ const ADDED_COLUMNS = [
   'alter table earnings_releases add column fcf_calc real',
   'alter table earnings_releases add column fcf_calc_prior real',
   'alter table earnings_releases add column fcf_calc_from text',
+  // The rest of the statements from the cash flow reading (2026-10-29): more
+  // income lines for the quarter and its year-earlier quarter, and the balance
+  // sheet at the quarter's end. Stored for measuring the releases against the
+  // 10-Q and the price provider; nothing reads them for display yet.
+  // stmt_read is 1 once a release has been read for them.
+  'alter table earnings_releases add column stmt_read integer',
+  'alter table earnings_releases add column gross_profit real',
+  'alter table earnings_releases add column gross_profit_prior real',
+  'alter table earnings_releases add column cost_rev real',
+  'alter table earnings_releases add column cost_rev_prior real',
+  'alter table earnings_releases add column ebitda real',
+  'alter table earnings_releases add column ebitda_prior real',
+  'alter table earnings_releases add column ebitda_label text',
+  'alter table earnings_releases add column dil_shares real',
+  'alter table earnings_releases add column dil_shares_prior real',
+  'alter table earnings_releases add column bs_as_of text',
+  'alter table earnings_releases add column bs_cash real',
+  'alter table earnings_releases add column bs_sti real',
+  'alter table earnings_releases add column bs_debt_cur real',
+  'alter table earnings_releases add column bs_debt_lt real',
+  'alter table earnings_releases add column bs_cur_assets real',
+  'alter table earnings_releases add column bs_cur_liab real',
+  'alter table earnings_releases add column bs_assets real',
+  'alter table earnings_releases add column bs_equity real',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -3082,7 +3106,9 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['guides', 'guides'], ['guide_change', 'guideChange'], ['guide_change_quote', 'guideChangeQuote'], ['eps_guide_prior', 'epsGuidePrior'], ['drivers', 'drivers'],
   ['fcf', 'fcf'], ['fcf_prior', 'fcfPrior'], ['fcf_label', 'fcfLabel'],
   ['cf_months', 'cfMonths'], ['ocf', 'ocf'], ['ocf_prior', 'ocfPrior'], ['capex', 'capex'], ['capex_prior', 'capexPrior'], ['capex_label', 'capexLabel'],
-  ['fcf_calc', 'fcfCalc'], ['fcf_calc_prior', 'fcfCalcPrior'], ['fcf_calc_from', 'fcfCalcFrom']];
+  ['fcf_calc', 'fcfCalc'], ['fcf_calc_prior', 'fcfCalcPrior'], ['fcf_calc_from', 'fcfCalcFrom'],
+  ['stmt_read', 'stmtRead'], ['gross_profit', 'grossProfit'], ['gross_profit_prior', 'grossProfitPrior'], ['cost_rev', 'costRev'], ['cost_rev_prior', 'costRevPrior'], ['ebitda', 'ebitda'], ['ebitda_prior', 'ebitdaPrior'], ['ebitda_label', 'ebitdaLabel'], ['dil_shares', 'dilShares'], ['dil_shares_prior', 'dilSharesPrior'], ['bs_as_of', 'bsAsOf'], ['bs_cash', 'bsCash'], ['bs_sti', 'bsSti'], ['bs_debt_cur', 'bsDebtCur'], ['bs_debt_lt', 'bsDebtLt'], ['bs_cur_assets', 'bsCurAssets'], ['bs_cur_liab', 'bsCurLiab'], ['bs_assets', 'bsAssets'], ['bs_equity', 'bsEquity']];
+const ER_STMT = [['stmt_read', 'stmtRead'], ['gross_profit', 'grossProfit'], ['gross_profit_prior', 'grossProfitPrior'], ['cost_rev', 'costRev'], ['cost_rev_prior', 'costRevPrior'], ['ebitda', 'ebitda'], ['ebitda_prior', 'ebitdaPrior'], ['ebitda_label', 'ebitdaLabel'], ['dil_shares', 'dilShares'], ['dil_shares_prior', 'dilSharesPrior'], ['bs_as_of', 'bsAsOf'], ['bs_cash', 'bsCash'], ['bs_sti', 'bsSti'], ['bs_debt_cur', 'bsDebtCur'], ['bs_debt_lt', 'bsDebtLt'], ['bs_cur_assets', 'bsCurAssets'], ['bs_cur_liab', 'bsCurLiab'], ['bs_assets', 'bsAssets'], ['bs_equity', 'bsEquity']];
 function erOut(x) {
   const o = {};
   for (const [c, k] of ER_COLS) o[k] = x[c] == null ? null : x[c];
@@ -3115,6 +3141,15 @@ async function writeReleaseCashFlow(accn, c) {
   await db.execute({
     sql: 'update earnings_releases set fcf = ?, fcf_prior = ?, fcf_label = ?, cf_months = ?, ocf = ?, ocf_prior = ?, capex = ?, capex_prior = ?, capex_label = ? where accn = ?',
     args: [c.fcf ?? null, c.fcfPrior ?? null, c.fcfLabel ?? null, c.cfMonths ?? null, c.ocf ?? null, c.ocfPrior ?? null, c.capex ?? null, c.capexPrior ?? null, c.capexLabel ?? null, String(accn)],
+  });
+}
+// THE STATEMENTS RE-READ (release-load.js --statements): the income lines and
+// the balance sheet, set beside the reading. Nothing else is touched.
+async function writeReleaseStatements(accn, c) {
+  await init();
+  await db.execute({
+    sql: 'update earnings_releases set ' + ER_STMT.map(([col]) => col + ' = ?').join(', ') + ' where accn = ?',
+    args: ER_STMT.map(([, k]) => (c[k] === undefined ? null : c[k])).concat([String(accn)]),
   });
 }
 // Free cash flow worked out (releases.js deriveFcf), set beside the reading.
@@ -8503,7 +8538,7 @@ module.exports = {
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,
   readGroupMonths, writeGroupMonths, readGroupYears, writeGroupYears, readGroupDays, writeGroupDays, readFigure,
-  writeEarningsRelease, writeReleaseCashFlow, writeReleaseFcfCalc, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
+  writeEarningsRelease, writeReleaseCashFlow, writeReleaseStatements, writeReleaseFcfCalc, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
   readEarningsReleasesSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,

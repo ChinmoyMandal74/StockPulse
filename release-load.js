@@ -107,9 +107,14 @@ const DRIVERS = flag('--drivers');
 // oldest first, as the year-to-date subtraction needs the release before.
 // --derive-only does the second step alone: no SEC fetch, no model call.
 // Model calls run --parallel at a time (default 8); SEC fetches stay one at a time.
-const CASHFLOW = flag('--cashflow');
+// --statements (2026-10-29): the same pass for the rest of the statements
+// (income lines, balance sheet) as well: it reads every release in the window
+// not yet read for them (default since 2025-07-01), writes those columns, and
+// the cash flow columns only where they were never read.
+const STATEMENTS = flag('--statements');
+const CASHFLOW = flag('--cashflow') || STATEMENTS;
 const DERIVE_ONLY = flag('--derive-only');
-const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since', '') : '2026-04-01';
+const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since', '') : STATEMENTS ? '2025-07-01' : '2026-04-01';
 const PARALLEL = Math.max(1, Math.min(12, Number(opt('--parallel', 8)) || 8));
 // The previous full year's GAAP diluted EPS from the 10-K, for a release whose
 // full-year GAAP EPS guidance prints no prior figure (releases.js priorFyEps).
@@ -323,24 +328,30 @@ async function driversPass() {
 async function cashflowPass() {
   const snap = await store.readSnapshot();
   const sector = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol).map((r) => [r.symbol, r.sector]));
+  // The company's size, for the share-count guard (as the reading's meta.ref).
+  const num = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  const refOf = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol).map((t) => { const cap = num(t.marketCap), px = num(t.price); return [t.symbol, { shares: cap > 0 && px > 0 ? cap / px : num(t.sharesOutstanding), revenueTtm: num(t.revenueTtm) }]; }));
   const all = (await store.readEarningsReleasesSince(SINCE)).filter((r) => r.isResults && (!ONLY || r.symbol === ONLY));
   if (!DERIVE_ONLY) {
     if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
     if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
-    const todo = all.filter((r) => r.fcfLabel == null && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
-    console.log(`[${new Date().toISOString()}] cash flow re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? 'COMMIT (cash flow columns only)' : 'DRY RUN'));
-    let done = 0, stated = 0, lines = 0, failed = 0, stop = null;
+    const todo = all.filter((r) => (STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
+    console.log(`[${new Date().toISOString()}] ${STATEMENTS ? 'statements' : 'cash flow'} re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? 'COMMIT (cash flow columns only)' : 'DRY RUN'));
+    let done = 0, stated = 0, lines = 0, sheets = 0, failed = 0, stop = null;
     const inflight = new Set();
     const one = async (r, text) => {
       try {
         const got = await ask(text, Rel.cfRequest);
         // The stored reading already says it is a results release.
-        const { row, problems } = Rel.toRow(Object.assign({ is_results_release: true }, got.ans), text, { accn: r.accn, symbol: r.symbol, filed: r.filed, url: r.url });
-        const cp = problems.filter((p) => /cash flow|capital expenditures/.test(p));
+        const { row, problems } = Rel.toRow(Object.assign({ is_results_release: true }, got.ans), text, { accn: r.accn, symbol: r.symbol, filed: r.filed, url: r.url, ref: refOf.get(r.symbol) });
+        const cp = problems.filter((p) => /cash flow|capital expenditures|income lines|gross profit|cost of revenue|EBITDA|diluted shares|balance sheet|total assets/.test(p));
         const b = (v) => (v == null ? '—' : (v / 1e9).toFixed(3) + 'B');
-        console.log(`  ${r.symbol} ${r.filed}: fcf ${b(row.fcf)}` + (row.cfMonths ? ` | ${row.cfMonths}m ocf ${b(row.ocf)} capex ${b(row.capex)}` : ' | no cash flow lines') + (cp.length ? ' | ' + cp.join('; ') : '') + ` | ${got.usd.toFixed(4)}`);
-        if (COMMIT) await store.writeReleaseCashFlow(r.accn, row);
-        Object.assign(r, { fcf: row.fcf, fcfPrior: row.fcfPrior, fcfLabel: row.fcfLabel, cfMonths: row.cfMonths, ocf: row.ocf, ocfPrior: row.ocfPrior, capex: row.capex, capexPrior: row.capexPrior, capexLabel: row.capexLabel });
+        console.log(`  ${r.symbol} ${r.filed}: fcf ${b(row.fcf)}` + (row.cfMonths ? ` | ${row.cfMonths}m ocf ${b(row.ocf)} capex ${b(row.capex)}` : ' | no cash flow lines') + (STATEMENTS ? ` | gp ${b(row.grossProfit)} assets ${b(row.bsAssets)} equity ${b(row.bsEquity)}` : '') + (cp.length ? ' | ' + cp.join('; ') : '') + ` | ${got.usd.toFixed(4)}`);
+        const freshCf = !STATEMENTS || r.fcfLabel == null;
+        if (COMMIT && freshCf) await store.writeReleaseCashFlow(r.accn, row);
+        if (COMMIT && STATEMENTS) await store.writeReleaseStatements(r.accn, row);
+        if (STATEMENTS && row.bsAssets != null) sheets++;
+        if (freshCf) Object.assign(r, { fcf: row.fcf, fcfPrior: row.fcfPrior, fcfLabel: row.fcfLabel, cfMonths: row.cfMonths, ocf: row.ocf, ocfPrior: row.ocfPrior, capex: row.capex, capexPrior: row.capexPrior, capexLabel: row.capexLabel });
         done++; if (row.fcf != null) stated++; if (row.cfMonths) lines++;
       } catch (err) {
         if (err instanceof Stop) stop = stop || err;
@@ -360,7 +371,7 @@ async function cashflowPass() {
     }
     await Promise.all(inflight);
     if (stop) throw stop;
-    console.log(`  re-read: ${done} done, ${stated} state a free cash flow, ${lines} with cash flow lines, ${failed} to retry; ${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
+    console.log(`  re-read: ${done} done, ${stated} state a free cash flow, ${lines} with cash flow lines${STATEMENTS ? ', ' + sheets + ' with a balance sheet' : ''}, ${failed} to retry; ${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   }
   // WORK IT OUT, oldest first per company, from the readings as they now stand.
   // The release before the window's first is read from the table when needed.

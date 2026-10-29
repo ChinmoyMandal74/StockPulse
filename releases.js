@@ -138,7 +138,7 @@ const SYSTEM = 'You read a company’s quarterly results press release and copy 
 // grammar is too large"), so the main reading keeps its proven schema. The
 // quarter's revenue is asked again so toRow's scale guards have it. Its answer
 // is merged into the main one before toRow; the same checks apply.
-const CF_SCHEMA = { type: 'object', additionalProperties: false, required: ['revenue', 'free_cash_flow', 'cash_flow'],
+const CF_SCHEMA = { type: 'object', additionalProperties: false, required: ['revenue', 'free_cash_flow', 'cash_flow', 'income_more', 'balance_sheet'],
   properties: {
     revenue: FIG('Total revenue (or net sales, total net revenue) for the three months, not year to date.'),
     // FREE CASH FLOW (2026-10-29, the owner): only the company's own stated
@@ -167,12 +167,42 @@ const CF_SCHEMA = { type: 'object', additionalProperties: false, required: ['rev
         capex_label: { type: 'string', description: 'The line’s name as printed, e.g. "Purchases of property and equipment".' },
         unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the printed figures are in.' } } },
   } };
+// THE REST OF THE STATEMENTS (2026-10-29, the owner: "first extract the data
+// from the release fillings", to measure the releases against the 10-Q and
+// the price provider before any screener column could use them). Stored only.
+const S = (d) => ({ type: 'string', description: d });
+CF_SCHEMA.properties.income_more = { type: 'object', additionalProperties: false,
+  required: ['gross_profit', 'cost_of_revenue', 'ebitda', 'ebitda_label', 'diluted_shares', 'diluted_shares_unit'],
+  description: 'More lines of the income statement for the three months, each with the same quarter a year earlier.',
+  properties: {
+    gross_profit: FIG('Gross profit (or gross margin in money) for the three months, only if printed as a line.'),
+    cost_of_revenue: FIG('Total cost of revenue (cost of sales, cost of goods sold) for the three months, only if printed as one total line.'),
+    ebitda: FIG('EBITDA or adjusted EBITDA for the three months, only if the release prints it.'),
+    ebitda_label: S('The company’s own name for that EBITDA figure, e.g. "Adjusted EBITDA". Empty if none.'),
+    diluted_shares: { type: 'object', additionalProperties: false, required: ['printed', 'prior_printed'], description: 'Weighted-average diluted shares outstanding for the three months, as printed.',
+      properties: { printed: S('This quarter, exactly as printed. Empty if not given.'), prior_printed: S('The same quarter a year earlier, exactly as printed. Empty if not given.') } },
+    diluted_shares_unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the share counts are printed in.' } } };
+CF_SCHEMA.properties.balance_sheet = { type: 'object', additionalProperties: false,
+  required: ['as_of', 'unit', 'cash', 'short_term_investments', 'debt_current', 'debt_long_term', 'current_assets', 'current_liabilities', 'total_assets', 'equity'],
+  description: 'The balance sheet at the END of the quarter reported (the current column, not the earlier year-end one), only if the release prints one. Every figure exactly as printed; empty strings for any line not printed, and all empty if there is no balance sheet.',
+  properties: {
+    as_of: S('The balance sheet date of the copied column, YYYY-MM-DD. Empty if none.'),
+    unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the balance sheet is printed in.' },
+    cash: S('Cash and cash equivalents.'),
+    short_term_investments: S('Short-term investments or marketable securities (current), one line or empty.'),
+    debt_current: S('Short-term borrowings plus the current portion of long-term debt, only if printed as ONE line; otherwise the current portion of long-term debt line. Empty if none.'),
+    debt_long_term: S('Long-term debt, net of the current portion.'),
+    current_assets: S('Total current assets.'),
+    current_liabilities: S('Total current liabilities.'),
+    total_assets: S('Total assets.'),
+    equity: S('Total stockholders’ (shareholders’) equity attributable to the company.') } };
 const CF_SYSTEM = 'You read a company’s quarterly results press release and copy cash flow figures out of it into fixed fields. '
   + 'Copy each number EXACTLY as printed in the document; never compute, round, convert or derive one. If a figure is not in the document, give an empty string. '
   + 'Free cash flow only as the company itself states it for the three months. The cash flow statement lines for the three months if given, otherwise for the year to date given, with its length in months. '
+  + 'Income statement lines for the three months only; the balance sheet at the end of the quarter reported. '
   + 'Report what the document says; add nothing.';
 function cfRequest(text, model) {
-  return { model: model || MODEL, max_tokens: 1500, system: CF_SYSTEM,
+  return { model: model || MODEL, max_tokens: 2500, system: CF_SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: CF_SCHEMA } },
     messages: [{ role: 'user', content: '<release>\n' + String(text).slice(0, MAX_CHARS) + '\n</release>' }] };
 }
@@ -315,6 +345,40 @@ function toRow(ans, text, meta) {
   const cfCap = (v, rev) => v != null && rev > 0 && Math.abs(v) > rev * 5 * (cfMonths / 3);
   if (cfCap(ocf, revenueG) || cfCap(capex, revenueG)) { problems.push('cash flow lines do not fit the quarter’s revenue (scale doubtful)'); ocf = null; capex = null; }
   if (cfCap(ocfPrior, revenuePriorG) || cfCap(capexPrior, revenuePriorG)) { problems.push('cash flow lines a year earlier do not fit that quarter’s revenue (scale doubtful)'); ocfPrior = null; capexPrior = null; }
+  // THE REST OF THE STATEMENTS. Income lines against revenue; the share count
+  // against the company's (meta.ref.shares) as the net income check does; the
+  // balance sheet against itself and against a quarter's revenue (a scale slip
+  // is a thousandfold: assets from a tenth to two thousand quarters' revenue,
+  // which a bank's 90 and a distributor's 1 sit well inside).
+  const IM = A.income_more, BS = A.balance_sheet;
+  const stmt = { stmtRead: isRes && IM && BS ? 1 : null };
+  if (stmt.stmtRead) {
+    let [gp, gpPrior] = money('gross profit', IM.gross_profit), [cor, corPrior] = money('cost of revenue', IM.cost_of_revenue), [eb, ebPrior] = money('EBITDA', IM.ebitda);
+    const over = (v, rev, k) => v != null && rev > 0 && Math.abs(v) > rev * k;
+    if (over(gp, revenueG, 1.05) || over(cor, revenueG, 5) || over(eb, revenueG, 5)) { problems.push('income lines do not fit the quarter’s revenue (scale doubtful)'); gp = cor = eb = null; }
+    if (over(gpPrior, revenuePriorG, 1.05) || over(corPrior, revenuePriorG, 5) || over(ebPrior, revenuePriorG, 5)) { problems.push('income lines a year earlier do not fit that quarter’s revenue (scale doubtful)'); gpPrior = corPrior = ebPrior = null; }
+    let [sh, shPrior] = money('diluted shares', { printed: (IM.diluted_shares || {}).printed, prior_printed: (IM.diluted_shares || {}).prior_printed, unit: IM.diluted_shares_unit });
+    if (ref.shares > 0) {
+      if (sh != null && !near(sh, ref.shares, 0.2, 5)) { problems.push('diluted shares ' + sh + ' do not fit the share count (scale doubtful)'); sh = null; }
+      if (shPrior != null && !near(shPrior, ref.shares, 0.2, 5)) { problems.push('diluted shares a year earlier ' + shPrior + ' do not fit the share count (scale doubtful)'); shPrior = null; }
+    }
+    const bs = {};
+    for (const [k, label] of [['cash', 'cash'], ['short_term_investments', 'short-term investments'], ['debt_current', 'current debt'], ['debt_long_term', 'long-term debt'], ['current_assets', 'current assets'], ['current_liabilities', 'current liabilities'], ['total_assets', 'total assets'], ['equity', 'equity']]) {
+      bs[k] = money('balance sheet ' + label, { printed: BS[k], prior_printed: '', unit: BS.unit })[0];
+    }
+    const ta = bs.total_assets;
+    const inside = (v) => v == null || ta == null || Math.abs(v) <= ta * 1.001;
+    let bsOk = ['cash', 'short_term_investments', 'current_assets', 'current_liabilities', 'equity', 'debt_current', 'debt_long_term'].every((k) => inside(bs[k]))
+      && (bs.cash == null || bs.current_assets == null || bs.cash <= bs.current_assets * 1.001);
+    if (!bsOk) problems.push('balance sheet lines do not add up (a line larger than total assets, or cash larger than current assets)');
+    if (bsOk && ta != null && revenueG > 0 && (ta < revenueG * 0.1 || ta > revenueG * 2000)) { problems.push('total assets ' + ta + ' do not fit the quarter’s revenue (scale doubtful)'); bsOk = false; }
+    const asOf = blankStr(BS.as_of);
+    Object.assign(stmt, { grossProfit: gp, grossProfitPrior: gpPrior, costRev: cor, costRevPrior: corPrior, ebitda: eb, ebitdaPrior: ebPrior,
+      ebitdaLabel: eb != null || ebPrior != null ? blankStr(IM.ebitda_label) : null, dilShares: sh, dilSharesPrior: shPrior,
+      bsAsOf: bsOk && asOf && /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? asOf : null,
+      bsCash: bsOk ? bs.cash : null, bsSti: bsOk ? bs.short_term_investments : null, bsDebtCur: bsOk ? bs.debt_current : null, bsDebtLt: bsOk ? bs.debt_long_term : null,
+      bsCurAssets: bsOk ? bs.current_assets : null, bsCurLiab: bsOk ? bs.current_liabilities : null, bsAssets: bsOk ? ta : null, bsEquity: bsOk ? bs.equity : null });
+  }
   // The label: the company's name for it, or '' when the release was read for
   // it and gives none (null when the cash flow reading was not made: before it
   // was asked for, or its call failed).
@@ -328,6 +392,7 @@ function toRow(ans, text, meta) {
     accn: meta.accn, symbol: meta.symbol, filed: meta.filed, url: meta.url || null, exhibit: meta.exhibit || null,
     isResults: isRes, periodEnd: pe && /^\d{4}-\d{2}-\d{2}$/.test(pe) ? pe : null, periodLabel: blankStr(A.period_label), currency: blankStr(A.currency),
     revenue: revenueG, revenuePrior: revenuePriorG, opIncome, opIncomePrior, netIncome: netIncomeG, netIncomePrior: netIncomePriorG, fcf: fcfG, fcfPrior: fcfPriorG, fcfLabel,
+    ...stmt,
     cfMonths: cfMonths && (ocf != null || ocfPrior != null) ? cfMonths : null, ocf, ocfPrior, capex, capexPrior, capexLabel: capex != null || capexPrior != null ? blankStr(CF.capex_label) : null,
     epsGaap, epsGaapPrior, epsAdj, epsAdjPrior,
     epsAdjLabel: epsAdj != null ? blankStr(J.label) : null, epsAdjExcludes: epsAdj != null ? blankStr(J.excludes) : null,
