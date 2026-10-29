@@ -111,7 +111,11 @@ const DRIVERS = flag('--drivers');
 // (income lines, balance sheet) as well: it reads every release in the window
 // not yet read for them (default since 2025-07-01), writes those columns, and
 // the cash flow columns only where they were never read.
-const STATEMENTS = flag('--statements');
+// --reshares: with the share-count rescale (releases.js, 2026-10-29), read again
+// only the releases read for the statements whose diluted shares are blank, and
+// write the share counts alone (the rest of the stored reading is kept).
+const RESHARES = flag('--reshares');
+const STATEMENTS = flag('--statements') || RESHARES;
 const CASHFLOW = flag('--cashflow') || STATEMENTS;
 const DERIVE_ONLY = flag('--derive-only');
 const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since', '') : STATEMENTS ? '2025-07-01' : '2026-04-01';
@@ -335,7 +339,7 @@ async function cashflowPass() {
   if (!DERIVE_ONLY) {
     if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
     if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
-    const todo = all.filter((r) => (STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
+    const todo = all.filter((r) => (RESHARES ? r.stmtRead === 1 && r.dilShares == null && r.dilSharesPrior == null : STATEMENTS ? r.stmtRead == null : r.fcfLabel == null) && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
     console.log(`[${new Date().toISOString()}] ${STATEMENTS ? 'statements' : 'cash flow'} re-read since ${SINCE}: ${todo.length} of ${all.length} releases; ${PARALLEL} at a time; stop at ${MAX_USD.toFixed(2)} or ${MAX_MIN} min; ` + (COMMIT ? (STATEMENTS ? 'COMMIT (statement columns, and cash flow where never read)' : 'COMMIT (cash flow columns only)') : 'DRY RUN'));
     let done = 0, stated = 0, lines = 0, sheets = 0, failed = 0, stop = null;
     const inflight = new Set();
@@ -349,7 +353,7 @@ async function cashflowPass() {
         console.log(`  ${r.symbol} ${r.filed}: fcf ${b(row.fcf)}` + (row.cfMonths ? ` | ${row.cfMonths}m ocf ${b(row.ocf)} capex ${b(row.capex)}` : ' | no cash flow lines') + (STATEMENTS ? ` | gp ${b(row.grossProfit)} assets ${b(row.bsAssets)} equity ${b(row.bsEquity)}` : '') + (cp.length ? ' | ' + cp.join('; ') : '') + ` | ${got.usd.toFixed(4)}`);
         const freshCf = !STATEMENTS || r.fcfLabel == null;
         if (COMMIT && freshCf) await store.writeReleaseCashFlow(r.accn, row);
-        if (COMMIT && STATEMENTS) await store.writeReleaseStatements(r.accn, row);
+        if (COMMIT && STATEMENTS) await store.writeReleaseStatements(r.accn, RESHARES ? Object.assign({}, r, { dilShares: row.dilShares, dilSharesPrior: row.dilSharesPrior }) : row);
         if (STATEMENTS && row.bsAssets != null) sheets++;
         if (freshCf) Object.assign(r, { fcf: row.fcf, fcfPrior: row.fcfPrior, fcfLabel: row.fcfLabel, cfMonths: row.cfMonths, ocf: row.ocf, ocfPrior: row.ocfPrior, capex: row.capex, capexPrior: row.capexPrior, capexLabel: row.capexLabel });
         done++; if (row.fcf != null) stated++; if (row.cfMonths) lines++;

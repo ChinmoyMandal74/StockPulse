@@ -358,9 +358,22 @@ function toRow(ans, text, meta) {
     if (over(gp, revenueG, 1.05) || over(cor, revenueG, 5) || over(eb, revenueG, 5)) { problems.push('income lines do not fit the quarter’s revenue (scale doubtful)'); gp = cor = eb = null; }
     if (over(gpPrior, revenuePriorG, 1.05) || over(corPrior, revenuePriorG, 5) || over(ebPrior, revenuePriorG, 5)) { problems.push('income lines a year earlier do not fit that quarter’s revenue (scale doubtful)'); gpPrior = corPrior = ebPrior = null; }
     let [sh, shPrior] = money('diluted shares', { printed: (IM.diluted_shares || {}).printed, prior_printed: (IM.diluted_shares || {}).prior_printed, unit: IM.diluted_shares_unit });
+    // THE SHARE COUNT'S OWN SCALE (the backfill, 2026-10-29: about 400 of
+    // 2,860 refused). Releases print shares in thousands or in full under an
+    // "in millions" heading, and the model takes the heading's scale. The
+    // printed digits are kept; when the stated scale does not fit the
+    // company's share count and exactly one other scale does (they are a
+    // thousandfold apart, the band twenty-five-fold), that one is taken.
+    // Neither or both: refused, as before.
+    const rescale = (v) => {
+      if (v == null || near(v, ref.shares, 0.2, 5)) return v;
+      const fits = [1e-9, 1e-6, 1e-3, 1e3, 1e6, 1e9].map((k) => v * k).filter((x) => near(x, ref.shares, 0.2, 5));
+      return fits.length === 1 ? Math.round(fits[0]) : NaN;
+    };
     if (ref.shares > 0) {
-      if (sh != null && !near(sh, ref.shares, 0.2, 5)) { problems.push('diluted shares ' + sh + ' do not fit the share count (scale doubtful)'); sh = null; }
-      if (shPrior != null && !near(shPrior, ref.shares, 0.2, 5)) { problems.push('diluted shares a year earlier ' + shPrior + ' do not fit the share count (scale doubtful)'); shPrior = null; }
+      const a = rescale(sh), b = rescale(shPrior);
+      if (Number.isNaN(a)) { problems.push('diluted shares ' + sh + ' do not fit the share count (scale doubtful)'); sh = null; } else sh = a;
+      if (Number.isNaN(b)) { problems.push('diluted shares a year earlier ' + shPrior + ' do not fit the share count (scale doubtful)'); shPrior = null; } else shPrior = b;
     }
     const bs = {};
     for (const [k, label] of [['cash', 'cash'], ['short_term_investments', 'short-term investments'], ['debt_current', 'current debt'], ['debt_long_term', 'long-term debt'], ['current_assets', 'current assets'], ['current_liabilities', 'current liabilities'], ['total_assets', 'total assets'], ['equity', 'equity']]) {

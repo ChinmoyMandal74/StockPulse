@@ -510,7 +510,9 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   r = Rel.toRow(stA({}, { unit: 'billions' }), t3, mref);
   check('stmt: a balance-sheet scale slip is refused against revenue', r.row.bsAssets === null && r.problems.some((p) => /total assets .* do not fit/.test(p)), r.problems);
   r = Rel.toRow(stA({ diluted_shares_unit: 'thousands' }, {}), t3, mref);
-  check('stmt: a share count off the company is refused', r.row.dilShares === null && r.problems.some((p) => /diluted shares/.test(p)), r.problems);
+  check('stmt: a share count under the wrong scale takes the one scale that fits the company', r.row.dilShares === 7446e6 && r.row.dilSharesPrior === 7466e6 && !r.problems.length, [r.row.dilShares, r.problems]);
+  r = Rel.toRow(stA({}, {}), t3, Object.assign({}, m, { ref: { shares: 2.5e5 } }));
+  check('stmt: a share count no scale fits is refused', r.row.dilShares === null && r.problems.some((p) => /diluted shares/.test(p)), r.problems);
   r = Rel.toRow(stA({ gross_profit: { printed: '92,279', prior_printed: '', unit: 'billions' } }, {}), t3, mref);
   check('stmt: gross profit above revenue is refused', r.row.grossProfit === null && r.problems.some((p) => /income lines do not fit/.test(p)), r.problems);
   r = Rel.toRow(base, t3, m);
