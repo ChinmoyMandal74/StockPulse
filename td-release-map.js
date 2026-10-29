@@ -352,7 +352,6 @@ const BEST = {
   'Shareholder yield': ['Twelve Data', 'Half is already from the filings (buybacks); the dividend half follows Dividend yield.'],
   'Period': ['Release', 'It names the newer quarter first: a median 1 day before the 10-Q and 6 days before Twelve Data.'],
   'Reported': ['Release', 'The day the results 8-K was filed is the report day.'],
-  'Operating margin': ['SEC filings', 'Twelve Data\u2019s is mostly the latest quarter\u2019s, not twelve months\u2019; the filings give the twelve months exactly.'],
   'Qual.': ['Follows its inputs', 'A score of ours; its source is whatever its inputs use.'],
 };
 // WHY TWELVE DATA PARTS FROM THE FILINGS, where it does, as traced while
@@ -394,6 +393,17 @@ function bestOf(o) {
     if (o.vsTd) ev.push('the release on ' + o.vsTd.close + '%');
     return { source: BEST[o.label][0], why: BEST[o.label][1] + (ev.length ? ' Measured: ' + ev.join(', ') + '.' : '') };
   }
+  // The owner's rule, where it applies: say what it would do today.
+  if (o.rule) {
+    const u = o.rule.used, a = o.rule.aside, tot = u.release + u.sec + u.td;
+    const pc = (v) => (tot ? Math.round(100 * v / tot) : 0) + '%';
+    const order = o.status === 'Yes' && o.sec.status === 'Yes' ? 'Release → SEC → Twelve Data' : o.status === 'Yes' ? 'Release → Twelve Data' : 'SEC → Twelve Data';
+    const out = (o.status === 'Yes' && o.sec.status !== 'Yes' ? ' The SEC line is on another definition, so it waits.' : '') + (o.sec.status === 'Yes' && o.status !== 'Yes' ? ' The release does not carry it on the same definition.' : '');
+    const why = 'Today it would use the release for ' + num(u.release) + ' (' + pc(u.release) + '), the SEC data for ' + num(u.sec) + ' (' + pc(u.sec) + '), Twelve Data for ' + num(u.td) + ' (' + pc(u.td) + ').'
+      + (a.waiting + a.scale + a.outvoted ? ' SEC set aside: ' + [a.waiting ? num(a.waiting) + ' not yet on the release’s quarter' : '', a.scale ? num(a.scale) + ' failed the scale check' : '', a.outvoted ? num(a.outvoted) + ' outvoted by the release and Twelve Data' : ''].filter(Boolean).join(', ') + '.' : '')
+      + out + ' ' + (o.sec.vsTd ? 'SEC and Twelve Data agree on ' + o.sec.vsTd.close + '% on the same quarter' + (DISAGREE[o.label] && o.sec.vsTd.close < 97 ? ' (' + DISAGREE[o.label] + ')' : '') + '. ' : '') + releaseEvidence(o);
+    return { source: order, why: why.trim() };
+  }
   const td = o.coverage ? o.coverage.td : null;
   const secOk = o.sec.status === 'Yes' && o.sec.coverage != null && td != null && o.sec.coverage >= 0.8 * td;
   const relOk = o.status === 'Yes' && o.coverage && td != null && o.coverage.rel >= 0.8 * td;
@@ -406,6 +416,7 @@ function bestOf(o) {
   return { source: 'Twelve Data', why: 'The filing sources have it only in part or on another definition. ' + (secEvidence(o) || releaseEvidence(o)) };
 }
 const num = (v) => Number(v).toLocaleString('en-US');
+const kindMoney = (k) => k === 'money' || k === 'mult';
 
 // ---- THE PROPOSALS (2026-10-29, the owner: "I want you propose everything in
 // this page ... If a new data item needs to be extracted highlight that also")
@@ -430,17 +441,17 @@ const P = (now, to, header, text, ex) => ({ now, to, header, text, ex: ex || nul
 const SIG = ' A Signal input: changing its source is the owner\u2019s decision.';
 const PROPOSE = {
   'Market Cap': P('today', 'today', 'Market cap', 'Keep Twelve Data until shares outstanding are extracted; then price \u00d7 the cover-page count is an exact alternative.' + SIG, 'shout'),
-  'Revenue TTM': P('ttm', 'ttm', 'Revenue TTM', 'SEC four quarters, the release while the 10-Q is pending; Twelve Data where neither has it.'),
-  'Gross profit': P('ttm', 'ttm', 'Gross profit TTM', 'Say TTM in the header. SEC where it carries it (695 companies), Twelve Data for the rest.'),
-  'Net income': P('ttm', 'ttm', 'Net income TTM', 'Say TTM in the header. SEC four quarters, the release first; say \u201cattributable to the company\u201d in the hover.' + SIG),
+  'Revenue TTM': P('ttm', 'ttm', 'Revenue TTM', 'By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback.'),
+  'Gross profit': P('ttm', 'ttm', 'Gross profit TTM', 'Say TTM in the header. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. Gross profit is printed in 44% of releases, so the SEC data and Twelve Data carry more of it.'),
+  'Net income': P('ttm', 'ttm', 'Net income TTM', 'Say TTM in the header. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. Say \u201cattributable to the company\u201d in the hover.' + SIG),
   'FCF TTM': P('ttm', 'ttm', 'FCF TTM', 'Decide the measure first: levered (Twelve Data) or operating cash flow less capex (SEC, release first). If unlevered, call it \u201cFCF TTM\u201d and add \u201cLevered FCF\u201d as its own column if wanted.' + SIG),
   'EBITDA': P('ttm', 'ttm', 'EBITDA TTM', 'Build it as operating income plus depreciation and amortization from the filings, twelve months; until then keep Twelve Data. The companies\u2019 adjusted EBITDA stays a release-only figure, labelled as theirs.', 'da'),
-  'Operating cash': P('ttm', 'ttm', 'Op. cash flow TTM', 'Say TTM. SEC four quarters, the release first.'),
+  'Operating cash': P('ttm', 'ttm', 'Op. cash flow TTM', 'Say TTM. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. About 40% of releases print a cash flow statement, so the SEC data carries most of it.'),
   'Revenue / employee': P('ttm', 'ttm', 'Revenue / employee', 'Keep Twelve Data\u2019s head count unless a filing source covers enough companies.', 'emp'),
   'Enterprise value': P('today', 'today', 'Enterprise value', 'Keep Twelve Data until the debt lines are extracted; then market value + total debt \u2212 cash and short-term investments from the filings.', 'debt'),
   'Fwd P/E': P('fwd', 'fwd', 'Fwd P/E', 'Keep Twelve Data: analysts\u2019 estimates have no filing source. Say \u201cnext twelve months\u201d in the hover.' + SIG),
   'Trailing P/E': P('ttm', 'ttm', 'Trailing P/E', 'Merge with Live P/E or drop: Twelve Data\u2019s uses its own week-old price. Live P/E on the SEC\u2019s twelve-month EPS says the same thing better.'),
-  'Live P/E': P('ttm', 'ttm', 'P/E (TTM, today\u2019s price)', 'Today\u2019s price over twelve-month diluted EPS from the SEC (release first).'),
+  'Live P/E': P('ttm', 'ttm', 'P/E (TTM, today\u2019s price)', 'Today\u2019s price over twelve-month diluted EPS. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback.'),
   'P/E vs peers': P('fwd', 'fwd', 'Fwd P/E vs peers', 'Keep; say forward in the header, as it is built on forward P/E.'),
   'PEG': P('fwd', 'fwd', 'PEG', 'Keep Twelve Data: forecast growth.'),
   'P/B': P('qe', 'qe', 'P/B', 'Market value over equity at quarter end from the SEC (release first). Say \u201cbook at quarter end\u201d in the hover.'),
@@ -451,14 +462,14 @@ const PROPOSE = {
   'Earnings yield': P('ttm', 'ttm', 'Earnings yield (TTM)', 'SEC twelve-month EPS over today\u2019s price.'),
   'FCF yield': P('ttm', 'ttm', 'FCF yield (TTM)', 'Follows the free cash flow decision.'),
   'Gross margin': P('ttm', 'ttm', 'Gross margin TTM', 'Say TTM. SEC where it carries gross profit or cost of revenue; Twelve Data for the rest.' + SIG),
-  'Operating margin': P('mixed', 'ttm', 'Op. margin TTM', 'FIX: Twelve Data\u2019s is mostly the latest quarter\u2019s, beside twelve-month gross and profit margins. Make it twelve months from the SEC (operating income over revenue); the values will move. Not a Signal input.'),
-  'Profit margin': P('ttm', 'ttm', 'Profit margin TTM', 'Say TTM. SEC four quarters, release first.' + SIG),
+  'Operating margin': P('mixed', 'ttm', 'Op. margin TTM', 'FIX: Twelve Data\u2019s is mostly the latest quarter\u2019s, beside twelve-month gross and profit margins. Make it twelve months. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. The values will move. Not a Signal input.'),
+  'Profit margin': P('ttm', 'ttm', 'Profit margin TTM', 'Say TTM. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback.' + SIG),
   'FCF margin': P('ttm', 'ttm', 'FCF margin TTM', 'Follows the free cash flow decision.' + SIG),
   'ROE': P('ttm', 'ttm', 'ROE (TTM, avg equity)', 'Twelve-month net income over AVERAGE equity (this quarter end and the same quarter a year earlier, both stored in the SEC data), to match the usual definition.' + SIG),
   'ROA': P('ttm', 'ttm', 'ROA (TTM, avg assets)', 'As ROE, over average total assets.'),
-  'Rev grth Q YoY': P('q', 'q', 'Rev growth (Q on Q a year ago)', 'Keep the quarter. The release first (it is out days before the 10-Q), the SEC once filed.' + SIG),
-  'Earn grth Q YoY': P('q', 'q', 'Net income growth (Q on Q a year ago)', 'Keep the quarter; name it net income growth, which is what both sides measure. Release first, then SEC.' + SIG),
-  'EPS TTM': P('ttm', 'ttm', 'EPS TTM (diluted)', 'SEC: four quarters, or the year, or last year plus this year to date less last year\u2019s; release first.'),
+  'Rev grth Q YoY': P('q', 'q', 'Rev growth (Q on Q a year ago)', 'Keep the quarter. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. Growth from the release\u2019s own two columns, which share one basis.' + SIG),
+  'Earn grth Q YoY': P('q', 'q', 'Net income growth (Q on Q a year ago)', 'Keep the quarter; name it net income growth, which is what both sides measure. By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback.' + SIG),
+  'EPS TTM': P('ttm', 'ttm', 'EPS TTM (diluted)', 'By the owner\u2019s rule: the release, then the SEC data once it has the quarter, Twelve Data as fallback. The SEC side: four quarters, or the year, or last year plus this year to date less last year\u2019s.'),
   'Cash': P('qe', 'qe', 'Cash + ST inv. (Q end)', 'Say \u201cat quarter end\u201d and whether short-term investments are in. After extracting them, the SEC total; the release has it already.', 'sti'),
   'Debt': P('qe', 'qe', 'Total debt (Q end)', 'Define total debt once (current + long-term borrowings, leases apart), extract the missing lines, then take it from the filings everywhere.', 'debt'),
   'Net cash': P('qe', 'qe', 'Net cash (Q end)', 'Follows Cash and Debt.', 'debt'),
@@ -486,15 +497,6 @@ const PROPOSE = {
   'Qual.': P('score', 'score', 'Qual.', 'Moves with its inputs; no change of its own.' + SIG),
 };
 // The plan in order, for the panel above the table.
-const PLAN_V1_UNUSED = [
-  { t: 'One period rule for the screener', d: 'Twelve months (TTM) for size, valuation, margins and returns; the quarter on the same quarter a year earlier for growth and the Last Earning AI Extracted group; at quarter end for the balance sheet; today for anything on the price; forward only for analysts\u2019 figures.' },
-  { t: 'Say the period in every header and hover', d: 'Display text only, as the Proposed header shows; the stored group|label keys behind tiles and the phone keep their names.' },
-  { t: 'Fix Operating margin', d: 'Twelve Data\u2019s is mostly one quarter\u2019s, beside twelve-month margins. Twelve months from the SEC data. Not a Signal input.' },
-  { t: 'Take the statement figures from the SEC data, the release first', d: 'The columns marked SEC filings below, display only. Signal inputs among them wait for the owner.' },
-  { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.' },
-  { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.' },
-  { t: 'Extract the new data items', d: 'Highlighted in the table and listed below: most are SEC concepts (no API credits), one is a release field.' },
-];
 
 // ---- REFINED AFTER TRADINGVIEW (2026-10-29, the owner: "look at what Trading
 // view has done ... and refine your thoughts", "May be we should regroup the
@@ -555,8 +557,8 @@ const PLAN = [
   { t: 'Regroup the screener by statement', d: 'As TradingView does: Overview, Signal, Performance, Technicals, Valuation, Income statement, Profitability, Growth, Balance sheet, a new Cash flow group, Dividends, Latest quarter (the release group), Reporting, Ownership, Long run, Reactions. Group ids stay; moved fields go into FIELD_KEY_MOVED so saved tiles and phone setups follow them.' },
   { t: 'One period a column, said in its header', d: 'A period tag on every header, TradingView-style: TTM, Q YoY, Q end, Now, Fwd. The group banner says the group\u2019s period too (Income statement \u00b7 TTM). Display text only; stored keys keep their names. A per-column period selector, as TradingView has, is a larger build and is left out.' },
   { t: 'Half-yearly reporters on their own period', d: 'Twelve months from the halves (the SEC data\u2019s H and FY rows already allow it) and growth on the half a year earlier, marked as half-yearly in the hover, instead of a quarter they do not report.' },
-  { t: 'Fix Operating margin', d: 'Twelve months from the SEC data; Twelve Data\u2019s is mostly one quarter\u2019s. Not a Signal input.' },
-  { t: 'Take the statement figures from the SEC data, the release first', d: 'The columns marked SEC filings below, display only. Signal inputs among them wait for the owner.' },
+  { t: 'Fix Operating margin', d: 'Twelve months, by the owner’s rule; Twelve Data’s is mostly one quarter’s. Not a Signal input.' },
+  { t: 'Statement figures by the owner\u2019s rule', d: 'The release while it is the newest, the SEC data once it has the quarter and is dependable (restatements included), Twelve Data where neither is (docs/context/data-sources.md). Each row shows what the rule would use today. Display first; Signal inputs wait for the owner.' },
   { t: 'Decide the free cash flow measure', d: 'Levered (Twelve Data) or operating cash flow less capex (the filings). Three columns and two Signal inputs follow it.' },
   { t: 'Define total debt once', d: 'Current and long-term borrowings, leases apart, from the filings. Needs the missing debt lines extracted.' },
   { t: 'Add the missing statement columns', d: 'Operating income, capex, interest cover (from data already stored); EBITDA margin, ROIC and FCF per share once their new data is extracted. Listed below.' },
@@ -652,6 +654,41 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     if (col.q10 && cmp.fields[col.q10]) {
       const f = cmp.fields[col.q10];
       o.vs10q = { figure: col.q10, pairs: f.pairs, within05: f.pairs ? Math.round(1000 * f.bands[1] / f.pairs) / 10 : null };
+    }
+    // THE OWNER'S RULE, SIMULATED (2026-10-29, docs/context/data-sources.md):
+    // for each company, which source the rule would use for this column. Only
+    // sources on the same definition take part (status Yes); Twelve Data is
+    // the fallback. SEC is set aside when it is not yet on the release's
+    // quarter, fails the scale check (over twenty times off the release or
+    // Twelve Data, whichever exist: all of them, so one near-zero figure cannot
+    // condemn it), or is outvoted (the release and Twelve Data agree with
+    // each other and it agrees with neither). Measured at the level of the
+    // column's figure; the build would apply it a quarter at a time.
+    o.rule = null;
+    if (!BEST[col.label] && col.td && (o.status === 'Yes' || o.sec.status === 'Yes')) {
+      const relIn = o.status === 'Yes', secIn = o.sec.status === 'Yes';
+      const tol = col.kind === 'pct' ? 1 : 0.02;
+      const close = (p, q) => (col.kind === 'pct' ? Math.abs(p - q) <= tol : Math.abs(p - q) <= Math.abs(q) * tol + 1e-9);
+      const off20 = (p, q) => p != null && q != null && q !== 0 && p !== 0 && (Math.abs(p / q) > 20 || Math.abs(p / q) < 1 / 20);
+      const u = { release: 0, sec: 0, td: 0, none: 0 }, aside = { waiting: 0, scale: 0, outvoted: 0 }, eg = { scale: [], outvoted: [] };
+      const big = (v) => (Math.abs(v) >= 1e6 ? (v / 1e9).toFixed(2) + 'B' : String(Math.round(v * 100) / 100));
+      for (const s of rows) {
+        const c = ctx.get(s.symbol), x = sctx.get(s.symbol);
+        const rv = relIn && c ? col.relv(s, c) : null;
+        const sv = secIn && x && sm.v ? sm.v(s, x) : null;
+        const tv = col.td(s);
+        let use = null;
+        if (sv != null) {
+          const sameQ = !c || Math.abs(t(x.last.period_end) - t(c.r.period_end)) <= 7 * DAY || t(x.last.period_end) > t(c.r.period_end);
+          if (!sameQ && rv != null) { aside.waiting++; use = 'release'; }
+          else if (kindMoney(col.kind) && (rv != null || tv != null) && (rv == null || off20(sv, rv)) && (tv == null || off20(sv, tv))) { aside.scale++; if (eg.scale.length < 5) eg.scale.push(s.symbol + ' SEC ' + big(sv) + ', release ' + (rv == null ? '—' : big(rv)) + ', Twelve Data ' + (tv == null ? '—' : big(tv))); use = rv != null ? 'release' : tv != null ? 'td' : null; }
+          else if (rv != null && tv != null && close(rv, tv) && !close(sv, rv) && !close(sv, tv)) { aside.outvoted++; if (eg.outvoted.length < 5) eg.outvoted.push(s.symbol + ' SEC ' + big(sv) + ', release ' + big(rv) + ', Twelve Data ' + big(tv)); use = 'release'; }
+          else use = 'sec';
+        } else if (rv != null) use = 'release';
+        else if (tv != null) use = 'td';
+        u[use || 'none']++;
+      }
+      o.rule = { used: u, aside, examples: eg, sources: (relIn ? 'release, ' : '') + (secIn ? 'SEC, ' : '') + 'Twelve Data' };
     }
     o.best = bestOf(o);
     const pr = PROPOSE[col.label];

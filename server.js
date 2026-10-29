@@ -1036,6 +1036,12 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Companies with an SEC value', 14, (r) => (r.sec ? num(r.sec.coverage) : null)],
     ['Best source', 30, (r) => (r.best ? r.best.source : null)],
     ['Why', 70, (r) => (r.best ? r.best.why : null)],
+    ['Rule today: release', 12, (r) => (r.rule ? num(r.rule.used.release) : null)],
+    ['Rule today: SEC', 12, (r) => (r.rule ? num(r.rule.used.sec) : null)],
+    ['Rule today: Twelve Data', 12, (r) => (r.rule ? num(r.rule.used.td) : null)],
+    ['SEC set aside: not yet on the quarter', 14, (r) => (r.rule ? num(r.rule.aside.waiting) : null)],
+    ['SEC set aside: scale check', 12, (r) => (r.rule ? num(r.rule.aside.scale) : null)],
+    ['SEC set aside: outvoted', 12, (r) => (r.rule ? num(r.rule.aside.outvoted) : null)],
     ['Period today', 22, (r) => (r.proposal ? r.proposal.now : null)],
     ['Period proposed', 22, (r) => (r.proposal ? r.proposal.to : null)],
     ['Period changes', 10, (r) => (r.proposal ? (r.proposal.periodChange ? 'Yes' : 'No') : null)],
@@ -1082,7 +1088,7 @@ app.get('/api/sources.xlsx', route(async (req, res) => {
     ['Coverage', 'Companies with a value on each side.'],
     ['Twelve months', 'Four releases in a row summed (each period 75 to 105 days after the one before), the newest within 130 days.'],
     ['SEC vs Twelve Data', 'The SEC filing data\u2019s figure against Twelve Data\u2019s, only where Twelve Data\u2019s most recent quarter is the filings\u2019 newest (within a week).'],
-    ['Best source', 'The SEC data where it is exact and covers at least four fifths of the companies Twelve Data does (the release first while the 10-Q is pending, where it has the figure); otherwise the release; otherwise Twelve Data. Judgment rows say so in Why.'],
+    ['Best source', 'The owner\u2019s rule (docs/context/data-sources.md): the release while it is the newest, the SEC data once it has the quarter and is dependable, Twelve Data where neither is. Only sources on the same definition take part. The SEC data is set aside when not yet on the release\u2019s quarter, more than twenty times off every other source, or outvoted (the release and Twelve Data agree and it agrees with neither). The Rule today columns count the companies each source would serve. Judgment rows (a definition still open, a forward figure) say so in Why.'],
     ['Already from the filings', (D.fromFilings || []).join('; ')],
   ];
   const aboutXml = X.sheetXml(about, { widths: [48, 110] });

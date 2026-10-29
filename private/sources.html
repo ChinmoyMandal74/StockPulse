@@ -89,6 +89,13 @@
     .sm-mv { display: inline-block; margin-top: 6px; margin-right: 6px; font: 600 11px var(--sans); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 50%, transparent); border-radius: 999px; padding: 2px 9px; }
     @media (max-width: 1000px) { .sm-tv { grid-template-columns: 1fr; } }
     .sm-best div { color: var(--muted); max-width: 52ch; }
+    .sm-best b.b-rule { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+    /* The owner's rule, as it would run today: one bar, release / SEC / Twelve Data. */
+    .sm-use-bar { display: flex; height: 7px; border-radius: 4px; overflow: hidden; margin: 2px 0 4px; background: var(--hair); max-width: 52ch; }
+    .sm-use-bar i { display: block; height: 100%; }
+    .sm-use-bar .u-rel { background: var(--accent); } .sm-use-bar .u-sec { background: var(--sky); } .sm-use-bar .u-td { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+    .sm-use-key { font: 11px var(--mono); color: var(--faint); margin-bottom: 4px; }
+    .sm-use-key b { all: unset; color: var(--text); }
     .sm-bar select { font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
     .sm-wrap th, .sm-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; line-height: 1.45; }
     .sm-wrap thead th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; position: sticky; top: 0; background: var(--surface); }
@@ -174,7 +181,17 @@
     }
 
     const exOf = (id) => (DOC.extracts || []).find((e) => e.id === id) || { item: id, from: '' };
-    const bestCls = (b) => (/^SEC/.test(b) ? 'b-sec' : /^Release/.test(b) ? 'b-rel' : /decision/.test(b) ? 'b-dec' : '');
+    const bestCls = (b) => (/\u2192/.test(b) ? 'b-rule' : /^SEC/.test(b) ? 'b-sec' : /^Release/.test(b) ? 'b-rel' : /decision/.test(b) ? 'b-dec' : '');
+    // The rule's usage today as a bar; the examples of the SEC data set aside on hover.
+    function useBar(r) {
+      if (!r.rule) return '';
+      const u = r.rule.used, tot = u.release + u.sec + u.td;
+      if (!tot) return '';
+      const w = (v) => (100 * v / tot).toFixed(1) + '%';
+      const eg = r.rule.examples || {}, tip = [eg.scale && eg.scale.length ? 'Scale check failed: ' + eg.scale.join('; ') : '', eg.outvoted && eg.outvoted.length ? 'Outvoted: ' + eg.outvoted.join('; ') : ''].filter(Boolean).join(' \u2014 ');
+      return '<div class="sm-use-bar" title="' + esc(tip || 'Release ' + u.release + ', SEC ' + u.sec + ', Twelve Data ' + u.td) + '"><i class="u-rel" style="width:' + w(u.release) + '"></i><i class="u-sec" style="width:' + w(u.sec) + '"></i><i class="u-td" style="width:' + w(u.td) + '"></i></div>'
+        + '<div class="sm-use-key">release <b>' + num(u.release) + '</b> \u00b7 SEC <b>' + num(u.sec) + '</b> \u00b7 Twelve Data <b>' + num(u.td) + '</b></div>';
+    }
     function render() {
       const q = $('q').value.trim().toLowerCase();
       const bestSel = $('best').value;
@@ -188,7 +205,7 @@
         html += `<tr>
           <td class="sm-col"><b>${esc(r.label)}</b><code>${esc(r.source)}</code></td>
           <td class="sm-use">${r.signal ? '<span class="sm-sig">Yes</span><div>' + esc(r.signal) + '</div>' : r.signalIndirect ? '<span class="sm-sig ind">Indirect</span><div>' + esc(r.signalIndirect) + '</div>' : '<span class="na">No</span>'}</td>
-          <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b><div>${esc(r.best.why)}</div></td>
+          <td class="sm-best"><b class="${bestCls(r.best.source)}">${esc(r.best.source)}</b>${useBar(r)}<div>${esc(r.best.why)}</div></td>
           <td class="sm-per${r.proposal && r.proposal.periodChange ? ' chg' : ''}">${r.proposal ? esc(r.proposal.now) + (r.proposal.periodChange ? '<span class="to">\u2192 ' + esc(r.proposal.to) + '</span>' : '<span class="to">Keep</span>') : ''}</td>
           <td class="sm-prop">${r.proposal ? '<span class="hdr">' + esc(r.proposal.header) + '</span>' + esc(r.proposal.text) + '<br><span class="sm-mv" title="The proposed group (see Proposed groups above)">' + (r.proposal.groupMoves ? 'Moves to ' : 'Group: ') + esc(r.proposal.group) + '</span>' + (r.proposal.extract ? '<span class="sm-new" title="' + esc(exOf(r.proposal.extract).from) + '">New data: ' + esc(exOf(r.proposal.extract).item) + '</span>' : '') : ''}</td>
           <td><span class="sm-st ${r.status.toLowerCase()}">${esc(r.status)}</span><div class="sm-eq">${esc(r.equivalent)}</div></td>
