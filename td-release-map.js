@@ -583,6 +583,7 @@ const PLAN = [
 // decision or change to the data sources, the periods, the groups or the
 // definitions adds a line here in the same commit, and its PLAN step's status.
 const DECISIONS = [
+  { d: '2026-10-29', who: 'Built', t: 'Banks’ net revenue: the second re-read', x: 'Net revenue built from net interest income plus non-interest income where the direct tag is missing; every company re-read again, no API credits. Now 49 of 153 financial companies: every one that files both lines (Wells Fargo Q3 $21.87B, as released). The rest (insurers, card networks, asset managers, exchanges, Citi, Berkshire, Schwab) headline total revenue, which the rule uses for them.' },
   { d: '2026-10-29', who: 'Built', t: 'The new SEC data items extracted', x: 'Depreciation and amortization, banks’ net revenue, short-term investments, the debt lines (total debt to the owner’s definition, leases apart), and from the cover page shares outstanding, employees and public float; every company re-read once, no API credits. Debt and all built on it, cash, EBITDA, shares outstanding and market cap now follow the owner’s rule on this page. Open: the declared dividend.' },
   { d: '2026-10-29', who: 'Built', t: 'The stock page, hover card, phone and tiles regrouped', x: 'The same groups as the screener. Five field keys moved (size|FCF TTM, size|Operating cash, growth|EPS TTM, size|Enterprise value, own|Book value/share); saved tile and phone setups follow them through FIELD_KEY_MOVED. Neither saved setup in production used a moved key.' },
   { d: '2026-10-29', who: 'Owner', t: 'Free cash flow is operating cash flow less capex', x: 'Not Twelve Data\u2019s levered figure. The FCF columns run release \u2192 SEC; Twelve Data\u2019s figure is another measure, so it is no fallback. The Signal\u2019s two free cash flow inputs stay on Twelve Data until the owner decides the Signal separately.' },
@@ -645,7 +646,7 @@ const FROM_FILINGS = ['Margin change (Profitability)', 'Working capital (Financi
     shout: [...sctx.values()].filter((x) => x.sharesOut).length,
     sti: [...sctx.values()].filter((x) => x.last.short_term_investments != null).length,
     debt: [...sctx.values()].filter((x) => x.totalDebt != null).length,
-    banknet: fin.filter((s) => sctx.get(s.symbol).ttm.netRevenue != null).length + ' of ' + fin.length + ' financial companies',
+    banknet: fin.filter((s) => sctx.get(s.symbol).ttm.netRevenue != null).length + ' of ' + fin.length + ' financial companies (every bank filing both lines; the rest headline total revenue)',
     emp: [...sctx.values()].filter((x) => x.employees).length,
     float: [...secOther.values()].filter((l) => l.some((r) => r.period_type === 'FY' && r.public_float != null && (Date.now() - t(r.period_end)) / DAY < 450)).length,
   };
