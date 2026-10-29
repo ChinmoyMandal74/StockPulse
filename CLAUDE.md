@@ -168,7 +168,7 @@ Verbatim sections of the old file. Three headings also hold unrelated material, 
 
 **Screener front end** — `frontend-layout` · `design-system` · `themes` · `table-specifics` · `screener-drill-down` · `column-groups` (190 KB: every column, plus tiles, views, the filter row, hidden columns) · `reactions-group` · `long-run` (growth over years, the long-run figures from filings) · `corrections` (the Drawdown column, the Corrections and Drawdowns cards) · `screens` · `analysis-screens` (retired) · `the-awesome-oscillator`
 
-**Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list`
+**Fundamentals and the universe** — `fundamentals-data` · `scores-ratings` · `everything-the-profile-call-returns-is-kept-now` · `fundamentals-history` · `which-dates-the-fundamentals-actually-describe` · `the-universe-and-the-ballast-that-has-been-draining-out-of-it` · `the-universe-table` · `adding-a-stock` · `dropping-a-symbol` · `editing-portfolios-does-not-pull` · `the-nasdaq-reference-list` · `data-sources` (the release, the SEC data and Twelve Data: the owner's source rule of 2026-10-29, definitions still open, the plan on `/sources`)
 
 **Refreshing** — `the-refresh-budget` · `a-live-price-pull-is-shallow` · `fast-refresh` · `refresh-one-stock` · `fill-missing` · `intraday-price-refreshes` · `refresh-runs` · `refresh-state` · `the-nightly-job` · `bar-archive` · `price-as-of`
 

@@ -2586,6 +2586,26 @@ by design, since it reports what the laptop's Task Scheduler holds.
 
 Nothing here touches the Signal.
 
+## 54. Fundamentals from the release, then the SEC data, then Twelve Data — 2026-10-29
+
+*Area: Data · Status: Open · Note: the owner set the rule ("take the data from Earning release if that is available as it comes first ... if SEC data exists we should take the data from SEC, if for some reason SEC data is not dependable we should get it from Twelve data") and asked for it documented first: docs/context/data-sources.md*
+
+The design, the measurements and the open decisions are in
+`docs/context/data-sources.md`; the column-by-column plan is the admin page
+`/sources` (`td-release-map.js`). What remains, in order:
+
+- Encode the rule on `/sources` and measure how often each source would be used,
+  and how often the SEC data fails the dependability test.
+- Period tags in every header and the regrouping by statement (display only).
+- The owner's definitions: free cash flow (levered or not), total debt, banks'
+  revenue line.
+- The new SEC concepts (depreciation and amortization, cover-page shares
+  outstanding, short-term investments, the rest of the debt lines) and one
+  `sec-reread.js` pass; the declared dividend as a release field.
+- The display columns onto the rule, a quarter at a time inside twelve-month
+  figures, with the source said in the hover.
+- The Signal's inputs: only on the owner's word, proven behaviourally.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
