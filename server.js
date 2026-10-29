@@ -995,6 +995,84 @@ app.get('/api/sources', route(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   res.json(tdMapMemo);
 }));
+// THE SAME MAP AS AN EXCEL WORKBOOK (2026-10-29, the owner: "a good export to
+// excel button ... so that I can analyse this properly"). Every row, whatever
+// the page's filters, with each measure in its own column and every number a
+// number, so the sheet can sort, filter and sum. A second sheet says how it
+// was measured. Admin only, as the page.
+app.get('/api/sources.xlsx', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.status(403).json({ error: 'Admin only.' });
+  if (tdMapMemo === undefined) { try { tdMapMemo = require('./td-release-map.json'); } catch { tdMapMemo = null; } }
+  const D = tdMapMemo;
+  if (!D) return res.status(404).json({ error: 'Not built yet: run td-release-map.js.' });
+  const X = require('./xlsx.js');
+  const num = (v) => (v == null || !isFinite(Number(v)) ? null : Number(v));
+  const COLS = [
+    ['Group', 18, (r) => r.group],
+    ['Twelve Data column', 22, (r) => r.label],
+    ['Screener field', 20, (r) => r.field],
+    ['Twelve Data source', 44, (r) => r.source],
+    ['Signal input', 12, (r) => (r.signal ? 'Yes' : r.signalIndirect ? 'Indirect' : 'No')],
+    ['Where the Signal reads it', 44, (r) => r.signal || r.signalIndirect || null],
+    ['Equivalent in the release', 14, (r) => r.status],
+    ['Release equivalent', 52, (r) => r.equivalent],
+    ['Shown today', 44, (r) => r.shown],
+    ['10-Q: release figure checked', 26, (r) => (r.vs10q ? r.vs10q.figure : null)],
+    ['10-Q: pairs', 11, (r) => (r.vs10q ? num(r.vs10q.pairs) : null)],
+    ['10-Q: within 0.5% (%)', 13, (r) => (r.vs10q ? num(r.vs10q.within05) : null)],
+    ['Twelve Data: companies compared', 14, (r) => (r.vsTd ? num(r.vsTd.n) : null)],
+    ['Twelve Data: within tolerance (%)', 14, (r) => (r.vsTd ? num(r.vsTd.close) : null)],
+    ['Tolerance', 11, (r) => (r.vsTd ? r.vsTd.tol + (r.vsTd.unit === 'pts' ? ' pts' : '%') : null)],
+    ['Median gap', 11, (r) => (r.vsTd ? num(r.vsTd.median) : null)],
+    ['Gap unit', 9, (r) => (r.vsTd ? (r.vsTd.unit === 'pts' ? 'points' : '%') : null)],
+    ['Companies with a Twelve Data value', 14, (r) => (r.coverage ? num(r.coverage.td) : null)],
+    ['Companies with a release value', 14, (r) => (r.coverage ? num(r.coverage.rel) : null)],
+    ['Companies (funds left out)', 14, (r) => (r.coverage ? num(r.coverage.of) : null)],
+    ['Comments', 80, (r) => r.note],
+  ];
+  const head = COLS.map(([h]) => ({ v: h, s: X.S.head }));
+  const body = D.rows.map((r) => COLS.map(([, , f]) => { const v = f(r); return typeof v === 'number' ? v : v == null || v === '' ? null : String(v); }));
+  const main = X.sheetXml([head, ...body], { widths: COLS.map(([, w]) => w), freeze: 1, tab: true,
+    autoFilter: 'A1:' + X.colName(COLS.length - 1) + (D.rows.length + 1) });
+  const T = D.timing || {};
+  const built = String(D.builtAt || '').slice(0, 16).replace('T', ' ') + ' UTC';
+  const about = [
+    [{ v: 'Twelve Data and the releases', s: X.S.title }],
+    [{ v: 'Built ' + built + ' by td-release-map.js on the local research copy. Admin only.', s: X.S.note }],
+    [],
+    [{ v: 'Figure', s: X.S.head }, { v: 'Value', s: X.S.head }],
+    ['Twelve Data columns', D.rows.length],
+    ['  with an equivalent in the release', D.rows.filter((r) => r.status === 'Yes').length],
+    ['  partly', D.rows.filter((r) => r.status === 'Partly').length],
+    ['  none', D.rows.filter((r) => r.status === 'No').length],
+    ['Signal inputs (direct)', D.rows.filter((r) => r.signal).length],
+    ['Signal inputs (indirect)', D.rows.filter((r) => r.signalIndirect).length],
+    ['Companies scored (funds left out)', num(D.companies)],
+    ['  with a release in the last 130 days', num(D.withReleases)],
+    ['Results releases since ' + D.releasesSince, num(D.releases)],
+    ['  matched to a 10-Q or 10-K quarter', num(D.matched)],
+    ['Release ahead of Twelve Data, median days', num(T.tdMedianDays)],
+    ['Release ahead of Twelve Data, 90th percentile days', num(T.tdP90Days)],
+    ['  releases measured', num(T.tdN)],
+    ['Release ahead of the 10-Q, median days', num(T.filingMedianDays)],
+    ['Release and 10-Q on the same day (%)', num(T.filingSameDayPct)],
+    ['Release ahead of the 10-Q, 90th percentile days', num(T.filingP90Days)],
+    [],
+    [{ v: 'How it is measured', s: X.S.label }],
+    ['10-Q', 'The release figure underneath against the quarter’s first 10-Q or 10-K: the share of pairs within 0.5%.'],
+    ['Twelve Data', 'The release-based column against Twelve Data’s, only where Twelve Data is on the same report (its last report date within five days of the release), so a gap is a definition or a reading, not a lag: the share within 2% (money and multiples) or 1 point (percentages), and the median gap.'],
+    ['Coverage', 'Companies with a value on each side.'],
+    ['Twelve months', 'Four releases in a row summed (each period 75 to 105 days after the one before), the newest within 130 days.'],
+    ['Already from the filings', (D.fromFilings || []).join('; ')],
+  ];
+  const aboutXml = X.sheetXml(about, { widths: [48, 110] });
+  const buf = X.workbook([{ name: 'Columns', xml: main }, { name: 'About', xml: aboutXml }]);
+  logAct(req, 'export', 'sources.xlsx');
+  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.set('Content-Disposition', 'attachment; filename="tickrlab-twelve-data-and-releases-' + String(D.builtAt || '').slice(0, 10) + '.xlsx"');
+  res.set('Cache-Control', 'private, no-store');
+  return res.send(buf);
+}));
 app.get('/news-runs', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   logAct(req, 'page', 'news-runs');

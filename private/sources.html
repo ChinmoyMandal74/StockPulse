@@ -45,6 +45,7 @@
     .sm-chip b { font-family: var(--mono); font-weight: 600; margin-left: 4px; }
     .sm-bar input[type=search] { flex: 1; min-width: 180px; font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
     .sm-bar input[type=search]::placeholder { color: var(--faint); }
+    .sm-xl { white-space: nowrap; }
 
     .sm-wrap { overflow-x: auto; }
     .sm-wrap table { width: 100%; border-collapse: collapse; min-width: 1340px; }
@@ -104,6 +105,7 @@
       <span id="chips"></span>
       <button class="sm-chip" id="sigOnly" type="button" aria-pressed="false">Signal inputs only</button>
       <input type="search" id="q" placeholder="Column or field" aria-label="Find a column" />
+      <a class="btn sm-xl" id="xlsx" href="/api/sources.xlsx" download title="Every row, whatever the filters above, with each measure in its own column: sorts and filters in Excel. A second sheet says how it was measured.">Export to Excel</a>
     </div>
     <div class="bezel"><div class="core" style="padding:0"><div class="sm-wrap" id="tbl"><div class="sm-empty">Reading the map&hellip;</div></div></div></div>
     <p class="sm-foot" id="foot"></p>
