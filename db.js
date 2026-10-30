@@ -2868,6 +2868,23 @@ async function writeJobsDigestMark(day) {
   await init();
   await db.execute({ sql: "insert or replace into app_meta (key, value) values ('jobs_digest_mark', ?)", args: [String(day)] });
 }
+// The nightly's refresh email, held until its later steps are on file
+// (2026-10-30): { runId, subject, text, html, at }, one at a time. Null clears it.
+async function readHeldNightlyMail() {
+  await init();
+  const r = await db.execute({ sql: "select value from app_meta where key = 'nightly_mail_held'" });
+  if (!r.rows.length) return null;
+  try { const v = JSON.parse(String(r.rows[0].value || 'null')); return v && v.runId ? v : null; } catch { return null; }
+}
+async function writeHeldNightlyMail(v) {
+  await init();
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('nightly_mail_held', ?)", args: [JSON.stringify(v || null)] });
+}
+async function setRunReportSent(runId, html) {
+  if (!runId) return;
+  await init();
+  await db.execute({ sql: 'update refresh_runs set report_sent = 1, report_html = ? where id = ?', args: [html || null, runId] });
+}
 async function listSubscribers() {
   await init();
   const r = await db.execute('select * from subscribers order by created_at desc');
@@ -8774,7 +8791,7 @@ module.exports = {
   noteRound,
   finishRun,
   setRunReport,
-  setRunSteps,
+  setRunSteps, readHeldNightlyMail, writeHeldNightlyMail, setRunReportSent,
   runStatus,
   readRuns,
   readRun,

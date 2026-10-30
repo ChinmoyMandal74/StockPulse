@@ -148,6 +148,7 @@ const FUND_ROTATION_DAYS = Math.max(1, Number(process.env.FUND_ROTATION_DAYS) ||
 // The report-triggered refresh (reportdue.js): at most this many companies
 // that just reported are added to a nightly run, about 80 credits each.
 const ReportDue = require('./reportdue.js');
+const NightlySteps = require('./nightlysteps.js');
 const REPORT_REFRESH_MAX = Math.max(0, Number(process.env.REPORT_REFRESH_MAX ?? 100));
 const PROFILE_TTL_MS = FUND_ROTATION_DAYS * 24 * 60 * 60 * 1000;
 // Publishing: set ADMIN_PASSWORD in .env to make the app read-only for the public.
@@ -18126,6 +18127,7 @@ async function runFacts(runId) {
       profileFails: sum(rounds.map((x) => x.profileFails || 0)),
       pricedLive: run.pricesLive || 0,
       trigger: run.trigger || null,
+      kind: run.kind || null,
       link: run.link || null,
       avgRoundMs: timed.length ? Math.round(sum(timed.map((x) => x.ms)) / timed.length) : null,
       maxRoundMs: timed.length ? Math.max(...timed.map((x) => x.ms)) : null,
@@ -18328,6 +18330,8 @@ function refreshReportBodies(r) {
     kv('Prices as of', r.asOf || '—') + kv('Fundamentals', fundLine) +
     '</table>' +
     problems +
+    // The nightly's later steps go here once they are on file (sendHeldNightlyMail).
+    '<!--steps-->' +
     jobBlock +
     // New record closes: the one thing in a run a reader cannot recover by
     // reloading the screener, since by tomorrow a record is simply the high.
@@ -18386,7 +18390,24 @@ async function sendRefreshReport(state, kind = 'all', snap = null) {
     // thirteen emails a trading day would bury the one that matters. Its
     // report is still kept on the run, for /refreshes.
     const to = MAIL_READY && kind !== 'plain' ? await operatorEmail() : null;
-    if (to) {
+    // THE NIGHTLY'S EMAIL WAITS FOR ITS STEPS (2026-10-30, the owner: "The
+    // nightly email does not talk about all the other steps"). The refresh is
+    // one step of a dozen; the rest (SEC filings, short interest, holdings,
+    // insiders, splits, options, the rebuilds) run after this point. So the
+    // email is held and goes out from /api/cron/refresh-steps with every step
+    // in it. If the steps never arrive, the next held email or the 20:00 jobs
+    // email sends it without them.
+    const hold = !!to && kind === 'all' && !!r.job && /^nightly/.test(r.job.kind || '');
+    if (hold) {
+      try {
+        await sendHeldNightlyMail(null);
+        await store.writeHeldNightlyMail({ runId: state.runId, subject, text, html, at: Date.now() });
+        console.log('report: refresh all summary held for the nightly steps');
+      } catch (e) {
+        console.warn('report: could not hold the summary, sending now:', e && e.message);
+        ok = await sendMail({ kind: 'refresh-report', to, subject, text, html });
+      }
+    } else if (to) {
       ok = await sendMail({ kind: 'refresh-report', to, subject, text, html });
       console.log(`report: ${kind === 'all' ? 'refresh all' : 'refresh'} summary ` +
         `${ok ? 'sent to ' + to : 'could not be sent'}`);
@@ -18401,6 +18422,55 @@ async function sendRefreshReport(state, kind = 'all', snap = null) {
     return ok;
   } catch (err) {
     console.warn('report: refresh summary failed (refresh unaffected):', err.message);
+    return false;
+  }
+}
+
+// Every step of a nightly run, for its email: the HTML section and its text lines.
+function nightlyStepsBodies(steps) {
+  const cell = 'padding:3px 10px 3px 0;font-size:13px;vertical-align:top';
+  const list = (steps || []).map((x) => ({ name: NightlySteps.NAMES[x.name] || x.name, ok: x.state === 'ok', ms: x.ms, note: x.note || '' }));
+  const bad = list.filter((x) => !x.ok).length;
+  const head = bad ? `${list.length - bad} of ${list.length} OK, ${bad} to look at` : `all ${list.length} OK`;
+  const html = '<h3 style="margin:22px 0 2px;font-size:14px">Every step</h3>' +
+    `<p style="margin:0 0 8px;font-size:12px;color:#999">${escHtml(head)}, in the order they ran.</p>` +
+    '<table style="border-collapse:collapse">' + list.map((x) =>
+      `<tr><td style="${cell};white-space:nowrap">${escHtml(x.name)}</td>` +
+      `<td style="${cell};white-space:nowrap;font-weight:600;color:${x.ok ? '#137333' : '#b06000'}">${x.ok ? 'OK' : 'Look at'}</td>` +
+      `<td style="${cell};white-space:nowrap;color:#777">${x.ms != null ? escHtml(secs(x.ms)) : ''}</td>` +
+      `<td style="${cell};color:#777">${escHtml(x.note.slice(0, 220))}</td></tr>`).join('') +
+    '</table>';
+  const text = ['', `Every step (${head}):`].concat(list.map((x) =>
+    `  ${x.ok ? 'OK     ' : 'LOOK AT'} ${x.name}${x.ms != null ? ' (' + secs(x.ms) + ')' : ''} -- ${x.note.slice(0, 220)}`));
+  return { html, text: text.join('\n') };
+}
+
+// Sends the held nightly email: with `runId`, the one for that run, with its
+// steps; with null, whatever is held (an older run whose steps never came),
+// adding its steps if they are on file by now. Never throws.
+async function sendHeldNightlyMail(runId, steps) {
+  try {
+    const held = await store.readHeldNightlyMail();
+    if (!held || (runId && held.runId !== runId)) return false;
+    await store.writeHeldNightlyMail(null);
+    if (!steps) { const run = await store.readRun(held.runId).catch(() => null); steps = run && run.steps; }
+    let { html, text } = held;
+    if (Array.isArray(steps) && steps.length) {
+      const b = nightlyStepsBodies(steps);
+      html = html.replace('<!--steps-->', () => b.html);
+      text += '\n' + b.text;
+    } else {
+      text += '\n\nThe later steps did not report.';
+      html = html.replace('<!--steps-->', '<p style="margin:14px 0 0;font-size:13px;color:#b06000">The later steps did not report.</p>');
+    }
+    const to = MAIL_READY ? await operatorEmail() : null;
+    if (!to) return false;
+    const ok = await sendMail({ kind: 'refresh-report', to, subject: held.subject, text, html });
+    console.log(`report: nightly summary with its steps ${ok ? 'sent to ' + to : 'could not be sent'}`);
+    if (ok) await trackSafe(store.setRunReportSent(held.runId, html));
+    return ok;
+  } catch (e) {
+    console.warn('report: held nightly summary failed:', e && e.message);
     return false;
   }
 }
@@ -20743,6 +20813,11 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
   const dry = req.query.dry === '1';
   const force = !!(req.body && req.body.force === true) || !!day;
   const today = JobsDigest.etDay(now);
+  // A nightly email held over two hours for steps that never came goes now.
+  if (!dry && !day) {
+    const held = await store.readHeldNightlyMail().catch(() => null);
+    if (held && Date.now() - held.at > 2 * 3600e3) await sendHeldNightlyMail(null);
+  }
   if (!dry && !force && (await store.readJobsDigestMark()) === today) return res.json({ sent: false, already: today });
   const [refresh, news, tone, releases, report, mail] = await Promise.all([
     store.readRuns(since).catch(() => []), store.readNewsRuns(since).catch(() => []), store.readToneRuns(since).catch(() => []),
@@ -20772,7 +20847,9 @@ app.post('/api/cron/refresh-steps', route(async (req, res) => {
     at: num(s.at), ms: num(s.ms),
   }));
   const ok = await store.setRunSteps(runId, steps);
-  res.status(ok ? 200 : 404).json({ ok, steps: steps.length });
+  // The run's email was held for these (sendRefreshReport); it goes now.
+  const mailed = ok ? await sendHeldNightlyMail(runId, steps) : false;
+  res.status(ok ? 200 : 404).json({ ok, steps: steps.length, mailed });
 }));
 
 app.post('/api/cron/release-digest', route(async (req, res) => {
