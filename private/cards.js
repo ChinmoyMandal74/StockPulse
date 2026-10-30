@@ -890,31 +890,35 @@
     const TOPICS = [
       {
         id: 'what', name: 'What Tickr Lab is',
+        // REWRITTEN FROM THE HOME PAGE (2026-10-30, the owner: "redo the Intro ->
+        // What Tickr Lab is based on the home page now that lot of things have
+        // changed"). The old deck promised a blog and an invite code, both gone,
+        // and missed the stock pages, the filings, the AI reading and the cards.
+        // Each line below restates a line of private/landing.html; a claim that
+        // leaves the home page leaves here too. No counts that drift (symbols,
+        // fields): only the 23 sections, which the home page states as fixed.
         slides: [
           { kind: 'cover', kick: 'Introducing', title: 'Tickr Lab',
-            sub: 'A stock screener that shows its work — every signal, every rule, every number, explained on click.' },
-          { kind: 'steps', kick: 'The short version', title: 'Five things<br><span class="dim">it does</span>',
+            sub: 'Every US stock, measured the same way after every close. A screener, a page for every company and post-ready visuals, all in one place.' },
+          { kind: 'steps', label: 'What you get', kick: 'What you get', title: 'All of it<br><span class="dim">in one place</span>',
             rows: [
-              ['screen', 'var(--green)', 'Screened nightly', 'Returns, trend and a 1–10 Quality score after every close, on an absolute scale — a 7 means the same thing in any market.'],
-              ['rules', 'var(--accent)', 'A signal that shows its work', 'One fixed, published rule set, and every signal names the ONE rule that fired.'],
-              // (2026-10-11 review.) This row read "Twenty years of receipts: trend
-              // ribbons, backtests and an indicator lab". The backtest is admin
-              // only, so a card was promising members a page they cannot open.
-              // It now names what every member has had since: the filings and the
-              // drawdown history, both on each stock's own page.
-              ['chart', 'var(--amber)', 'The filings and the drawdowns', 'Revenue, profit and margins by quarter from each company’s SEC filings, and every correction in five years with its depth and length.'],
-              ['ask', 'var(--accent-2)', 'Alerts on what you follow', 'Watch one stock for one thing — a price level, a moving-average cross, a change of signal — and see it when it happens.'],
-              ['guest', 'var(--red)', 'Try it in one click', 'A guest preview: twenty real stocks across every sector, the whole table and every signal. No account, no card.'],
+              ['screen', 'var(--accent)', 'One table, every stock', 'Returns, trend, valuation, growth, margins and ownership after every close. Click any number to see its history.'],
+              ['list', 'var(--accent-2)', 'A page for every company', 'Twenty-three sections: the chart, filings, earnings, insiders, institutions, funds, short interest, options and news.'],
+              ['rules', 'var(--amber)', 'A Signal with its reason', 'One of six words from a fixed set of rules, with the rule that fired shown beside it. A reading of strength, not a tip.'],
+              ['ask', 'var(--green)', 'Results and news, read by AI', 'Each results release read the day it is filed and checked against its own text. Each article summed up in two sentences.'],
+              ['chart', 'var(--accent)', 'Cards for social posts', 'Market, sector and single-stock visuals from the latest close, in feed, square and story sizes.'],
             ] },
-          // The posts are PUBLIC first and the list is the convenience, which
-          // is the order the slide states them in. Saying the terms on the
-          // slide rather than at the form is the point: a list nobody
-          // regrets joining is cheaper than one people report.
-          { kind: 'stmts', kick: 'Where the writing goes', title: 'Read it,<br><span class="dim">or have it sent</span>',
+          { kind: 'stmts', label: 'Who it is for', kick: 'Who it is for', title: 'Three kinds<br><span class="dim">of people</span>',
             rows: [
-              ['y', 'A blog anyone can read', 'What the screen found, and what it did not. No sign-in, no paywall, nothing behind a form.'],
-              ['y', 'New posts by email', 'Confirmed opt-in, one click to leave, and nothing else ever goes to that address.'],
-              ['y', 'The failures are published too', 'The research that came back flat is written up beside the research that did not.'],
+              ['y', 'Individual investors', 'Follow US stocks without twenty open tabs: one table, a page for every company, a reason behind every number.'],
+              ['y', 'Content creators', 'Post-ready market visuals made from tonight’s data, each dated and carrying a not-advice line.'],
+              ['y', 'Students and researchers', 'Years of daily prices, filings and AI-read results, already joined up. Write in about a project.'],
+            ] },
+          { kind: 'stmts', label: 'From the public record', kick: 'Where it comes from', title: 'From the<br><span class="dim">public record</span>',
+            rows: [
+              ['y', 'Read from the SEC every day', '10-Ks and 10-Qs, 8-K announcements, 5% holders, insider trades, institutions’ 13Fs and fund holdings.'],
+              ['y', 'Prices through the day', 'Daily closes going back years, refreshed every half hour while the market is open.'],
+              ['y', 'Short interest and options', 'Twice-monthly short positions from FINRA, and open calls and puts by expiry from the OCC.'],
             ] },
           { kind: 'close' },
         ],
@@ -1065,8 +1069,10 @@
         '<div class="fl">No account needed</div>' +
         '<div class="fa">Try it free</div>' +
         '<div class="fw">Twenty real stocks, the whole table and every signal — one click on the login page.</div></div>' +
-        '<p class="s-sub wide" style="margin-top:30px">Want the whole screen? Ask for an invite code on the sign-up form and it is emailed to you. '
-        + 'Or have the write-ups sent instead: <b>tickrlab.com/blog</b> — confirmed opt-in, one click to leave, and nothing else ever goes to that address.</p>';
+        // (2026-10-30) It asked for an invite code and pointed at the blog; sign-up
+        // is open now and the blog is empty, so it says what the home page says.
+        '<p class="s-sub wide" style="margin-top:30px">Want every stock? Join the beta at <b>tickrlab.com</b>. '
+        + 'Free while in beta, no card asked for.</p>';
     }
 
     function tplIntro() {
@@ -17564,7 +17570,8 @@
     // drifting in silence.
     benchmarks: () => BENCH.map((b) => b.slice()),
     // shape only — the host builds its own slide picker from this
-    topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.kind) })),
+    // A slide's own label, where it has one, names it in the studio's list.
+    topics: () => TOPICS.map((t) => ({ id: t.id, name: t.name, slides: t.slides.map((sl) => sl.label || sl.kind) })),
     // The studio builds its two pickers from this, so a topic or a slide
     // added above appears there with no second edit.
     // THE SLIDE CARRIES ITS OWN LABEL, so the studio's picker needs no
