@@ -20677,9 +20677,15 @@ function jobsDigestEmail(d) {
 }
 app.post('/api/cron/jobs-digest', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
-  const now = Date.now(), since = now - 26 * 3600e3;
+  // body.day 'YYYY-MM-DD': a sample built as of 20:00 Eastern that day, its
+  // subject marked [Sample], never marking a day as sent. The laptop report
+  // is the newest, not that day's.
+  const day = req.body && /^\d{4}-\d\d-\d\d$/.test(String(req.body.day || '')) ? String(req.body.day) : null;
+  const asOf = day ? ['-04:00', '-05:00'].map((o) => Date.parse(day + 'T20:00:00' + o)).find((t) => Schedule.eastern(new Date(t)).minute === 1200) : null;
+  if (day && !(asOf < Date.now())) return res.status(400).json({ error: 'A sample day must be in the past.' });
+  const now = asOf || Date.now(), since = now - 26 * 3600e3;
   const dry = req.query.dry === '1';
-  const force = !!(req.body && req.body.force === true);
+  const force = !!(req.body && req.body.force === true) || !!day;
   const today = JobsDigest.etDay(now);
   if (!dry && !force && (await store.readJobsDigestMark()) === today) return res.json({ sent: false, already: today });
   const [refresh, news, tone, releases, report, mail] = await Promise.all([
@@ -20692,8 +20698,8 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
-  const sent = await sendMail({ kind: 'jobs-digest', to, subject: e.subject, text: e.text, html: e.html });
-  if (sent) { try { await store.writeJobsDigestMark(today); } catch { /* bookkeeping never fails the send */ } }
+  const sent = await sendMail({ kind: 'jobs-digest', to, subject: (day ? '[Sample] ' : '') + e.subject, text: e.text, html: e.html });
+  if (sent && !day) { try { await store.writeJobsDigestMark(today); } catch { /* bookkeeping never fails the send */ } }
   res.json({ sent: !!sent, issues: d.issues.length, runs: d.runs, due: d.due });
 }));
 
