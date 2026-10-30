@@ -20,6 +20,7 @@
 // jobsdigest-test.js.
 'use strict';
 const S = require('./schedule.js');
+const NightlySteps = require('./nightlysteps.js');
 
 const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
 const etMin = (t) => S.eastern(new Date(t)).minute;
@@ -51,7 +52,7 @@ const ADAPT = {
 };
 function refreshRecs(runs, kind, now) {
   return (runs || []).filter((r) => r.kind === kind && r.trigger === 'scheduled').map((r) => ({
-    at: r.startedAt, credits: n0(r.credits),
+    at: r.startedAt, credits: n0(r.credits), steps: r.steps || null, endedAt: r.endedAt || null,
     state: r.status === 'complete' ? 'ok' : r.status === 'running' && now - (r.updatedAt || r.startedAt) < RUNNING_MS ? 'running' : 'problem',
     why: r.status === 'complete' ? null : (r.status || 'unknown') + (r.error ? ': ' + String(r.error).slice(0, 140) : ''),
   }));
@@ -61,6 +62,28 @@ function endState(r, now) {
   if (r.error) return { state: 'problem', why: String(r.error).slice(0, 140) };
   if (!r.endedAt) return now - r.startedAt < RUNNING_MS ? { state: 'running' } : { state: 'problem', why: 'did not finish' };
   return { state: 'ok' };
+}
+
+// One nightly run's steps: each named for the email, a problem step joining
+// the run's problems. A finished refresh whose steps are not on file yet is
+// still on its later steps for two hours; after that they were never saved.
+const STEPS_LATE_MS = 2 * 3600e3;
+function nightlySteps(slot, r, now, problems) {
+  if (!Array.isArray(r.steps)) {
+    const waiting = r.state === 'running' || (r.endedAt && now - r.endedAt < STEPS_LATE_MS) || (!r.endedAt && r.state !== 'problem');
+    if (!waiting) problems.push(slot + ' the step results were not saved');
+    return { slot, steps: null, pending: !!waiting };
+  }
+  const steps = r.steps.map((x) => ({ name: NightlySteps.NAMES[x.name] || x.name, state: x.state === 'ok' ? 'ok' : 'problem', note: x.note || '' }));
+  for (const x of steps) if (x.state !== 'ok') problems.push(slot + ' ' + x.name + ': ' + x.note.slice(0, 140));
+  return { slot, steps, pending: false };
+}
+function stepsPhrase(stepRuns) {
+  const done = stepRuns.filter((x) => x.steps);
+  if (!done.length) return stepRuns.some((x) => x.pending) ? 'steps still running' : '';
+  const all = done.reduce((k, x) => k + x.steps.length, 0);
+  const ok = done.reduce((k, x) => k + x.steps.filter((y) => y.state === 'ok').length, 0);
+  return ok + ' of ' + all + ' steps OK';
 }
 
 const money = (v) => '$' + (v < 10 ? v.toFixed(2) : Math.round(v).toLocaleString('en-US'));
@@ -96,7 +119,7 @@ function build(src, nowMs) {
         if (s != null && m - s <= window) bySlot.get(s).push(r);
       }
       const t = { credits: 0, spent: 0, count: 0, left: 0 };
-      const missed = [], problems = [];
+      const missed = [], problems = [], stepRuns = [];
       let ran = 0, running = 0, lastAt = 0;
       for (const [s, rs] of bySlot) {
         if (!rs.length) { missed.push(fmtT(s)); continue; }
@@ -106,13 +129,16 @@ function build(src, nowMs) {
           if (r.at > lastAt) { lastAt = r.at; t.left = n0(r.left); }
           if (r.state === 'running') running++;
           if (r.state === 'problem') problems.push(fmtT(s) + ' ' + (r.why || 'failed'));
+          if (job.id === 'nightly') stepRuns.push(nightlySteps(fmtT(s), r, now, problems));
         }
       }
       credits += t.credits; spent += t.spent; runs += ran; due += slots.length;
       const status = missed.length || problems.length ? 'issue' : running ? 'running' : 'ok';
       const runsText = slots.length ? ran + ' of ' + slots.length + ' ran' : 'none due today';
+      const stepText = stepsPhrase(stepRuns);
+      const what = slots.length && ran ? PHRASE[job.id](t) + (stepText ? '; ' + stepText : '') : '';
       jobs.push({ id: job.id, name: job.name, host: job.host, due: slots.length, ran, running, missed, problems, status,
-        runs: runsText, what: slots.length && ran ? PHRASE[job.id](t) : '', totals: t });
+        runs: runsText, what, totals: t, ...(job.id === 'nightly' ? { steps: stepRuns } : {}) });
       for (const m of missed) issues.push(job.name + ': the ' + m + ' run did not start');
       for (const p of problems) issues.push(job.name + ': ' + p);
     }

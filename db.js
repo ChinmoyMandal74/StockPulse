@@ -1927,6 +1927,10 @@ const ADDED_COLUMNS = [
   // serve time, so improving the rule improves every name that was never
   // edited, and an edited one is never quietly overwritten.
   'alter table names add column short_name text',
+  // The nightly's steps, each with its outcome (2026-10-30, the owner wanted
+  // the daily jobs email to cover every step): JSON, written once by the
+  // nightly ping when its last step ends. Null on other runs and older ones.
+  'alter table refresh_runs add column steps text',
 ];
 
 let ready = null;
@@ -5273,7 +5277,7 @@ async function runStatus(runId) {
 
 const RUN_COLS = `id, kind, trigger, actor, started_at, updated_at, ended_at, status, total, targets,
   loaded, rounds, refused, credits, profiles, prices_live, error, failed_symbols, still_missing,
-  report_sent, link`;
+  report_sent, link, steps`;
 
 function runFromRow(row) {
   const num = (v) => (v == null ? null : Number(v));
@@ -5286,7 +5290,16 @@ function runFromRow(row) {
     profiles: num(row.profiles), pricesLive: num(row.prices_live), error: row.error || null,
     failedSymbols: arr(row.failed_symbols), stillMissing: arr(row.still_missing),
     reportSent: row.report_sent == null ? null : !!Number(row.report_sent), link: row.link || null,
+    steps: arr(row.steps),
   };
+}
+
+// The nightly ping's steps and their outcomes, onto its run.
+async function setRunSteps(runId, steps) {
+  if (!runId) return false;
+  await init();
+  const r = await db.execute({ sql: 'update refresh_runs set steps = ? where id = ?', args: [JSON.stringify(steps || []), runId] });
+  return (r.rowsAffected ?? 0) > 0;
 }
 
 // Anything left running and silent is marked abandoned first, so every reader
@@ -8761,6 +8774,7 @@ module.exports = {
   noteRound,
   finishRun,
   setRunReport,
+  setRunSteps,
   runStatus,
   readRuns,
   readRun,

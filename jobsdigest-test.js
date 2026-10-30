@@ -11,7 +11,9 @@ const ok = (c, m, x) => { if (c) { pass++; console.log('  ok  ', m); } else { fa
 // Thursday 2026-10-29, 20:00 Eastern (EDT, UTC-4).
 const NOW = Date.parse('2026-10-29T20:00:00-04:00');
 const at = (hm, day = '2026-10-29') => Date.parse(day + 'T' + hm + ':00-04:00');
-const refresh = (kind, hm, extra) => Object.assign({ kind, trigger: 'scheduled', status: 'complete', startedAt: at(hm), updatedAt: at(hm) + 60000, credits: kind === 'nightly' ? 20000 : 1286 }, extra);
+const STEP_KEYS = ['sec daily', 'calendar', 'refresh', 'sec', 'short', 'holdings', 'insider', 'splits', 'options', 'months', 'figures', 'index P/E', 'news archive'];
+const okSteps = () => STEP_KEYS.map((name) => ({ name, state: 'ok', note: 'up to date' }));
+const refresh = (kind, hm, extra) => Object.assign({ kind, trigger: 'scheduled', status: 'complete', startedAt: at(hm), updatedAt: at(hm) + 60000, endedAt: at(hm) + 60000, credits: kind === 'nightly' ? 20000 : 1286 }, kind === 'nightly' ? { steps: okSteps() } : {}, extra);
 const intradayTimes = S.runsOn(S.JOBS.find((j) => j.id === 'intraday'), 'Thu').map(S.fmt);
 const toneTimes = S.runsOn(S.JOBS.find((j) => j.id === 'tone'), 'Thu').map(S.fmt);
 const tone = (hm, extra) => Object.assign({ startedAt: at(hm), endedAt: at(hm) + 1500000, scored: 300, spent: 0.1, left: 0, stop: 'done', error: null }, extra);
@@ -44,7 +46,8 @@ ok(job(d, 'nightly').runs === '2 of 2 ran' && job(d, 'intraday').runs === '14 of
 ok(job(d, 'news').runs === '4 of 4 ran' && job(d, 'news').totals.count === 1200, 'headline batches count as one run each, their headlines summed', job(d, 'news'));
 ok(job(d, 'tone').runs === toneTimes.length + ' of ' + toneTimes.length + ' ran', 'tone: every hourly run', job(d, 'tone').runs);
 ok(job(d, 'releases').what === '100 results releases read, $0.60', 'releases: what they read and spent', job(d, 'releases').what);
-ok(job(d, 'nightly').what === '40,000 Twelve Data credits', 'nightly: the credits', job(d, 'nightly').what);
+ok(job(d, 'nightly').what === '40,000 Twelve Data credits; 26 of 26 steps OK', 'nightly: the credits and the steps', job(d, 'nightly').what);
+ok(job(d, 'nightly').steps.length === 2 && job(d, 'nightly').steps[1].slot === '16:00' && job(d, 'nightly').steps[0].steps[3].name === 'SEC filings rotation', 'every step of each run, named for the email', job(d, 'nightly').steps);
 ok(realIssues(d).length === 0 && d.jobs.every((j) => j.status === 'ok'), 'a clean day: nothing to look at', d.issues);
 ok(d.mail.sent === 1 && d.mail.failed === 0, 'the day’s mail counted', d.mail);
 ok(!d.jobs.some((j) => j.id === 'digest' || j.id === 'schedule' || j.id === 'watchdog'), 'only jobs with run records get a row');
@@ -126,6 +129,26 @@ ok(job(d, 'nightly').runs === '1 of 1 ran' && job(d, 'intraday').runs === 'none 
 const dj = S.JOBS.find((j) => j.id === 'digest');
 ok(dj && dj.host === 'fly' && S.runsOn(dj, 'Sun').map(S.fmt).join() === '20:00' && S.runsOn(dj, 'Wed').map(S.fmt).join() === '20:00', 'the email: 20:00 every day on Fly.io');
 ok(S.drift({ at: 1, tasks: [] }).jobs.digest.status === 'fly', 'drift: a fly job with no laptop task is on Fly.io, not Vercel');
+
+const NS = require('./nightlysteps.js');
+const st = (name, lines) => NS.stepFrom(name, lines, 0, 5000);
+ok(st('sec', ['sec        up to date -- 3 refetched in 1 batch(es)']).state === 'ok' && st('sec', ['sec        up to date -- 3 refetched in 1 batch(es)']).note === 'up to date -- 3 refetched in 1 batch(es)', 'a step that went through is OK, its line without the label');
+ok(st('sec', ['sec        40 refetched in 30 batch(es) (cap) -- more next run']).state === 'ok', 'a step that hit its cap is still OK');
+ok(st('short', ['short      2026-10-15 is dated but not published yet -- holding 2026-09-30']).state === 'ok', 'short interest not yet published is OK');
+for (const line of ['options    stopped after 3 batch(es) -- timed out', 'holdings   REFUSED the file -- too few rows', 'short      FINRA unreachable (x) -- holding y', 'months     HTTP 500', 'figures    not built -- no rows', 'splits     3 fetched, 1 failed (ABC), 0 still due', 'calendar   not read -- no key', 'insider    stopped -- the SEC is rate-limiting; resumes next run', 'news archi skipped -- boom'])
+  ok(st('x', [line]).state === 'problem', 'a problem: ' + line.slice(11, 50));
+ok(st('months', []).state === 'problem' && st('months', []).note === 'said nothing', 'a step that said nothing is a problem');
+ok(st('holdings', ['holdings   SPY as of 2026-10-29 -- 503 holdings', 'holdings   qqq skipped -- timed out']).state === 'problem', 'one bad line of two makes the step a problem');
+src = clean(); src.refresh[1] = refresh('nightly', '16:00', { steps: okSteps().map((x) => x.name === 'options' ? { name: 'options', state: 'problem', note: 'stopped after 3 batch(es) -- timed out' } : x) });
+d = J.build(src, NOW);
+ok(job(d, 'nightly').status === 'issue' && realIssues(d).includes('Nightly refresh: 16:00 Options open interest: stopped after 3 batch(es) -- timed out'), 'a problem step is named to look at', d.issues);
+ok(/25 of 26 steps OK/.test(job(d, 'nightly').what), 'and counted', job(d, 'nightly').what);
+src = clean(); delete src.refresh[1].steps; src.refresh[1].endedAt = NOW - 30 * 60000;
+d = J.build(src, NOW);
+ok(job(d, 'nightly').status === 'ok' && job(d, 'nightly').steps[1].pending && /13 of 13 steps OK/.test(job(d, 'nightly').what), 'a refresh finished half an hour ago is still on its later steps', job(d, 'nightly'));
+src = clean(); delete src.refresh[0].steps;
+d = J.build(src, NOW);
+ok(realIssues(d).includes('Nightly refresh: 04:00 the step results were not saved') && !job(d, 'nightly').steps[0].pending, 'steps missing long after the refresh are named', d.issues);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

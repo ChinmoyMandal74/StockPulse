@@ -20666,12 +20666,25 @@ function jobsDigestEmail(d) {
   const look = k ? `<div class="em-panel"${st(`margin:0 0 18px;padding:10px 14px;border-left:3px solid ${JD_AMBER};background:${MC.panel}`)}>`
     + `<div class="em-warn"${st(`font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${JD_AMBER};margin-bottom:6px`)}>To look at</div>`
     + d.issues.slice(0, 20).map((x) => `<div${st(`font-size:13.5px;color:${MC.body};margin:3px 0`)}>${mailEsc(x)}</div>`).join('') + '</div>' : '';
+  // Every step of each nightly run, the owner's ask: a table a run.
+  const nightly = d.jobs.find((j) => j.id === 'nightly');
+  const stepRuns = (nightly && nightly.steps) || [];
+  const stepTables = stepRuns.map((x) => `<div${st(`margin:22px 0 4px;font-size:14px;font-weight:700;color:${MC.ink}`)}>${mailEsc(nightly.name)} at ${mailEsc(x.slot)}, step by step</div>`
+    + (x.steps
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse')}>`
+        + x.steps.map((s) => `<tr>${td(mailEsc(s.name), `color:${MC.ink}`)}${tag(s.state === 'ok' ? 'OK' : 'Check', s.state === 'ok' ? MC.mute : JD_AMBER)}${td(`<span${st(`font-size:12.5px;color:${MC.mute}`)}>${mailEsc(s.note.slice(0, 160))}</span>`)}</tr>`).join('')
+        + '</table>'
+      : `<div${st(`font-size:13px;color:${MC.mute}`)}>${x.pending ? 'Still running its later steps.' : 'Its step results were not saved.'}</div>`)).join('');
   const body = look + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse')}>`
-    + `<tr>${th('Job')}${th('')}${th('Today')}</tr>${rows.join('')}</table>`
+    + `<tr>${th('Job')}${th('')}${th('Today')}</tr>${rows.join('')}</table>` + stepTables
     + (site ? `<div${st('margin-top:18px')}>${mailButton(site + '/schedule', 'Open the schedule')}</div>` : '');
   const lines = [].concat(k ? ['To look at:'].concat(d.issues.slice(0, 20).map((x) => '  - ' + x), ['']) : [],
     d.jobs.map((j) => `${j.name}: ${j.runs}${j.what ? ' (' + j.what + ')' : ''}${j.status === 'issue' ? '  CHECK' : ''}`),
-    [`Laptop tasks: ${lapOk ? 'OK' : 'check'}. ${lapAt}`, `Emails: ${mailLine}`], site ? ['', site + '/schedule'] : []);
+    [`Laptop tasks: ${lapOk ? 'OK' : 'check'}. ${lapAt}`, `Emails: ${mailLine}`],
+    ...stepRuns.map((x) => ['', `${nightly.name} at ${x.slot}, step by step:`].concat(x.steps
+      ? x.steps.map((s) => `  ${s.state === 'ok' ? 'OK   ' : 'CHECK'} ${s.name}: ${s.note.slice(0, 160)}`)
+      : [x.pending ? '  Still running its later steps.' : '  Its step results were not saved.'])),
+    site ? ['', site + '/schedule'] : []);
   const note = 'Sent to the site’s operator every evening at 8 PM Eastern by the scheduler on Fly.io.';
   return { subject, html: emailShell({ heading: 'Scheduled jobs, ' + when, intro, body, note }), text: textShell({ heading: 'Scheduled jobs, ' + when, intro, lines, note }) };
 }
@@ -20701,6 +20714,22 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
   const sent = await sendMail({ kind: 'jobs-digest', to, subject: (day ? '[Sample] ' : '') + e.subject, text: e.text, html: e.html });
   if (sent && !day) { try { await store.writeJobsDigestMark(today); } catch { /* bookkeeping never fails the send */ } }
   res.json({ sent: !!sent, issues: d.issues.length, runs: d.runs, due: d.due });
+}));
+// The nightly ping's steps (SEC daily, the calendar, the refresh, and every
+// phase after it), each with its outcome, saved onto its run once the last
+// one ends. The jobs email reads them.
+app.post('/api/cron/refresh-steps', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const runId = Number(req.body && req.body.runId);
+  const raw = Array.isArray(req.body && req.body.steps) ? req.body.steps : null;
+  if (!Number.isInteger(runId) || runId <= 0 || !raw) return res.status(400).json({ error: 'A run id and its steps.' });
+  const num = (v) => (Number.isFinite(Number(v)) && v != null ? Math.round(Number(v)) : null);
+  const steps = raw.slice(0, 30).filter((s) => s && /^[A-Za-z][A-Za-z ./]{0,29}$/.test(String(s.name || ''))).map((s) => ({
+    name: String(s.name), state: s.state === 'ok' ? 'ok' : 'problem', note: String(s.note || '').slice(0, 300),
+    at: num(s.at), ms: num(s.ms),
+  }));
+  const ok = await store.setRunSteps(runId, steps);
+  res.status(ok ? 200 : 404).json({ ok, steps: steps.length });
 }));
 
 app.post('/api/cron/release-digest', route(async (req, res) => {

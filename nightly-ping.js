@@ -118,7 +118,14 @@ function fromEnvFile(key) {
   return '';
 }
 
+// The step now running, if any: what it says is kept as its outcome
+// (nightlysteps.js), and the steps go onto the run at the end.
+const NightlySteps = require('./nightlysteps.js');
+let STEP = null;
+const STEPS = [];
+
 function say(line) {
+  if (STEP) STEP.lines.push(line);
   const stamp = new Date().toLocaleString('en-CA', {
     timeZone: 'America/New_York', hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -602,12 +609,41 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         if (!r.ok || !j) { say(`months     HTTP ${r.status}`); return; }
         say(j.built ? `months     ${j.groups} groups over ${j.months} months, ${j.companies} companies, ${Math.round((j.ms || 0) / 1000)}s` : `months     not built -- ${j.reason || j.error || 'no reason given'}`);
       }
+      // The refresh itself is a step too: done, or the reason it gave up.
+      STEPS.push(Object.assign(NightlySteps.stepFrom('refresh', [], refreshAt, Date.now()),
+        why ? { state: 'problem', note: why } : { state: 'ok', note: lastRound || 'complete' }));
       for (const [name, fn] of [['sec', secRotate], ['short', shortRotate], ['holdings', holdingsRotate], ['insider', insiderRotate], ['splits', splitRotate], ['options', optionsRotate], ['months', groupMonths], ['figures', groupFigures], ['index P/E', indexPe], ['news archive', newsArchive]]) {
-        try {
-          await fn();
-        } catch (e) {
-          say(`${name.padEnd(10)} skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`);
-        }
+        await step(name, fn);
+      }
+      await saveSteps();
+    }
+
+    // One step: everything it says is its outcome. A throw is a skip.
+    async function step(name, fn) {
+      const at = Date.now();
+      STEP = { lines: [] };
+      try {
+        await fn();
+      } catch (e) {
+        say(`${name.slice(0, 10).padEnd(10)} skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`);
+      }
+      const s = NightlySteps.stepFrom(name, STEP.lines, at, Date.now());
+      STEP = null;
+      STEPS.push(s);
+    }
+    // Onto the run, for the jobs email. Non-fatal: the log still has it all.
+    async function saveSteps() {
+      if (!runId) { say('steps      not saved -- the refresh gave no run id'); return; }
+      try {
+        const r = await fetch(`${base}/api/cron/refresh-steps`, {
+          method: 'POST', signal: AbortSignal.timeout(60000),
+          headers: { Authorization: 'Bearer ' + secret, 'content-type': 'application/json' },
+          body: JSON.stringify({ runId, steps: STEPS }),
+        });
+        const bad = STEPS.filter((s) => s.state !== 'ok').map((s) => s.name);
+        say(r.ok ? `steps      ${STEPS.length} saved to run ${runId}${bad.length ? '; to look at: ' + bad.join(', ') : ', all OK'}` : `steps      not saved -- HTTP ${r.status}`);
+      } catch (e) {
+        say(`steps      not saved -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`);
       }
     }
 
@@ -616,22 +652,24 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     // that just reported (reportdue.js), so this run pulls their figures and
     // the snapshot it writes carries them. SEC requests only, no Twelve Data
     // credits, and non-fatal: a failure leaves the rotation as it was.
-    try { await secDaily(); } catch (e) { say(`sec daily  skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`); }
+    await step('sec daily', secDaily);
 
     // THE EARNINGS CALENDAR, ALSO BEFORE THE ROTATION (2026-10-28, the owner
     // chose confirmed report days for the Signal's Earnings soon rule): the
     // server reads Alpha Vantage (else Nasdaq), keeps the listing and writes
     // each listed day into the profile, so the rotation's snapshot carries
     // it. One call, no Twelve Data credits, non-fatal.
-    try {
+    await step('calendar', async () => {
       const r = await fetch(`${base}/api/earnings-calendar/refresh`, { method: 'POST', signal: AbortSignal.timeout(120000), headers: { Authorization: 'Bearer ' + secret } });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j) say(`calendar   HTTP ${r.status}`);
       else if (j.skipped) say(`calendar   skipped -- ${j.reason || 'a refresh is running'}`);
       else if (!j.ok) say(`calendar   not read -- ${j.reason || 'no reason given'}`);
       else say(`calendar   ${j.universe} tracked companies listed by ${j.source} (of ${j.listed}); ${j.changed} dates written (${j.replacedEstimate} estimates replaced, ${j.moved} moved), ${Math.round((j.ms || 0) / 1000)}s`);
-    } catch (e) { say(`calendar   skipped -- ${(e && e.message) ? String(e.message).slice(0, 110) : String(e)}`); }
+    });
 
+    const refreshAt = Date.now();
+    let lastRound = null;
     say(`starting ${FULL ? 'FULL sweep' : 'rotation'} against ${base}`);
     let resp = await call(FULL ? '?start=1&full=1' : '?start=1');
     if (resp.j && resp.j.runId) runId = resp.j.runId;
@@ -665,6 +703,7 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
         }
       } else {
         say(`round ${round}  ${j.loaded}/${j.total} profiles in ${resp.secs}s`);
+        lastRound = `${j.loaded}/${j.total} profiles in ${round} round${round === 1 ? '' : 's'}`;
         if (j.done) {
           say(`DONE       ${j.already ? 'already ' + j.already : 'complete'} -- the server has sent the report`);
           await tailPhases();

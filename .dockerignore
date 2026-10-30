@@ -3,6 +3,7 @@
 *
 !schedule.js
 !nightly-ping.js
+!nightlysteps.js
 !intraday-ping.js
 !news-ping.js
 !digest-ping.js
