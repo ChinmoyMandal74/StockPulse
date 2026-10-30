@@ -211,7 +211,15 @@ const SYMBOL_RE = /^[A-Z0-9.\-]{1,12}$/;
 // Registration gate. When SIGNUP_CODE is set, a new account must supply it —
 // that is what makes this a door rather than an open sign-up sheet. Unset (the
 // default) leaves registration open, which is fine locally but not in public.
-const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
+//
+// SWITCHED OFF 2026-10-30 (the owner: "I want to open the app for everyone,
+// disable the Invite code feature, I might bring it back later"). The code
+// stays in Vercel's SIGNUP_CODE untouched; set INVITE_CODE_ON back to true and
+// push to bring it back. With it off every code path below reads as "no code
+// set": no code field on sign-up or /join, no request link, the access mail
+// says none is needed.
+const INVITE_CODE_ON = false;
+const SIGNUP_CODE = INVITE_CODE_ON ? (process.env.SIGNUP_CODE || '') : '';
 // Approval was mandatory from 2026-09-14 until 2026-09-26, when the owner
 // turned it off for the public launch: a gate somebody has to click is a gate
 // people wait behind, and one registrant had already been pending for days.
@@ -3429,7 +3437,7 @@ app.get('/api/auth/google/selftest', requireAdmin, route(async (req, res) => {
 app.get('/api/auth/google/pending', route(async (req, res) => {
   const p = GOOGLE_READY ? readPending(parseCookies(req)[GOOGLE_PENDING_COOKIE]) : null;
   res.set('Cache-Control', 'no-store');
-  res.json(p ? { waiting: true, email: p.email, name: p.name || null } : { waiting: false });
+  res.json(p ? { waiting: true, email: p.email, name: p.name || null, codeRequired: !!SIGNUP_CODE } : { waiting: false });
 }));
 
 app.post('/api/auth/google/finish', route(async (req, res) => {

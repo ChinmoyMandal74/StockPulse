@@ -22,3 +22,9 @@ Owner's request: someone should be able to ask for access by giving an email add
 **Where**: `server.js` block `// ---- asking for an invite code` (above the `/api/users` routes, below `requireAdmin`); `db.js` `noteAccessRequest`, `listAccessRequests`, `readAccessRequest`, `markAccessRequestSent`, `deleteAccessRequest`; `public/login.html` `requestAccess`; `private/users.html` `loadRequests`.
 
 **Not built**: a request form on the landing page (it links to `/login`), and any automatic approval.
+
+## Invite code switched off (2026-10-30)
+
+The owner opened sign-up to everyone: "disable the Invite code feature, I might bring it back later". `INVITE_CODE_ON = false` in server.js makes `SIGNUP_CODE` read as empty whatever Vercel holds; the code itself stays in Vercel's `SIGNUP_CODE`, untouched. With approval also off (since 2026-09-26) registration is open, and the startup warning about wide-open registration is expected. Email verification and the terms tick still apply. `/join` (the Google step) now asks for the code only when `/api/auth/google/pending` says `codeRequired`, and otherwise just asks for the terms. Help and Privacy are worded to hold either way.
+
+**To bring it back:** set `INVITE_CODE_ON = true` and push. The sign-up field, the request link, `/join`'s field and the access mail all follow `SIGNUP_CODE`.

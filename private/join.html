@@ -136,10 +136,13 @@
       $('body').innerHTML =
         '<h1>One more thing</h1>' +
         '<p class="who">Google says you are <b>' + esc(p.email) + '</b>.<br>' +
-        'Tickr Lab is invite-only just now, so enter the code you were sent to finish setting up.</p>' +
-        '<div class="jfield"><label for="code">Invite code</label>' +
+        // The code field only while the invite code is on (codeRequired).
+        (p.codeRequired
+          ? 'Tickr Lab is invite-only just now, so enter the code you were sent to finish setting up.</p>' +
+            '<div class="jfield"><label for="code">Invite code</label>' +
         '<input type="text" id="code" autocomplete="off" autocapitalize="none" autocorrect="off" ' +
-        'spellcheck="false" placeholder="Ask whoever invited you" /></div>' +
+        'spellcheck="false" placeholder="Ask whoever invited you" /></div>'
+          : 'Agree to the terms below to finish setting up your account.</p>') +
         // UNTICKED and required: the account is not created without it.
         '<div class="chk"><label for="terms"><input type="checkbox" id="terms" />' +
         '<span>I am at least 18 and I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of use</a> ' +
@@ -149,7 +152,7 @@
         '<p class="jnote">Not you? <a href="/login">Start again</a>.</p>';
 
       const go = $('go'), msg = $('msg'), code = $('code');
-      code.focus();
+      if (code) code.focus();
       let busy = false;
 
       async function submit() {
@@ -164,7 +167,7 @@
         try {
           const r = await fetch('/api/auth/google/finish', {
             method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ code: code.value, terms: $('terms').checked === true }),
+            body: JSON.stringify({ code: code ? code.value : '', terms: $('terms').checked === true }),
           });
           const d = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(d.error || 'That did not work. Please try again.');
@@ -185,7 +188,7 @@
         }
       }
       go.addEventListener('click', submit);
-      code.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      if (code) code.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
     })();
   </script>
 </body>
