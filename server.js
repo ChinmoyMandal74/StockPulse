@@ -616,7 +616,7 @@ app.get('/api/public-stats', route(async (req, res) => {
   }
 }));
 
-// Every figure the /about page prints, so none of them is typed into its prose.
+// Every figure the home page and the Tour print, so none of them is typed into their prose.
 // The universe grows and the archive deepens between deploys, and a stale claim
 // on a public page is worse than no claim at all.
 //
@@ -756,9 +756,10 @@ app.get('/api/about-stats', route(async (req, res) => {
   }
 }));
 
-app.get('/about', (req, res) => {
-  res.sendFile(path.join(__dirname, 'private', 'about.html'));
-});
+// The About page was removed on 2026-10-30 (the owner: "Remove the about page
+// and remove all links to about page"). Old links and search results land on
+// the home page instead of a 404.
+app.get('/about', (req, res) => res.redirect(301, '/home'));
 
 // Public, unguarded, and deliberately NOT logged: a legal page is not activity
 // worth recording, and a privacy page that logs you reading it is a poor joke.
@@ -893,7 +894,6 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar', '/onboarding.html': '/onboarding',
                       // The public pages have canonical addresses of their own.
                       '/blog.html': '/blog', '/landing.html': '/', '/post.html': '/blog',
-                      '/about.html': '/about',
                       '/privacy.html': '/privacy', '/terms.html': '/terms',
                       '/alerts.html': '/alerts',
                       '/posts.html': '/posts',
@@ -2029,7 +2029,7 @@ app.get('/sitemap.xml', route(async (req, res) => {
   const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    [url(base + '/'), url(base + '/about'), url(base + '/blog'), url(base + '/results'),
+    [url(base + '/'), url(base + '/blog'), url(base + '/results'),
       url(base + '/privacy'), url(base + '/terms'),
       ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
     ].join('\n') + '\n</urlset>\n');

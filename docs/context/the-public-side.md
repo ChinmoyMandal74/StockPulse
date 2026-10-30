@@ -160,3 +160,7 @@ The owner: *"I want to include Students and Researchers, I want to let them that
 ## Compared section removed (2026-10-30)
 
 The "Compared · Where Tickr Lab fits" table (Tickr Lab beside Yahoo Finance, Google Finance and TradingView) was taken off the home page at the owner's request, with its `.cmp` styles. The measured day line in How soon a quarter shows up (`#earnings`) stays.
+
+## The About page, removed (2026-10-30)
+
+The owner: "Remove the about page and remove all links to about page". `private/about.html` is deleted; `/about` answers a 301 to `/home` so old links and search results land somewhere; it is off the sitemap; the links on the sign-in page ("What is Tickr Lab?"), the Privacy and Terms bars and footers, and the home page footer are gone. `/api/about-stats` stays: the home page and the Tour read it. The page is in git history if it is ever wanted again.
