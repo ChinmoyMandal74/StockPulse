@@ -70,7 +70,9 @@ const disputed = (a, b) => a != null && b != null && (Math.sign(a) !== Math.sign
 // Nothing confirms it and it is more than half again, or under two thirds of, Twelve Data's
 // (or of the other sign): not dependable, Twelve Data's is kept.
 const farFromTd = (v, td) => td != null && td !== 0 && (v / td > 1.5 || v / td < 1 / 1.5);
-const gapOk = (a, b) => { const g = (t(b) - t(a)) / DAY; return g >= 75 && g <= 105; };
+// One quarter apart: 75 to 120 days (a 52/53-week calendar's sixteen-week
+// quarter runs about 112: Costco, PepsiCo, Kroger, AutoZone).
+const gapOk = (a, b) => { const g = (t(b) - t(a)) / DAY; return g >= 75 && g <= 120; };
 const STALE_DAYS = 200;      // a newest quarter older than this is not current
 const SEC_SINCE_DAYS = 800;  // two years of quarters, and the year before for a restated year-ago
 const REL_SINCE_DAYS = 480;  // five releases: four quarters and one before for a year-to-date cash flow
@@ -260,6 +262,13 @@ function forCompany(row, secRows, rels, today) {
   const f = {};
   // TWELVE MONTHS, where the newest four quarters run in a row.
   const four = n >= 3 && gapOk(tl[n - 3].end, tl[n - 2].end) && gapOk(tl[n - 2].end, tl[n - 1].end) && gapOk(tl[n - 1].end, tl[n].end) ? [n - 3, n - 2, n - 1, n] : null;
+  // THE CASH FLOW LINES' FALLBACK WINDOW (2026-10-29): a release that prints
+  // no cash flow statement (Intel's for September) leaves the newest quarter
+  // without one; operating and free cash flow then take the four quarters to
+  // the quarter before, all filed, and say so (their own period end), rather
+  // than going blank. Revenue and net income keep the newest four.
+  const fourPrev = n >= 4 && gapOk(tl[n - 4].end, tl[n - 3].end) && gapOk(tl[n - 3].end, tl[n - 2].end) && gapOk(tl[n - 2].end, tl[n - 1].end) ? [n - 4, n - 3, n - 2, n - 1] : null;
+  const CF_FALLBACK = new Set(['operatingCashFlowTtm', 'fcfTtm']);
   const T = {};
   if (four) {
     // A split inside the window leaves the quarters' EPS on two share counts.
@@ -273,7 +282,8 @@ function forCompany(row, secRows, rels, today) {
       // its disputes take the release, and no unconfirmed test applies.
       const td = field === '_op' ? (num(row.operatingMargin) != null && T.revenueTtm ? num(row.operatingMargin) / 100 * T.revenueTtm[0] : null)
         : field === 'fcfTtm' ? null : num(row[field]);
-      const x = ttm(tl, four, line, fin, td);
+      let x = ttm(tl, four, line, fin, td), win = null;
+      if (x.v == null && CF_FALLBACK.has(field) && fourPrev) { x = ttm(tl, fourPrev, line, fin, td); win = tl[n - 1].end; }
       if (x.v == null) continue;
       // Twenty times off Twelve Data is a unit, not a company, whatever
       // agrees with it (Berkshire's EPS is per A share in its filings and
@@ -282,10 +292,10 @@ function forCompany(row, secRows, rels, today) {
       let v = x.v, code = codeOf(x.from);
       if (x.rel != null && td != null && close(x.rel, td) && !close(v, x.rel) && !close(v, td)) { v = x.rel; code = 'o'; }
       else if (!x.confirmed && farFromTd(v, td)) continue;
-      T[field] = [v, code];
+      T[field] = win ? [v, code, win] : [v, code];
     }
   }
-  for (const k of TTM_FIELDS) if (T[k]) f[k] = [k === 'dilutedEpsTtm' ? Math.round(T[k][0] * 100) / 100 : Math.round(T[k][0]), T[k][1]];
+  for (const k of TTM_FIELDS) if (T[k]) f[k] = [k === 'dilutedEpsTtm' ? Math.round(T[k][0] * 100) / 100 : Math.round(T[k][0]), T[k][1]].concat(T[k][2] ? [T[k][2]] : []);
   // GROWTH: the newest quarter against the same quarter a year earlier. The
   // release's own two columns first (printed on one basis, a restatement
   // already in its year-ago figure), unless the SEC data has that quarter and
@@ -378,8 +388,9 @@ function forCompany(row, secRows, rels, today) {
   if (T.grossProfitTtm && rev) setPct('grossMargin', pctOf(T.grossProfitTtm[0] / rev[0]), code2(T.grossProfitTtm, rev));
   if (T.netIncomeTtm && rev) setPct('profitMargin', pctOf(T.netIncomeTtm[0] / rev[0]), code2(T.netIncomeTtm, rev));
   if (T.fcfTtm) {
-    const r0 = rev ? rev[0] : num(row.revenueTtm);
-    if (r0 != null && r0 > 0) f.fcfMargin = [pctOf(T.fcfTtm[0] / r0), code2(T.fcfTtm, rev)];
+    // Over revenue for the same four quarters: the fallback window's own.
+    const r0 = T.fcfTtm[2] && fourPrev ? ttm(tl, fourPrev, 'revenue', fin, null).v : rev ? rev[0] : num(row.revenueTtm);
+    if (r0 != null && r0 > 0) f.fcfMargin = [pctOf(T.fcfTtm[0] / r0), code2(T.fcfTtm, rev)].concat(T.fcfTtm[2] ? [T.fcfTtm[2]] : []);
   }
   // ROE: net income over twelve months against the average of equity now and
   // a year earlier (the newest equity alone where the year-ago one is not
@@ -391,7 +402,7 @@ function forCompany(row, secRows, rels, today) {
     setPct('roe', pctOf(T.netIncomeTtm[0] / avg), code2(T.netIncomeTtm, B.equity));
   }
   const cap = num(row.marketCap);
-  if (usd && cap > 0 && T.fcfTtm) f.fcfYield = [pctOf(T.fcfTtm[0] / cap), T.fcfTtm[1]];
+  if (usd && cap > 0 && T.fcfTtm) f.fcfYield = [pctOf(T.fcfTtm[0] / cap), T.fcfTtm[1]].concat(T.fcfTtm[2] ? [T.fcfTtm[2]] : []);
   if (usd && cap > 0) {
     if (T.revenueTtm && T.revenueTtm[0] > 0) f.priceToSales = [Math.round(cap / T.revenueTtm[0] * 100) / 100, T.revenueTtm[1]];
     if (B.equity && B.equity[0] > 0) f.priceToBook = [Math.round(cap / B.equity[0] * 100) / 100, B.equity[1]];
@@ -452,22 +463,24 @@ function apply(row, entry) {
     for (const k of FIELDS) o[k] = row[k] == null ? null : row[k];
     row.srcTd = o;
   }
-  const src = {};
+  const src = {}, qs = {};
   for (const k of FIELDS) {
     const x = entry && entry.f ? entry.f[k] : null;
-    if (x) { row[k] = x[0] == null ? null : x[0]; src[k] = x[1]; }
+    if (x) { row[k] = x[0] == null ? null : x[0]; src[k] = x[1]; if (x[2]) qs[k] = x[2]; }
     else if (NO_TD.has(k) && entry) { row[k] = null; src[k] = 'n'; }
     else row[k] = row.srcTd[k];
   }
   row.src = entry ? src : null;
   row.srcQ = entry ? entry.q : null;
+  // A field on its own, older window (the cash flow fallback): its end.
+  row.srcQs = entry && Object.keys(qs).length ? qs : null;
 }
 // Twelve Data's own figures back on the row, and the marks gone: what the
 // stored snapshot keeps (computeStocks, after the Signal is scored).
 function restore(row) {
   if (!row || !row.srcTd) return;
   Object.assign(row, row.srcTd);
-  delete row.srcTd; delete row.src; delete row.srcQ;
+  delete row.srcTd; delete row.src; delete row.srcQ; delete row.srcQs;
 }
 
 module.exports = { V, FIELDS, TTM_FIELDS, GROWTH_FIELDS, QE_FIELDS, DERIVED, NO_TD, SIGNAL_SET, SIGNAL_KEPT, forCompany, build, apply, restore, timeline, SEC_SINCE_DAYS, REL_SINCE_DAYS };

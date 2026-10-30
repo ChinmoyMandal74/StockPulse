@@ -13648,6 +13648,11 @@ const SecQuality = require('./secquality.js');
 // that is luck, not a contract.
 const secAddress = (s) => (/<([^>]+)>/.exec(String(s || '')) || [, s])[1] || '';
 const SEC_CONTACT = secAddress(process.env.REPORT_TO || process.env.MAIL_FROM || '').trim();
+// Companies whose filing history sits under a predecessor CIK after a
+// reorganisation (2026-10-29): ExxonMobil Holdings Corp (CIK 2115436) became
+// the registrant for XOM in 2026; every 10-Q and 10-K before is Exxon Mobil
+// Corp's (CIK 34088). The SEC reader reads both and merges.
+const SEC_PREDECESSOR = { XOM: [34088] };
 const SEC_UA = String(process.env.SEC_UA || (SEC_CONTACT ? `Tickr Lab (${SEC_CONTACT})` : '')).trim();
 const SEC_READY = !!SEC_UA;                       // SEC refuses an undeclared bot
 const SEC_BATCH = Math.max(1, Math.min(20, Number(process.env.SEC_BATCH) || 5));
@@ -13917,7 +13922,21 @@ async function secFetchOne(symbol) {
     const cur = SecFacts.currencyOf(facts);
     const conv = !!cur && cur !== 'USD' && Fx.supports(cur);
     const opts = conv ? { fx: await fxFor(cur), fxCurrency: cur } : undefined;
-    const rows = SecFacts.normalise(facts, sym, opts);
+    let rows = SecFacts.normalise(facts, sym, opts);
+    // A PREDECESSOR REGISTRANT (2026-10-29): a company that reorganised under a
+    // new holding company keeps its filing history under the old CIK. Read it
+    // too and keep every row the new one lacks; where both filed a period, the
+    // newest filing wins as it always does (latestFilled). Sequential, one more
+    // file, and a failure keeps the new registrant's rows alone.
+    for (const old of SEC_PREDECESSOR[sym] || []) {
+      try {
+        const pr = await fetch('https://data.sec.gov/api/xbrl/companyfacts/CIK' + String(old).padStart(10, '0') + '.json', {
+          headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+        if (!pr.ok) continue;
+        const have = new Set(rows.map((x) => x.accn + '|' + x.periodType + '|' + x.periodEnd));
+        for (const x of SecFacts.normalise(await pr.json(), sym, opts)) if (!have.has(x.accn + '|' + x.periodType + '|' + x.periodEnd)) rows.push(x);
+      } catch (e) { /* the new registrant's rows stand */ }
+    }
     const filer = { taxonomy: SecFacts.taxonomyOf(facts), currency: cur };
     // A currency with no rate source is recorded as exactly that.
     if (!rows.length && cur && cur !== 'USD' && !conv) {

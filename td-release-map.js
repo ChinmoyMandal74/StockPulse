@@ -48,7 +48,7 @@ function context(list) {
   if ((Date.now() - t(last.filed)) / DAY > 130) return null;
   const c = { r: last, ttm: {} };
   const five = list.slice(-5);
-  const gapOk = (a, b) => { const g = (t(b.period_end) - t(a.period_end)) / DAY; return g >= 75 && g <= 105; };
+  const gapOk = (a, b) => { const g = (t(b.period_end) - t(a.period_end)) / DAY; return g >= 75 && g <= 120; };
   // The quarter's operating cash flow: a three-month statement directly, a
   // year to date less the release before (three months shorter, a quarter back).
   const qOcf = (i) => { const x = five[i]; if (!x || x.ocf == null || !x.cf_months) return null; if (x.cf_months === 3) return x.ocf;
@@ -262,7 +262,7 @@ function secContext(qs, others) {
   const last = qs[qs.length - 1];
   if ((Date.now() - t(last.period_end)) / DAY > 200) return null;
   const x = { last, ttm: {} };
-  const gapOk = (a, b) => { const g = (t(b.period_end) - t(a.period_end)) / DAY; return g >= 75 && g <= 105; };
+  const gapOk = (a, b) => { const g = (t(b.period_end) - t(a.period_end)) / DAY; return g >= 75 && g <= 120; };
   const four = qs.slice(-4);
   let chain = four.length === 4;
   for (let k = 1; chain && k < 4; k++) if (!gapOk(four[k - 1], four[k])) chain = false;

@@ -75,7 +75,7 @@
     // recent as the newest fiscal year.
     let ttm = null;
     const four = q.slice(0, 4);
-    const inRow = four.length === 4 && four.every((r, i) => !i || (days(r.periodEnd, four[i - 1].periodEnd) >= 60 && days(r.periodEnd, four[i - 1].periodEnd) <= 110));
+    const inRow = four.length === 4 && four.every((r, i) => !i || (days(r.periodEnd, four[i - 1].periodEnd) >= 60 && days(r.periodEnd, four[i - 1].periodEnd) <= 120));
     if (inRow && (!fy[0] || four[0].periodEnd >= fy[0].periodEnd)) {
       const p = four.map(pick);
       const all = (f) => (p.every((x) => x[f] != null) ? p.reduce((s, x) => s + x[f], 0) : null);

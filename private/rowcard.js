@@ -1806,8 +1806,16 @@
   function srcNote(s, key) {
     const code = s && s.src ? s.src[key] : null;
     if (!code) return '';
-    const q = s.srcQ || '';
+    // A cash flow figure on its own, earlier window (the newest quarter's
+    // release printed no cash flow statement): its own end, and why.
+    const own = s.srcQs && s.srcQs[key];
+    const q = own || s.srcQ || '';
     const ttm = !!SRC_TTM[key];
+    if (own && code !== 'n') {
+      const td0 = s.srcTd ? s.srcTd[key] : null;
+      const tdTxt0 = !ok(td0) ? '' : SRC_MONEY[key] ? fmtMktCap(td0, s.currency) : SRC_PCT[key] ? td0.toFixed(1) + '%' : td0.toFixed(2);
+      return 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings: the newest quarter’s results release, to ' + (s.srcQ || '') + ', printed no cash flow statement.' + (tdTxt0 ? ' Twelve Data: ' + tdTxt0 + '.' : '');
+    }
     const text = {
       s: ttm ? 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings.' : 'At ' + q + ', from the company’s 10-Q or 10-K.',
       r: ttm ? 'Four quarters to ' + q + ': the newest from the results release (its 10-Q not filed yet), the rest from the filings.' : 'At ' + q + ', from the results release (its 10-Q not filed yet).',

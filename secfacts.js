@@ -40,7 +40,14 @@ const CONCEPTS = {
   epsDiluted: ['EarningsPerShareDiluted', 'IncomeLossFromContinuingOperationsPerDilutedShare'],
   operatingCashFlow: ['NetCashProvidedByUsedInOperatingActivities',
     'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'],
-  capex: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets'],
+  // The last three (2026-10-29): Lilly files its capital spending only as
+  // "other" property, plant and equipment, Verizon as "other" productive
+  // assets; without them their free cash flow was blank. Last in the list, so
+  // a company filing the plain tag keeps it.
+  capex: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets',
+    'PaymentsToAcquireOtherPropertyPlantAndEquipment', 'PaymentsToAcquireOtherProductiveAssets',
+    // A utility's capital spending is its construction (Con Edison).
+    'PaymentsForConstructionInProcess'],
   assets: ['Assets'],
   liabilities: ['Liabilities'],
   equity: ['StockholdersEquity',
@@ -271,7 +278,10 @@ function periodType(start, end) {
   if (!start) return 'I';                       // instant: a balance-sheet date
   const days = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
   if (!Number.isFinite(days) || days < 0) return null;
-  if (days <= 110) return 'Q';
+  // Up to 120 days (2026-10-29): a 52/53-week calendar's sixteen-week quarter
+  // (Costco, PepsiCo, Kroger, AutoZone) runs about 112 days and was read as a
+  // half year. A real half is about 182.
+  if (days <= 120) return 'Q';
   if (days <= 200) return 'H';
   if (days <= 290) return '9M';
   if (days <= 400) return 'FY';
@@ -530,7 +540,7 @@ function deriveQuarters(rows) {
     for (let i = 1; i < chain.length; i++) {
       const prev = chain[i - 1], cur = chain[i];
       const gap = Math.round((Date.parse(cur.periodEnd) - Date.parse(prev.periodEnd)) / 86400000);
-      if (gap < 60 || gap > 110) continue;          // not one quarter apart
+      if (gap < 60 || gap > 120) continue;          // not one quarter apart (a sixteen-week quarter is ~112 days)
       const target = filedQ.get(cur.periodEnd);
       const diff = {};
       for (const c of CONCEPT_KEYS) {
