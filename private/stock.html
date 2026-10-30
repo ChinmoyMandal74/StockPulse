@@ -1787,7 +1787,9 @@
           : null;
       };
       const parts = [];
-      const ttm = d(s.mostRecentQuarter);
+      // The quarter the figures run to: the source rule's where it set them,
+      // else Twelve Data's (RowCard.figuresTo, 2026-10-30).
+      const ttm = d((RowCard.figuresTo(s) || {}).iso);
       // Without the period there is nothing to qualify, so the line does not
       // open with a half-claim — it simply says less.
       if (ttm) parts.push('Trailing twelve months to ' + ttm);

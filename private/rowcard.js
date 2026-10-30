@@ -105,9 +105,9 @@
     // resignation in a results column.
     if (gap < -ANN_AHEAD_DAYS) {
       return { t: '—', c: 'na',
-        title: `This company's newest Item 2.02 is ${iso}, which predates the earnings feed's own date (${vend}).`
+        title: `This company's newest Item 2.02 is ${iso}, which predates Twelve Data's own date (${vend}).`
           + ' It announces results under a different 8-K item — 7.01 or 8.01 — so Item 2.02 cannot answer for it.'
-          + ' Read Reported instead. 51 of 1,062 companies are like this.' };
+          + ' Read Last results out instead. 51 of 1,062 companies are like this.' };
     }
     const thisYear = d.getFullYear() === new Date().getFullYear();
     const t = shortDate(iso) + (thisYear ? '' : ` '${String(d.getFullYear()).slice(2)}`);
@@ -115,11 +115,16 @@
     // so in sync they are the same day: measured, NVDA reads 2026-08-26 from
     // EDGAR and Aug 26 from the feed.
     const miss = gap > ANN_AHEAD_DAYS;
+    // Since the source rule the row's figures may already include the
+    // quarter Twelve Data missed, from the release or the filings.
+    const fq = (figuresTo(s) || {}).iso;
+    const covered = fq && Math.round((d - new Date(fq + 'T12:00:00')) / 86400000) <= STALE_FIG_DAYS;
     return { t, c: miss ? 'warn' : '',
       title: `Announced ${iso} — the newest 8-K carrying Item 2.02, from EDGAR`
-        + (miss ? `\n\nTHE EARNINGS FEED HAS MISSED THIS: it still shows ${vend}, ${gap} days earlier.`
-            + ' Every fundamental figure here is the feed’s, so they predate this announcement.'
-          : vend ? '' : '\n\nNo vendor date to compare against.') };
+        + (miss ? `\n\nTWELVE DATA HAS MISSED THIS: it still shows ${vend}, ${gap} days earlier.`
+            + (covered ? ` The figures on this row already include that quarter, to ${fq}, from the results release or the filings (Figures to).`
+              : ' The figures on this row predate this announcement.')
+          : vend ? '' : '\n\nNo Twelve Data date to compare against.') };
   }
 
   // ---- Out of date: what on this row is behind, in words -------------------
@@ -128,40 +133,68 @@
   // Oct 17": not a colour on those cells but a column naming the issue. Each
   // entry is one fact the row's own dates prove; none is a guess. Null for a
   // fund (no reports to be behind on) and an empty list when nothing is.
-  //   figures   the period is more than STALE_FIG_DAYS before the announcement:
-  //             the feed recorded the report but not its quarter's figures
-  //             (a report lands 23-29 days after its quarter, so 75 clears it)
-  //   sec       the company filed an Item 2.02 the feed has not recorded
-  //   quiet     no results for more than a quarter (the Reported cell's 100)
-  //   next      the next report date has passed and no newer one is on file
+  //   figures   the row's figures (figuresTo) end more than STALE_FIG_DAYS
+  //             before the newest results announcement, Twelve Data's or the
+  //             SEC's: that quarter's figures are not in yet (a report lands
+  //             23-29 days after its quarter, so 75 clears it)
+  //   sec       the company filed an Item 2.02 Twelve Data has not recorded;
+  //             the title says whether the row's figures already cover it
+  //   quiet     no results, by either date, for more than a quarter
+  //   next      the next report date has passed and neither date is newer
+  // Since the source rule (2026-10-29) the figures and Twelve Data's dates
+  // are different things: GOOGL's figures ran to Sep 30 from its Oct 28
+  // release while Twelve Data still said Jun 30 and Jul 22.
   //   profile   company data not re-pulled for STALE_PROFILE_DAYS
   //   price     no price for STALE_PRICE_DAYS
   // Client-only inputs (secLastResults) are read when present, so the cell
   // changes once /api/sec/filed lands; the page repaints it then.
   const STALE_FIG_DAYS = 75, STALE_QUIET_DAYS = 100, STALE_PROFILE_DAYS = 10, STALE_PRICE_DAYS = 5;
+  // THE PERIOD THE ROW'S COMPANY FIGURES RUN TO (2026-10-30). Since the
+  // owner's source rule (2026-10-29) revenue, the margins, net income, cash
+  // flow, growth and the balance sheet come from the results release or the
+  // SEC filings where they have them, and run to that quarter (row.srcQ, the
+  // company's own period end), not to Twelve Data's (mostRecentQuarter,
+  // rounded to a month end). from: 'release' (the newest quarter is a results
+  // release whose 10-Q is not filed yet), 'filings', or 'td'.
+  const FIG_FROM = { release: 'the results release and the SEC filings', filings: 'the SEC filings (10-Q, 10-K)', td: 'Twelve Data' };
+  function figuresTo(s) {
+    if (!s) return null;
+    if (s.srcQ) {
+      const codes = s.src ? Object.values(s.src) : [];
+      return { iso: String(s.srcQ).slice(0, 10), from: codes.includes('r') || codes.includes('o') ? 'release' : 'filings', td: s.mostRecentQuarter || null };
+    }
+    return s.mostRecentQuarter ? { iso: String(s.mostRecentQuarter).slice(0, 10), from: 'td', td: s.mostRecentQuarter } : null;
+  }
+
   function staleIssues(s, now) {
     if (!s || isFund(s)) return null;
     const t = now || Date.now();
     const day = (iso) => new Date(String(iso).slice(0, 10) + 'T12:00:00').getTime();
     const ago = (iso) => Math.round((t - day(iso)) / 86400000);
     const out = [];
-    const rep = s.lastEarningsDate, per = s.mostRecentQuarter;
-    if (rep && per) {
-      const gap = Math.round((day(rep) - day(per)) / 86400000);
+    const rep = s.lastEarningsDate, sec = s.secLastResults;
+    const fig = figuresTo(s), per = fig && fig.iso;
+    // The newest results announcement either source knows of.
+    const last = rep && sec ? (day(sec) > day(rep) ? sec : rep) : (rep || sec);
+    const lastBy = last && last === sec && !(rep && day(rep) >= day(sec)) ? ' (its SEC filing)' : '';
+    if (last && per) {
+      const gap = Math.round((day(last) - day(per)) / 86400000);
       if (gap > STALE_FIG_DAYS) out.push({ k: 'figures', t: 'Figures predate last results',
-        title: `The figures are to ${per}, but the company reported on ${rep}, ${gap} days later: the feed has the announcement and not yet that quarter's figures.` });
+        title: `The figures on this row run to ${per}, from ${FIG_FROM[fig.from]}, but the company reported results on ${last}${lastBy}, ${gap} days later: that quarter's figures are not in yet.` });
     }
-    const sec = s.secLastResults;
     if (sec && rep) {
       const gap = Math.round((day(sec) - day(rep)) / 86400000);
-      if (gap > ANN_AHEAD_DAYS) out.push({ k: 'sec', t: 'Feed missed a report',
-        title: `The company filed results with the SEC (Item 2.02) on ${sec}, ${gap} days after the feed's last report date.` });
+      const covered = per && Math.round((day(sec) - day(per)) / 86400000) <= STALE_FIG_DAYS;
+      if (gap > ANN_AHEAD_DAYS) out.push({ k: 'sec', t: 'Twelve Data missed a report',
+        title: `The company filed results with the SEC (Item 2.02) on ${sec}, ${gap} days after Twelve Data's last report date (${rep}).`
+          + (covered ? ` The figures on this row already include that quarter, to ${per}, from ${FIG_FROM[fig.from]}; what is behind is Twelve Data's own record: Last results out, and the figures only it supplies, such as forward P/E.`
+            : ' The figures on this row predate it too.') });
     }
-    if (rep && ago(rep) > STALE_QUIET_DAYS) out.push({ k: 'quiet', t: 'No results in ' + ago(rep) + 'd',
-      title: `Last reported ${rep}, ${ago(rep)} days ago: more than a quarter.` });
+    if (last && ago(last) > STALE_QUIET_DAYS) out.push({ k: 'quiet', t: 'No results in ' + ago(last) + 'd',
+      title: `Last reported ${last}${lastBy}, ${ago(last)} days ago: more than a quarter.` });
     const nx = s.nextEarningsDate;
-    if (nx && ago(nx) > 0 && !(rep && day(rep) >= day(nx))) out.push({ k: 'next', t: 'Report date passed',
-      title: `The next report date on file (${String(nx).slice(0, 10)}${s.nextEarningsEstimated ? ', estimated' : ''}) passed ${ago(nx)} days ago with no newer report recorded.` });
+    if (nx && ago(nx) > 0 && !(last && day(last) >= day(nx))) out.push({ k: 'next', t: 'Report date passed',
+      title: `The next report date on file (${String(nx).slice(0, 10)}${s.nextEarningsEstimated ? ', estimated' : ''}) passed ${ago(nx)} days ago with no newer results recorded, by Twelve Data or at the SEC.` });
     if (s.profileFetchedAt) {
       const d = Math.floor((t - Number(s.profileFetchedAt)) / 86400000);
       if (d > STALE_PROFILE_DAYS) out.push({ k: 'profile', t: 'Company data ' + d + 'd old',
@@ -523,8 +556,9 @@
     // multiples should see how old they are before reading them. The DATE
     // only -- the time of day lives in earnings_history, which a snapshot row
     // does not carry; /stock's caption has it because that page reads it.
-    ['report', 'Period',         (s) => (s.mostRecentQuarter
-      ? { t: shortDate(s.mostRecentQuarter), c: '' } : null)],
+    // The period the row's figures run to: the source rule's quarter where it
+    // set them, else Twelve Data's (figuresTo).
+    ['report', 'Period',         (s) => { const f = figuresTo(s); return f ? { t: shortDate(f.iso), c: '' } : null; }],
     ['report', 'Reported',       (s) => (s.lastEarningsDate
       ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
     // Every per-share figure on the row — EPS, book value, the share count —
@@ -1852,7 +1886,7 @@
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,
-    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, fieldName, NOW_WORD,
+    GROUP_ORDER, GROUP_COLORS, GROUP_LABELS, SEC_BEHIND_DAYS, ANN_AHEAD_DAYS, announcedSec, staleIssues, figuresTo, fieldName, NOW_WORD,
     fieldCatalogue, fieldValues, fieldProps, isFund, nextEarn,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1718,10 +1718,10 @@
         <th class="grp-divs" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout<span class="ptag">TTM</span></th>
         <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield<span class="ptag">TTM</span></th>
         <th class="grp-divs" data-key="shareholderYield" title="Dividend yield plus buyback yield: the cash returned to shareholders over the latest year as a share of today&#39;s market value. Blank where the company files no buyback line, which is not the same as zero. Before shares handed out as pay, so a company that issues many shares can return cash and still dilute: see Shares chg 1Y.">Holder<br>Yield<span class="ptag">Fwd + TTM</span></th>
-        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE COMPANY FIGURES COVER &mdash; revenue, the margins, ROE, net income and FCF (in Scale, Valuation, Profitability and Growth) are all a trailing twelve months ENDING on this date. Last results out beside it is a different fact: that is when the company ANNOUNCED, which lands a median 30 days later, and on 1,250 rows measured the two were never the same day. The vendor rounds a 52/53-week fiscal calendar to month end, so it can sit a few days off the filing. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
-        <th class="grp-report" data-key="lastEarningsDate" title="When the company last reported — the announcement, which is what every figure in this group was struck at. It is NOT the period they cover: the announcement lands 23-29 days after the quarter it reports on, so a figure dated here describes a quarter that ended about a month earlier. Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything that has not reported in a quarter. Amber past 100 days, where the figures beside it are a quarter stale.">Last results out</th>
-        <th class="grp-report" data-col="secResults" title="When the company told the SEC it had results — the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. A SECOND, INDEPENDENT answer to &quot;has this company reported&quot;, from the company itself rather than from the price feed: on 2026-10-01 Micron had announced on Sep 30 and the feed still said Jun 24. Amber when it is ahead of the Reported column, which means the feed has missed a report. Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
-        <th class="left grp-report" data-key="staleIssues" title="What on this row is behind, in words: figures that predate the last results (the feed has the announcement but not yet that quarter), a results filing at the SEC the feed has not recorded, no results for more than 100 days, a next report date that has passed, company data more than 10 days old, a price more than 5 days old. Blank when nothing is. Filters as text (&quot;predate&quot;, &quot;missed&quot;); sorts by how many issues. A fund reads NA.">Out of<br>date</th>
+        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE ROW&rsquo;S COMPANY FIGURES RUN TO &mdash; revenue, the margins, net income, cash flow and growth are a trailing twelve months ending on this date, and the balance sheet is at it. Since the source rule of 2026-10-29 they come from the company&rsquo;s results release while it is the newest report, its SEC filings once they are filed, and Twelve Data otherwise, so this is usually the company&rsquo;s own period end; the hover names the source, and Twelve Data&rsquo;s period when it differs. Market value, forward P/E and short interest stay Twelve Data&rsquo;s. Last results out beside it is a different fact: when Twelve Data recorded the ANNOUNCEMENT, which lands about a month after the period. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
+        <th class="grp-report" data-key="lastEarningsDate" title="When Twelve Data last recorded results &mdash; the announcement, NOT the period it covers: a report lands 23-29 days after the quarter it reports on. It is Twelve Data&rsquo;s record, so it can lag the company: Announced (SEC) beside it is the company&rsquo;s own filing. The figures on this row no longer wait for it (Figures to says how far they run). Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything Twelve Data has not seen report in a quarter. Amber past 100 days, or when the company has filed with the SEC since.">Last results out</th>
+        <th class="grp-report" data-col="secResults" title="When the company told the SEC it had results &mdash; the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. The company&rsquo;s own answer to &quot;has this company reported&quot;, beside Twelve Data&rsquo;s in Last results out: on 2026-10-01 Micron had announced on Sep 30 and Twelve Data still said Jun 24. Amber when it is ahead of Last results out, which means Twelve Data has missed a report (the figures on the row may still include it, from the release: Figures to says). Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
+        <th class="left grp-report" data-key="staleIssues" title="What on this row is behind, in words: figures that predate the last results, by Twelve Data&rsquo;s date or the SEC&rsquo;s (that quarter&rsquo;s figures are not in yet); a results filing at the SEC that Twelve Data has not recorded (the hover says whether the figures already include it); no results for more than 100 days; a next report date that has passed with no newer results; company data more than 10 days old; a price more than 5 days old. Blank when nothing is. Filters as text (&quot;predate&quot;, &quot;missed&quot;); sorts by how many issues. A fund reads NA.">Out of<br>date</th>
         <th class="grp-lrun" data-key="revGrowth3y" title="Revenue growth a year, compounded, over three years: the latest four quarters against the same four quarters three years earlier, from the company's own SEC filings. +20.0 means revenue grew 20% a year, about 73% in all. A company that files in another currency is measured on its annual reports in that currency, so a currency's move is not counted as growth. Blank where three years are not on file, where the newest quarter is not recent, and for a bank, whose filings carry no revenue line. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>3Y</th>
         <th class="grp-lrun" data-key="revGrowth5y" title="Revenue growth a year, compounded, over five years: the latest four quarters against the same four quarters five years earlier, from the company's own SEC filings. A company that files in another currency is measured on its annual reports in that currency. Blank where five years are not on file, where the newest quarter is not recent, and for a bank. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>5Y</th>
         <th class="grp-lrun" data-key="niGrowth3y" title="Net income growth a year, compounded, over three years: the latest four quarters' net income against the same four quarters three years earlier, from the company's own SEC filings. Blank where either end is a loss, since from a loss there is no rate, and where three years are not on file. A rate past 1,000% a year is a base too small to measure from and is left blank too. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>3Y</th>
@@ -2227,8 +2227,13 @@
     // staleness colour on an adjacent column to flag one row is noise. The
     // cell states the fact and the column beside it does the warning, which
     // is the rule the Instrument column already follows.
+    // SINCE THE SOURCE RULE (2026-10-29) the figures on most rows come from
+    // the results release or the SEC filings and run to their own quarter
+    // (RowCard.figuresTo), so this cell shows that; Twelve Data's period is
+    // in the hover when it differs.
     function periodCell(s) {
-      const iso = s.mostRecentQuarter;
+      const fig = RowCard.figuresTo(s);
+      const iso = fig && fig.iso;
       if (!iso) {
         return '<td class="na grp-report" title="No period recorded for this stock yet — it fills the next time its profile is pulled.">—</td>';
       }
@@ -2243,10 +2248,16 @@
       // the one clause that changes how every other figure here reads.
       const fy = s.fiscalYearEnd && !/-12-/.test(s.fiscalYearEnd)
         ? ` Its fiscal year ends ${fmtShortDate(s.fiscalYearEnd)}, so this is not a calendar quarter.` : '';
-      const title = `Trailing twelve months to ${iso}, ${days} days ago — the period every figure in this group covers.`
-        + ' Reported beside it is when the company announced, about a month after this.'
-        + fy
-        + ' The vendor rounds a 52/53-week fiscal calendar to month end, so it can differ from the filing by a few days.';
+      const from = {
+        release: 'The newest quarter is from the company’s results release (its 10-Q is not filed yet), the three before it from its SEC filings.',
+        filings: 'From the company’s 10-Q and 10-K filings.',
+        td: 'From Twelve Data, which rounds a 52/53-week fiscal calendar to month end, so it can differ from the filing by a few days.',
+      }[fig.from];
+      const tdNote = fig.from !== 'td' && fig.td && String(fig.td).slice(0, 10) !== iso
+        ? ` Twelve Data’s own figures run to ${String(fig.td).slice(0, 10)}.` : '';
+      const title = `Trailing twelve months to ${iso}, ${days} days ago: the period revenue, the margins, net income, cash flow, growth and the balance sheet on this row run to. ${from}${tdNote}`
+        + ' Market value, forward P/E and short interest are Twelve Data’s.'
+        + fy;
       return `<td class="grp-report"${attr(title)}>${label}</td>`;
     }
 
@@ -2270,14 +2281,16 @@
       // everywhere else here. `.warn` is colour-only, so this stays a cell.
       const behind = secBehind(s);
       const stale = days > 100 || behind > 0;
-      const title = `Last reported ${iso} — ${days} days ago`
-        + (days > 100 ? ', so the figures in this group are at least a quarter old' : '')
+      // Twelve Data's record of the announcement. Since the source rule the
+      // row's figures need not wait for it (Figures to says how far they run).
+      const title = `Twelve Data’s last results date: ${iso}, ${days} days ago`
+        + (days > 100 ? ', more than a quarter' : '')
         + '. This is the ANNOUNCEMENT, not the period it covers: a report lands 23-29 days after the quarter it reports on.'
         // The specific, provable half: not "this looks old" but "the company
-        // has filed since and the price feed has not caught up".
-        + (behind ? `\n\nTHE EARNINGS FEED IS BEHIND: this company filed a statement with the SEC on ${s.secLastFiled}`
-            + ` — ${behind} days after the date shown here — which the feed has not recorded.`
-            + ' The figures in this group are the feed’s, so they predate that filing.' : '');
+        // has filed since and Twelve Data has not caught up".
+        + (behind ? `\n\nTWELVE DATA IS BEHIND: this company filed a statement with the SEC on ${s.secLastFiled}`
+            + ` — ${behind} days after the date shown here — which Twelve Data has not recorded.`
+            + ' Figures to says whether the figures on this row already include it, from the results release or the filings.' : '');
       return `<td class="grp-report${stale ? ' warn' : ''}" data-rep="${we(s.symbol)}"${attr(title)}>${label}</td>`;
     }
 
@@ -4356,6 +4369,8 @@
         : sortKey === 'crNow' ? (x.crNow ? ['decline', 'slow', 'grow'].indexOf(x.crNow) : null)
         : sortKey === 'crRevUp' ? (x.crRevUp != null && x.crRevN ? x.crRevUp / x.crRevN + x.crRevN / 1e6 : null)
         : sortKey === 'staleIssues' ? ((RowCard.staleIssues(x) || []).length || null)
+        // Figures to sorts on the date it shows (RowCard.figuresTo, 2026-10-30).
+        : sortKey === 'mostRecentQuarter' ? ((RowCard.figuresTo(x) || {}).iso || null)
         : x[sortKey]);
       // Sorting by an advice column leaves whole tiers tied — five Very Strongs
       // in a row, in whatever order they happened to arrive. Cushion breaks

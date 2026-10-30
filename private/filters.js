@@ -197,9 +197,13 @@
     // announcement date does: an ISO string is not something a reader
     // can type a comparison against. Local noon, or every count is a
     // day high west of Greenwich.
+    // Since the source rule (2026-10-29) the column shows the quarter the
+    // row's figures run to (srcQ) where the rule set them, so it filters on
+    // that too; else Twelve Data's period.
     if (key === 'mostRecentQuarter') {
-      return x.mostRecentQuarter
-        ? Math.round((Date.now() - new Date(x.mostRecentQuarter + 'T12:00:00').getTime()) / 86400000) : null;
+      const per = x.srcQ || x.mostRecentQuarter;
+      return per
+        ? Math.round((Date.now() - new Date(String(per).slice(0, 10) + 'T12:00:00').getTime()) / 86400000) : null;
     }
     if (key === 'lastEarningsDate' || key === 'daysSinceEarnings') {
       // LOCAL NOON, not the bare string. `new Date('2026-09-20')` is UTC
