@@ -99,6 +99,11 @@
     .lp .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 36px; }
     .lp .two .pnl { padding: 30px; display: flex; flex-direction: column; gap: 14px; }
     .lp .two .pnl.cr .tag { color: var(--orange); }
+    /* Who it is for, three panels since 2026-10-30 (students and researchers). */
+    .lp .two.who3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .lp .two .pnl.rs .tag { color: var(--blue); }
+    .lp .two .pnl.rs .ask { margin: auto 0 0; font-size: 14px; color: var(--muted); }
+    .lp .two .pnl.rs .ask a { color: var(--accent); }
     .lp .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 34px; }
     .lp .three .pnl { display: flex; flex-direction: column; gap: 10px; }
     .lp .three .pnl p { color: var(--muted); font-size: 14.5px; }
@@ -298,7 +303,7 @@
 
     @media (max-width: 1000px) { .lp-nav { display: none; } }
     @media (max-width: 900px) {
-      .lp-hero .w, .lp .lp-race, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
+      .lp-hero .w, .lp .lp-race, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .two.who3, .lp .plans { grid-template-columns: 1fr; }
       .lp .stack { justify-self: center; max-width: 360px; } .lp .stackcap { justify-self: center; text-align: center; }
       .lp-nums .w { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .lp .grid, .lp .depth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -382,8 +387,8 @@
   <section id="who">
     <div class="w">
       <span class="eyebrow">Who it is for</span>
-      <h2 class="h2">Two kinds of people use it.</h2>
-      <div class="two">
+      <h2 class="h2">Three kinds of people use it.</h2>
+      <div class="two who3">
         <div class="pnl">
           <span class="tag">Individual investors</span>
           <h3 class="h3">Follow US stocks without twenty open tabs.</h3>
@@ -402,6 +407,18 @@
             <li>Dozens of cards for the market, sectors, industries, themes and single stocks</li>
             <li>Instagram sizes: feed, square and story, in Dark, Navy or Light</li>
           </ul>
+        </div>
+        <div class="pnl rs" id="research">
+          <span class="tag">Students and researchers</span>
+          <h3 class="h3">Custom access for a project, a thesis or a hunch.</h3>
+          <p style="color:var(--muted)">Years of daily prices, company filings and AI-read news and results, already joined up. Tell us what you are working on and we will set up access for it.</p>
+          <ul>
+            <li>Backtest an idea against the stored history</li>
+            <li>Download data sets we build ourselves from public filings and AI reading</li>
+            <li>Build new visualizations from the same data as the cards</li>
+            <li>Work through new trading ideas with us, and test them before trusting them</li>
+          </ul>
+          <p class="ask">Write to <a href="mailto:support@tickrlab.com?subject=Research%20access">support@tickrlab.com</a> with a line about your project.</p>
         </div>
       </div>
     </div>
