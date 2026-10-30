@@ -436,7 +436,9 @@ app.get(['/', '/index.html'], route(async (req, res, next) => {
     userEmail: who ? who.email : (AUTH_REQUIRED ? 'admin (legacy login)' : null),
   };
   // Fire and forget: a logging failure must never block the page load.
-  store.logVisit(entry).catch(() => { /* ignore */ });
+  // Admin visits are not logged (2026-10-30, the owner: "In the visitor log can
+  // you not log admin"): the log is for who else comes. Earlier admin rows stay.
+  if (!(await isAdmin(req))) store.logVisit(entry).catch(() => { /* ignore */ });
   logAct(req, 'page', 'screener');
   next();
 }));
