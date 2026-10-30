@@ -567,6 +567,8 @@ The short-interest strip's rule and its reason: a trailing year sits in a narrow
   - **A REVERT PROOF THAT DOES NOT RUN THE TEST REPORTS ZERO FAILURES**, which reads exactly like guards that were never load-bearing — all four did on the first attempt, because the harness built a `node` path out of `sys.executable`. It counts PASSes now and refuses to report on a run that did not happen.
 
 ### Around earnings — how one stock behaves around its own reports (2026-09-28, owner's request)
+
+**Removed from the stock page on 2026-10-30** (the owner: "This chart on individual stock page is hard to understand, can you remove it"). The card, its styles and toggle, `/api/stock`'s `earningsStudy` field and the help paragraph went; `earnstudy.js` stays, unused, for research. The notes below describe it as it was.
 **Inside the earnings card on `/stock`: one faint line per quarter rebased to its report-day close, the median over them, an interquartile band, and four figures.** The owner asked for the aggregate rather than markers on the price chart — *"how does this stock typically behave around earnings"* — and explicitly ruled out drawing on the chart itself.
 
 - **`earnstudy.js` is pure** (bars + events → the aggregate), the `news.js` / `secfacts.js` / `insider.js` shape, which is what lets every statistic be tested with no server. `/api/stock` gains one `readBars(symbol, 2600)` in the Promise.all it already runs, and ships ~2-8KB of aggregate rather than ten years of closes for the browser to re-derive.

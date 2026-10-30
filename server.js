@@ -94,7 +94,6 @@ const NewsTone = require('./newstone.js');
 // Pure: bars + earnings events -> the aggregate /stock draws. Required at the
 // top rather than beside the route, because /api/stock sits above the point
 // where secfacts.js and insider.js are pulled in.
-const EarnStudy = require('./earnstudy.js');
 const {
   readPortfolios: readPortfoliosAll, writePortfolios,
   readNames, writeNames,
@@ -11561,20 +11560,6 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     earnings,
     // Month-end closes for the month-by-year grid, from the bars already read.
     monthly: { stock: monthEnds(studyBars), bench: benchMonths || [] },
-    // How this stock has behaved around its OWN earnings — the aggregate, not
-    // the bars. Computed here rather than in the browser because the window it
-    // needs (a fixed span around each of ~24 reports, up to six years back) is
-    // not the range the chart happens to be drawing, and a few hundred bytes
-    // of aggregate beats shipping ten years of closes to work it out again.
-    // DESCRIPTION, NOT A SIGNAL: post-earnings drift is untested here
-    // (docs/backlog.md entry 1) and the card says so.
-    earningsStudy: (() => {
-      try {
-        // readBars returns newest-first with `datetime`; the module sorts and
-        // normalises either shape, so this is just a handover.
-        return EarnStudy.build(studyBars, earnings);
-      } catch (e) { return null; }   // never fail the page over a statistic
-    })(),
     // The symbol picker's list. The whole snapshot is already in memory to work
     // out the rank above, so this costs a map and ~3 KB rather than a query.
     // Alphabetical, because the picker is for reaching a ticker you have in
