@@ -253,14 +253,6 @@
     .lp .words { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
     .lp .words span { font: 500 12.5px var(--sans); border: 1px solid var(--hair-2); border-radius: 999px; padding: 5px 12px; color: var(--muted); }
 
-    /* ---- compare ---- */
-    .lp .cmp { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 14.5px; min-width: 760px; }
-    .lp .cmp th, .lp .cmp td { padding: 14px 16px; border-bottom: 1px solid var(--hair); text-align: left; vertical-align: top; }
-    .lp .cmp thead th { font: 500 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
-    .lp .cmp thead th.us { color: var(--accent); }
-    .lp .cmp td { color: var(--muted); }
-    .lp .cmp td.us { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--text); }
-    .lp .cmp tbody th { font: 600 14.5px var(--sans); letter-spacing: 0; text-transform: none; color: var(--text); width: 22%; }
 
     /* ---- plans ---- */
     .lp .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 34px; }
@@ -751,29 +743,6 @@
         <p>We have tested whether these readings predict returns eleven different ways. Ten came back flat. Every test is written up, including the ones that failed.</p>
         <p style="color:var(--faint);font-size:13.5px">The full research register opens with the paid Research plan.</p>
       </div>
-    </div>
-  </section>
-
-  <section id="compare" class="tight">
-    <div class="w">
-      <span class="eyebrow">Compared</span>
-      <h2 class="h2">Where Tickr Lab fits.</h2>
-      <p class="lede">Most people already use one of these. Tickr Lab is built to sit beside them, for the nightly look across the whole market.</p>
-      <div class="scroll">
-        <table class="cmp">
-          <thead><tr><th></th><th class="us">Tickr Lab</th><th>Yahoo Finance</th><th>Google Finance</th><th>TradingView</th></tr></thead>
-          <tbody>
-            <tr><th>Best known for</th><td class="us">A nightly reading of every US stock, with filings and ownership in one table</td><td>Quotes, news and a stock screener</td><td>Quick quotes and simple watchlists</td><td>Charting and a large community of shared ideas</td></tr>
-            <tr><th>Every number explained</th><td class="us">Click any cell for its history and how it was worked out</td><td>Figures shown, not explained</td><td>Figures shown, not explained</td><td>Indicators you configure</td></tr>
-            <tr><th>Filings and ownership</th><td class="us">8-Ks, 13D/13G, insiders, 13F institutions and funds, read daily from the SEC</td><td>Holders and insider pages</td><td>Limited</td><td>Limited</td></tr>
-            <tr><th>A quarter's figures, after a company reports</th><td class="us">Read from the results release within hours, then checked against the 10-Q</td><td>After the 10-Q is filed (none of 18 earlier, October 2026)</td><td>Not checked</td><td>Usually from the release (15 of 18 before the 10-Q, October 2026)</td></tr>
-            <tr><th>Visuals for posting</th><td class="us">Dozens of dated cards in Instagram sizes</td><td>No</td><td>No</td><td>Chart snapshots</td></tr>
-            <tr><th>Markets covered</th><td class="us">US-listed stocks only, <span data-k="symbols">{{symbols}}</span> of them</td><td>Global</td><td>Global</td><td>Global, many asset classes</td></tr>
-            <tr><th>Price</th><td class="us">Free during the beta</td><td>Free, with paid tiers</td><td>Free</td><td>Free, with paid tiers</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note">The other three columns describe each service in general terms, as of October 2026. The row on a quarter's figures was measured on October 29, 2026; see <a href="#earnings">How soon a quarter shows up</a>.</p>
     </div>
   </section>
 

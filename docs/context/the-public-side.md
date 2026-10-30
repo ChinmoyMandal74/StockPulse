@@ -156,3 +156,7 @@ The owner: *"I want to include Students and Researchers, I want to let them that
 
 - **"Data sets we build ourselves", on purpose:** the owner's "non API data" read as what we derive (SEC filings, AI-read news and releases), not Twelve Data's prices or fundamentals, which the vendor's terms likely do not let us hand on. Check the licence before offering vendor data in a download.
 - It is an offer made by hand: there is no research tier in the app. Access means whatever the owner sets up for the person.
+
+## Compared section removed (2026-10-30)
+
+The "Compared · Where Tickr Lab fits" table (Tickr Lab beside Yahoo Finance, Google Finance and TradingView) was taken off the home page at the owner's request, with its `.cmp` styles. The measured day line in How soon a quarter shows up (`#earnings`) stays.
