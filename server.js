@@ -61,6 +61,7 @@ const EarnCal = require('./earncal.js');
 // Earnings releases read by an AI model (release-load.js writes, these routes read).
 const Releases = require('./releases.js');
 const Schedule = require('./schedule.js');
+const JobsDigest = require('./jobsdigest.js');
 // The alert types, for the same reason: the browser draws the form from this
 // list and the server evaluates against it, so neither can invent a type or a
 // comparison the other does not have.
@@ -3676,6 +3677,7 @@ const MAIL_DARK_RULES = (D) => [
   [['.em-card .em-ink'], `color:${D.ink};border-color:${D.ink}`],
   // The guidance change label keeps its white ink on its own fill.
   [['.em-card .em-pill'], 'color:#ffffff'],
+  [['.em-card .em-warn'], 'color:#f0a83a'],
   [['.em-card .em-box', '.em-card .em-row td'], `border-color:${D.line}`],
   // Scoped under .em-card deliberately: a bare .em-quiet is one class against
   // .em-card p's class-plus-element and loses, so the kicker and the captions
@@ -20622,6 +20624,75 @@ app.post('/api/cron/earnings-today', route(async (req, res) => {
   const sent = await sendMail({ kind: 'earnings-today', to, subject: d.subject, text: d.text, html: d.html });
   if (sent) { try { await store.writeEarningsTodayMark(today); } catch { /* bookkeeping never fails the send */ } }
   res.json({ sent: !!sent, companies: d.companies });
+}));
+
+// ---- The daily jobs email (2026-10-30) --------------------------------------
+// The owner: "one daily email on all scheduled task runs ... end of day .. may
+// be 8pm ... a high level summary". jobsdigest.js builds it from the records
+// the jobs already write; the scheduler on Fly.io calls this at 20:00 Eastern
+// every day (digest-ping.js). One email to the operator address, kind
+// 'jobs-digest', once a day (the mark); ?dry=1 answers the summary unsent.
+const JD_AMBER = '#b26a00';
+function jobsDigestEmail(d) {
+  const site = APP_URL || '';
+  const when = new Date(d.day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
+  const k = d.issues.length;
+  const subject = `Scheduled jobs: ${k ? k + ' to look at' : 'all ran'} (${when})`;
+  const totals = [d.credits ? JobsDigest.plural(d.credits, 'Twelve Data credit') + ' spent' : null,
+    d.spent ? JobsDigest.money(d.spent) + ' of Anthropic API' : null].filter(Boolean).join(', ');
+  const intro = (k ? `${k} thing${k === 1 ? '' : 's'} to look at. ` : 'Every scheduled run went through. ')
+    + `${d.runs} of ${d.due} scheduled runs started today` + (totals ? '; ' + totals : '') + '.';
+  // OK is quiet, not green: green and red mean price up and down. Amber is
+  // 'notice this', kept in a dark client by the em-warn rule.
+  const word = { ok: ['OK', MC.mute], running: ['Running', MC.mute], issue: ['Check', JD_AMBER] };
+  const td = (t, extra) => `<td${st(`padding:8px 8px;font-size:13.5px;color:${MC.body};border-bottom:1px solid ${MC.line};vertical-align:top;${extra || ''}`)}>${t}</td>`;
+  const th = (t) => `<th${st(`padding:6px 8px;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:${MC.faint};text-align:left;border-bottom:1px solid ${MC.line}`)}>${t}</th>`;
+  const tag = (w, c) => td(`<span${c === JD_AMBER ? ' class="em-warn"' : ''}${st(`color:${c};font-weight:700`)}>${w}</span>`, 'white-space:nowrap');
+  const rows = d.jobs.map((j) => {
+    const [w, c] = word[j.status] || word.ok;
+    const where = j.host === 'fly' ? 'Fly.io' : j.host === 'laptop' ? 'laptop' : j.host;
+    return `<tr>${td(`<b${st(`color:${MC.ink}`)}>${mailEsc(j.name)}</b><br><span${st(`font-size:11.5px;color:${MC.faint}`)}>${mailEsc(where)}</span>`)}`
+      + tag(w, c)
+      + td(mailEsc(j.runs) + (j.what ? `<br><span${st(`font-size:12.5px;color:${MC.mute}`)}>${mailEsc(j.what)}</span>` : '')) + '</tr>';
+  });
+  const lapOk = !d.laptop.problems.length;
+  const lapAt = d.laptop.at ? 'Last reported ' + new Date(d.laptop.at).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : 'No report';
+  rows.push(`<tr>${td(`<b${st(`color:${MC.ink}`)}>Laptop tasks</b>`)}${tag(lapOk ? 'OK' : 'Check', lapOk ? MC.mute : JD_AMBER)}${td(mailEsc(lapAt))}</tr>`);
+  const m = d.mail;
+  const mailLine = JobsDigest.plural(m.sent, 'email') + ' sent' + (m.failed ? ', ' + m.failed + ' refused' : ', none refused') + (m.alerts ? '' : '; no watchdog alert');
+  rows.push(`<tr>${td(`<b${st(`color:${MC.ink}`)}>Emails</b>`)}${tag(m.failed ? 'Check' : 'OK', m.failed ? JD_AMBER : MC.mute)}${td(mailEsc(mailLine))}</tr>`);
+  const look = k ? `<div class="em-panel"${st(`margin:0 0 18px;padding:10px 14px;border-left:3px solid ${JD_AMBER};background:${MC.panel}`)}>`
+    + `<div class="em-warn"${st(`font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${JD_AMBER};margin-bottom:6px`)}>To look at</div>`
+    + d.issues.slice(0, 20).map((x) => `<div${st(`font-size:13.5px;color:${MC.body};margin:3px 0`)}>${mailEsc(x)}</div>`).join('') + '</div>' : '';
+  const body = look + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse')}>`
+    + `<tr>${th('Job')}${th('')}${th('Today')}</tr>${rows.join('')}</table>`
+    + (site ? `<div${st('margin-top:18px')}>${mailButton(site + '/schedule', 'Open the schedule')}</div>` : '');
+  const lines = [].concat(k ? ['To look at:'].concat(d.issues.slice(0, 20).map((x) => '  - ' + x), ['']) : [],
+    d.jobs.map((j) => `${j.name}: ${j.runs}${j.what ? ' (' + j.what + ')' : ''}${j.status === 'issue' ? '  CHECK' : ''}`),
+    [`Laptop tasks: ${lapOk ? 'OK' : 'check'}. ${lapAt}`, `Emails: ${mailLine}`], site ? ['', site + '/schedule'] : []);
+  const note = 'Sent to the site’s operator every evening at 8 PM Eastern by the scheduler on Fly.io.';
+  return { subject, html: emailShell({ heading: 'Scheduled jobs, ' + when, intro, body, note }), text: textShell({ heading: 'Scheduled jobs, ' + when, intro, lines, note }) };
+}
+app.post('/api/cron/jobs-digest', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const now = Date.now(), since = now - 26 * 3600e3;
+  const dry = req.query.dry === '1';
+  const force = !!(req.body && req.body.force === true);
+  const today = JobsDigest.etDay(now);
+  if (!dry && !force && (await store.readJobsDigestMark()) === today) return res.json({ sent: false, already: today });
+  const [refresh, news, tone, releases, report, mail] = await Promise.all([
+    store.readRuns(since).catch(() => []), store.readNewsRuns(since).catch(() => []), store.readToneRuns(since).catch(() => []),
+    store.readReleaseRuns(since).catch(() => []), store.readScheduleReport().catch(() => null), store.readMailLog(since, 500).catch(() => []),
+  ]);
+  const d = JobsDigest.build({ refresh, news, tone, releases, report, mail }, now);
+  const e = jobsDigestEmail(d);
+  if (dry) return res.json({ dry: true, subject: e.subject, digest: d, text: e.text });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sent = await sendMail({ kind: 'jobs-digest', to, subject: e.subject, text: e.text, html: e.html });
+  if (sent) { try { await store.writeJobsDigestMark(today); } catch { /* bookkeeping never fails the send */ } }
+  res.json({ sent: !!sent, issues: d.issues.length, runs: d.runs, due: d.due });
 }));
 
 app.post('/api/cron/release-digest', route(async (req, res) => {

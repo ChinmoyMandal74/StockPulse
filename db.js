@@ -2853,6 +2853,17 @@ async function writeEarningsTodayMark(day) {
   await init();
   await db.execute({ sql: "insert or replace into app_meta (key, value) values ('earnings_today_mark', ?)", args: [String(day)] });
 }
+// The daily jobs email (jobsdigest.js): the Eastern day last sent, so a second
+// call that day sends nothing.
+async function readJobsDigestMark() {
+  await init();
+  const r = await db.execute({ sql: "select value from app_meta where key = 'jobs_digest_mark'" });
+  return r.rows.length ? String(r.rows[0].value || '') : '';
+}
+async function writeJobsDigestMark(day) {
+  await init();
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('jobs_digest_mark', ?)", args: [String(day)] });
+}
 async function listSubscribers() {
   await init();
   const r = await db.execute('select * from subscribers order by created_at desc');
@@ -8693,7 +8704,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark,
   listSubscribers,
   deleteSubscriber,
   readSentFor,

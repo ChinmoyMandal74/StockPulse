@@ -90,6 +90,16 @@ const JOBS = [
     what: 'Runs on Vercel, not the laptop, so a laptop that slept is still noticed: mails the owner when the nightly did not run.',
     log: '/refreshes',
   },
+  {
+    // THE DAILY JOBS EMAIL (2026-10-30, the owner: "one daily email on all
+    // scheduled task runs ... end of day .. may be 8pm"). On Fly.io rather
+    // than a Vercel cron, whose Hobby timing is "somewhere in the hour".
+    id: 'digest', name: 'Daily jobs email', task: null, host: 'fly', script: 'digest-ping.js',
+    days: ALL_DAYS, times: ['20:00'], minutes: 1, limit: 5,
+    spends: { kind: 'free', text: 'Free' },
+    what: 'Emails the owner a one-screen summary of the day: for each job above, how many of its scheduled runs started and what they did, the laptop\'s tasks, the day\'s emails, and anything to look at (jobsdigest.js).',
+    log: '/schedule',
+  },
 ];
 
 // THE TWELVE DATA WINDOWS nothing else may spend credits in: the nightly's
@@ -198,8 +208,8 @@ function drift(report, jobs = JOBS) {
   const byName = new Map(tasks.map((t) => [t.name, t]));
   const out = { jobs: {}, unknown: [] };
   for (const job of jobs) {
-    if (!job.task) { out.jobs[job.id] = { status: 'remote' }; continue; }
-    const t = byName.get(job.task);
+    const t = job.task ? byName.get(job.task) : null;
+    if (!job.task && job.host !== 'fly') { out.jobs[job.id] = { status: 'remote' }; continue; }
     if (job.host === 'fly') { out.jobs[job.id] = { status: t && String(t.state || '') !== 'Disabled' ? 'doubled' : 'fly' }; continue; }
     if (!t) { out.jobs[job.id] = { status: 'missing' }; continue; }
     const want = new Set(), have = new Set();

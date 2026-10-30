@@ -46,7 +46,7 @@ The owner asked how to move the jobs off the laptop, then signed up to Fly.io. *
 
 **The machine:**
 - App `tickrlab-jobs`, one machine, shared-cpu-1x with 256MB, region `ewr` (Secaucus). About $2 a month.
-- `fly.toml` at the root, `fly/Dockerfile`, and `.dockerignore`, which lets in only `schedule.js`, the three ping scripts and `fly/cron.js`. `.env` is never uploaded.
+- `fly.toml` at the root, `fly/Dockerfile`, and `.dockerignore`, which lets in only `schedule.js`, the ping scripts (`digest-ping.js` since 2026-10-30) and `fly/cron.js`. `.env` is never uploaded.
 - **Deploy by hand from the laptop: `fly deploy --ha=false -a tickrlab-jobs`.** Never connect GitHub: a push to main is Vercel's deploy, and a Fly restart kills a running job. `--ha=false` matters too, because a second machine would run every job twice.
 - The secret is `CRON_SECRET`, set with `fly secrets import` from stdin. `fly/cron.js` writes it into `/app/.env` at start, because the pings read `.env`, never the environment. It does that only when `FLY_APP_NAME` is set, so running it on the laptop cannot overwrite the real `.env`. `APP_URL` is optional (the pings default to production).
 
@@ -71,3 +71,42 @@ The owner asked how to move the jobs off the laptop, then signed up to Fly.io. *
 - **The schedule report.** It reports the laptop's own tasks.
 
 **Tests:** `schedule-test.js`, 85 checks, including the fly states, a fly job enabled on the laptop, a task removed, and every fly job having a limit. The `doubled` guard was proved by reverting it.
+
+## The daily jobs email (2026-10-30)
+The owner: *"Can I get one daily email on all scheduled task runs …ideally it should come end of day .. may be 8pm … it should be a high level summery"*.
+
+- **What it says.** Each job that records runs gets a row: Nightly refresh, Intraday prices, Earnings releases, Headlines and Article tone. A row gives the job's host, OK, Check or Running, and "N of M ran" for today's scheduled starts, with a phrase on what they did:
+  - Twelve Data credits;
+  - results releases read and dollars spent;
+  - headlines added;
+  - articles scored and dollars spent, plus what the last tone run left over.
+
+  Two more rows: **Laptop tasks** (when the laptop last reported) and **Emails** (sent today, any refused, any watchdog alert). A **To look at** box at the top lists each problem in a line:
+  - a start with no run;
+  - a run that failed, was abandoned, or is still marked running after three hours;
+  - a laptop loader's error;
+  - a laptop silent for three hours;
+  - a laptop task whose last result is an error (the running, never-run and queued codes are not);
+  - a fly job still enabled on the laptop;
+  - a laptop task whose times differ from `schedule.js`;
+  - a watchdog, quota or Instagram alert mailed;
+  - an email the provider refused.
+
+  The subject says "all ran" or "N to look at".
+- **How runs are matched.** `jobsdigest.js` (pure) builds the summary from the records the jobs already write: `refresh_runs`, `news_runs`, `news_tone_runs`, `earnings_release_runs`, the newest `schedule_reports` row and `mail_log`.
+  - A run belongs to the latest scheduled start at or before it, allowing three minutes' grace, if it began within the job's window: its `limit`, or 30 minutes at least.
+  - A headline slot's many batches therefore count as one run.
+  - A start under ten minutes old is not yet due.
+  - Only today's Eastern day counts.
+  - Runs nobody scheduled are left out: a manual refresh, a page's news fetch, a news fetch started by a refresh.
+- **When and where.**
+  - `POST /api/cron/jobs-digest` (cron secret or admin), kind `jobs-digest`, to `REPORT_TO`.
+  - It sends once a day: the mark is `app_meta.jobs_digest_mark`. `{"force":true}` sends again; `?dry=1` returns the summary and the text without sending.
+  - It is sent by the new `digest` job in `schedule.js`: 20:00 every day, `host: 'fly'`, `digest-ping.js` (`--dry` prints the summary). It runs on Fly.io rather than a Vercel cron because Hobby crons fire "somewhere in the hour".
+  - It has no laptop task. `drift` now calls a fly job without a task `fly`; before this it was called `remote` and shown as "Vercel".
+- **Its first finding** (the summary built from 2026-10-29's real runs): every run went through (34 of 34, 65,695 credits, $2.37), but the laptop's `TickrLab news tone` task lacks the weekend runs `schedule.js` declares (Saturday and Sunday 06:30, 12:30 and 18:30). The task was not re-registered after `news-tone-task.ps1` gained them. Re-running that script fixes it.
+- **Dark mode.** The To look at box uses the shell's `em-panel`. Amber survives a dark client through a new `em-warn` rule in `MAIL_DARK_RULES`. OK is grey, not green: green and red mean price up and down.
+- **Tests:**
+  - `jobsdigest-test.js`, 30 checks. The due guard, the scheduled-only filters for refresh and news, the slot window, today-only, the running staleness, the task result codes and the fly-without-task drift were each proved by reverting them.
+  - The route end to end on an in-memory database: wrong secret refused, dry sends nothing, sent once to the operator, a second call sends nothing, force sends, the mail log. 10 checks.
+  - `schedule-test.js`, 86 checks.

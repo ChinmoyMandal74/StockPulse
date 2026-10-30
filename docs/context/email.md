@@ -62,6 +62,7 @@ Sent through **Resend** over plain `fetch` — a REST call does not justify a fo
 - Two real defects surfaced and were **deferred by the owner** (Gmail delivers; a tenant's quarantine policy is not fixable from here) — the unset postal address and `MAIL_FROM` being `no-reply@`. Both are in [docs/backlog.md](docs/backlog.md) entry 10 with what each would take.
 
 
+- **`jobs-digest`** (2026-10-30): the daily jobs email at 20:00 Eastern to `REPORT_TO`, a line per scheduled job and anything to look at. See `scheduled-jobs.md`.
 - **`release-digest`** (2026-10-22): the earnings results email after each scheduled release run with new results, to `REPORT_TO`. See `earnings-releases.md`.
 
 ### On a phone (2026-10-23)
