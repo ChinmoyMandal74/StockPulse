@@ -1,5 +1,5 @@
 {
- "builtAt": "2026-10-29T22:57:19.129Z",
+ "builtAt": "2026-10-30T00:56:03.579Z",
  "secCompanies": 1153,
  "secSameQuarter": 87.5,
  "secSameQuarterN": 1130,
@@ -26,6 +26,12 @@
   "Insider net, Short build, Last 8-K and 5% filing"
  ],
  "decisions": [
+  {
+   "d": "2026-10-29",
+   "who": "Built",
+   "t": "Free cash flow: fewer blanks",
+   "x": "Of 152 companies outside banks and insurers with no free cash flow, the causes traced: a results release with no cash flow statement leaving the newest quarter without one (Intel, Merck: operating and free cash flow now take the four filed quarters before, marked with their own end); 52/53-week calendars whose sixteen-week quarter (about 112 days) was read as a half year (Costco, PepsiCo, Kroger, AutoZone: a quarter is now up to 120 days); capex under three more tags (Lilly, Verizon, utilities); Exxon, whose history sits under its predecessor CIK after the 2026 holding-company reorganisation (now read and merged). REITs, like banks, have no free cash flow on this definition. Left: companies that file capex only under their own tag (Valero, ConocoPhillips, AppLovin, Airbnb, Phillips 66), backlog 55."
+  },
   {
    "d": "2026-10-29",
    "who": "Owner",
@@ -555,11 +561,11 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 991,
+    "rel": 996,
     "of": 1258
    },
    "vsTd": {
-    "n": 740,
+    "n": 744,
     "close": 87.6,
     "median": 0,
     "unit": "%",
@@ -577,8 +583,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 862,
-     "close": 93,
+     "n": 865,
+     "close": 93.1,
      "median": 0,
      "unit": "%",
      "tol": 2
@@ -591,13 +597,13 @@
    },
    "rule": {
     "used": {
-     "release": 154,
-     "sec": 954,
+     "release": 156,
+     "sec": 952,
      "td": 150,
      "none": 0
     },
     "aside": {
-     "waiting": 94,
+     "waiting": 96,
      "scale": 12,
      "outvoted": 42
     },
@@ -621,7 +627,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 154 (12%), the SEC data for 954 (76%), Twelve Data for 150 (12%). SEC set aside: 94 not yet on the release’s quarter, 12 failed the scale check, 42 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 82.6% on the same quarter (most of the rest is banks and insurers (net revenue against total)). The release matches the 10-Q 90.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 156 (12%), the SEC data for 952 (76%), Twelve Data for 150 (12%). SEC set aside: 96 not yet on the release’s quarter, 12 failed the scale check, 42 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 82.6% on the same quarter (most of the rest is banks and insurers (net revenue against total)). The release matches the 10-Q 90.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -649,11 +655,11 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 597,
+    "rel": 600,
     "of": 1258
    },
    "vsTd": {
-    "n": 493,
+    "n": 496,
     "close": 73.6,
     "median": 0.1,
     "unit": "%",
@@ -671,7 +677,7 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 491,
+     "n": 492,
      "close": 95.5,
      "median": 0,
      "unit": "%",
@@ -685,13 +691,13 @@
    },
    "rule": {
     "used": {
-     "release": 113,
-     "sec": 642,
-     "td": 503,
+     "release": 115,
+     "sec": 641,
+     "td": 502,
      "none": 0
     },
     "aside": {
-     "waiting": 30,
+     "waiting": 31,
      "scale": 4,
      "outvoted": 20
     },
@@ -714,7 +720,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 113 (9%), the SEC data for 642 (51%), Twelve Data for 503 (40%). SEC set aside: 30 not yet on the release’s quarter, 4 failed the scale check, 20 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 72.8% on the same quarter (what each counts in cost of revenue). The release matches the 10-Q 98.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 115 (9%), the SEC data for 641 (51%), Twelve Data for 502 (40%). SEC set aside: 31 not yet on the release’s quarter, 4 failed the scale check, 20 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 72.8% on the same quarter (what each counts in cost of revenue). The release matches the 10-Q 98.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -742,12 +748,12 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 1051,
+    "rel": 1056,
     "of": 1258
    },
    "vsTd": {
-    "n": 785,
-    "close": 83.4,
+    "n": 789,
+    "close": 83.5,
     "median": 0,
     "unit": "%",
     "tol": 2
@@ -764,8 +770,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 911,
-     "close": 89.2,
+     "n": 914,
+     "close": 89.3,
      "median": 0,
      "unit": "%",
      "tol": 2
@@ -778,13 +784,13 @@
    },
    "rule": {
     "used": {
-     "release": 178,
-     "sec": 952,
+     "release": 180,
+     "sec": 950,
      "td": 128,
      "none": 0
     },
     "aside": {
-     "waiting": 112,
+     "waiting": 114,
      "scale": 1,
      "outvoted": 60
     },
@@ -804,7 +810,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 178 (14%), the SEC data for 952 (76%), Twelve Data for 128 (10%). SEC set aside: 112 not yet on the release’s quarter, 1 failed the scale check, 60 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 78.1% on the same quarter (non-controlling interests or preferred dividends in or out). The release matches the 10-Q 90.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 180 (14%), the SEC data for 950 (76%), Twelve Data for 128 (10%). SEC set aside: 114 not yet on the release’s quarter, 1 failed the scale check, 60 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 78.1% on the same quarter (non-controlling interests or preferred dividends in or out). The release matches the 10-Q 90.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -832,11 +838,11 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 611,
+    "rel": 613,
     "of": 1258
    },
    "vsTd": {
-    "n": 465,
+    "n": 467,
     "close": 3,
     "median": 33.6,
     "unit": "%",
@@ -854,7 +860,7 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 511,
+     "n": 512,
      "close": 93.2,
      "median": 0,
      "unit": "%",
@@ -868,13 +874,13 @@
    },
    "rule": {
     "used": {
-     "release": 90,
-     "sec": 897,
+     "release": 91,
+     "sec": 896,
      "td": 0,
      "none": 271
     },
     "aside": {
-     "waiting": 37,
+     "waiting": 38,
      "scale": 1,
      "outvoted": 0
     },
@@ -888,7 +894,7 @@
    },
    "best": {
     "source": "Release → SEC",
-    "why": "Today it would use the release for 90 (9%), the SEC data for 897 (91%), Twelve Data for 0 (0%). SEC set aside: 37 not yet on the release’s quarter, 1 failed the scale check. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (271 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 91 (9%), the SEC data for 896 (91%), Twelve Data for 0 (0%). SEC set aside: 38 not yet on the release’s quarter, 1 failed the scale check. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (271 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -916,12 +922,12 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 456,
+    "rel": 458,
     "of": 1258
    },
    "vsTd": {
-    "n": 362,
-    "close": 11.6,
+    "n": 364,
+    "close": 11.5,
     "median": 11.4,
     "unit": "%",
     "tol": 2
@@ -938,8 +944,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 344,
-     "close": 10.2,
+     "n": 346,
+     "close": 10.1,
      "median": 16,
      "unit": "%",
      "tol": 2
@@ -998,12 +1004,12 @@
    "kind": "money",
    "coverage": {
     "td": 1258,
-    "rel": 688,
+    "rel": 691,
     "of": 1258
    },
    "vsTd": {
-    "n": 520,
-    "close": 91.3,
+    "n": 523,
+    "close": 91.2,
     "median": 0,
     "unit": "%",
     "tol": 2
@@ -1020,8 +1026,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 618,
-     "close": 97.2,
+     "n": 620,
+     "close": 97.3,
      "median": 0,
      "unit": "%",
      "tol": 2
@@ -1034,13 +1040,13 @@
    },
    "rule": {
     "used": {
-     "release": 69,
-     "sec": 1059,
+     "release": 70,
+     "sec": 1058,
      "td": 130,
      "none": 0
     },
     "aside": {
-     "waiting": 51,
+     "waiting": 52,
      "scale": 0,
      "outvoted": 12
     },
@@ -1058,7 +1064,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 69 (5%), the SEC data for 1,059 (84%), Twelve Data for 130 (10%). SEC set aside: 51 not yet on the release’s quarter, 12 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 91.8% on the same quarter (restated cash flow statements). The release matches the 10-Q 96.7% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 70 (6%), the SEC data for 1,058 (84%), Twelve Data for 130 (10%). SEC set aside: 52 not yet on the release’s quarter, 12 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 91.8% on the same quarter (restated cash flow statements). The release matches the 10-Q 96.7% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1244,12 +1250,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1162,
-    "rel": 894,
+    "rel": 898,
     "of": 1258
    },
    "vsTd": {
-    "n": 657,
-    "close": 38.2,
+    "n": 660,
+    "close": 38,
     "median": 2.8,
     "unit": "%",
     "tol": 2
@@ -1266,7 +1272,7 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 696,
+     "n": 698,
      "close": 90.1,
      "median": 0.2,
      "unit": "%",
@@ -1280,13 +1286,13 @@
    },
    "rule": {
     "used": {
-     "release": 192,
-     "sec": 747,
+     "release": 194,
+     "sec": 745,
      "td": 228,
      "none": 91
     },
     "aside": {
-     "waiting": 98,
+     "waiting": 100,
      "scale": 0,
      "outvoted": 10
     },
@@ -1304,7 +1310,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 192 (16%), the SEC data for 747 (64%), Twelve Data for 228 (20%). SEC set aside: 98 not yet on the release’s quarter, 10 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 39.4% on the same quarter (Twelve Data’s price is its own last pull, up to a week old). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 194 (17%), the SEC data for 745 (64%), Twelve Data for 228 (20%). SEC set aside: 100 not yet on the release’s quarter, 10 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 39.4% on the same quarter (Twelve Data’s price is its own last pull, up to a week old). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1332,12 +1338,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1042,
-    "rel": 894,
+    "rel": 898,
     "of": 1258
    },
    "vsTd": {
-    "n": 656,
-    "close": 77.9,
+    "n": 659,
+    "close": 77.8,
     "median": 0.3,
     "unit": "%",
     "tol": 2
@@ -1354,7 +1360,7 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 696,
+     "n": 698,
      "close": 90.1,
      "median": 0.2,
      "unit": "%",
@@ -1368,13 +1374,13 @@
    },
    "rule": {
     "used": {
-     "release": 202,
-     "sec": 737,
+     "release": 204,
+     "sec": 735,
      "td": 114,
      "none": 205
     },
     "aside": {
-     "waiting": 98,
+     "waiting": 100,
      "scale": 0,
      "outvoted": 20
     },
@@ -1392,7 +1398,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 202 (19%), the SEC data for 737 (70%), Twelve Data for 114 (11%). SEC set aside: 98 not yet on the release’s quarter, 20 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 81.1% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 204 (19%), the SEC data for 735 (70%), Twelve Data for 114 (11%). SEC set aside: 100 not yet on the release’s quarter, 20 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 81.1% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1580,12 +1586,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1248,
-    "rel": 991,
+    "rel": 996,
     "of": 1258
    },
    "vsTd": {
-    "n": 740,
-    "close": 64.3,
+    "n": 744,
+    "close": 64.2,
     "median": 1.2,
     "unit": "%",
     "tol": 2
@@ -1602,8 +1608,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 861,
-     "close": 93.1,
+     "n": 864,
+     "close": 93.2,
      "median": 0,
      "unit": "%",
      "tol": 2
@@ -1616,13 +1622,13 @@
    },
    "rule": {
     "used": {
-     "release": 143,
-     "sec": 965,
+     "release": 145,
+     "sec": 963,
      "td": 140,
      "none": 10
     },
     "aside": {
-     "waiting": 94,
+     "waiting": 96,
      "scale": 11,
      "outvoted": 30
     },
@@ -1646,7 +1652,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 143 (11%), the SEC data for 965 (77%), Twelve Data for 140 (11%). SEC set aside: 94 not yet on the release’s quarter, 11 failed the scale check, 30 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 59.3% on the same quarter (as Revenue TTM). The release matches the 10-Q 90.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 145 (12%), the SEC data for 963 (77%), Twelve Data for 140 (11%). SEC set aside: 96 not yet on the release’s quarter, 11 failed the scale check, 30 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 59.3% on the same quarter (as Revenue TTM). The release matches the 10-Q 90.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1674,12 +1680,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1217,
-    "rel": 678,
+    "rel": 681,
     "of": 1258
    },
    "vsTd": {
-    "n": 528,
-    "close": 38.1,
+    "n": 530,
+    "close": 37.9,
     "median": 3.3,
     "unit": "%",
     "tol": 2
@@ -1696,8 +1702,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 531,
-     "close": 82.7,
+     "n": 533,
+     "close": 82.6,
      "median": 0,
      "unit": "%",
      "tol": 2
@@ -1710,13 +1716,13 @@
    },
    "rule": {
     "used": {
-     "release": 158,
-     "sec": 770,
+     "release": 159,
+     "sec": 769,
      "td": 0,
      "none": 330
     },
     "aside": {
-     "waiting": 39,
+     "waiting": 40,
      "scale": 1,
      "outvoted": 19
     },
@@ -1736,7 +1742,7 @@
    },
    "best": {
     "source": "Release → SEC",
-    "why": "Today it would use the release for 158 (17%), the SEC data for 770 (83%), Twelve Data for 0 (0%). SEC set aside: 39 not yet on the release’s quarter, 1 failed the scale check, 19 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (330 today). The release matches the 10-Q 38.4% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 159 (17%), the SEC data for 769 (83%), Twelve Data for 0 (0%). SEC set aside: 40 not yet on the release’s quarter, 1 failed the scale check, 19 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (330 today). The release matches the 10-Q 38.4% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1764,11 +1770,11 @@
    "kind": "mult",
    "coverage": {
     "td": 1053,
-    "rel": 358,
+    "rel": 359,
     "of": 1258
    },
    "vsTd": {
-    "n": 266,
+    "n": 267,
     "close": 9,
     "median": 12.1,
     "unit": "%",
@@ -1786,9 +1792,9 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 229,
+     "n": 230,
      "close": 10,
-     "median": 14.2,
+     "median": 14.5,
      "unit": "%",
      "tol": 2
     }
@@ -1841,12 +1847,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1122,
-    "rel": 655,
+    "rel": 658,
     "of": 1258
    },
    "vsTd": {
-    "n": 491,
-    "close": 90.4,
+    "n": 494,
+    "close": 90.3,
     "median": 0,
     "unit": "%",
     "tol": 2
@@ -1863,7 +1869,7 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 589,
+     "n": 591,
      "close": 97.3,
      "median": 0,
      "unit": "%",
@@ -1877,13 +1883,13 @@
    },
    "rule": {
     "used": {
-     "release": 65,
-     "sec": 958,
+     "release": 66,
+     "sec": 957,
      "td": 103,
      "none": 132
     },
     "aside": {
-     "waiting": 51,
+     "waiting": 52,
      "scale": 0,
      "outvoted": 9
     },
@@ -1901,7 +1907,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 65 (6%), the SEC data for 958 (85%), Twelve Data for 103 (9%). SEC set aside: 51 not yet on the release’s quarter, 9 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 91.8% on the same quarter (as Operating cash). The release matches the 10-Q 96.7% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 66 (6%), the SEC data for 957 (85%), Twelve Data for 103 (9%). SEC set aside: 52 not yet on the release’s quarter, 9 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 91.8% on the same quarter (as Operating cash). The release matches the 10-Q 96.7% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -1929,12 +1935,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1258,
-    "rel": 1041,
+    "rel": 1046,
     "of": 1258
    },
    "vsTd": {
-    "n": 776,
-    "close": 93.9,
+    "n": 780,
+    "close": 94,
     "median": 0,
     "unit": "pts",
     "tol": 1
@@ -1951,7 +1957,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 825,
+     "n": 828,
      "close": 95.8,
      "median": 0,
      "unit": "pts",
@@ -1965,13 +1971,13 @@
    },
    "rule": {
     "used": {
-     "release": 204,
-     "sec": 913,
+     "release": 206,
+     "sec": 911,
      "td": 141,
      "none": 0
     },
     "aside": {
-     "waiting": 106,
+     "waiting": 108,
      "scale": 0,
      "outvoted": 9
     },
@@ -1989,7 +1995,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 204 (16%), the SEC data for 913 (73%), Twelve Data for 141 (11%). SEC set aside: 106 not yet on the release’s quarter, 9 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 92.6% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 206 (16%), the SEC data for 911 (72%), Twelve Data for 141 (11%). SEC set aside: 108 not yet on the release’s quarter, 9 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 92.6% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2017,12 +2023,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1258,
-    "rel": 611,
+    "rel": 613,
     "of": 1258
    },
    "vsTd": {
-    "n": 465,
-    "close": 43.9,
+    "n": 467,
+    "close": 43.7,
     "median": 1.2,
     "unit": "pts",
     "tol": 1
@@ -2039,7 +2045,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 511,
+     "n": 512,
      "close": 97.3,
      "median": 0,
      "unit": "pts",
@@ -2053,13 +2059,13 @@
    },
    "rule": {
     "used": {
-     "release": 91,
-     "sec": 896,
+     "release": 92,
+     "sec": 895,
      "td": 0,
      "none": 271
     },
     "aside": {
-     "waiting": 37,
+     "waiting": 38,
      "scale": 0,
      "outvoted": 2
     },
@@ -2074,7 +2080,7 @@
    },
    "best": {
     "source": "Release → SEC",
-    "why": "Today it would use the release for 91 (9%), the SEC data for 896 (91%), Twelve Data for 0 (0%). SEC set aside: 37 not yet on the release’s quarter, 2 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (271 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 92 (9%), the SEC data for 895 (91%), Twelve Data for 0 (0%). SEC set aside: 38 not yet on the release’s quarter, 2 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (271 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2102,12 +2108,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1248,
-    "rel": 597,
+    "rel": 600,
     "of": 1258
    },
    "vsTd": {
-    "n": 493,
-    "close": 79.5,
+    "n": 496,
+    "close": 79.4,
     "median": 0,
     "unit": "pts",
     "tol": 1
@@ -2124,7 +2130,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 491,
+     "n": 492,
      "close": 95.1,
      "median": 0,
      "unit": "pts",
@@ -2138,13 +2144,13 @@
    },
    "rule": {
     "used": {
-     "release": 107,
-     "sec": 652,
-     "td": 489,
+     "release": 109,
+     "sec": 651,
+     "td": 488,
      "none": 10
     },
     "aside": {
-     "waiting": 30,
+     "waiting": 31,
      "scale": 0,
      "outvoted": 14
     },
@@ -2162,7 +2168,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 107 (9%), the SEC data for 652 (52%), Twelve Data for 489 (39%). SEC set aside: 30 not yet on the release’s quarter, 14 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 75.5% on the same quarter (what each counts in cost of revenue). The release matches the 10-Q 98.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 109 (9%), the SEC data for 651 (52%), Twelve Data for 488 (39%). SEC set aside: 31 not yet on the release’s quarter, 14 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 75.5% on the same quarter (what each counts in cost of revenue). The release matches the 10-Q 98.5% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2190,12 +2196,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1257,
-    "rel": 811,
+    "rel": 816,
     "of": 1258
    },
    "vsTd": {
-    "n": 612,
-    "close": 26.3,
+    "n": 616,
+    "close": 26.1,
     "median": 2.6,
     "unit": "pts",
     "tol": 1
@@ -2212,7 +2218,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 709,
+     "n": 712,
      "close": 95.9,
      "median": 0,
      "unit": "pts",
@@ -2226,13 +2232,13 @@
    },
    "rule": {
     "used": {
-     "release": 90,
-     "sec": 833,
+     "release": 92,
+     "sec": 831,
      "td": 334,
      "none": 1
     },
     "aside": {
-     "waiting": 50,
+     "waiting": 52,
      "scale": 0,
      "outvoted": 3
     },
@@ -2248,7 +2254,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 90 (7%), the SEC data for 833 (66%), Twelve Data for 334 (27%). SEC set aside: 50 not yet on the release’s quarter, 3 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 23.5% on the same quarter. The release matches the 10-Q 98.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 92 (7%), the SEC data for 831 (66%), Twelve Data for 334 (27%). SEC set aside: 52 not yet on the release’s quarter, 3 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 23.5% on the same quarter. The release matches the 10-Q 98.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Mixed",
@@ -2276,12 +2282,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1248,
-    "rel": 978,
+    "rel": 983,
     "of": 1258
    },
    "vsTd": {
-    "n": 727,
-    "close": 89.8,
+    "n": 731,
+    "close": 89.9,
     "median": 0,
     "unit": "pts",
     "tol": 1
@@ -2298,7 +2304,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 844,
+     "n": 847,
      "close": 92.4,
      "median": 0,
      "unit": "pts",
@@ -2312,13 +2318,13 @@
    },
    "rule": {
     "used": {
-     "release": 162,
-     "sec": 944,
+     "release": 164,
+     "sec": 942,
      "td": 142,
      "none": 10
     },
     "aside": {
-     "waiting": 82,
+     "waiting": 84,
      "scale": 0,
      "outvoted": 46
     },
@@ -2336,7 +2342,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 162 (13%), the SEC data for 944 (76%), Twelve Data for 142 (11%). SEC set aside: 82 not yet on the release’s quarter, 46 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 81.4% on the same quarter (non-controlling interests in or out). The release matches the 10-Q 90.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 164 (13%), the SEC data for 942 (75%), Twelve Data for 142 (11%). SEC set aside: 84 not yet on the release’s quarter, 46 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 81.4% on the same quarter (non-controlling interests in or out). The release matches the 10-Q 90.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2364,12 +2370,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1248,
-    "rel": 600,
+    "rel": 602,
     "of": 1258
    },
    "vsTd": {
-    "n": 454,
-    "close": 16.5,
+    "n": 456,
+    "close": 16.4,
     "median": 3.3,
     "unit": "pts",
     "tol": 1
@@ -2386,8 +2392,8 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 504,
-     "close": 94.8,
+     "n": 505,
+     "close": 94.9,
      "median": 0,
      "unit": "pts",
      "tol": 1
@@ -2400,13 +2406,13 @@
    },
    "rule": {
     "used": {
-     "release": 87,
-     "sec": 877,
+     "release": 88,
+     "sec": 876,
      "td": 0,
      "none": 294
     },
     "aside": {
-     "waiting": 33,
+     "waiting": 34,
      "scale": 0,
      "outvoted": 1
     },
@@ -2420,7 +2426,7 @@
    },
    "best": {
     "source": "Release → SEC",
-    "why": "Today it would use the release for 87 (9%), the SEC data for 877 (91%), Twelve Data for 0 (0%). SEC set aside: 33 not yet on the release’s quarter, 1 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (294 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 88 (9%), the SEC data for 876 (91%), Twelve Data for 0 (0%). SEC set aside: 34 not yet on the release’s quarter, 1 outvoted by the release and Twelve Data. The owner chose operating cash flow less capex (2026-10-29); Twelve Data’s levered figure is another measure, so it is no fallback and a company neither filing source covers is left blank (294 today). The release matches the 10-Q 93.8% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2448,12 +2454,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1257,
-    "rel": 817,
+    "rel": 821,
     "of": 1258
    },
    "vsTd": {
-    "n": 642,
-    "close": 50,
+    "n": 645,
+    "close": 49.9,
     "median": 1,
     "unit": "pts",
     "tol": 1
@@ -2470,7 +2476,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 715,
+     "n": 718,
      "close": 94,
      "median": 0,
      "unit": "pts",
@@ -2484,13 +2490,13 @@
    },
    "rule": {
     "used": {
-     "release": 93,
-     "sec": 970,
+     "release": 94,
+     "sec": 969,
      "td": 194,
      "none": 1
     },
     "aside": {
-     "waiting": 78,
+     "waiting": 79,
      "scale": 0,
      "outvoted": 8
     },
@@ -2508,7 +2514,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 93 (7%), the SEC data for 970 (77%), Twelve Data for 194 (15%). SEC set aside: 78 not yet on the release’s quarter, 8 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 51.2% on the same quarter (Twelve Data divides by average equity, the filings give the quarter end). The release matches the 10-Q 95.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 94 (7%), the SEC data for 969 (77%), Twelve Data for 194 (15%). SEC set aside: 79 not yet on the release’s quarter, 8 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 51.2% on the same quarter (Twelve Data divides by average equity, the filings give the quarter end). The release matches the 10-Q 95.2% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2536,12 +2542,12 @@
    "kind": "pct",
    "coverage": {
     "td": 1257,
-    "rel": 846,
+    "rel": 851,
     "of": 1258
    },
    "vsTd": {
-    "n": 670,
-    "close": 40.6,
+    "n": 674,
+    "close": 40.7,
     "median": 1.5,
     "unit": "pts",
     "tol": 1
@@ -2558,7 +2564,7 @@
      "tol": 1
     },
     "vsRel": {
-     "n": 741,
+     "n": 744,
      "close": 98.1,
      "median": 0,
      "unit": "pts",
@@ -2572,13 +2578,13 @@
    },
    "rule": {
     "used": {
-     "release": 91,
-     "sec": 1039,
+     "release": 93,
+     "sec": 1037,
      "td": 127,
      "none": 1
     },
     "aside": {
-     "waiting": 79,
+     "waiting": 81,
      "scale": 0,
      "outvoted": 5
     },
@@ -2596,7 +2602,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 91 (7%), the SEC data for 1,039 (83%), Twelve Data for 127 (10%). SEC set aside: 79 not yet on the release’s quarter, 5 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 38.9% on the same quarter (Twelve Data divides by average assets, the filings give the quarter end). The release matches the 10-Q 99.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 93 (7%), the SEC data for 1,037 (82%), Twelve Data for 127 (10%). SEC set aside: 81 not yet on the release’s quarter, 5 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 38.9% on the same quarter (Twelve Data divides by average assets, the filings give the quarter end). The release matches the 10-Q 99.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",
@@ -2800,12 +2806,12 @@
    "kind": "mult",
    "coverage": {
     "td": 1258,
-    "rel": 1041,
+    "rel": 1046,
     "of": 1258
    },
    "vsTd": {
-    "n": 776,
-    "close": 74.6,
+    "n": 780,
+    "close": 74.5,
     "median": 0.3,
     "unit": "%",
     "tol": 2
@@ -2822,8 +2828,8 @@
      "tol": 2
     },
     "vsRel": {
-     "n": 825,
-     "close": 85.1,
+     "n": 828,
+     "close": 85,
      "median": 0.2,
      "unit": "%",
      "tol": 2
@@ -2836,13 +2842,13 @@
    },
    "rule": {
     "used": {
-     "release": 227,
-     "sec": 890,
+     "release": 229,
+     "sec": 888,
      "td": 141,
      "none": 0
     },
     "aside": {
-     "waiting": 106,
+     "waiting": 108,
      "scale": 0,
      "outvoted": 32
     },
@@ -2860,7 +2866,7 @@
    },
    "best": {
     "source": "Release → SEC → Twelve Data",
-    "why": "Today it would use the release for 227 (18%), the SEC data for 890 (71%), Twelve Data for 141 (11%). SEC set aside: 106 not yet on the release’s quarter, 32 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 76.7% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
+    "why": "Today it would use the release for 229 (18%), the SEC data for 888 (71%), Twelve Data for 141 (11%). SEC set aside: 108 not yet on the release’s quarter, 32 outvoted by the release and Twelve Data. SEC and Twelve Data agree on 76.7% on the same quarter (quarter EPS do not add exactly to a year’s). The release matches the 10-Q 98.6% within 0.5%, a median 1 day before the 10-Q (13 for the slowest tenth)."
    },
    "proposal": {
     "now": "Twelve months",

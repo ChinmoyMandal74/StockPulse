@@ -2588,23 +2588,42 @@ Nothing here touches the Signal.
 
 ## 54. Fundamentals from the release, then the SEC data, then Twelve Data — 2026-10-29
 
-*Area: Data · Status: Open · Note: the owner set the rule ("take the data from Earning release if that is available as it comes first ... if SEC data exists we should take the data from SEC, if for some reason SEC data is not dependable we should get it from Twelve data") and asked for it documented first: docs/context/data-sources.md*
+*Area: Data · Status: Done · Note: the owner set the rule ("take the data from Earning release if that is available as it comes first ... if SEC data exists we should take the data from SEC, if for some reason SEC data is not dependable we should get it from Twelve data"); built the same day for the display columns and then, on the owner's word ("just rebuild signal"), for the Signal's inputs: docs/context/data-sources.md*
 
-The design, the measurements and the open decisions are in
-`docs/context/data-sources.md`; the column-by-column plan is the admin page
-`/sources` (`td-release-map.js`). What remains, in order:
+Done 2026-10-29: the rule encoded and measured on `/sources`; period tags and
+the regrouping by statement; the owner's definitions (free cash flow is
+operating cash flow less capex, debt is borrowings with leases apart, banks'
+revenue is net revenue); the new SEC concepts and two re-reads; the display
+columns on the rule a quarter at a time, the source said in every hover
+(`sourcerule.js`); the Signal's inputs on it, Quality scored again from them.
+What is left is entry 55.
 
-- Encode the rule on `/sources` and measure how often each source would be used,
-  and how often the SEC data fails the dependability test.
-- Period tags in every header and the regrouping by statement (display only).
-- The owner's definitions: free cash flow (levered or not), total debt, banks'
-  revenue line.
-- The new SEC concepts (depreciation and amortization, cover-page shares
-  outstanding, short-term investments, the rest of the debt lines) and one
-  `sec-reread.js` pass; the declared dividend as a release field.
-- The display columns onto the rule, a quarter at a time inside twelve-month
-  figures, with the source said in the hover.
-- The Signal's inputs: only on the owner's word, proven behaviourally.
+## 55. The source plan: what is left — 2026-10-29
+
+*Area: Data · Status: Open · Note: the owner asked for these on the backlog after the Signal was rebuilt on the source rule (docs/context/data-sources.md, the plan on /sources)*
+
+- **Half-yearly reporters on their own period.** Foreign filers that report
+  every six months (most 20-F and 6-K filers) keep Twelve Data's figures,
+  because the rule needs four quarters in a row. Twelve months from the halves
+  (the SEC data's H and FY rows already allow it), growth on the half a year
+  earlier, said in the hover as half-yearly.
+- **The missing statement columns.** Operating income, capex and interest cover
+  from data already stored; EBITDA margin, ROIC and FCF per share once their
+  inputs are settled (EBITDA is still Twelve Data's: ours, operating income
+  plus depreciation, agreed with it for 20% of companies, impairments apart).
+  Each a screener column (the column checklist in CLAUDE.md) and a FIELD_SPEC
+  row.
+- **The declared dividend from the releases.** The dividend per share a results
+  release declares, with its record and payment dates, as a release field
+  (about $8 of model credit to backfill); the forward dividend columns stay
+  Twelve Data's until then.
+- **Free cash flow still blank for some companies outside banks, insurers and
+  REITs.** After the 2026-10-29 fixes (four filed quarters when the newest
+  release has no cash flow statement, sixteen-week quarters, three more capex
+  tags, Exxon's predecessor CIK), the ones left file capex only under their own
+  company-specific tag (Valero, ConocoPhillips, AppLovin, Airbnb, Phillips 66)
+  and print no cash flow statement in their release. A per-company tag list,
+  or the release's cash flow read for them, would close it.
 
 ## What is deliberately NOT on this list
 

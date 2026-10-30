@@ -936,3 +936,7 @@ The header's period tag reads **TTM** (was "latest Q"): the owner's source rule 
 ### Hovers open with the source (2026-10-29)
 
 The owner: start the screener hover with "Source: <source>" and then the existing text. Every company-figure cell now does: the rule's fields through `srcT` (`RowCard.srcLabel`: SEC filings (10-Q, 10-K); Results release; Results release and SEC filings; SEC filings and results release; Results releases; None; or Twelve Data where the rule left the field alone), and the fields only Twelve Data has (sector, industry, market cap, EBITDA, revenue per employee, forward and trailing P/E, PEG, ROA, dividend yield, payout, float, short ratio and short %, insiders, institutions) through `tdT`, "Source: Twelve Data." before the cache line. Not in a rewound (as-of) table, where fundamentals are hidden.
+
+### Fund. reads "No case"; the stock page says the source (2026-10-29)
+
+The owner, on Alphabet's Fund. cell showing a dash: the fundamentals bucket "none" is stored as "\u2014" (`ActionRules` `FUND_LABELS`), which read as missing data. `stateCell` draws it as **No case** (italic, faint, class `st-nocase`) with a hover saying what it means; the stored label, `FUND_ORDER`, the sort and the filters keep the dash. The stock page's "Everything the screener knows" rows for the source rule's fields carry "Source: ..." on hover (`buildSections` option `sources`, `RowCard.SRC_KEYS` mapping each catalogue row to its field). The hover card is a tooltip already and the phone has no hover, so neither shows it.

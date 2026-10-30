@@ -204,6 +204,7 @@
     td.state.st-bad { color: color-mix(in srgb, var(--red) 75%, var(--muted)); }
     td.state.st-warn { color: var(--amber); }
     td.state.st-guard { color: var(--faint); font-size: 11px; }
+    td.state.st-nocase { color: var(--faint); font-style: italic; }
 
     .pick-hint {
       padding: 8px 12px 4px; font-size: 10.5px; line-height: 1.5;
@@ -1622,7 +1623,7 @@
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
         <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
-        <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or — when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
+        <th class="grp-act left" data-key="actionFund" title="The fundamentals bucket under this stock's rule set — Strong, OK, Weak, or No case when the data makes no case either way. Established is judged on earnings, revenue, margins and cash flow; Early on growth, gross margin, burn and short interest. Fundamentals answer how much conviction.">Fund.</th>
         <th class="grp-act left" data-key="actionGuards" title="Timing guards that cap the signal at Neutral: earnings within the blackout window, or too little price history to judge. Blank for most stocks — when this column speaks, it matters.">Guards</th>
         <th class="grp-act left av-col av-balanced" data-key="av:Balanced" title="What the fixed rules read for this stock today. A mechanical reading of the table, not a recommendation. First matching rule wins, and the cell's tooltip names the rule that fired.">Signal</th>
         <th class="grp-act" data-key="actionCushion" title="How far the rules let this stock fall before they exit, measured in its OWN monthly volatility — so it is comparable between a quiet stock and a wild one, which the raw percentage is not. It orders TAIL SIZE inside a signal tier, not return: over 307,965 stock-days the higher-cushion half of a tier had a thinner 10th-percentile loss in every era and horizon tested, while the average return difference stayed noise. Sorting by an advice column breaks ties on it.">Cushion</th>
@@ -4580,6 +4581,13 @@
 
     function stateCell(v, danger, fam) {
       if (!v) return `<td class="state grp-act" data-fam="${fam}">—</td>`;
+      // The fundamentals bucket "none" is stored as a dash, which read as
+      // missing data (the owner, on Alphabet, 2026-10-29). It is a reading:
+      // the figures made no case either way. Drawn as words; the stored
+      // label, the sort order and the filters keep the dash.
+      if (fam === 'fund' && v === '—') {
+        return `<td class="state grp-act st-nocase" data-fam="fund"${attr('No case either way: not weak (that needs earnings and revenue both falling, a loss, or a low Quality), and not OK or Strong (those need earnings and revenue growth above their thresholds). The Signal rests on the other readings.')}>No case</td>`;
+      }
       const cls = danger[v] ? ' ' + danger[v] : '';
       return `<td class="state grp-act${cls}" data-fam="${fam}">${we(v)}</td>`;
     }

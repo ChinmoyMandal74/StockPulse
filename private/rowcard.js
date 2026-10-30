@@ -1520,7 +1520,12 @@
           // screener puts the same explanation — on the cell. Only an
           // extra row can have one, so the hover card is unchanged: a
           // tooltip inside a tooltip helps nobody.
-          const ttl = r.title ? ` title="${esc(r.title)}"` : '';
+          // `sources` (opt-in; only /stock passes it): a figure the owner's
+          // source rule sets says where it came from, as the screener's cell
+          // does. Not in the hover card, a tooltip already.
+          const sf = o.sources && !r.title && r.t !== '—' ? SRC_KEYS[r.key || (g + '|' + r.k)] : null;
+          const stTitle = sf ? 'Source: ' + srcLabel(s, sf) + '.' + (srcNote(s, sf) ? ' ' + srcNote(s, sf) : '') : '';
+          const ttl = r.title ? ` title="${esc(r.title)}"` : stTitle ? ` title="${esc(stTitle)}"` : '';
           // `drill` marks a row whose figure has a history behind it
           // (drillpop.js FIELD_OF, keyed group|label). Opt-in like `links`:
           // only /stock passes it, and only a row with a value is marked.
@@ -1787,6 +1792,14 @@
   const SRC_MONEY = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, totalCash: 1, totalDebt: 1, netCash: 1, enterpriseValue: 1, netIncomeTtm: 1, fcfTtm: 1 };
   const SRC_PCT = { operatingMargin: 1, netCashPct: 1, grossMargin: 1, profitMargin: 1, fcfMargin: 1, roe: 1, fcfYield: 1, revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
   const SRC_GROWTH = { revenueGrowthYoY: 1, earningsGrowthYoY: 1 };
+  // The catalogue row (group|label) of each field the rule sets, for the stock page.
+  const SRC_KEYS = { 'size|Revenue TTM': 'revenueTtm', 'size|Gross profit': 'grossProfitTtm', 'size|Net income': 'netIncomeTtm', 'size|EPS TTM': 'dilutedEpsTtm',
+    'cflow|FCF TTM': 'fcfTtm', 'cflow|Operating cash': 'operatingCashFlowTtm', 'value|P/B': 'priceToBook', 'value|P/S': 'priceToSales', 'value|EV/EBITDA': 'evToEbitda',
+    'value|FCF yield': 'fcfYield', 'value|Enterprise value': 'enterpriseValue', 'profit|Gross margin': 'grossMargin', 'profit|Operating margin': 'operatingMargin',
+    'profit|Profit margin': 'profitMargin', 'profit|FCF margin': 'fcfMargin', 'profit|ROE': 'roe', 'growth|Rev grth Q YoY': 'revenueGrowthYoY',
+    'growth|Earn grth Q YoY': 'earningsGrowthYoY', 'finpos|Cash': 'totalCash', 'finpos|Debt': 'totalDebt', 'finpos|Net cash': 'netCash',
+    'finpos|Debt / equity': 'debtToEquity', 'finpos|Current ratio': 'currentRatio', 'finpos|Net cash %': 'netCashPct', 'own|Shares out': 'sharesOutstanding',
+    'finpos|Book value/share': 'bookValuePerShare' };
   const SRC_FCF = { fcfTtm: 1, fcfMargin: 1, fcfYield: 1 };
   // The short name of a figure's source, for the "Source: ..." that opens a
   // screener cell's hover: the rule's code, or Twelve Data where the rule left
