@@ -8814,7 +8814,9 @@ app.post('/api/schedule/report', route(async (req, res) => {
     .filter((t) => t && /^TickrLab /.test(String(t.name || '')))
     .map((t) => ({
       name: str(t.name, 80), state: str(t.state, 20), action: str(t.action, 400),
-      triggers: (Array.isArray(t.triggers) ? t.triggers : []).slice(0, 12).map((g) => ({
+      // 40, not 12 (2026-10-30): Article tone has 15 triggers, and the cap cut its
+      // three weekend ones, so /schedule and the jobs email said they were missing.
+      triggers: (Array.isArray(t.triggers) ? t.triggers : []).slice(0, 40).map((g) => ({
         kind: str(g && g.kind, 20), start: str(g && g.start, 40), days: g && g.days != null ? Number(g.days) || 0 : null,
         interval: str(g && g.interval, 20), duration: str(g && g.duration, 20), enabled: !(g && g.enabled === false),
       })),
