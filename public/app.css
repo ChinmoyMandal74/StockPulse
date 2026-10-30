@@ -725,6 +725,21 @@ tbody tr:hover svg.spark path { stroke: var(--text); }
 .rv-drv-col ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 4px; }
 .rv-drv-col li { font-size: 13px; line-height: 1.45; color: var(--muted); }
 .rv-drv-col p { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
+/* AI spend and AI rewards (2026-10-29): beside the drivers, their own two colours. */
+.rv-ai { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin-top: 12px; }
+.rv-ai-col { border-left: 3px solid var(--c); padding-left: 12px; }
+.rv-ai-col.rv-ai-spend, .rv-ai-tag.rv-ai-spend { --c: var(--indigo); }
+.rv-ai-col.rv-ai-reward, .rv-ai-tag.rv-ai-reward { --c: var(--teal); }
+.rv-ai-col > b { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c); }
+.rv-ai-col ul { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 4px; }
+.rv-ai-col li { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.rv-ai-col li::marker { color: var(--c); }
+.rv-ai-col p { margin: 6px 0 0; font-size: 12.5px; color: var(--faint); }
+.rv-ai-when { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); margin-right: 6px; }
+.rv-ai.rv-ai-none { display: block; font-size: 12.5px; color: var(--faint); }
+.rv-ai-line { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 6px; }
+.rv-ai-tag { font-size: 11.5px; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); border-radius: 999px; padding: 1px 8px; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 640px) { .rv-ai { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .rv-drv { grid-template-columns: 1fr; } }
 /* From the statements (2026-10-29): margins and the balance sheet from the
    release, one quiet row of small figures under a release's six cards. */

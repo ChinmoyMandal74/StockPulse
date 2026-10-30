@@ -124,6 +124,14 @@ const RESTMT = flag('--restmt');
 const STATEMENTS = flag('--statements') || RESHARES || RESTMT;
 const CASHFLOW = flag('--cashflow') || STATEMENTS;
 const DERIVE_ONLY = flag('--derive-only');
+// THE AI PASS (--ai, 2026-10-29, the owner: "add a few points on the earning
+// and guidance on AI spend and AI rewards ... only fill for the current quarter
+// filling"): read again the results releases for the quarter just reported
+// (period ending on or after --ai-since, default 2026-08-01) not yet read for
+// it, and write the AI points alone (writeReleaseAi). Every reading after this
+// asks for them itself, so the pass is the one backfill. --parallel at a time.
+const AI_PASS = flag('--ai');
+const AI_SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--ai-since', '')) ? opt('--ai-since', '') : '2026-08-01';
 const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(opt('--since', '')) ? opt('--since', '') : STATEMENTS ? '2025-07-01' : '2026-04-01';
 const PARALLEL = Math.max(1, Math.min(12, Number(opt('--parallel', 8)) || 8));
 // The previous full year's GAAP diluted EPS from the 10-K, for a release whose
@@ -347,6 +355,48 @@ async function driversPass() {
   }
   console.log(`  done: ${done} re-read, ${withAny} with reasons, ${refused} points refused by the checks, ${failed} to retry; $${spent.toFixed(4)}; ${Math.round((Date.now() - t0) / 1000)}s`);
 }
+async function aiPass() {
+  if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
+  if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
+  // Filed in the window that can hold the quarter (a quarter is reported
+  // within about three months of its end), then by its period end.
+  const all = (await store.readEarningsReleasesSince(AI_SINCE)).filter((r) => r.isResults && r.periodEnd && r.periodEnd >= AI_SINCE && (!ONLY || r.symbol === ONLY));
+  const todo = all.filter((r) => r.aiPoints == null && r.url).sort((a, b) => (a.filed < b.filed ? 1 : -1));
+  console.log('[' + new Date().toISOString() + '] AI re-read for quarters ending on or after ' + AI_SINCE + ': ' + todo.length + ' of ' + all.length + ' releases; ' + PARALLEL + ' at a time; stop at ' + MAX_USD.toFixed(2) + ' or ' + MAX_MIN + ' min; ' + (COMMIT ? 'COMMIT (AI points only)' : 'DRY RUN'));
+  let done = 0, withAny = 0, spendN = 0, rewardN = 0, refused = 0, failed = 0, stop = null;
+  const inflight = new Set();
+  const one = async (r, text) => {
+    try {
+      const got = await ask(text, Rel.aiRequest);
+      const problems = [];
+      const pts = Rel.aiPoints(got.ans, text, problems);
+      refused += problems.length;
+      const sp = pts.filter((p) => p.kind === 'spend').length, rw = pts.filter((p) => p.kind === 'reward').length;
+      console.log('  ' + r.symbol + ' ' + r.filed + ': ' + (pts.length ? sp + ' spend, ' + rw + ' reward' : 'nothing on AI') + (problems.length ? ' | ' + problems.join('; ').slice(0, 200) : '') + ' | ' + got.usd.toFixed(4));
+      // One company asked for (--symbol): the points themselves, to read them.
+      if (ONLY) for (const p of pts) console.log('    ' + p.kind + ' / ' + p.when + ': ' + p.text + '  “' + p.evidence + '”');
+      if (COMMIT) await store.writeReleaseAi(r.accn, pts);
+      done++; if (pts.length) withAny++; spendN += sp; rewardN += rw;
+    } catch (err) {
+      if (err instanceof Stop) stop = stop || err;
+      failed++;
+      console.log('  ' + r.symbol + ' ' + r.filed + ': failed (' + String(err.message).slice(0, 120) + '); next run');
+    }
+  };
+  for (const r of todo) {
+    if (stop) break;
+    if (spent >= MAX_USD) { console.log('  stopping: the dollar limit'); break; }
+    if (Date.now() - t0 > MAX_MIN * 60000) { console.log('  stopping: the time limit'); break; }
+    const html = await sec(r.url);
+    if (!html) { console.log('  ' + r.symbol + ' ' + r.filed + ': the exhibit did not load; next run'); failed++; continue; }
+    const p = one(r, Rel.toText(html)).finally(() => inflight.delete(p));
+    inflight.add(p);
+    while (inflight.size >= PARALLEL) await Promise.race(inflight);
+  }
+  await Promise.all(inflight);
+  if (stop) throw stop;
+  console.log('  done: ' + done + ' read, ' + withAny + ' say something about AI (' + spendN + ' spend points, ' + rewardN + ' reward points), ' + refused + ' points refused by the checks, ' + failed + ' to retry; $' + spent.toFixed(4) + '; ' + Math.round((Date.now() - t0) / 1000) + 's');
+}
 async function cashflowPass() {
   const snap = await store.readSnapshot();
   const sector = new Map(((snap && snap.stocks) || []).filter((r) => r && r.symbol).map((r) => [r.symbol, r.sector]));
@@ -419,6 +469,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   if (COLUMN_ONLY) { await writeColumn(); await writeSourced().catch((err) => console.log('  source rule failed: ' + String(err.message).slice(0, 120))); await writeRecon(); process.exit(0); }
   if (GUIDANCE) { await guidancePass(); process.exit(0); }
   if (DRIVERS) { await driversPass(); process.exit(0); }
+  if (AI_PASS) { await aiPass(); process.exit(0); }
   if (CASHFLOW || DERIVE_ONLY) { await cashflowPass(); process.exit(0); }
   if (!KEY) throw new Stop('ANTHROPIC_API_KEY is not set');
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
@@ -477,7 +528,21 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
             console.log(`  ${e.symbol} ${e.filed}: the cash flow reading failed (${String(err.message).slice(0, 80)}); left for --cashflow`);
           }
         }
+        // AI SPEND AND AI REWARDS (2026-10-29): a third small call, the same
+        // terms: its failure leaves the points unread (null) for --ai.
+        let aiAns = null;
+        if (got.ans && got.ans.is_results_release === true) {
+          try {
+            const ai = await ask(text, Rel.aiRequest);
+            aiAns = ai.ans;
+            cost = { inTok: cost.inTok + ai.inTok, outTok: cost.outTok + ai.outTok, usd: cost.usd + ai.usd };
+          } catch (err) {
+            if (err instanceof Stop) throw err;
+            console.log(`  ${e.symbol} ${e.filed}: the AI reading failed (${String(err.message).slice(0, 80)}); left for --ai`);
+          }
+        }
         ({ row, problems } = Rel.toRow(got.ans, text, meta));
+        if (row.isResults && aiAns) row.aiPoints = Rel.aiPoints(aiAns, text, problems);
       }
       read++;
       if (row.isResults) results++; else notResults++;

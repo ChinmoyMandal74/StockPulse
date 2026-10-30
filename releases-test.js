@@ -534,5 +534,36 @@ check('request: no maxItems (the structured-output API refuses it on arrays)', !
   check('fcfSub: neither is none given', /^none given/.test(RV.fcfSub({ fcf: null, fcfCalc: null, fcfCalcPrior: null, fcfLabel: '' }, sub)));
 }
 
+// ---- AI SPEND AND AI REWARDS (2026-10-29) ------------------------------------
+{
+  const text = 'Revenue grew 20%. Google Cloud revenue rose 34%, driven by demand for our AI infrastructure and generative AI solutions. '
+    + 'We now expect 2026 capital expenditures of $175 billion to $185 billion, primarily for technical infrastructure to support AI. '
+    + 'Forward-looking statements about artificial intelligence involve risks and uncertainties. '
+    // Far from any mention of AI, so its nearness test has nothing to find.
+    + 'Other matters. '.repeat(40) + 'Our search business grew 12%.';
+  const pts = (list) => { const problems = []; return { out: Rel.aiPoints({ points: list }, text, problems), problems }; };
+  let x = pts([
+    { kind: 'reward', when: 'quarter', text: 'Google Cloud revenue up 34% on AI demand', evidence: 'driven by demand for our AI infrastructure and generative AI solutions' },
+    { kind: 'spend', when: 'outlook', text: 'Capital expenditures of $175B to $185B in 2026, mostly for AI', evidence: 'primarily for technical infrastructure to support AI' },
+  ]);
+  check('AI: two points kept, spend and reward', x.out.length === 2 && x.out[0].kind === 'reward' && x.out[1].when === 'outlook');
+  x = pts([{ kind: 'reward', when: 'quarter', text: 'AI drove a record quarter', evidence: 'AI drove a record quarter for the company' }]);
+  check('AI: a phrase not in the release is refused', x.out.length === 0 && /not in the release/.test(x.problems[0]));
+  x = pts([{ kind: 'reward', when: 'quarter', text: 'Search grew 12%', evidence: 'Our search business grew 12%' }]);
+  check('AI: a phrase with no AI near it is refused', x.out.length === 0 && /nothing near its words names AI/.test(x.problems[0]));
+  x = pts([{ kind: 'spend', when: 'outlook', text: 'AI involves risks', evidence: 'Forward-looking statements about artificial intelligence involve risks and uncertainties' }]);
+  check('AI: the boilerplate is refused', x.out.length === 0 && /boilerplate/.test(x.problems[0]));
+  x = pts([{ kind: 'reward', when: 'quarter', text: 'Strong AI demand in cloud', evidence: 'driven by demand for our AI infrastructure' }]);
+  check('AI: a banned word is refused', x.out.length === 0 && /word the site does not use/.test(x.problems[0]));
+  const four = Array.from({ length: 4 }, (_, i) => ({ kind: 'spend', when: 'quarter', text: 'Capex for AI, part ' + 'abcd'[i], evidence: 'primarily for technical infrastructure to support AI' }));
+  check('AI: at most three a kind', pts(four).out.length === 3);
+  x = pts([{ kind: 'reward', when: 'quarter', text: 'Google Cloud revenue up 43% on AI demand', evidence: 'driven by demand for our AI infrastructure and generative AI solutions' }]);
+  check('AI: a figure the release does not print is refused', x.out.length === 0 && /43 not in the release/.test(x.problems[0]));
+  check('AI: nothing on AI is an empty list', Array.isArray(pts([]).out) && pts([]).out.length === 0);
+  check('AI: the schema asks for kind, when, text and evidence', JSON.stringify(Rel.AI_SCHEMA.properties.points.items.required) === JSON.stringify(['kind', 'when', 'text', 'evidence']));
+  check('AI view: none read draws nothing; read and empty says so', RV.aiHtml({}) === '' && /nothing about AI/.test(RV.aiHtml({ aiPoints: [] })));
+  check('AI view: the quote rides on hover', /title="“primarily for technical/.test(RV.aiHtml({ aiPoints: x.out.length ? x.out : pts([{ kind: 'spend', when: 'outlook', text: 'Capex for AI', evidence: 'primarily for technical infrastructure to support AI' }]).out })));
+}
+
 console.log(`${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

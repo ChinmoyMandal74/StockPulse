@@ -206,6 +206,64 @@ function cfRequest(text, model) {
     output_config: { effort: 'low', format: { type: 'json_schema', schema: CF_SCHEMA } },
     messages: [{ role: 'user', content: '<release>\n' + String(text).slice(0, MAX_CHARS) + '\n</release>' }] };
 }
+// ---- AI SPEND AND AI REWARDS (2026-10-29) -------------------------------------
+// The owner: "Company are spending a lot on AI and some companies are also
+// benefitting from AI, Is it possible to add a few points on the earning and
+// guidance on AI spend and AI rewards". A third small request for a results
+// release: what the release itself says the company is spending on AI (capex
+// for data centres and chips, investment, AI costs) and what it says AI is
+// bringing it (AI revenue, demand, products, efficiency), each for the quarter
+// reported or in its outlook. Each point backed by a phrase copied from the
+// release that names AI; the company's words, never a view of ours.
+const AI_TERMS = /\bA\.?I\b|artificial intelligence|generative|\bgen ?AI\b|machine learning|\bLLMs?\b|large language model|\bGPUs?\b|accelerated computing|\baccelerators?\b|data cent(er|re)s?|\bcompute\b|inference|agentic|\bAI agents?\b|copilot|gemini|chatgpt|openai|anthropic|neural|hyperscal/i;
+const AI_POINT = { type: 'object', additionalProperties: false, required: ['kind', 'when', 'text', 'evidence'], properties: {
+  kind: { type: 'string', enum: ['spend', 'reward'], description: 'spend: money the company is putting into AI (capital spending on data centres, chips or compute, AI investment, AI-related costs). reward: what AI is bringing the company (AI revenue or bookings, demand for its AI products or services, AI-driven growth, margins or efficiency).' },
+  when: { type: 'string', enum: ['quarter', 'outlook'], description: 'quarter: about the quarter reported. outlook: about what the company expects (guidance, plans, expected spending).' },
+  text: { type: 'string', description: 'The point in plain words, under 120 characters, as the company presents it, with its figure where the release gives one. Not the words buy, sell, hold, strong, weak, bullish or bearish.' },
+  evidence: { type: 'string', description: 'A phrase of 4 to 25 words copied EXACTLY from the release that states it and that names AI (or its plain equivalents: artificial intelligence, generative, GPUs, accelerators, data centers, compute, inference).' } } };
+const AI_SCHEMA = { type: 'object', additionalProperties: false, required: ['points'], properties: {
+  points: { type: 'array', items: AI_POINT, description: 'Up to three AI spend points and three AI reward points, the most material first. Only what the release itself says about AI; an empty array if it says nothing about AI, or only in the forward-looking-statements or risk-factors boilerplate.' } } };
+const AI_SYSTEM = 'You read a company’s quarterly results press release and note what it says about artificial intelligence: what the company is spending on AI, and what AI is bringing it, for the quarter reported and in its outlook. '
+  + 'Only what the release itself states about AI, each with a phrase copied word for word from it. Never your own view, never a forecast of yours, never the forward-looking-statements or risk-factors boilerplate. '
+  + 'If the release does not discuss AI, give an empty list. Report what the document says; add nothing.';
+function aiRequest(text, model) {
+  return { model: model || MODEL, max_tokens: 1500, system: AI_SYSTEM,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: AI_SCHEMA } },
+    messages: [{ role: 'user', content: '<release>\n' + String(text).slice(0, MAX_CHARS) + '\n</release>' }] };
+}
+// The checks: the phrase in the release word for word, naming AI, not the legal
+// boilerplate, no word the site does not use; at most three a kind. Returns
+// [{ kind, when, text, evidence }] (an empty list is stored: read, nothing on AI).
+function aiPoints(ans, text, problems) {
+  const flat = flatQ(String(text || '').replace(/\s+/g, ' '));
+  const out = [], per = { spend: 0, reward: 0 };
+  for (const it of (ans && Array.isArray(ans.points) ? ans.points : [])) {
+    const kind = it && (it.kind === 'spend' || it.kind === 'reward') ? it.kind : null;
+    const when = it && (it.when === 'quarter' || it.when === 'outlook') ? it.when : null;
+    const t = blankStr(it && it.text), ev = blankStr(it && it.evidence);
+    if (!kind || !when || !t || !ev || per[kind] >= 3) continue;
+    const tag = 'AI ' + kind + ' "' + t.slice(0, 50) + '"';
+    const at = flat.indexOf(flatQ(ev));
+    if (at < 0) { problems.push(tag + ': its words are not in the release'); continue; }
+    // ABOUT AI, BY THE RELEASE'S OWN WORDS: the phrase names AI, or the release
+    // names it within about 300 characters of it (Microsoft's Azure growth and
+    // Meta's capital spending are tied to AI a sentence away, not in the phrase).
+    const near = flat.slice(Math.max(0, at - 300), at + flatQ(ev).length + 300);
+    if (!AI_TERMS.test(ev) && !AI_TERMS.test(near)) { problems.push(tag + ': nothing near its words names AI'); continue; }
+    if (BOILER.test(ev) || BOILER.test(t)) { problems.push(tag + ': boilerplate, left out'); continue; }
+    if (BANNED.test(t)) { problems.push(tag + ': used a word the site does not use'); continue; }
+    // EVERY FIGURE IN THE POINT IS IN THE RELEASE: the phrase backs the claim,
+    // and each number the point quotes ("up 103% to $30.7 billion") must be
+    // printed somewhere in the release too, as the main reading's figures are.
+    const nums = (t.match(/\d[\d,]*(?:\.\d+)?/g) || []).map((x) => x.replace(/,/g, '')).filter((x) => !/^(19|20)\d\d$/.test(x) || x.length !== 4);
+    const flatNum = flat.replace(/(\d),(?=\d{3})/g, '$1');
+    const missing = nums.filter((x) => !new RegExp('(^|[^\\d.])' + x.replace('.', '\\.') + '(?![\\d])').test(flatNum));
+    if (missing.length) { problems.push(tag + ': ' + missing.join(', ') + ' not in the release'); continue; }
+    out.push({ kind, when, text: t.slice(0, 150), evidence: ev.slice(0, 260) });
+    per[kind]++;
+  }
+  return out;
+}
 function request(text, model) {
   return { model: model || MODEL, max_tokens: 6000, system: SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
@@ -1006,4 +1064,4 @@ function trackRecord(rows) {
     revenue, currency: cur, latestRevYoY: yoy(last.revenue, last.revenuePrior), latestPeriod: last.periodLabel || null };
 }
 
-module.exports = { CF_SCHEMA, CF_SYSTEM, cfRequest, deriveFcf, prevRelease, isFinancial, changeFromPrevious, changeFromHistory, saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };
+module.exports = { AI_SCHEMA, AI_SYSTEM, AI_TERMS, aiRequest, aiPoints, CF_SCHEMA, CF_SYSTEM, cfRequest, deriveFcf, prevRelease, isFinancial, changeFromPrevious, changeFromHistory, saysFullYearStart, initiatedVerdict, printedMid, comparedDirection, initiatedFrom, trackRecord, bareFigure, driverLists, BOILER, guideItems, guideChange, guideMidOf, guideYear, priorFyEps, guideReadings, CHANGE_WORDS, seasonOf, reconRow, reconStatus, RECON_TOL, columnRows, tenQCheck, split, againstProvider, forReader, MODEL, MAX_CHARS, SCALE, BANNED, SCHEMA, SYSTEM, toText, pickExhibit, archiveBase, request, num, inText, blankStr, toRow, yoy };

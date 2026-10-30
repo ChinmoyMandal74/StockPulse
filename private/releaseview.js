@@ -221,6 +221,32 @@
     return '<div class="rv-drv">' + col('What helped', d.helped) + col('What weighed', d.weighed) + '</div>';
   }
 
+  // AI SPEND AND AI REWARDS (2026-10-29, releases.js aiPoints): what the
+  // release says the company is spending on AI and what AI is bringing it,
+  // for the quarter or in its outlook, each point with the release's own words
+  // on hover. '' when the release was not read for it (null); a line saying
+  // so when it was read and says nothing about AI.
+  function aiHtml(r) {
+    const pts = r && r.aiPoints;
+    if (!Array.isArray(pts)) return '';
+    if (!pts.length) return '<div class="rv-ai rv-ai-none">The release says nothing about AI.</div>';
+    const WHEN = { quarter: 'This quarter', outlook: 'Outlook' };
+    const col = (kind, title) => {
+      const list = pts.filter((p) => p.kind === kind);
+      return '<div class="rv-ai-col rv-ai-' + kind + '"><b>' + title + '</b>' + (list.length
+        ? '<ul>' + list.map((p) => '<li title="' + esc('“' + p.evidence + '”') + '"><span class="rv-ai-when">' + esc(WHEN[p.when] || '') + '</span>' + esc(p.text) + '</li>').join('') + '</ul>'
+        : '<p>None stated.</p>') + '</div>';
+    };
+    return '<div class="rv-ai">' + col('spend', 'AI spend') + col('reward', 'AI rewards') + '</div>';
+  }
+  // The same points as one short line, for a table row (/filings).
+  function aiLine(r) {
+    const pts = r && r.aiPoints;
+    if (!Array.isArray(pts) || !pts.length) return '';
+    const part = (kind, title) => { const l = pts.filter((p) => p.kind === kind); return l.length ? '<span class="rv-ai-tag rv-ai-' + kind + '" title="' + esc(l.map((p) => (p.when === 'outlook' ? 'Outlook: ' : '') + p.text + ' — “' + p.evidence + '”').join(' | ')) + '">' + title + ' · ' + esc(l[0].text) + (l.length > 1 ? ' (+' + (l.length - 1) + ')' : '') + '</span>' : ''; };
+    return '<span class="rv-ai-line">' + part('spend', 'AI spend') + part('reward', 'AI rewards') + '</span>';
+  }
+
   // THE GUIDANCE AS A GRID (2026-10-23, the owner over CrowdStrike's
   // "Total revenue | $1,523.2 - $1,529.2 million | $5,991.1 - $6,011.1 million"):
   // the stored guidance items laid out as the release's own table, one row a
@@ -279,5 +305,5 @@
       guideChange: changeKey(r.guideRead && r.guideRead.change ? r.guideRead.change : r.guideChange),
       tenQ: r.secCheck || null };
   }
-  root.ReleaseView = { esc, money, eps, chg, fcfValue, fcfSub, stmt, stmtHtml, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, guideTable, guideCell, historyRow };
+  root.ReleaseView = { esc, money, eps, chg, fcfValue, fcfSub, stmt, stmtHtml, estimate, tenQ, refused, shortDay, fields, FIELD_KEYS, tenQText, CHANGE_WORD, CHANGE_HEX, changeKey, changeTag, vsEstWord, vsEstTag, VS_EST_BAND, driversHtml, aiHtml, aiLine, guideTable, guideCell, historyRow };
 })(typeof window !== 'undefined' ? window : globalThis);

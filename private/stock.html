@@ -3662,6 +3662,7 @@
             + '<p class="rl-sum">' + e(r.summary || '') + (tq ? ' ' + tq : '')
             + (figs.length ? ' <span class="rv-amb" title="' + e(figs.join('; ')) + '">' + figs.length + ' figure' + (figs.length === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</p>'
             + RV.driversHtml(r)
+            + RV.aiHtml(r)
             + '</div>';
         };
         document.getElementById('relsBody').innerHTML = relCard(list[0]);

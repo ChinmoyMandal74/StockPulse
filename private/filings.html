@@ -288,7 +288,7 @@
         + '<td class="fl-num">' + RV.estimate(r) + '</td>'
         + '<td class="fl-out"' + (r.guideSentence ? ' title="' + we(r.guideSentence) + '"' : '') + '>' + (r.guideSentence ? we(r.guideSentence.length > 150 ? r.guideSentence.slice(0, 147) + '…' : r.guideSentence) : '—') + '</td>'
         + '<td>' + (r.url ? '<a class="fl-link" href="' + we(r.url) + '" target="_blank" rel="noopener">' + we(r.exhibit || 'Release') + ' &#8599;</a>' : '') + sub(we(r.periodLabel || '')) + '</td></tr>'
-        + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (tq ? ' ' + tq : '')
+        + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (tq ? ' ' + tq : '') + RV.aiLine(r)
         + (probs ? ' <span class="rv-amb" title="' + we(figs.join('; ')) + '">' + probs + ' figure' + (probs === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</td></tr>';
     }
     // ONE HOLDER (2026-10-21): every 13D/13G it filed about the tracked

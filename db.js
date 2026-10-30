@@ -1862,6 +1862,8 @@ const ADDED_COLUMNS = [
   'alter table earnings_releases add column bs_cur_liab real',
   'alter table earnings_releases add column bs_assets real',
   'alter table earnings_releases add column bs_equity real',
+  // AI spend and AI rewards (2026-10-29, releases.js aiPoints): JSON points.
+  'alter table earnings_releases add column ai_points text',
   // How many symbols of this run have had their prices pulled live. Prices are
   // 1 credit each, so above ~530 symbols the whole universe does not fit in one
   // minute and the round is refused outright — the pull is paced across rounds
@@ -3127,7 +3129,7 @@ const ER_COLS = [['accn', 'accn'], ['symbol', 'symbol'], ['filed', 'filed'], ['i
   ['fcf', 'fcf'], ['fcf_prior', 'fcfPrior'], ['fcf_label', 'fcfLabel'],
   ['cf_months', 'cfMonths'], ['ocf', 'ocf'], ['ocf_prior', 'ocfPrior'], ['capex', 'capex'], ['capex_prior', 'capexPrior'], ['capex_label', 'capexLabel'],
   ['fcf_calc', 'fcfCalc'], ['fcf_calc_prior', 'fcfCalcPrior'], ['fcf_calc_from', 'fcfCalcFrom'],
-  ['stmt_read', 'stmtRead'], ['gross_profit', 'grossProfit'], ['gross_profit_prior', 'grossProfitPrior'], ['cost_rev', 'costRev'], ['cost_rev_prior', 'costRevPrior'], ['ebitda', 'ebitda'], ['ebitda_prior', 'ebitdaPrior'], ['ebitda_label', 'ebitdaLabel'], ['dil_shares', 'dilShares'], ['dil_shares_prior', 'dilSharesPrior'], ['bs_as_of', 'bsAsOf'], ['bs_cash', 'bsCash'], ['bs_sti', 'bsSti'], ['bs_debt_cur', 'bsDebtCur'], ['bs_debt_lt', 'bsDebtLt'], ['bs_cur_assets', 'bsCurAssets'], ['bs_cur_liab', 'bsCurLiab'], ['bs_assets', 'bsAssets'], ['bs_equity', 'bsEquity']];
+  ['stmt_read', 'stmtRead'], ['gross_profit', 'grossProfit'], ['gross_profit_prior', 'grossProfitPrior'], ['cost_rev', 'costRev'], ['cost_rev_prior', 'costRevPrior'], ['ebitda', 'ebitda'], ['ebitda_prior', 'ebitdaPrior'], ['ebitda_label', 'ebitdaLabel'], ['dil_shares', 'dilShares'], ['dil_shares_prior', 'dilSharesPrior'], ['bs_as_of', 'bsAsOf'], ['bs_cash', 'bsCash'], ['bs_sti', 'bsSti'], ['bs_debt_cur', 'bsDebtCur'], ['bs_debt_lt', 'bsDebtLt'], ['bs_cur_assets', 'bsCurAssets'], ['bs_cur_liab', 'bsCurLiab'], ['bs_assets', 'bsAssets'], ['bs_equity', 'bsEquity'], ['ai_points', 'aiPoints']];
 const ER_STMT = [['stmt_read', 'stmtRead'], ['gross_profit', 'grossProfit'], ['gross_profit_prior', 'grossProfitPrior'], ['cost_rev', 'costRev'], ['cost_rev_prior', 'costRevPrior'], ['ebitda', 'ebitda'], ['ebitda_prior', 'ebitdaPrior'], ['ebitda_label', 'ebitdaLabel'], ['dil_shares', 'dilShares'], ['dil_shares_prior', 'dilSharesPrior'], ['bs_as_of', 'bsAsOf'], ['bs_cash', 'bsCash'], ['bs_sti', 'bsSti'], ['bs_debt_cur', 'bsDebtCur'], ['bs_debt_lt', 'bsDebtLt'], ['bs_cur_assets', 'bsCurAssets'], ['bs_cur_liab', 'bsCurLiab'], ['bs_assets', 'bsAssets'], ['bs_equity', 'bsEquity']];
 function erOut(x) {
   const o = {};
@@ -3137,6 +3139,7 @@ function erOut(x) {
   try { o.secDiffers = o.secDiffers ? JSON.parse(o.secDiffers) : []; } catch (e) { o.secDiffers = []; }
   try { o.guides = o.guides ? JSON.parse(o.guides) : null; } catch (e) { o.guides = null; }
   try { o.drivers = o.drivers ? JSON.parse(o.drivers) : null; } catch (e) { o.drivers = null; }
+  try { o.aiPoints = o.aiPoints ? JSON.parse(o.aiPoints) : null; } catch (e) { o.aiPoints = null; }
   return o;
 }
 // Every results release filed on or after a day: the screener column's build
@@ -3266,7 +3269,7 @@ async function readReleaseRuns(sinceMs) {
 async function writeEarningsRelease(r, opts) {
   await init();
   const v = Object.assign({}, r, { isResults: r.isResults ? 1 : 0, problems: JSON.stringify(r.problems || []), symbol: String(r.symbol).toUpperCase(),
-    guides: r.guides ? JSON.stringify(r.guides) : null, drivers: r.drivers ? JSON.stringify(r.drivers) : null, secDiffers: Array.isArray(r.secDiffers) ? JSON.stringify(r.secDiffers) : r.secDiffers });
+    guides: r.guides ? JSON.stringify(r.guides) : null, drivers: r.drivers ? JSON.stringify(r.drivers) : null, aiPoints: Array.isArray(r.aiPoints) ? JSON.stringify(r.aiPoints) : null, secDiffers: Array.isArray(r.secDiffers) ? JSON.stringify(r.secDiffers) : r.secDiffers });
   const res = await db.execute({
     sql: `insert or ${opts && opts.replace ? 'replace' : 'ignore'} into earnings_releases (${ER_COLS.map((c) => c[0]).join(', ')}) values (${ER_COLS.map(() => '?').join(', ')})`,
     args: ER_COLS.map(([, k]) => (v[k] === undefined ? null : v[k])),
@@ -3289,6 +3292,12 @@ async function writeReleaseGuidance(accn, g) {
     args: [g.guides ? JSON.stringify(g.guides) : null, g.guideChange || null, g.guideChangeQuote || null, g.epsGuidePrior == null ? null : Number(g.epsGuidePrior), String(accn)] });
 }
 // The drivers re-read (release-load.js --drivers): that one column, nothing else.
+// AI SPEND AND AI REWARDS (2026-10-29): the points alone, beside a reading made
+// before they were asked for. An empty list is stored too: read, nothing on AI.
+async function writeReleaseAi(accn, points) {
+  await init();
+  await db.execute({ sql: 'update earnings_releases set ai_points = ? where accn = ?', args: [JSON.stringify(points || []), String(accn)] });
+}
 async function writeReleaseDrivers(accn, drivers) {
   await init();
   await db.execute({ sql: 'update earnings_releases set drivers = ? where accn = ?', args: [JSON.stringify(drivers || { helped: [], weighed: [] }), String(accn)] });
@@ -8583,7 +8592,7 @@ module.exports = {
   readGroupMonths, writeGroupMonths, readGroupYears, writeGroupYears, readGroupDays, writeGroupDays, readFigure,
   writeEarningsRelease, writeReleaseCashFlow, writeReleaseStatements, writeReleaseFcfCalc, readEarningsReleasesOn, readEarningsReleases, readEarningsReleaseAccns,
   writeRecon, readRecon, readReconSeasons,
-  readEarningsReleasesSince, readReleaseFiguresSince, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
+  readEarningsReleasesSince, readReleaseFiguresSince, writeReleaseAi, readReleasesToCheck, writeReleaseCheck, readEarningsReleaseDays, writeReleaseRun, readReleaseRuns, readAiSpendRuns, readEarningsReleasesByAccn, writeReleaseGuidance, writeReleaseDrivers, writeReleaseChange, writeScheduleReport, readScheduleReport, writeFigures, readNameOf,
   setSecLastResults, setSecLastReport, readSecInstanceAccns, readSecQuality, writeSecQuality,
   readBuildLog, buildLogState, upsertBuildLog, buildLogKnown,
   buildLogMeta, writeBuildLogMeta,
