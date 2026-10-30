@@ -188,7 +188,9 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
       // kills a function at about 300s, so 330 is the honest ceiling.
       const signal = AbortSignal.timeout(330000);
       const body = JSON.stringify(Object.assign(
-        { actor: 'nightly job (laptop)', trigger: 'scheduled' },
+        // Where it ran: Fly.io sets FLY_APP_NAME (and fly/cron.js passes its
+        // environment on); anywhere else is the laptop.
+        { actor: 'nightly job (' + (process.env.FLY_APP_NAME ? 'Fly.io' : 'laptop') + ')', trigger: 'scheduled' },
         runId ? { runId } : {},
       ));
       const t0 = Date.now();
