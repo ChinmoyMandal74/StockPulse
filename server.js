@@ -2582,6 +2582,8 @@ app.get('/api/me', route(async (req, res) => {
     user: u ? { email: u.email, name: u.name || null, role: u.role }
       : (admin && AUTH_REQUIRED ? { email: null, name: null, role: ROLE_ADMIN } : null),
     signupCodeRequired: !!SIGNUP_CODE,
+    // The sign-up page says whether new accounts wait for approval (2026-10-30).
+    approvalRequired: REQUIRE_APPROVAL,
     // Read inside the handler, so the const declared further down the file is
     // long past its temporal dead zone by the time anything asks.
     googleReady: GOOGLE_READY,

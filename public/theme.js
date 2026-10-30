@@ -28,8 +28,12 @@
     if (c === 'auto') return mq && mq.matches ? 'light' : 'dark';
     return c === 'light' || c === 'navy' ? c : 'dark';
   }
+  // A page can pin one theme whatever the visitor chose: <html data-theme-fixed="navy">
+  // (the sign-in and sign-up page, 2026-10-30, the owner: "make the signup page into the navy theme").
+  var fixed = root.getAttribute('data-theme-fixed');
+  if (fixed !== 'dark' && fixed !== 'light' && fixed !== 'navy') fixed = null;
   function apply() {
-    var t = themeable ? resolve(choice()) : 'dark';
+    var t = fixed || (themeable ? resolve(choice()) : 'dark');
     var was = root.getAttribute('data-theme');
     root.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');

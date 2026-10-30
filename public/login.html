@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-themeable>
+<html lang="en" data-theme="navy" data-theme-fixed="navy">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Sign in — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <meta name="theme-color" content="#050505" />
+  <meta name="theme-color" content="#071120" />
   <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -275,7 +275,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let mode = 'signin';
-    let signupCodeRequired = false;
+    let signupCodeRequired = false, approvalRequired = false;
     let mailReady = false;
     // On unless the server says otherwise: a form that hid the box and was then refused would be a dead end.
     let termsRequired = true;
@@ -346,7 +346,7 @@
       $('tabRegister').setAttribute('aria-selected', String(reg));
       $('submit').textContent = reg ? 'Create account' : 'Sign in';
       $('lede').textContent = reg
-        ? 'Create an account — new members are approved by the admin.'
+        ? (approvalRequired ? 'Create an account — new members are approved by the admin.' : 'Create a free account to see every stock on the screener.')
         : 'Sign in to view the screener.';
       $('pwHint').style.display = reg ? '' : 'none';
       $('codeField').style.display = reg && signupCodeRequired ? '' : 'none';
@@ -499,6 +499,7 @@
       try {
         const me = await fetch('/api/me', { cache: 'no-store' }).then((r) => r.json());
         signupCodeRequired = !!me.signupCodeRequired;
+        approvalRequired = me.approvalRequired === true;
         mailReady = !!me.mailReady;
         termsRequired = me.termsRequired !== false;
         // Shown only when the server says it is configured. A button that
