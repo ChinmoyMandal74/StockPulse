@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Screener fields — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The shell is the Filings page's. Everything this page adds is prefixed fd- .
+       The definitions come from /api/fields, which reads the screener's own
+       header hover text: this page holds no copy of any of them. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 72ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .fd-bar { position: sticky; top: 64px; z-index: 30; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+              margin: 0 0 10px; padding: 10px 4px; background: color-mix(in srgb, var(--bg) 88%, transparent);
+              backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    .fd-bar input[type=search] { flex: 1 1 260px; min-width: 0; font: 500 13px var(--sans); color: var(--text);
+      background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 9px 14px; }
+    .fd-bar input[type=search]::placeholder { color: var(--faint); }
+    .fd-bar input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .fd-count { font: 12px var(--mono); color: var(--faint); white-space: nowrap; }
+    .fd-jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 4px 18px; }
+    .fd-jump a { font: 500 11.5px var(--sans); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair);
+                 color: var(--muted); text-decoration: none; white-space: nowrap; }
+    .fd-jump a:hover, .fd-jump a:focus-visible { color: var(--text); border-color: var(--accent); }
+    .fd-jump a span { font-family: var(--mono); color: var(--faint); margin-left: 5px; }
+
+    .fd-sec { margin-top: 26px; scroll-margin-top: 130px; }
+    .fd-sec h2 { margin: 0 6px 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); }
+    .fd-sec .fd-gdef { margin: 0 6px 10px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 80ch; }
+    .fd-sec .core { padding: 4px 0; }
+    .fd-row { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 18px; padding: 12px 22px;
+              border-bottom: 1px solid var(--hair); }
+    .fd-row:last-child { border-bottom: 0; }
+    .fd-name { font: 600 13px var(--sans); color: var(--text); overflow-wrap: anywhere; }
+    .fd-def { font-size: 13px; line-height: 1.62; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+    .fd-def.fd-none { color: var(--faint); font-style: italic; }
+    .fd-def mark, .fd-name mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
+    .fd-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .fd-foot { margin: 22px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 90ch; }
+    .fd-foot a { color: var(--accent); text-decoration: none; }
+    .fd-foot a:hover { text-decoration: underline; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+    @media (max-width: 600px) {
+      .fd-row { grid-template-columns: 1fr; gap: 4px; padding: 12px 16px; }
+      .fd-bar { top: 58px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+      <a class="btn" href="/help">Help</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Reference</span>
+      <h1>Screener fields</h1>
+      <p class="lede">Every column on the screener and what it means, in the order the table shows them. Each definition
+        is the same text you see when you hover over the column's header on the screener. TTM means the last twelve
+        months, Q end the latest quarter end, Fwd an analysts' estimate for the next twelve months, and Q YoY the latest quarter against
+        the same quarter a year earlier.</p>
+    </header>
+
+    <div class="fd-bar">
+      <input type="search" id="q" placeholder="Search fields and definitions" aria-label="Search fields and definitions" autocomplete="off" />
+      <span class="fd-count" id="count"></span>
+    </div>
+    <nav class="fd-jump" id="jump" aria-label="Column groups"></nav>
+    <div id="list"><div class="fd-empty">Reading the fields&hellip;</div></div>
+
+    <p class="fd-foot">Every figure describes the stock; none is a recommendation to trade it. How the screener works
+      is on <a href="/help">Help</a>. A dash in a cell on the screener means the figure is missing, never zero.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    let groups = [];
+
+    // Highlight the search words in already-escaped text.
+    function mark(text, words) {
+      let h = we(text);
+      for (const w of words) {
+        const e = we(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        h = h.replace(new RegExp('(' + e + ')(?![^<]*>)', 'gi'), '<mark>$1</mark>');
+      }
+      return h;
+    }
+
+    function paint() {
+      const words = $('q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const hit = (c) => words.every((w) => (c.label + ' ' + c.def).toLowerCase().includes(w));
+      let shown = 0, total = 0;
+      const secs = [], jumps = [];
+      for (const g of groups) {
+        total += g.columns.length;
+        // A search for the group's own name lists the whole group.
+        const groupHit = words.length && words.every((w) => g.label.toLowerCase().includes(w));
+        const cols = words.length && !groupHit ? g.columns.filter(hit) : g.columns;
+        if (!cols.length) continue;
+        shown += cols.length;
+        jumps.push(`<a href="#g-${we(g.id)}">${we(g.label)}<span>${cols.length}</span></a>`);
+        secs.push(`<section class="fd-sec" id="g-${we(g.id)}"><h2>${mark(g.label, groupHit ? words : [])}</h2>`
+          + (g.def ? `<p class="fd-gdef">${we(g.def)}</p>` : '')
+          + '<div class="bezel"><div class="core">'
+          + cols.map((c) => `<div class="fd-row"><div class="fd-name">${mark(c.label, words)}</div>`
+            + (c.def ? `<div class="fd-def">${mark(c.def, words)}</div>` : '<div class="fd-def fd-none">No definition yet.</div>')
+            + '</div>').join('')
+          + '</div></div></section>');
+      }
+      $('jump').innerHTML = jumps.join('');
+      $('list').innerHTML = secs.join('') || '<div class="fd-empty">No field matches that search.</div>';
+      $('count').textContent = words.length ? `${shown} of ${total} fields` : `${total} fields`;
+    }
+
+    fetch('/api/fields', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => {
+        // The frozen pair (Symbol, Name) leads the table, so it leads here.
+        groups = (d.frozen && d.frozen.length ? [{ id: 'stock', label: 'The stock', def: '', columns: d.frozen }] : [])
+          .concat(d.groups || []);
+        const q = new URLSearchParams(location.search).get('q');
+        if (q) $('q').value = q.slice(0, 60);
+        paint();
+        if (location.hash) { const el = document.getElementById(location.hash.slice(1)); if (el) el.scrollIntoView(); }
+      })
+      .catch(() => { $('list').innerHTML = '<div class="fd-empty">The fields could not be read. Reload the page to try again.</div>'; });
+    $('q').addEventListener('input', paint);
+  </script>
+</body>
+</html>

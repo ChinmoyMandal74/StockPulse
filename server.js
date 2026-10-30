@@ -535,6 +535,13 @@ app.get('/help', route(async (req, res) => {
   res.sendFile(path.join(__dirname, 'private', 'help.html'));
 }));
 
+// Every screener column and what it means (2026-10-30), from /api/fields.
+app.get('/fields', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  logAct(req, 'page', 'fields');
+  res.sendFile(path.join(__dirname, 'private', 'fields.html'));
+}));
+
 app.get('/contact', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
@@ -873,7 +880,7 @@ const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/vi
                       // no symbols in that path, so it opens with both pickers empty
                       '/compare.html': '/compare',
                       '/consolidated.html': '/consolidated',
-                      '/news-runs.html': '/news-runs', '/ai-spend.html': '/ai-spend', '/columns.html': '/columns',
+                      '/news-runs.html': '/news-runs', '/ai-spend.html': '/ai-spend', '/columns.html': '/columns', '/fields.html': '/fields',
                       '/export.html': '/export', '/subscribers.html': '/subscribers',
                       '/emails.html': '/emails', '/holdings.html': '/holdings', '/edgar.html': '/edgar', '/onboarding.html': '/onboarding',
                       // The public pages have canonical addresses of their own.
@@ -11643,15 +11650,28 @@ async function prefsKey(req) {
 // than restated here: the table is the one description of what columns exist,
 // and a second list would drift the first time a column was added. Parsed
 // once per instance.
-let COLUMN_CATALOGUE = null;
+let COLUMN_CATALOGUE = null, COLUMN_FROZEN = [];
 function columnCatalogue() {
   if (COLUMN_CATALOGUE) return COLUMN_CATALOGUE;
   const out = [];
   try {
     const html = fs.readFileSync(path.join(__dirname, 'private', 'index.html'), 'utf8');
     const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
-    const labels = {};
-    for (const m of head.matchAll(/<th class="group grp-([a-z]+)"[^>]*>([^<]+)<\/th>/g)) labels[m[1]] = m[2].trim();
+    // The header's own hover text is the column's definition, and /fields
+    // lists it (2026-10-30), so the screener's hover and that page cannot differ.
+    const unent = (t) => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const titleOf = (attrs) => { const t = /\btitle="([^"]*)"/.exec(attrs); return t ? unent(t[1]).trim() : ''; };
+    const labels = {}, groupDefs = {};
+    for (const m of head.matchAll(/<th (class="group grp-([a-z]+)"[^>]*)>([^<]+)<\/th>/g)) {
+      labels[m[2]] = unent(m[3]).trim();
+      groupDefs[m[2]] = titleOf(m[1]);
+    }
+    // The frozen pair (Symbol, Name) is never hideable, so it is not in the
+    // catalogue; /fields still defines it.
+    COLUMN_FROZEN = [...head.matchAll(/<th ([^>]*class="[^"]*\bfrz\b[^"]*"[^>]*)>([^<]+)<\/th>/g)]
+      .map((m) => ({ id: (/data-key="([^"]+)"/.exec(m[1]) || [])[1], label: unent(m[2]).trim(), def: titleOf(m[1]) }))
+      .filter((c) => c.id);
     for (const m of head.matchAll(/<th ([^>]*class="[^"]*grp-([a-z]+)[^"]*"[^>]*)>([\s\S]*?)<\/th>/g)) {
       const attrs = m[1];
       const group = m[2];
@@ -11661,10 +11681,11 @@ function columnCatalogue() {
       if (!id || group === 'fwd') continue;               // forward returns follow the as-of mode
       // A tag becomes a space, so the period tag under a name (2026-10-29) reads
       // "Revenue TTM", not "RevenueTTM".
-      const label = m[3].replace(/<br\s*\/?>/g, ' ').replace(/<[^>]*>/g, ' ')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
-      out.push({ id, label, group, groupLabel: labels[group] || group });
+      // A word broken over two lines joins up: "Cross-<br>ings" is Crossings,
+      // "EV/<br>EBITDA" is EV/EBITDA, but "F-<br>score" keeps its hyphen.
+      const label = unent(m[3].replace(/\b([A-Z])-<br\s*\/?>/g, '$1-').replace(/-<br\s*\/?>/g, '')
+        .replace(/\/<br\s*\/?>/g, '/').replace(/<br\s*\/?>/g, ' ').replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+      out.push({ id, label, group, groupLabel: labels[group] || group, def: titleOf(attrs), groupDef: groupDefs[group] || '' });
     }
   } catch (err) {
     console.warn('column catalogue could not be read:', err.message);
@@ -13365,6 +13386,25 @@ app.put('/api/columns', requireAdmin, route(async (req, res) => {
   const hidden = who === 'admin' ? await store.writeHiddenColumnsAdmin(keep) : await store.writeHiddenColumns(keep);
   logAct(req, 'view', (who === 'admin' ? 'admincols:' : 'sitecols:') + hidden.length);
   res.json({ ok: true, who, hidden });
+}));
+
+// Every screener column with its definition, for /fields (2026-10-30). The
+// definitions are the headers' own hover text, read by columnCatalogue(), and
+// a column the site hides from this reader is left out, so the page lists
+// what they actually see. Guests too: it describes the table, not the data.
+app.get('/api/fields', requireAuth, route(async (req, res) => {
+  const [memberHidden, adminHidden, admin] = await Promise.all([
+    store.readHiddenColumns(), store.readHiddenColumnsAdmin().catch(() => null), isAdmin(req).catch(() => false),
+  ]);
+  const hidden = new Set((admin && adminHidden) || memberHidden || []);
+  const groups = [];
+  for (const c of columnCatalogue()) {
+    if (hidden.has(c.id)) continue;
+    let g = groups[groups.length - 1];
+    if (!g || g.id !== c.group) groups.push(g = { id: c.group, label: c.groupLabel, def: c.groupDef, columns: [] });
+    g.columns.push({ id: c.id, label: c.label, def: c.def });
+  }
+  res.json({ frozen: COLUMN_FROZEN, groups });
 }));
 
 // The announcement. Read by everyone through /api/prefs; written only here.

@@ -1358,6 +1358,11 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>
                   <span class="nm">Help</span>
                 </a>
+                <!-- Everyone signed in: every column and its definition (2026-10-30). -->
+                <a class="pick" href="/fields" id="fieldsLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>
+                  <span class="nm">Screener fields</span>
+                </a>
                 <!-- Members: every backtest, written up. Hidden on the guest preview, which the route refuses. -->
                 <!-- Theme (2026-10-15): every signed-in account. The screener and the stock page follow it; pages not yet converted stay dark. -->
                 <div class="pick theme-row" id="themeRow" style="cursor:default">
@@ -1579,7 +1584,7 @@
   <table>
     <thead>
       <tr>
-        <th rowspan="2" class="left frz frz0" data-key="symbol">Symbol</th>
+        <th rowspan="2" class="left frz frz0" data-key="symbol" title="The ticker the stock trades under on its US exchange. Click it to open the stock’s own page.">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="12">Info</th>
         <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
@@ -1606,14 +1611,14 @@
         <th rowspan="2"></th>
       </tr>
       <tr>
-        <th class="left grp-info" data-fkey="portfolios">Themes</th>
-        <th class="left grp-info" data-key="sector">Sector</th>
+        <th class="left grp-info" data-fkey="portfolios" title="The themes this stock belongs to: hand-kept lists such as Chips or Software. A stock can sit in more than one. Pick a theme from the Theme menu above the table to see only its members.">Themes</th>
+        <th class="left grp-info" data-key="sector" title="The broad business the company is in, from the same profile data as Industry: Twelve Data’s own taxonomy, not GICS.">Sector</th>
         <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Signal engine reads it.">Instrument</th>
         <th class="left grp-info" data-key="filer" title="How the company files its accounts with the SEC. &quot;Foreign&quot; means a foreign company filing under international standards (IFRS), which only a foreign issuer may do; the code beside it is the currency it reports in. A company reporting in another currency is shown in dollars on its stock page, at the exchange rate for each period. &quot;US GAAP&quot; is how nearly every company here files, and says how it reports rather than where it is from: a foreign company may choose US GAAP too. Every stock here is US-listed either way. Blank for a fund, which files no statements.">Filer</th>
         <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Signal engine reads this.">Index</th>
-        <th class="grp-info" data-key="marketCap">Market<br>Cap</th>
+        <th class="grp-info" data-key="marketCap" title="Market value: the share price times the shares outstanding, in US dollars. The one money figure on the screener that is always in dollars.">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
         <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. Read for every company on the screener from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
@@ -1629,17 +1634,17 @@
         <th class="grp-act" data-key="adviceDays" title="Market days the signal has stood. A reading that has held for weeks is a different proposition from one that turned this morning, and the chevron beside the signal only says that it moved since the last close. It counts once a day, after the close — counting on the intraday rounds would advance it on a provisional bar and reset the run whenever a signal flapped over lunch. A ≥ means the signal has held since this column started watching: the run before that could not be recovered, because only one day of technicals is stored and a signal replay needs fundamentals, which begin at the end of August.">Days held</th>
         <th class="grp-chart" data-col="spark90" title="Closing price over the last ~90 trading sessions. Read the shape, not the level — each line is scaled to its own high and low.">90d</th>
         <th class="grp-short" data-key="pricedAt" title="When this stock’s price was last fetched from the provider — a per-symbol clock, not the time the refresh ran. The two differ: price rounds are paced once the universe is large, so a round prices only the slice that fits inside the minute and reads the rest from the archive. It says we ASKED, which is a different fact from whether anything came back — a stock can be pulled on time and still carry a stale close, so read it beside the bar date rather than instead of it. Amber past a day.">Price<br>pulled</th>
-        <th class="grp-short" data-key="price">Price</th>
-        <th class="grp-short" data-key="todayPct">Today</th>
+        <th class="grp-short" data-key="price" title="The latest stored price, in the currency the stock trades in. Price pulled says when it was fetched.">Price</th>
+        <th class="grp-short" data-key="todayPct" title="Price change from the previous close to the latest price.">Today</th>
         <th class="grp-short" data-key="capChangeToday" title="Roughly how much market value the company added or lost today: its market cap times today's move. A big percentage on a small company is a small number here, which is the point — it answers where the money actually went rather than which line moved furthest. The cap behind it is the last one the provider reported and rotates weekly, so read this as a ranking rather than a figure to the cent. Blank for anything with no market cap, such as a fund.">Value<br>added</th>
-        <th class="grp-short" data-key="yesterdayPct">YDAY</th>
-        <th class="grp-short" data-key="oneWeekPct">1W</th>
-        <th class="grp-short" data-key="twoWeekPct">2W</th>
-        <th class="grp-short" data-key="oneMonthPct">1M</th>
-        <th class="grp-long" data-key="threeMonthPct">3M</th>
-        <th class="grp-long" data-key="sixMonthPct">6M</th>
+        <th class="grp-short" data-key="yesterdayPct" title="Yesterday’s move: the change from the close the day before yesterday to yesterday’s close.">YDAY</th>
+        <th class="grp-short" data-key="oneWeekPct" title="Price change over the last 5 trading sessions, about a week.">1W</th>
+        <th class="grp-short" data-key="twoWeekPct" title="Price change over the last 10 trading sessions, about two weeks.">2W</th>
+        <th class="grp-short" data-key="oneMonthPct" title="Price change over the last 21 trading sessions, about a month.">1M</th>
+        <th class="grp-long" data-key="threeMonthPct" title="Price change over the last 63 trading sessions, about three months.">3M</th>
+        <th class="grp-long" data-key="sixMonthPct" title="Price change over the last 126 trading sessions, about six months.">6M</th>
         <th class="grp-long" data-key="ytdPct" title="Return since the start of this calendar year — measured from the last close before 1 January, which is 31 December or the trading day before it. NOT a rolling window: in January it covers days and in December nearly a year, which is exactly what makes it the number every fund and index is quoted on. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock that listed this year, and in the forward-returns view, where &quot;this year&quot; would mean something else.">YTD</th>
-        <th class="grp-long" data-key="oneYearPct">1Y</th>
+        <th class="grp-long" data-key="oneYearPct" title="Price change over the last 252 trading sessions, about a year.">1Y</th>
         <th class="grp-long" data-key="fiveYearPct" title="Five-year price change. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock with less than five years of history here.">5Y</th>
         <th class="grp-fwd" data-key="fwd1M" title="Return in the ~1 month AFTER the as-of date">+1M</th>
         <th class="grp-fwd" data-key="fwd3M" title="Return in the ~3 months after the as-of date">+3M</th>
