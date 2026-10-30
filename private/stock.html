@@ -4827,9 +4827,10 @@
       // and the per-filing provenance this layout has no room for.
       let stmtTab = 'income';
       // How many periods (5, 10 or every one filed) and whether each figure
-      // carries a growth line under it (2026-10-19).
+      // carries a growth line under it (2026-10-19; on by default since
+      // 2026-10-30, the owner's ask).
       let stmtCols = '5';
-      let stmtGrowth = false;
+      let stmtGrowth = true;
 
       // IN MILLIONS, NO UNIT PER CELL, and that is the one real difference
       // from secMoney. That formatter picks a unit per value, which is right
