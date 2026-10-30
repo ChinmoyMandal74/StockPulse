@@ -1096,7 +1096,7 @@
         : sl.kind === 'close' ? slideClose()
         : (sl.sub ? `<p class="s-sub" style="--fs:26px;margin-top:26px">${sl.sub}</p>` : '');
       return chromeTop(false) +
-        `<div class="s-body"><div><span class="s-kick">${esc(kick)}</span>` +
+        `<div class="s-body"><div class="int-col int-${esc(sl.kind)}"><span class="s-kick">${esc(kick)}</span>` +
         `<h2 class="s-title">${title}</h2>${body}` +
         dotRow(topic.slides.length, idx) +
         '</div></div>' + chromeFoot();
@@ -17134,6 +17134,37 @@
     .sz-story .pcard .pv { font-size: 35px; }
     .sz-story .feat h3 { font-size: 28px; }
     .sz-story .feat p { font-size: 21px; }
+    /* THE INTRO CENTRES ON A STORY (2026-10-30, the owner: "everything seems
+       more top aligned instead of vertical middle"). The fill rule above
+       stretched its column to the frame and spread five rows down it, so the
+       title sat at the top and the rows floated apart. An explainer slide is
+       one block: here it keeps its own height, .s-body centres it, and the
+       type and spacing step up so the block fills the middle of the frame. */
+    .sz-story .s-body > .int-col { height: auto; }
+    .sz-story .int-col .rows, .sz-story .int-col .stmts, .sz-story .int-col .flow,
+    .sz-story .int-col .rungs { flex: none; justify-content: flex-start; }
+    .sz-story .int-col .rows { gap: 26px; margin-top: 52px !important; }
+    .sz-story .int-col .feat { padding: 30px 32px; gap: 26px; }
+    .sz-story .int-col .feat .fi { width: 66px; height: 66px; border-radius: 18px; }
+    .sz-story .int-col .feat .fi svg { width: 33px; height: 33px; }
+    .sz-story .int-col .feat h3 { font-size: 34px; margin-bottom: 8px; }
+    .sz-story .int-col .feat p { font-size: 25px; }
+    .sz-story .int-col .stmts { gap: 26px; margin-top: 52px; }
+    .sz-story .int-col .stmt { padding: 34px 34px; gap: 24px; }
+    .sz-story .int-col .stmt .x, .sz-story .int-col .stmt .y { font-size: 38px; }
+    .sz-story .int-col .stmt b { font-size: 34px; }
+    .sz-story .int-col .stmt span { font-size: 25px; margin-top: 8px; }
+    .sz-story .int-col .flowend { padding: 34px 36px; }
+    .sz-story .int-col .flowend .fl { font-size: 22px; }
+    .sz-story .int-col .flowend .fa { font-size: 64px; }
+    .sz-story .int-col .flowend .fw { font-size: 27px; }
+    .sz-story .int-col .s-sub { font-size: max(30px, calc(var(--fs, 20px) * 1.3)); max-width: 36ch; }
+    .sz-story .int-col .dots { margin-top: 48px; }
+    .sz-story .int-col .dots { gap: 14px; }
+    .sz-story .int-cover .s-kick { font-size: 26px; }
+    .sz-story .int-cover .s-title { font-size: 136px; }
+    .sz-story .int-cover .s-sub { font-size: 40px; max-width: 24ch; margin-top: 36px !important; }
+    .sz-story .int-col .dots i { width: 15px; height: 15px; }
     .sz-story .ftile .fv { font-size: 44px; }
 
     /* the sparkline grid stretches its rows, and the shapes stretch with
