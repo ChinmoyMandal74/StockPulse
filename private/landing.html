@@ -288,9 +288,17 @@
     .lp footer .cols a:not(.mark) { display: block; text-decoration: none; padding: 3px 0; } .lp footer .cols a:hover { color: var(--text); }
     .lp footer .legal { margin-top: 30px; max-width: 90ch; line-height: 1.6; }
 
+    /* The race video (2026-10-30): one recorded Mag 7 race, muted and looping,
+       its still first; loaded after the page and only when near the view. */
+    .lp .lp-race { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 48px; align-items: center; }
+    .lp .lp-race-v { margin: 0; aspect-ratio: 1 / 1; width: 100%; max-width: 520px; justify-self: center; }
+    .lp .lp-race-v video { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .lp .lp-race p { max-width: 54ch; }
+    .lp .lp-race .lp-race-cap { font: 12px var(--mono); color: var(--faint); }
+
     @media (max-width: 1000px) { .lp-nav { display: none; } }
     @media (max-width: 900px) {
-      .lp-hero .w, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
+      .lp-hero .w, .lp .lp-race, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .plans { grid-template-columns: 1fr; }
       .lp .stack { justify-self: center; max-width: 360px; } .lp .stackcap { justify-self: center; text-align: center; }
       .lp-nums .w { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .lp .grid, .lp .depth { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -354,6 +362,22 @@
       <div class="num"><b><span class="livedot"></span><span data-k="asof">{{asof}}</span></b><span>last refresh, ET</span></div>
     </div>
   </div>
+
+  <section id="race" class="tight">
+    <div class="w lp-race">
+      <figure class="shot lp-race-v">
+        <video id="raceVid" muted loop playsinline preload="none" width="720" height="720" poster="/img/landing/race-mag7.jpg" aria-label="The Magnificent 7's share prices over the past year, each line drawn day by day from where it started">
+          <source src="/img/landing/race-mag7.mp4" type="video/mp4" />
+        </video>
+      </figure>
+      <div>
+        <span class="eyebrow">From the visuals studio</span>
+        <h2 class="h2">Seven stocks, one year, drawn day by day.</h2>
+        <p>The Magnificent 7's share prices from October 28, 2025 to October 29, 2026, each line rebased to where it started. Made in Tickr Lab's visuals studio from the stored daily closes, as a video ready to post.</p>
+        <p class="lp-race-cap">Price return only. A record of what happened, not a forecast.</p>
+      </div>
+    </div>
+  </section>
 
   <section id="who">
     <div class="w">
@@ -821,6 +845,20 @@
     <button type="button" data-step="1" aria-label="Next card">&rarr;</button>
     <button type="button" data-close>Close</button></div>
 </dialog>
+<script>
+  // The race video: nothing downloads until the page has loaded and the video
+  // is near the view; it pauses off screen; reduced motion keeps the still.
+  (function () {
+    const v = document.getElementById('raceVid');
+    if (!v || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const go = () => { v.preload = 'auto'; const p = v.play(); if (p && p.catch) p.catch(() => {}); };
+    const arm = () => {
+      if (!('IntersectionObserver' in window)) return go();
+      new IntersectionObserver((es) => { for (const e of es) { if (e.isIntersecting) go(); else v.pause(); } }, { rootMargin: '200px' }).observe(v);
+    };
+    if (document.readyState === 'complete') arm(); else addEventListener('load', arm);
+  })();
+</script>
 <script>
   // The card grid: a tile opens its full-size card; the arrows step, and
   // Escape (the dialog's own) or a click outside the card closes it.
