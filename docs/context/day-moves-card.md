@@ -1,0 +1,16 @@
+## Research › Biggest one-day moves in value (2026-10-29)
+The owner: "In promo under research .. can you make a card showing worst market cap loss or gain for one stock in one day .. give the user the ability to choose the time 1 year to 10 years".
+
+**Template `daymoves`**, the second view of the Research group (`TPL_GROUPS` in `promo.html`). Controls `dmvSide` (falls or rises, the module's `DMV_SIDES`) and `dmvYears` (1 to 10, opening on 10), both in `CONTROL_IDS` with their own listener, panel `dmvBox`.
+
+**The data: `day-moves.js`, an offline builder like `sp-years.js`.** It reads the local archive (`analysis.db`: bars, `sec_facts`, splits) and, from Turso, only today's snapshot (the companies and today's share counts). It writes `private/day-moves.json` (about 18 KB), committed so Vercel serves it; `GUEST_BLOCKED_ASSET` keeps it from guests and from anyone not signed in. The phone's saved posts read it through `dayMovesFile()`. **Rebuild:** `node --use-system-ca day-moves.js` after syncing `analysis-db.js`.
+
+**What it measures**, for every company on the screener (funds left out) and every session in the last ten years: the change in market value that day, the value at the close before times the day's price move. The value before uses the diluted share count from the **original** filing for the newest period ending in the 15 months before, times the splits filed since (bars are split-adjusted), as `sp-years.js` does; today's count (market value over price) where no filing, a count more than 3× from today's (a units fault), or the company files in another currency or is a depositary receipt. 87% of company-days use a filed count.
+
+**A bad bar is not a move**: a session more than a week after the one before is skipped (4 in ten years), and so is a jump of more than 35% that the next session undoes to within 15% (80). **One row a company** in each window, its biggest day, so one stock does not fill the list; ten rows (six on a square).
+
+**Checked against the record**: Nvidia 27 January 2025 −$600B, −17.0% (reported about −$589B); Meta 3 February 2022 −$244B, −26.4% (reported about −$232B). SpaceX (SPCX, listed June 2026 near $2T) has swings of ±$400B+ in its first sessions, on today's share count; Alphabet's −12.8% on 29 October 2026 (after its results) is the second-largest fall.
+
+**The card (`tplDayMoves` in `cards.js`)**: rank, company, ticker and day, the dollar change (red for a fall, green for a rise), the price move and the value before, and a bar proportional to the change. The note says each row is a company's single biggest day, how the value is worked out, where the share counts come from, that these are the companies on Tickr Lab today (failed or taken-over companies missing), and that it is a change in value, not anyone's profit or loss. No buy, sell, hold, winner or loser wording (checked).
+
+**Tested** (scratchpad `daymoves-test.js`, 95 checks in the studio over a copy of production's snapshot): offered under Research, the year picker one to ten opening on ten; at all three sizes, both sides and 1, 5 and 10 years: the build's rows in order, the top figure, red and minus for falls and plus for rises, nothing past the artboard, the note clear of the footer, no name cut, the window named; no trade wording; a saved post (rises, 3 years) drawn by the server.

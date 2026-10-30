@@ -2357,6 +2357,15 @@
           companies that left the index are missing and the averages run high; the
           S&amp;P 500 fund's line is the index as it was. Rebuilt with sp-years.js.</p>
       </div>
+      <!-- Research: the biggest one-day moves in market value (2026-10-29). -->
+      <div id="dmvBox">
+        <label>Show</label>
+        <select id="dmvSide"></select>
+        <label>Over</label>
+        <select id="dmvYears"></select>
+        <p class="hint">Each company's single biggest day in the window, one row a company: its value at the close
+          before times that day's price move. The companies on Tickr Lab today. Rebuilt with day-moves.js.</p>
+      </div>
       <div id="disBox">
         <label>Depth</label>
         <select id="disMode">
@@ -2629,6 +2638,7 @@
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
       { id: 'spyears', name: 'S&P 500 returns by year', note: 'How many of the S&P 500’s stocks returned what in one year, with the equal-weighted and cap-weighted averages and the S&P 500 fund. One year a slide, 2007 on' },
+      { id: 'daymoves', name: 'Biggest one-day moves in value', note: 'The ten companies with the biggest single-day fall, or rise, in market value over the last one to ten years, one row a company' },
     ];
     // Opens on Market > Snapshot (owner, 2026-10-15). A link naming a template
     // (/promo?tpl=spotlight&sym=MU) still wins: it is read after this.
@@ -2837,7 +2847,7 @@
       { name: 'Screeners', views: [['upofhigh', 'Strong uptrend, still well off the high'], ['rec52lo0', 'Recent 52-week lows']], last: 'upofhigh' },
       // Research (2026-10-28, the owner: "put under a new template category
       // called research"): findings from the archive, built offline.
-      { name: 'Research', views: [['spyears', 'S&P 500 returns by year']], last: 'spyears' },
+      { name: 'Research', views: [['spyears', 'S&P 500 returns by year'], ['daymoves', 'Biggest one-day moves in value']], last: 'spyears' },
       { name: 'Brand', views: BRAND_VIEWS, last: 'intro' },
     ];
     const groupOf = (id) => TPL_GROUPS.find((g) => g.views.some((v) => v[0] === id)) || null;
@@ -3319,6 +3329,18 @@
       const full = ys.find((y) => !y.partial);
       sel.value = ys.some((y) => String(y.y) === keep) ? keep : full ? String(full.y) : sel.value;
     }
+    // The biggest one-day moves in value: the offline build (day-moves.js), read once.
+    let dmvData = null, dmvPending = false;
+    function getDayMoves() {
+      if (dmvData) return dmvData;
+      if (dmvPending) return null;
+      dmvPending = true;
+      fetch('/day-moves.json', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : { windows: [] }))
+        .then((d) => { dmvData = d || { windows: [] }; dmvPending = false; if (Cards.dayMovesNeed(tpl)) render(); })
+        .catch(() => { dmvData = { windows: [] }; dmvPending = false; if (Cards.dayMovesNeed(tpl)) render(); });
+      return null;
+    }
     // Year by year for every group (the daily build), read once a visit.
     let gyData = null, gyPending = false;
     function getGroupYears() {
@@ -3718,7 +3740,7 @@
       'evoSym', 'evoMeasure', 'evoWin', 'evoValue',
       'evtSymA', 'evtSymB', 'evtMeasure', 'evtValue', 'evtWin',
       'intTopic', 'intSlide', 'howTopic', 'howSlide', 'annKick', 'annHead', 'annBody', 'shwHead', 'shwSub', 'shwSym', 'covSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg',
-      'disMode', 'spyYear'];
+      'disMode', 'spyYear', 'dmvSide', 'dmvYears'];
     function controlOpts() {
       const o = {};
       CONTROL_IDS.forEach((id) => { const el = $(id); if (el) o[id] = el.value; });
@@ -3738,7 +3760,7 @@
       fill: cardFill,
       stocks, myLists, screens: screenList, size, opts: Object.assign(controlOpts(), linkOpts),
       filers,
-      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getGroupYears, getSpYears, getIndexPe, getDays, getGroupDays,
+      getBasket, getHistory, getEvolution, getShortMoves, getMonths, getPeerTrend, getPerf, getEarnGrowth, getLineSeries, getMargins, getFiled, getReported, getReleaseColumn, getRelease, getTrack, getGlance, getGroupLines, getHolders, getSegments, getFundHolders, getHolderBook, getInstFlow, getCapReturns, getOptions, getToneBoard, getToneStock, getInsider, getDrill, getGroupMonths, getGroupYears, getSpYears, getDayMoves, getIndexPe, getDays, getGroupDays,
       updatedAt: pulledAt,
     });
     const buildCard = () => Cards.build(tpl, cardCtx());
@@ -4588,6 +4610,7 @@
       $('covBox').style.display = tpl === 'covread' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
       $('spyBox').style.display = tpl === 'spyears' ? 'block' : 'none';
+      $('dmvBox').style.display = tpl === 'daymoves' ? 'block' : 'none';
       if (tpl === 'spyears') fillSpyYears();
       $('movBox').style.display = tpl === 'movers' ? 'block' : 'none';
       // two rankings in half the width apiece leaves no room for a verdict
@@ -4991,6 +5014,11 @@
     });
     ['spyYear'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'spyears') render(); }));
+    // The one-day moves: its own listener list; the sides from the module, the windows one to ten years.
+    for (const [v, label] of Cards.dayMoveSides()) $('dmvSide').appendChild(new Option(label, v));
+    for (let y = 10; y >= 1; y--) $('dmvYears').appendChild(new Option(y === 1 ? '1 year' : y + ' years', String(y), y === 10, y === 10));
+    ['dmvSide', 'dmvYears'].forEach((id) =>
+      $(id).addEventListener('change', () => { if (tpl === 'daymoves') render(); }));
     ['disMode'].forEach((id) =>
       $(id).addEventListener('change', () => { if (tpl === 'disclaimer') render(); }));
     ['shwHead', 'shwSub'].forEach((id) =>

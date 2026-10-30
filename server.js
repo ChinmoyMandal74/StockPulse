@@ -2466,7 +2466,7 @@ async function isGuest(req) {
 // The research data — every close, every stored run — is exactly what the
 // guest view exists to not hand out, and so are the pages built on it.
 const GUEST_BLOCKED_ASSET =
-  /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|sp-years\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
+  /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|sp-years\.json|day-moves\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
 
 // Signed in with a real account — the guest preview stops here.
 const requireMember = route(async (req, res, next) => {
@@ -13303,6 +13303,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
       getGroupMonths: () => gmonths,
       getGroupYears: () => gyears,
       getSpYears: () => spYearsFile(),
+      getDayMoves: () => dayMovesFile(),
       getDays: () => days,
       getGroupDays: () => gdays,
       getIndexPe: () => ipe,
@@ -17492,6 +17493,12 @@ async function groupYearsStored() {
 // S&P 500 returns by year for the phone's saved posts: the offline build
 // (sp-years.js) shipped in private/, read once per instance. A build
 // artefact like the strategy files, not state.
+// The biggest one-day moves in value (day-moves.js), the same way.
+let dayMovesMemo;
+function dayMovesFile() {
+  if (dayMovesMemo === undefined) { try { dayMovesMemo = require('./private/day-moves.json'); } catch { dayMovesMemo = null; } }
+  return dayMovesMemo;
+}
 let spYearsMemo;
 function spYearsFile() {
   if (spYearsMemo === undefined) { try { spYearsMemo = require('./private/sp-years.json'); } catch { spYearsMemo = null; } }

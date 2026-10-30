@@ -14253,7 +14253,67 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Research: the biggest one-day moves in market value (2026-10-29) ------
+  // The owner: "make a card showing worst market cap loss or gain for one stock
+  // in one day .. give the user the ability to choose the time 1 year to 10
+  // years". Built offline by day-moves.js into private/day-moves.json.
+  //
+  // Ten companies, each on its biggest one-day fall (or rise) in market value
+  // over the window chosen: the dollars, the day, the price move, the value at
+  // the close before. One row a company, so one stock that moved hugely on many
+  // days does not fill the list. A move in value, not anyone's profit or loss;
+  // red for a fall and green for a rise, as everywhere.
+  let getDayMoves = () => null;
+  const DMV_SIDES = [['loss', 'Biggest one-day falls'], ['gain', 'Biggest one-day rises']];
+  function dayMovesNeed(tpl) { return tpl === 'daymoves' ? {} : null; }
+  const dmvMoney = (v) => {
+    const a = Math.abs(v), sg = v < 0 ? '\u2212' : '+';
+    return sg + '$' + (a >= 1e12 ? (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? Math.round(a / 1e9) + 'B' : (a / 1e6).toFixed(0) + 'M');
+  };
+  const dmvCap = (v) => '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : Math.round(v / 1e9) + 'B');
+  function tplDayMoves() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const data = getDayMoves();
+    if (!data) return shell('Research', 'Reading', 'the archive\u2026');
+    const ws = data.windows || [];
+    if (!ws.length) return shell('Research', 'No build', 'yet', 'The one-day moves have not been built.');
+    const years = Math.max(1, Math.min(ws.length, Number(O.dmvYears) || ws.length));
+    const W = ws.find((w) => w.y === years) || ws[ws.length - 1];
+    const side = O.dmvSide === 'gain' ? 'gain' : 'loss';
+    const cap = size.id === 'square' ? 6 : 10;
+    const list = (W[side] || []).slice(0, cap);
+    if (!list.length) return shell('Research', 'No moves', 'in that window');
+    const max = Math.max(...list.map((x) => Math.abs(x.chg)));
+    const day = (d) => { const t = new Date(d + 'T12:00:00'); return isNaN(t) ? d : t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const cls = side === 'loss' ? 'dm-dn' : 'dm-up';
+    const rowsHtml = list.map((x, i) => {
+      const nm = (data.names && data.names[x.s]) || x.s;
+      return '<div class="dm-r ' + cls + '">'
+        + '<span class="dm-i">' + (i + 1) + '</span>'
+        + '<span class="dm-n"><b>' + esc(nm) + '</b><i>' + esc(x.s) + ' \u00b7 ' + esc(day(x.d)) + '</i></span>'
+        + '<span class="dm-v"><b>' + esc(dmvMoney(x.chg)) + '</b><i>' + esc((x.pct > 0 ? '+' : '\u2212') + Math.abs(x.pct).toFixed(1) + '% \u00b7 from ' + dmvCap(x.cap)) + '</i></span>'
+        + '<span class="dm-bar"><span style="width:' + (Math.abs(x.chg) / max * 100).toFixed(1) + '%"></span></span>'
+        + '</div>';
+    }).join('');
+    const head = side === 'loss' ? 'Biggest one-day falls' : 'Biggest one-day rises';
+    const span = years === 1 ? 'the last year' : 'the last ' + years + ' years';
+    const note = 'Each company\u2019s single biggest day in ' + span + ' to ' + day(W.to) + ', one row a company: its market value at the close before times that day\u2019s price move. '
+      + 'Share counts come from the company\u2019s own filings (' + (data.sharesFromFilings || 0) + '% of days), otherwise today\u2019s. '
+      + 'The ' + (data.companies || '') + ' companies on Tickr Lab today, so companies that have since failed or been taken over are not here. A change in value, not anyone\u2019s profit or loss.';
+    return chromeTop()
+      + '<div class="s-body"><div class="dm-in">'
+      + '<span class="s-kick">Research \u00b7 ' + esc(span) + '</span>'
+      + '<h2 class="s-title">' + esc(head) + '<br><span class="dim">in market value</span></h2>'
+      + '<div class="dm-rows">' + rowsHtml + '</div>'
+      + '<p class="s-sub wide dm-note" style="--fs:15px">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   const BUILDERS = {
+    daymoves: tplDayMoves,
     stksignal: tplStockSignal,
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
@@ -16240,6 +16300,30 @@
     .sz-story .sg-r { padding: 26px 28px; }
     .sz-story .sg-r b { font-size: 38px; }
     .sz-story .sg-rw { font-size: 23px; }
+    /* Research: the biggest one-day moves in market value (2026-10-29). */
+    .dm-in { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+    .dm-rows { margin-top: 26px; display: flex; flex-direction: column; gap: 12px; }
+    .dm-r { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-rows: auto 6px; column-gap: 16px; row-gap: 6px; align-items: center; }
+    .dm-i { font: 700 20px var(--mono); color: var(--faint); grid-row: 1; }
+    .dm-n { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .dm-n b { font: 700 24px var(--sans); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dm-n i { font: 500 15px var(--mono); font-style: normal; color: var(--muted); }
+    .dm-v { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .dm-v b { font: 700 28px var(--mono); letter-spacing: -0.02em; }
+    .dm-v i { font: 500 15px var(--mono); font-style: normal; color: var(--muted); white-space: nowrap; }
+    .dm-dn .dm-v b { color: var(--red); } .dm-up .dm-v b { color: var(--green); }
+    .dm-bar { grid-column: 2 / 4; height: 6px; border-radius: 4px; background: var(--hair); overflow: hidden; }
+    .dm-bar span { display: block; height: 100%; border-radius: 4px; }
+    .dm-dn .dm-bar span { background: color-mix(in srgb, var(--red) 75%, transparent); }
+    .dm-up .dm-bar span { background: color-mix(in srgb, var(--green) 75%, transparent); }
+    .dm-note { margin-top: auto; padding-top: 18px; }
+    .sz-square .dm-rows { margin-top: 16px; gap: 9px; }
+    .sz-square .dm-n b { font-size: 21px; } .sz-square .dm-v b { font-size: 24px; }
+    .sz-square .dm-n i, .sz-square .dm-v i { font-size: 13px; }
+    .sz-story .dm-rows { margin-top: 40px; gap: 22px; }
+    .sz-story .dm-n b { font-size: 30px; } .sz-story .dm-v b { font-size: 34px; }
+    .sz-story .dm-n i, .sz-story .dm-v i { font-size: 18px; }
+    .sz-story .dm-i { font-size: 24px; }
     /* Filed yesterday (2026-10-20): one day's 13D/13G and 8-K filings. */
     .fd-in { height: 100%; display: flex; flex-direction: column; }
     .fd-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
@@ -17444,7 +17528,7 @@
     beatSplits: () => BEAT_SPLITS.map((p) => p.slice()),
     moveGridPeriods: () => MG_PERIODS.map((p) => [p[0], p[1]]),
     figureFmt: figFmt,
-    groupMonthsNeed, groupMonthThemes, indexPeNeed, spYearsNeed, groupYearsNeed,
+    groupMonthsNeed, groupMonthThemes, indexPeNeed, spYearsNeed, groupYearsNeed, dayMovesNeed, dayMoveSides: () => DMV_SIDES,
     daysNeed, groupDaysNeed,
     indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
@@ -17560,6 +17644,7 @@
       getPeerTrend = c.getPeerTrend || (() => null);
       getGroupMonths = c.getGroupMonths || (() => null);
       getSpYears = c.getSpYears || (() => null);
+      getDayMoves = c.getDayMoves || (() => null);
       getGroupYears = c.getGroupYears || (() => null);
       getDays = c.getDays || (() => null);
       getGroupDays = c.getGroupDays || (() => null);
