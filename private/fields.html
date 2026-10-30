@@ -66,13 +66,17 @@
     .fd-sec h2 { margin: 0 6px 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); }
     .fd-sec .fd-gdef { margin: 0 6px 10px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 80ch; }
     .fd-sec .core { padding: 4px 0; }
-    .fd-row { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 18px; padding: 12px 22px;
+    .fd-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr minmax(150px, 230px); gap: 18px; padding: 12px 22px;
               border-bottom: 1px solid var(--hair); }
+    .fd-row.fd-head { padding-top: 10px; padding-bottom: 8px; font: 500 10.5px var(--sans); letter-spacing: 0.08em;
+                      text-transform: uppercase; color: var(--faint); }
+    .fd-src { font-size: 12.5px; line-height: 1.55; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+    .fd-src .fd-sl { display: none; }
     .fd-row:last-child { border-bottom: 0; }
     .fd-name { font: 600 13px var(--sans); color: var(--text); overflow-wrap: anywhere; }
     .fd-def { font-size: 13px; line-height: 1.62; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
     .fd-def.fd-none { color: var(--faint); font-style: italic; }
-    .fd-def mark, .fd-name mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
+    .fd-def mark, .fd-name mark, .fd-src mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
     .fd-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .fd-foot { margin: 22px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 90ch; }
     .fd-foot a { color: var(--accent); text-decoration: none; }
@@ -80,6 +84,9 @@
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
     @media (max-width: 600px) {
       .fd-row { grid-template-columns: 1fr; gap: 4px; padding: 12px 16px; }
+      .fd-row.fd-head { display: none; }
+      .fd-src { color: var(--muted); font-size: 12px; }
+      .fd-src .fd-sl { display: inline; color: var(--faint); }
       .fd-bar { top: 58px; }
     }
   </style>
@@ -109,13 +116,14 @@
       <span class="eyebrow"><span class="pip"></span>Reference</span>
       <h1>Screener fields</h1>
       <p class="lede">Every column on the screener and what it means, in the order the table shows them. Each definition
-        is the same text you see when you hover over the column's header on the screener. TTM means the last twelve
+        is the same text you see when you hover over the column's header on the screener, and Source says where the figure comes
+        from; "worked out here" means Tickr Lab calculates it from the data named. TTM means the last twelve
         months, Q end the latest quarter end, Fwd an analysts' estimate for the next twelve months, and Q YoY the latest quarter against
         the same quarter a year earlier.</p>
     </header>
 
     <div class="fd-bar">
-      <input type="search" id="q" placeholder="Search fields and definitions" aria-label="Search fields and definitions" autocomplete="off" />
+      <input type="search" id="q" placeholder="Search fields, definitions and sources" aria-label="Search fields, definitions and sources" autocomplete="off" />
       <span class="fd-count" id="count"></span>
     </div>
     <nav class="fd-jump" id="jump" aria-label="Column groups"></nav>
@@ -143,7 +151,7 @@
 
     function paint() {
       const words = $('q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-      const hit = (c) => words.every((w) => (c.label + ' ' + c.def).toLowerCase().includes(w));
+      const hit = (c) => words.every((w) => (c.label + ' ' + c.def + ' ' + (c.src || '')).toLowerCase().includes(w));
       let shown = 0, total = 0;
       const secs = [], jumps = [];
       for (const g of groups) {
@@ -157,8 +165,10 @@
         secs.push(`<section class="fd-sec" id="g-${we(g.id)}"><h2>${mark(g.label, groupHit ? words : [])}</h2>`
           + (g.def ? `<p class="fd-gdef">${we(g.def)}</p>` : '')
           + '<div class="bezel"><div class="core">'
+          + '<div class="fd-row fd-head" aria-hidden="true"><div>Field</div><div>Definition</div><div>Source</div></div>'
           + cols.map((c) => `<div class="fd-row"><div class="fd-name">${mark(c.label, words)}</div>`
             + (c.def ? `<div class="fd-def">${mark(c.def, words)}</div>` : '<div class="fd-def fd-none">No definition yet.</div>')
+            + `<div class="fd-src"><span class="fd-sl">Source: </span>${c.src ? mark(c.src, words) : '—'}</div>`
             + '</div>').join('')
           + '</div></div></section>');
       }

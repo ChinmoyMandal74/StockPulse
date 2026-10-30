@@ -148,3 +148,7 @@ The owner: "do 1 and 3" (close the free cash flow gaps; the screener follow-ups)
 - **Left** (backlog 55): companies that file capex only under their own company-specific tag (Valero, ConocoPhillips, AppLovin, Airbnb, Phillips 66) and print no cash flow statement in the release.
 
 A third re-read of every company (`sec-reread.js`) loaded the new tags, quarters and Exxon's history.
+
+## Sources as members see them (2026-10-30)
+
+`/fields` gives every screener column a short Source line from `fieldsource.js`. The source-rule columns take theirs from `sourcerule.js` (FIELDS, NO_TD), so a change to the rule shows there without an edit; a change to any other column's source (a new provider, a column moving from Twelve Data to the filings) updates its entry in `fieldsource.js` in the same commit as /sources.

@@ -4717,6 +4717,7 @@ const SHORT_PCT_MAX = 100;
 // and stampCapDerived applies it first, so the figures it works out from these
 // (live P/E, earnings yield, EV/sales, P/op cash, net cash per share) follow.
 const SourceRule = require('./sourcerule.js');
+const FieldSource = require('./fieldsource.js');
 let sourcedHeld = null;
 async function sourcedNow() {
   // Ten minutes for a figure; a minute for none, so the first build shows soon.
@@ -11659,8 +11660,13 @@ function columnCatalogue() {
     const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
     // The header's own hover text is the column's definition, and /fields
     // lists it (2026-10-30), so the screener's hover and that page cannot differ.
-    const unent = (t) => t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    // The headers write typography as entities (&rsquo; &mdash;), so those
+    // decode too; &amp; last, so "&amp;lt;" stays text.
+    const NAMED = { lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
+      mdash: '—', ndash: '–', hellip: '…', times: '×', minus: '−', middot: '·', divide: '÷', deg: '°', asymp: '≈', le: '≤', ge: '≥', rarr: '→' };
+    const unent = (t) => t.replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16)))
+      .replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(+d))
+      .replace(/&([a-z]+);/gi, (m, k) => (k === 'amp' ? m : NAMED[k] !== undefined ? NAMED[k] : m)).replace(/&amp;/g, '&');
     const titleOf = (attrs) => { const t = /\btitle="([^"]*)"/.exec(attrs); return t ? unent(t[1]).trim() : ''; };
     const labels = {}, groupDefs = {};
     for (const m of head.matchAll(/<th (class="group grp-([a-z]+)"[^>]*)>([^<]+)<\/th>/g)) {
@@ -13402,9 +13408,9 @@ app.get('/api/fields', requireAuth, route(async (req, res) => {
     if (hidden.has(c.id)) continue;
     let g = groups[groups.length - 1];
     if (!g || g.id !== c.group) groups.push(g = { id: c.group, label: c.groupLabel, def: c.groupDef, columns: [] });
-    g.columns.push({ id: c.id, label: c.label, def: c.def });
+    g.columns.push({ id: c.id, label: c.label, def: c.def, src: FieldSource.sourceOf(c.id, c.group) });
   }
-  res.json({ frozen: COLUMN_FROZEN, groups });
+  res.json({ frozen: COLUMN_FROZEN.map((c) => Object.assign({}, c, { src: FieldSource.sourceOf(c.id, 'stock') })), groups });
 }));
 
 // The announcement. Read by everyone through /api/prefs; written only here.
