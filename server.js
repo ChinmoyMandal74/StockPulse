@@ -1227,6 +1227,14 @@ function igPictures(md) {
   return { fromFence: ig.length > 0, pictures: ours, foreign: all.filter((u) => !/^\/blog\/img\//.test(u)).length };
 }
 
+// A post laid out in ONE column: every picture on the page is "wide" (or there
+// are none), so nothing would sit in the two-column layout's right-hand rail.
+// The Instagram fence is not on the page and does not count.
+function oneColumnPost(md) {
+  const pics = [...splitIgFence(md).blog.matchAll(IMG_LINE)];
+  return pics.every((m) => /"\s*wide\s*"\)\s*$/i.test(m[0].replace(/^!\[[^\]]*\]/, '')));
+}
+
 const firstImage = (md) => {
   const re = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
   md = splitIgFence(md).blog;
@@ -1665,6 +1673,7 @@ app.get('/blog/:slug', route(async (req, res, next) => {
     // It sits on the SHELL rather than on the body, because there are three
     // columns to describe now and the third one is the body's sibling.
     .replace('%SHELLCLASS%', () => 'shell' + (req.query.guides === '1' ? ' guides' : ''))
+    .replace('%ARTCLASS%', () => (oneColumnPost(p.body) ? 'one' : ''))
     .replace('%RECENT%', () => recentRail(others, p.slug))
     // Which post the subscribe box was filled in from, kept as the consent
     // record's `source`. Escaped like everything else, though a slug is already

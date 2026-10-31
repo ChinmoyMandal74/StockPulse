@@ -278,6 +278,21 @@
     .body .pimg.medium { margin-right: calc(-460px - var(--railgap)); }
     /* Nothing may straddle the rail. */
     .body h2, .body h3, .body hr { clear: none; }
+    /* ONE COLUMN (owner, 2026-10-31, from a screenshot with the empty right
+       half ringed in red). A post whose every picture is "wide" has nothing
+       to put in the rail, so the halved text column only left the right half
+       empty. The server marks such a post `one` (`oneColumnPost`): the words
+       get a 720px measure, centred, at a slightly larger size so the longer
+       line still reads, and the pictures keep the article's full width. A
+       post with any rail picture keeps the two columns above. */
+    article.one > .meta, article.one > h1, article.one > .summary,
+    article.one > .rule, article.one > .body { max-width: 720px; margin-left: auto; margin-right: auto; }
+    article.one .body { padding-right: 0; font-size: 16.5px; }
+    article.one .body .pimg.wide {
+      float: none; clear: both; max-width: none;
+      width: min(1040px, calc(100vw - 40px));
+      margin: 26px 0 0 50%; transform: translateX(-50%);
+    }
     }   /* end of the two columns inside the article */
 
     /* ---- the third column: recent posts -----------------------------------
@@ -427,7 +442,7 @@
 
   <main class="page">
     <div class="%SHELLCLASS%">
-      <article>
+      <article class="%ARTCLASS%">
         <div class="meta">%META%</div>
         <h1>%TITLE%</h1>
         <p class="summary">%SUMMARY%</p>
