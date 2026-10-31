@@ -12286,7 +12286,7 @@ const IG_READY = !!(IG_ENV_TOKEN && /^\d+$/.test(IG_USER_ID));
 // stored, refreshed token say which one it descends from.
 const IG_MARK = IG_ENV_TOKEN ? crypto.createHash('sha256').update(IG_ENV_TOKEN).digest('hex').slice(0, 16) : null;
 const IG_AGAIN_MS = 10 * 60 * 1000;      // the same pictures twice inside this is a double click
-const IG_WAIT_MS = 25000;                // how long a container may take to be ready
+const IG_WAIT_MS = 45000;                // how long each container may take to be ready
 
 async function igCall(method, path, params, token, opts = {}) {
   const url = new URL(Instagram.HOST + (opts.bare ? '' : '/' + IG_VER) + path);
@@ -12445,20 +12445,25 @@ async function igPublish(req, res, blogSlug) {
   for (const g of groups) {
   let mediaId = null;
   try {
-    const until = Date.now() + IG_WAIT_MS;
     const single = g.urls.length === 1;
     const made = [];
-    // In order, not at once: the carousel is in the order the children are named.
+    // Created in order (the carousel is in the order its children are named),
+    // then waited for TOGETHER, each with its own allowance (owner, 2026-10-31:
+    // a four-slide blog carousel ran out of one shared 25 seconds while
+    // Instagram fetched the pictures one after another). allSettled, so no
+    // poll is left running once one has failed.
     for (const url of g.urls) {
       const c = await igCall('POST', '/' + IG_USER_ID + '/media',
         kind === 'story' ? Instagram.storyParams(url) : Instagram.itemParams(url, single, caption), t.token);
-      await igReady(c.id, t.token, until);
       made.push(c.id);
     }
+    const waits = await Promise.allSettled(made.map((id) => igReady(id, t.token, Date.now() + IG_WAIT_MS)));
+    const bad = waits.find((w) => w.status === 'rejected');
+    if (bad) throw bad.reason;
     let creation = made[0];
     if (!single) {
       const c = await igCall('POST', '/' + IG_USER_ID + '/media', Instagram.carouselParams(made, caption), t.token);
-      await igReady(c.id, t.token, until);
+      await igReady(c.id, t.token, Date.now() + IG_WAIT_MS);
       creation = c.id;
     }
     const pub = await igCall('POST', '/' + IG_USER_ID + '/media_publish', { creation_id: creation }, t.token, { timeout: 30000 });
