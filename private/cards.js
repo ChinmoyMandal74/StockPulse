@@ -2386,7 +2386,7 @@
     // year's price moves only. No offer and no button: there is no price to
     // quote, and a drawn button on a still image does nothing.
     function showcaseNeed(tpl, opts) {
-      if (tpl !== 'showcase') return null;
+      if (tpl !== 'showcase' && tpl !== 'golive') return null;
       const o = opts || {};
       return { symbol: o.shwSym || null, days: 130 };
     }
@@ -2401,7 +2401,14 @@
     // The heat map and the sector bars are price moves, so green and red; the
     // sectors are the median company, so one giant cannot carry its sector.
     const SHW_WIN = { today: ['todayPct', 'Today', 3], m1: ['oneMonthPct', 'Past month', 10], ytd: ['ytdPct', 'This year', 30] };
-    function tplShowcase() {
+    // THE LAUNCH CARD (Brand > LinkedIn, 2026-10-31, the owner: "a new image,
+    // based on this visual, may be clearly like TickrLab is now Live"). The
+    // same scene and the same controls as Showcase, with fixed launch words: a
+    // "Now live" badge, the headline, the house line and the count, and a
+    // closing line with the offer the home page makes (free in beta, no card).
+    // Fixed text, so the headline boxes are hidden for it.
+    function tplShowcase(launch) {
+      launch = launch === true;
       const story = size.id === 'story', square = size.id === 'square';
       const style = ['devices', 'browser', 'phones'].includes(O.shwStyle) ? O.shwStyle : 'devices';
       const bigKind = ['screener', 'heat', 'sectors'].includes(O.shwLap) ? O.shwLap : 'screener';
@@ -2409,8 +2416,11 @@
       const W8 = SHW_WIN[O.shwWin] || SHW_WIN.today;
       const cos = stocks.filter((x) => x && !x.error && !isFundRow(x));
       const all = stocks.filter((x) => x && !x.error);
-      const head = String(O.shwHead || '').trim() || 'Every stock, measured the same way after every close.';
-      const sub = String(O.shwSub || '').trim()
+      const head = launch ? 'Tickr Lab is now live.'
+        : String(O.shwHead || '').trim() || 'Every stock, measured the same way after every close.';
+      const sub = launch ? 'Every US stock, measured the same way after every close. '
+        + cos.length.toLocaleString('en-US') + ' companies on one screen, with their filings, holders and history.'
+        : String(O.shwSub || '').trim()
         || cos.length.toLocaleString('en-US') + ' US-listed companies on one screen, with their filings, holders and history.';
       const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
       const pctTxt = (v) => (v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(Math.abs(v) < 10 ? 2 : 1) + '%');
@@ -2532,10 +2542,12 @@
         mesh = '<svg class="shw-mesh" viewBox="0 0 1080 ' + (story ? 560 : 420) + '" preserveAspectRatio="xMidYMin slice" aria-hidden="true">' + g + '</svg>';
       }
       return chromeTop() + mesh
-        + '<div class="s-body"><div class="shw-in shw-' + style + '">'
+        + '<div class="s-body"><div class="shw-in shw-' + style + (launch ? ' shw-launch' : '') + '">'
+        + (launch ? '<div class="shw-live"><i></i>Now live · Public beta</div>' : '')
         + '<h2 class="shw-h">' + esc(head) + '</h2>'
         + '<p class="shw-s">' + esc(sub) + '</p>'
         + '<div class="shw-scene">' + scene + '</div>'
+        + (launch ? '<div class="shw-cta"><span>Free while in beta. No card asked for.</span><b>tickrlab.com</b></div>' : '')
         + '</div></div>' + chromeFoot();
     }
 
@@ -14322,7 +14334,7 @@
     daymoves: tplDayMoves,
     stksignal: tplStockSignal,
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
-    intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase,
+    intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase, golive: () => tplShowcase(true),
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
     disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload,
@@ -14769,6 +14781,25 @@
     .sz-square .shw-s { font-size: 20px; margin-top: 12px; }
     .sz-story .shw-s { font-size: 30px; }
     .shw-scene { position: relative; width: 100%; height: 560px; margin-top: 44px; }
+    /* The launch card: a badge over the headline and the offer under the scene. */
+    .shw-live { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 26px; padding: 10px 22px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); font: 600 20px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+    .shw-live i { display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent); }
+    .shw-launch .shw-h { font-size: 80px; }
+    .shw-launch .shw-s { max-width: 860px; }
+    .shw-launch .shw-scene { height: 520px; margin-top: 38px; }
+    .shw-cta { display: flex; align-items: baseline; justify-content: center; gap: 22px; margin-top: 30px; font-size: 24px; color: var(--muted); }
+    .shw-cta b { font: 700 34px var(--mono); color: var(--text); letter-spacing: -0.01em; }
+    .sz-square .shw-live { font-size: 16px; margin-bottom: 18px; padding: 8px 18px; }
+    .sz-square .shw-launch .shw-h { font-size: 58px; }
+    .sz-square .shw-launch .shw-scene { height: 505px; margin-top: 22px; }
+    .sz-square .shw-launch .shw-s { font-size: 19px; margin-top: 10px; }
+    .sz-square .shw-cta { margin-top: 18px; font-size: 20px; }
+    .sz-square .shw-cta b { font-size: 28px; }
+    .sz-story .shw-live { font-size: 22px; margin-bottom: 26px; }
+    .sz-story .shw-launch .shw-h { font-size: 84px; }
+    .sz-story .shw-launch .shw-s { margin-top: 14px; }
+    .sz-story .shw-cta { flex-direction: column; align-items: center; gap: 8px; margin-top: 30px; font-size: 28px; }
+    .sz-story .shw-cta b { font-size: 46px; }
     .sz-story .shw-in { padding-top: 92px; }
     .sz-square .shw-scene { height: 470px; margin-top: 30px; }
     .sz-story .shw-scene { height: 1130px; margin-top: 54px; }

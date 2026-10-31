@@ -2311,10 +2311,14 @@
           the charts and values are drawn from. Square keeps nine of the twelve.</p>
       </div>
       <div id="shwBox">
+        <!-- Brand > LinkedIn (golive) shares these controls; its words are fixed,
+             so the two text boxes are hidden for it (shwText). -->
+        <div id="shwText">
         <label>Headline</label>
         <textarea id="shwHead" maxlength="90">Every stock, measured the same way after every close.</textarea>
         <label>Line under it (empty: the count of companies)</label>
         <textarea id="shwSub" maxlength="140"></textarea>
+        </div>
         <label>Style</label>
         <select id="shwStyle">
           <option value="devices" selected>A laptop and a phone</option>
@@ -2634,6 +2638,7 @@
       { id: 'howto', name: 'How to', note: 'Training slides — one topic, three slides, a carousel each' },
       { id: 'announce', name: 'Announcement', note: 'Say something in the house style' },
       { id: 'showcase', name: 'Showcase', note: 'The site in a laptop and a phone, drawn from today\u2019s data, under a headline of your own' },
+      { id: 'golive', name: 'LinkedIn', note: 'Tickr Lab is now live: the launch card, with the site in a laptop and a phone from today’s data. Post 4:5 is the size for a LinkedIn or Instagram feed' },
       { id: 'overload', name: 'Too much to read', note: 'A cartoon: charts, filings and jargon swirling round someone reading it all on their own' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
@@ -2775,6 +2780,7 @@
       ['howto', 'How to'],
       ['announce', 'Announcement'],
       ['showcase', 'Showcase'],
+      ['golive', 'LinkedIn'],
       ['overload', 'Too much to read'],
       ['disclaimer', 'Disclaimer'],
       ['avatar', 'Profile picture'],
@@ -2888,7 +2894,7 @@
     // Which scoped controls belong to which template, for an opened post.
     const SCOPE_PREFIX = { movers: 'mov', chart: 'cht', sparks: 'spk', range: 'rng', advboard: 'adv', fund: 'fund', size: 'size', bubble: 'bub', histogram: 'hist', shorted: 'shrt', bars: 'bar', lines: 'lin', scatter: 'sct', race: 'rac', fallhigh: 'fall' };
     // The Race chart is the owner's too (2026-10-16: "always for Admin only").
-    const OWNER_ONLY_TPLS = new Set(['announce', 'race', 'showcase', 'reel']);
+    const OWNER_ONLY_TPLS = new Set(['announce', 'race', 'showcase', 'golive', 'reel']);
     let canAnnounce = false;
     // ---- member mode ---------------------------------------------------------
     //
@@ -4606,7 +4612,8 @@
     // before the card is built, so a card can see which pickers it shows).
     function paintBoxes() {
       $('annBox').style.display = tpl === 'announce' ? 'block' : 'none';
-      $('shwBox').style.display = tpl === 'showcase' ? 'block' : 'none';
+      $('shwBox').style.display = tpl === 'showcase' || tpl === 'golive' ? 'block' : 'none';
+      $('shwText').style.display = tpl === 'golive' ? 'none' : 'block';
       $('covBox').style.display = tpl === 'covread' ? 'block' : 'none';
       $('disBox').style.display = tpl === 'disclaimer' ? 'block' : 'none';
       $('spyBox').style.display = tpl === 'spyears' ? 'block' : 'none';
@@ -5025,7 +5032,7 @@
       $(id).addEventListener('input', () => { if (tpl === 'showcase') render(); }));
     $('covSym').addEventListener('change', () => { if (tpl === 'covread') render(); });
     ['shwSym', 'shwStyle', 'shwLap', 'shwWin', 'shwPh', 'shwBg'].forEach((id) =>
-      $(id).addEventListener('change', () => { if (tpl === 'showcase') render(); }));
+      $(id).addEventListener('change', () => { if (tpl === 'showcase' || tpl === 'golive') render(); }));
     ['annKick', 'annHead', 'annBody'].forEach((id) =>
       $(id).addEventListener('input', () => { if (tpl === 'announce') render(); }));
     $('movAdv').innerHTML = '<option value="off" selected>Don’t show</option>' +
