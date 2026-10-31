@@ -25,3 +25,14 @@ The studio's admin-only box under "Post to blog". One card is a post; cards adde
 **Tests** were scratchpad Node suites: the rules, and the server block run against a pretend Instagram. Nothing was posted to the real account by the build.
 
 **Not built**: video and reels, scheduling, deleting a post, links or stickers on a Story (the API offers none).
+
+## A blog post to Instagram (2026-10-31, owner: "This should only be allowed if the blog is live")
+
+**"Post to Instagram" on `/posts`**, beside "Send as email" and shown only for a live post, as that one is.
+
+- **The slides are drawn in the editor from the SAVED post**, fetched again when the box opens, never the textarea: the caption sends people to the page, so the slides must be what the page says. Unsaved edits are named in the hint.
+- **A cover, then each of the post's own pictures** (`/blog/img/` only, in reading order, fences included, at most nine), every slide 1080x1350 on navy (`#071120` to `#0d1a2d`), a JPEG at q0.92 stored through `/api/admin/posts/image`. One shape because a carousel is one shape; 4:5 because it is the tallest the feed takes. A picture from another site is left out and counted (it would taint the canvas). A post with no pictures is a single cover.
+- **The caption** starts as the title, the summary, `The full post, with every chart: tickrlab.com/blog/<slug>`, and the house caveat; it is editable, and editing it after Check hides Post now until checked again.
+- **`POST /api/admin/posts/:slug/instagram`** refuses an unknown post (404) and a draft (400, "Publish it first"), the dry run included, and then runs `igPublish`, the studio route's body moved into a function, unchanged. So the rule is the server's, not the hidden button's. The activity log line ends `:blog:<slug>`.
+- **Check, then Post now**, as the studio: the dry run names the account; the same slides inside ten minutes turn the button into "Post it again anyway".
+- Tests (scratchpad, pretend Instagram, headless Chrome over the real page): 17 checks, including the button absent on a draft and after unpublishing, three slides from a body with a foreign picture, four media calls and one publish, and the draft refused with nothing reaching Instagram. Proved by reverting the status check: three fail, and the draft is posted.

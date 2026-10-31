@@ -12343,7 +12343,22 @@ app.get('/api/admin/instagram', requireAdmin, route(async (req, res) => {
 // `dry` checks everything and posts nothing; the studio shows what it
 // returns and asks. `again` allows the same pictures a second time inside
 // ten minutes, which is otherwise taken for a double click.
-app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
+app.post('/api/admin/instagram/post', requireAdmin, route((req, res) => igPublish(req, res)));
+
+// A blog post to Instagram (2026-10-31, owner: "only allowed if the blog is
+// live"). The editor draws the slides from the SAVED post and sends them here;
+// this refuses a draft, dry run included, and then posts exactly as the studio
+// does. Checked here, not by hiding the button.
+app.post('/api/admin/posts/:slug/instagram', requireAdmin, route(async (req, res) => {
+  const p = await store.readPost(req.params.slug, { publishedOnly: false });
+  if (!p) return res.status(404).json({ error: 'No such post.' });
+  if (p.status !== 'published') {
+    return res.status(400).json({ error: 'Publish it first: only a live post can go to Instagram, because the caption sends people to it.' });
+  }
+  return igPublish(req, res, p.slug);
+}));
+
+async function igPublish(req, res, blogSlug) {
   if (!IG_READY) return res.status(503).json({ error: 'Instagram is not connected on this server: IG_ACCESS_TOKEN and IG_USER_ID are not set.' });
   const caption = String(req.body?.caption || '').replace(/\r\n/g, '\n').trim();
   const asked = Array.isArray(req.body?.images) ? req.body.images.slice(0, Instagram.CAROUSEL_MAX + 1) : [];
@@ -12428,10 +12443,10 @@ app.post('/api/admin/instagram/post', requireAdmin, route(async (req, res) => {
   done.push({ mediaId, permalink, recorded });
   }
   if (!done.length) return res.status(502).json({ error: failed });
-  logAct(req, 'instagram', `${kind}:${done.length}:${done[0].mediaId}`);
+  logAct(req, 'instagram', `${kind}:${done.length}:${done[0].mediaId}` + (blogSlug ? ':blog:' + blogSlug : ''));
   res.json({ ok: true, kind, mediaId: done[0].mediaId, permalink: done[0].permalink, username: me.username,
     pictures: images.length, posted: done.length, failed, recorded: done.every((d) => d.recorded) });
-}));
+}
 
 app.get('/api/admin/posts/images', requireAdmin, route(async (req, res) => {
   res.json({ images: (await store.listPostImages()).map((i) => ({ ...i, url: `/blog/img/${i.id}` })) });

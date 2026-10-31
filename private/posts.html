@@ -170,6 +170,9 @@
                          color: var(--text); cursor: pointer; }
     .mailbox label.aud input { margin: 0; accent-color: var(--accent); }
     .mailbox label.aud.off { color: var(--faint); cursor: not-allowed; }
+    .igbox .igslides { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px; }
+    .igbox .igslides img { width: 96px; height: 120px; flex: none; border-radius: 6px; border: 1px solid var(--hair); }
+    .igbox .igslides .igwait { font-size: 13px; color: var(--muted); }
     .gtick { display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
              font-size: 12px; color: var(--muted); cursor: pointer; }
     .phead { display: flex; align-items: center; gap: 12px; }
@@ -272,6 +275,7 @@
             <button class="btn btn-primary" id="pubBtn">Publish</button>
             <button class="btn" id="previewBtn">Preview</button>
             <button class="btn" id="mailBtn" hidden>Send as email</button>
+            <button class="btn" id="igBtn" hidden>Post to Instagram</button>
             <span class="said" id="said"></span>
             <a class="openlink" id="openLink" target="_blank" rel="noopener" hidden>Open the post &#8599;</a>
             <span class="sp"></span>
@@ -309,6 +313,24 @@
               <button class="btn btn-primary" id="mailSend">Send</button>
               <button class="btn" id="mailCancel">Cancel</button>
               <span class="said" id="mailSaid"></span>
+            </div>
+          </div>
+
+          <!-- A LIVE POST TO INSTAGRAM. The slides are drawn here from the
+               SAVED post (a cover, then each of its pictures, all 4:5 on navy),
+               checked by a dry run, and posted only on the second button. The
+               server refuses a draft. -->
+          <div class="mailbox igbox" id="igBox" hidden>
+            <label>Slides, in order</label>
+            <div class="igslides" id="igSlides"></div>
+            <label for="igCaption">Caption</label>
+            <textarea id="igCaption" rows="6" spellcheck="true"></textarea>
+            <p class="hint" id="igHint"></p>
+            <div class="bar">
+              <button class="btn" id="igCheckBtn">Check</button>
+              <button class="btn btn-primary" id="igGoBtn" hidden>Post now</button>
+              <button class="btn" id="igCancel">Cancel</button>
+              <span class="said" id="igSaid"></span>
             </div>
           </div>
         </div></div>
@@ -580,6 +602,8 @@
       // but a button that exists in order to be refused is worse than none.
       $('mailBtn').hidden = !(p && p.status === 'published');
       $('mailBox').hidden = true;
+      $('igBtn').hidden = !(p && p.status === 'published');
+      igClose();
       paintPostLink();
       $('pubBtn').textContent = p && p.status === 'published' ? 'Update the live post' : 'Publish';
       $('preview').hidden = true;
@@ -680,6 +704,8 @@
         $('delBtn').hidden = false;
         $('pubBtn').textContent = d.post.status === 'published' ? 'Update the live post' : 'Publish';
         $('mailBtn').hidden = d.post.status !== 'published';
+        $('igBtn').hidden = d.post.status !== 'published';
+        igClose();
         paintPostLink();
         dirty = false;
         say(d.post.status === 'published'
@@ -963,6 +989,212 @@
       $('body').focus();
       $('body').setSelectionRange(0, 0);
       say('Started from “' + t.name + '” — replace the prompts as you go.');
+    });
+
+    // ---- Post to Instagram -------------------------------------------------
+    // ONLY A LIVE POST, and only the SAVED version of it: the caption sends
+    // people to the page, so the slides must be what the page says. A cover
+    // slide, then each of the post's own pictures (our uploads only: a picture
+    // from another site would taint the canvas), all 1080x1350 on navy,
+    // because a carousel is one shape and 4:5 is the tallest the feed takes.
+    // The posting itself is the studio's (`/api/admin/instagram/post`), behind
+    // a route that refuses a draft.
+    const IG_W = 1080, IG_H = 1350, IG_MAX = 10;
+    const IG_INK = { ground: '#071120', ground2: '#0d1a2d', text: '#eef2f8', muted: '#a9b3c2',
+      faint: '#8b95a5', brand: '#34d399', hair: 'rgba(255,255,255,0.10)' };
+    const SANS = 'Geist, system-ui, sans-serif', MONO = '"Geist Mono", ui-monospace, monospace';
+    let igSlides = null, igReady = null, igAgain = false;
+    const say3 = (m, kind) => { $('igSaid').textContent = m || ''; $('igSaid').className = 'said' + (kind ? ' ' + kind : ''); };
+
+    function igClose() {
+      $('igBox').hidden = true;
+      igSlides = null; igReady = null; igAgain = false;
+      $('igGoBtn').hidden = true;
+    }
+
+    // Lines that fit `width` at the current font, breaking on spaces.
+    function igWrap(g, text, width) {
+      const lines = [];
+      let line = '';
+      for (const word of String(text || '').split(/\s+/).filter(Boolean)) {
+        const next = line ? line + ' ' + word : word;
+        if (line && g.measureText(next).width > width) { lines.push(line); line = word; } else line = next;
+      }
+      if (line) lines.push(line);
+      return lines;
+    }
+    function igSpaced(g, px) { if ('letterSpacing' in g) g.letterSpacing = px + 'px'; }
+
+    function igCanvas() {
+      const c = document.createElement('canvas');
+      c.width = IG_W; c.height = IG_H;
+      const g = c.getContext('2d');
+      const grad = g.createLinearGradient(0, 0, 0, IG_H);
+      grad.addColorStop(0, IG_INK.ground2); grad.addColorStop(1, IG_INK.ground);
+      g.fillStyle = grad; g.fillRect(0, 0, IG_W, IG_H);
+      g.textBaseline = 'alphabetic';
+      return { c, g };
+    }
+    function igFooter(g, slug, n, of) {
+      g.fillStyle = IG_INK.faint; g.font = '500 24px ' + MONO; igSpaced(g, 0);
+      g.textAlign = 'left'; g.fillText('tickrlab.com/blog/' + slug, 64, IG_H - 52);
+      if (of > 1) { g.textAlign = 'right'; g.fillText(n + ' / ' + of, IG_W - 64, IG_H - 52); }
+      g.textAlign = 'left';
+    }
+
+    function igCover(p, of) {
+      const { c, g } = igCanvas();
+      const X = 80, W = IG_W - 2 * X;
+      g.fillStyle = IG_INK.text; g.font = '600 40px ' + SANS; igSpaced(g, -0.5);
+      g.fillText('Tickr Lab', X, 130);
+      g.fillStyle = IG_INK.brand; g.font = '500 17px ' + MONO; igSpaced(g, 3);
+      g.fillText('FROM DATA TO DECISIONS', X, 162);
+      g.font = '500 26px ' + MONO; igSpaced(g, 5);
+      g.fillText('ON THE BLOG', X, 400);
+      // The largest title that fits in five lines.
+      let size = 92, lines;
+      for (; size >= 52; size -= 4) {
+        g.font = '600 ' + size + 'px ' + SANS; igSpaced(g, -size * 0.03);
+        lines = igWrap(g, p.title, W);
+        if (lines.length <= 5) break;
+      }
+      g.fillStyle = IG_INK.text;
+      let y = 400 + 40 + size;
+      for (const l of lines.slice(0, 6)) { g.fillText(l, X, y); y += Math.round(size * 1.08); }
+      if (p.summary) {
+        g.fillStyle = IG_INK.muted; g.font = '400 34px ' + SANS; igSpaced(g, 0);
+        y += 24;
+        for (const l of igWrap(g, p.summary, W).slice(0, 4)) { g.fillText(l, X, y); y += 48; }
+      }
+      g.fillStyle = IG_INK.hair; g.fillRect(X, IG_H - 190, W, 1);
+      g.fillStyle = IG_INK.text; g.font = '500 30px ' + MONO; igSpaced(g, 0);
+      g.fillText('Read it at tickrlab.com/blog', X, IG_H - 130);
+      g.fillStyle = IG_INK.faint; g.font = '400 22px ' + SANS;
+      g.fillText('What happened, not what happens next. Not investment advice.', X, IG_H - 88);
+      if (of > 1) { g.font = '500 24px ' + MONO; g.textAlign = 'right'; g.fillText('1 / ' + of, IG_W - 64, IG_H - 52); g.textAlign = 'left'; }
+      return c.toDataURL('image/jpeg', 0.92);
+    }
+
+    async function igPicture(src, slug, n, of) {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const { c, g } = igCanvas();
+      const box = { x: 48, y: 48, w: IG_W - 96, h: IG_H - 150 };
+      const s = Math.min(box.w / img.naturalWidth, box.h / img.naturalHeight);
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, box.x + Math.round((box.w - w) / 2), box.y + Math.round((box.h - h) / 2), w, h);
+      igFooter(g, slug, n, of);
+      return c.toDataURL('image/jpeg', 0.92);
+    }
+
+    // The post's own pictures in reading order, a fence's included.
+    function igPictures(body) {
+      const all = [...String(body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
+      const ours = [...new Set(all.filter((u) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(u)))];
+      return { ours, foreign: all.length - all.filter((u) => /^\/blog\/img\//.test(u)).length };
+    }
+
+    function igDefaultCaption(p) {
+      return [p.title, p.summary || '', 'The full post, with every chart: tickrlab.com/blog/' + p.slug,
+        'What happened, not what happens next. Not investment advice.'].filter(Boolean).join('\n\n');
+    }
+
+    async function igOpen() {
+      if (!$('igBox').hidden) { igClose(); return; }
+      if (!current || currentStatus !== 'published') return say('Publish it first.', 'bad');
+      igClose();
+      $('igBox').hidden = false;
+      $('igSlides').innerHTML = '<span class="igwait">Drawing the slides…</span>';
+      $('igHint').textContent = '';
+      say3('');
+      $('igCheckBtn').disabled = true;
+      try {
+        const p = (await api('GET', '/api/admin/posts?slug=' + encodeURIComponent(current))).post;
+        if (!p || p.status !== 'published') throw new Error('This post is not live any more. Publish it first.');
+        await Promise.all(['600 92px Geist', '400 34px Geist', '500 26px "Geist Mono"'].map((f) => document.fonts.load(f).catch(() => null)));
+        const pics = igPictures(p.body);
+        const use = pics.ours.slice(0, IG_MAX - 1);
+        const of = 1 + use.length;
+        const slides = [igCover(p, of)];
+        for (let i = 0; i < use.length; i++) slides.push(await igPicture(use[i], p.slug, i + 2, of));
+        igSlides = slides;
+        $('igSlides').innerHTML = slides.map((s, i) => `<img src="${s}" alt="Slide ${i + 1}" />`).join('');
+        if (!$('igCaption').value.trim() || $('igCaption').dataset.slug !== p.slug) {
+          $('igCaption').value = igDefaultCaption(p);
+          $('igCaption').dataset.slug = p.slug;
+        }
+        const notes = [`${of} slide${of === 1 ? '' : 's'}: a cover, then ${use.length ? 'the post’s ' + use.length + ' picture' + (use.length === 1 ? '' : 's') : 'no pictures (the post has none of its own)'}.`];
+        if (pics.ours.length > use.length) notes.push(`${pics.ours.length - use.length} more left out: a carousel holds ten.`);
+        if (pics.foreign) notes.push(`${pics.foreign} picture${pics.foreign === 1 ? '' : 's'} from other sites left out.`);
+        if (dirty) notes.push('You have unsaved changes; these slides are the live version.');
+        const ig = await api('GET', '/api/admin/instagram').catch(() => null);
+        if (!ig || !ig.configured) {
+          notes.push('Instagram is not connected on this server, so it can only be posted from the live site.');
+        } else if (ig.error) {
+          notes.push('Instagram: ' + ig.error);
+        } else {
+          notes.push('Posts as @' + ig.username + (ig.allowed ? ` (${ig.used} of ${ig.allowed} posts used today)` : '') + '.');
+          $('igCheckBtn').disabled = false;
+        }
+        $('igHint').textContent = notes.join(' ');
+      } catch (e) {
+        $('igSlides').innerHTML = '';
+        say3(e.message, 'bad');
+      }
+    }
+
+    async function igSend(dry) {
+      const url = '/api/admin/posts/' + encodeURIComponent(current) + '/instagram';
+      return api('POST', url, { images: igReady, caption: $('igCaption').value, dry, again: igAgain || undefined });
+    }
+
+    $('igBtn').addEventListener('click', igOpen);
+    $('igCancel').addEventListener('click', igClose);
+    $('igCaption').addEventListener('input', () => { igReady = null; $('igGoBtn').hidden = true; });
+    $('igCheckBtn').addEventListener('click', async () => {
+      if (!igSlides) return;
+      $('igCheckBtn').disabled = true;
+      $('igGoBtn').hidden = true;
+      try {
+        say3('Storing the slides…');
+        const ids = [];
+        for (const dataUrl of igSlides) ids.push((await api('POST', '/api/admin/posts/image', { dataUrl })).id);
+        igReady = ids.map((id) => ({ id, w: IG_W, h: IG_H }));
+        const d = await igSend(true);
+        say3(`Ready: ${d.pictures} slide${d.pictures === 1 ? '' : 's'} as @${d.username}, caption ${d.captionLength} characters. `
+          + 'Post now puts it up at once, and Instagram has no undo.', 'good');
+        $('igGoBtn').textContent = 'Post now';
+        $('igGoBtn').hidden = false;
+      } catch (e) { say3(e.message, 'bad'); }
+      finally { $('igCheckBtn').disabled = false; }
+    });
+    $('igGoBtn').addEventListener('click', async () => {
+      if (!igReady) return;
+      $('igGoBtn').disabled = $('igCheckBtn').disabled = true;
+      say3('Posting… Instagram fetches each slide, which takes a little while.');
+      try {
+        const d = await igSend(false);
+        $('igGoBtn').hidden = true;
+        igAgain = false;
+        const s = $('igSaid');
+        s.className = 'said good';
+        s.textContent = `Posted to @${d.username}. `;
+        if (d.permalink) {
+          const a = document.createElement('a');
+          a.href = d.permalink; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'See it on Instagram ↗';
+          s.appendChild(a);
+        }
+      } catch (e) {
+        // The same slides inside ten minutes reads as a double click; say so
+        // and let a second press mean it.
+        if (/minute\(s\) ago/.test(e.message)) {
+          igAgain = true;
+          $('igGoBtn').textContent = 'Post it again anyway';
+        }
+        say3(e.message, 'bad');
+      } finally { $('igGoBtn').disabled = $('igCheckBtn').disabled = false; }
     });
 
     // NOTHING GUARDED THIS BEFORE. A thousand words live in a textarea until
