@@ -256,11 +256,16 @@
                 <option value="grid">Grid — all at once</option>
                 <option value="instagram">Instagram only — 4:5 pictures, not on the blog</option>
               </select>
+              <!-- ONE COLUMN IS THE DEFAULT (owner, 2026-10-31: "adopt this for all
+                   future posts unless I explicitly ask for two column"). A post
+                   whose pictures are all "wide" reads in one centred column; any
+                   of the other three puts that picture beside the text and turns
+                   the post into two columns. -->
               <select id="imgSize" class="md" title="How wide the next picture goes in. Change the word in the markdown to alter one later.">
-                <option value="">Full column</option>
-                <option value="wide">Wide — past the text</option>
-                <option value="medium">Medium</option>
-                <option value="small">Small</option>
+                <option value="wide" selected>Full width — one column</option>
+                <option value="">Beside the text — two columns</option>
+                <option value="medium">Medium, beside the text — two columns</option>
+                <option value="small">Small, beside the text — two columns</option>
               </select>
               <input type="file" id="imgFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
               <span class="sp"></span>
@@ -531,7 +536,8 @@
         const alt = file.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
         // The width goes in markdown's title slot, so it stays editable as plain
         // text afterwards rather than being locked into whatever was picked at
-        // upload time. Full column is the default and writes nothing.
+        // upload time. Full width ("wide", one column) is the default; beside
+        // the text writes nothing.
         const size = $('imgSize').value;
         const tail = size ? ' "' + size + '"' : '';
         // Its own line with blank lines either side, which is what makes the

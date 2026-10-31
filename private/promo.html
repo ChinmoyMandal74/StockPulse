@@ -5799,9 +5799,11 @@
       return t.slice(0, 90);
     }
 
-    // The picture is the FIRST block and carries NO width word, which on the
-    // post page means the right-hand rail at its full width: the two-column
-    // shape, image on the right, prose running down the left beside it. The
+    // The picture is the FIRST block and is "wide": since 2026-10-31 a post is
+    // one centred column unless the owner asks for two ("adopt this for all
+    // future posts unless I explicitly ask for two column"), and a post whose
+    // pictures are all wide is laid out that way. A 4:5 card is held to the
+    // window's height by the post page, so it stays whole on one screen. The
     // alt text becomes the figure's caption, so it names the card rather than
     // describing it to nobody.
     //
@@ -5811,7 +5813,7 @@
     // a hand-started post read alike. The closing caveat is the house line,
     // which is the one part that should survive being edited.
     const blogBody = (url, caption) =>
-      `![${caption}](${url})\n\n`
+      `![${caption}](${url} "wide")\n\n`
       + '## What this shows\n\nOne sentence on what the card is ranking, over what window, '
       + 'and which list it was drawn from.\n\n'
       + '## What stands out\n\n- **NAME** — why this one is worth a second look\n'
