@@ -164,3 +164,6 @@ The "Compared · Where Tickr Lab fits" table (Tickr Lab beside Yahoo Finance, Go
 ## The About page, removed (2026-10-30)
 
 The owner: "Remove the about page and remove all links to about page". `private/about.html` is deleted; `/about` answers a 301 to `/home` so old links and search results land somewhere; it is off the sitemap; the links on the sign-in page ("What is Tickr Lab?"), the Privacy and Terms bars and footers, and the home page footer are gone. `/api/about-stats` stays: the home page and the Tour read it. The page is in git history if it is ever wanted again.
+
+### A wide picture is never taller than the screen (2026-10-31, owner, from a screenshot)
+A 4:5 card marked `"wide"` in a one-column post spanned the whole article, 1040x1300, taller than any laptop window. `.body .pimg.wide img` now has `max-height: 82vh` with `width: auto` and auto side margins, so a portrait picture stops at most of the window's height and sits centred, whole on one screen, while a landscape chart is far shorter than that and still fills the width. Measured on the Alphabet post at 1440x900, 1920x1080 and 390x844: the landscape charts unchanged at full width, the card 591x738 and 709x886 and centred, no sideways scroll; removing the rule fails the two desktop sizes (1040x1300). A wide picture smaller than the article is no longer stretched up to its width.

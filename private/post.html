@@ -99,6 +99,12 @@
     .body .pimg figcaption {
       margin-top: 8px; font-size: 12.5px; line-height: 1.5; color: var(--faint); text-align: center;
     }
+    /* A WIDE PICTURE IS NEVER TALLER THAN THE SCREEN (owner, 2026-10-31, from a
+       screenshot of a 4:5 card spanning the page). Wide is for width: a
+       landscape chart or table is far shorter than this and draws exactly as
+       before, while a portrait card stops at most of the window's height and
+       sits centred, whole on one screen. */
+    .body .pimg.wide img { width: auto; max-width: 100%; max-height: 82vh; margin: 0 auto; }
     .body .pimg.small  { max-width: 300px; margin-left: auto; margin-right: auto; }
     .body .pimg.medium { max-width: 460px; margin-left: auto; margin-right: auto; }
     /* WIDE breaks out of the reading column, which is the point: a screenshot
