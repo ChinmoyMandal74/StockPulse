@@ -1192,8 +1192,44 @@ const safeImgSrc = (src) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https
 // rather than the rendered HTML: the renderer escapes before it formats, so
 // scraping its output means matching `&quot;` and unpicking entities to get a
 // src back — parsing our own output to recover what the input already said.
+// THE INSTAGRAM FENCE (2026-10-31, owner: "the image size for blog and
+// instagram cannot be the same"). A post may carry its own 4:5 pictures for
+// Instagram in a ```instagram fence: the page and the mail never show them,
+// and the editor's Post to Instagram uses them instead of the post's
+// pictures. ONE reader, here: the renderer skips the fence, and `igPictures`
+// is what the editor is handed, so the page has no copy of the rule.
+const IMG_LINE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+function splitIgFence(md) {
+  const blog = [], ig = [];
+  // `inFence`: inside any other fence (code, gallery, grid), each closed by a
+  // bare ```, where an ```instagram line is only text.
+  let inIg = false, inFence = false;
+  for (const raw of String(md || '').replace(/\r\n/g, '\n').split('\n')) {
+    const fence = /^```/.test(raw.trim());
+    if (inIg) {
+      if (fence) { inIg = false; continue; }
+      for (const m of raw.matchAll(IMG_LINE)) ig.push(m[2]);
+      continue;
+    }
+    if (fence && !inFence && /^```instagram\s*$/i.test(raw.trim())) { inIg = true; continue; }
+    if (fence) inFence = !inFence;
+    blog.push(raw);
+  }
+  return { blog: blog.join('\n'), ig };
+}
+// The slides after the cover: the fence's pictures when there are any, else the
+// post's own. Only our uploads: a picture from another site would taint the
+// editor's canvas, so it is counted and left out.
+function igPictures(md) {
+  const { blog, ig } = splitIgFence(md);
+  const all = ig.length ? ig : [...blog.matchAll(IMG_LINE)].map((m) => m[2]);
+  const ours = [...new Set(all.filter((u) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(u)))];
+  return { fromFence: ig.length > 0, pictures: ours, foreign: all.filter((u) => !/^\/blog\/img\//.test(u)).length };
+}
+
 const firstImage = (md) => {
   const re = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  md = splitIgFence(md).blog;
   let m;
   while ((m = re.exec(String(md || '')))) {
     if (safeImgSrc(m[2])) return { src: m[2], alt: m[1] };
@@ -1294,6 +1330,8 @@ function renderMarkdown(src, skin) {
   let gal = null;
   const closeGallery = () => {
     if (!gal) return;
+    // The Instagram fence is for Instagram only: nothing of it on the page or in a mail.
+    if (gal.mode === 'instagram') { gal = null; return; }
     // A carousel of one is a picture. Fall back rather than build a scroll
     // container with nothing to scroll.
     if (gal.items.length === 1) {
@@ -1310,7 +1348,7 @@ function renderMarkdown(src, skin) {
       closePara(); closeList(); closeQuote();
       const info = line.slice(3).trim().toLowerCase();
       if (gal) { closeGallery(); continue; }            // the closing fence
-      if (!code && (info === 'gallery' || info === 'grid')) {
+      if (!code && (info === 'gallery' || info === 'grid' || info === 'instagram')) {
         gal = { mode: info, items: [] };
         continue;
       }
@@ -3830,7 +3868,7 @@ const emailSkin = () => ({
 // because stripping tags out of the rendered version reintroduces every
 // escaping question the renderer just answered.
 function postAsText(p, url) {
-  const lines = String(p.body || '').replace(/\r\n/g, '\n').split('\n')
+  const lines = splitIgFence(p.body).blog.split('\n')
     // The fence is markup, not words. Left in, a plain-text mail reads
     // "```gallery" at the reader.
     .filter((l) => !/^```(gallery|grid)?\s*$/i.test(l.trim()))
@@ -11859,7 +11897,7 @@ app.get('/api/admin/posts', requireAdmin, route(async (req, res) => {
   if (slug) {
     const p = await store.readPost(slug, { publishedOnly: false });
     if (!p) return res.status(404).json({ error: 'No such post.' });
-    return res.json({ post: { ...p, html: renderMarkdown(p.body) } });
+    return res.json({ post: { ...p, html: renderMarkdown(p.body), instagram: igPictures(p.body) } });
   }
   res.json({ posts: await store.readPosts({ publishedOnly: false }) });
 }));

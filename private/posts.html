@@ -254,6 +254,7 @@
                 <option value="">Gallery…</option>
                 <option value="gallery">Carousel — one at a time</option>
                 <option value="grid">Grid — all at once</option>
+                <option value="instagram">Instagram only — 4:5 pictures, not on the blog</option>
               </select>
               <select id="imgSize" class="md" title="How wide the next picture goes in. Change the word in the markdown to alter one later.">
                 <option value="">Full column</option>
@@ -975,7 +976,9 @@
       const el = $('body');
       MD.gallery(el, mode);
       el.focus();
-      say(mode === 'grid'
+      say(mode === 'instagram'
+        ? 'Instagram section added — put one 4:5 picture (1080x1350) per line inside it. The blog never shows it; Post to Instagram uses these instead of the post’s pictures.'
+        : mode === 'grid'
         ? 'Grid added — put one picture per line inside it. They all show at once.'
         : 'Carousel added — put one picture per line inside it. Readers swipe sideways.', 'good');
     });
@@ -1089,13 +1092,6 @@
       return c.toDataURL('image/jpeg', 0.92);
     }
 
-    // The post's own pictures in reading order, a fence's included.
-    function igPictures(body) {
-      const all = [...String(body || '').matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
-      const ours = [...new Set(all.filter((u) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(u)))];
-      return { ours, foreign: all.length - all.filter((u) => /^\/blog\/img\//.test(u)).length };
-    }
-
     function igDefaultCaption(p) {
       return [p.title, p.summary || '', 'The full post, with every chart: tickrlab.com/blog/' + p.slug,
         'What happened, not what happens next. Not investment advice.'].filter(Boolean).join('\n\n');
@@ -1114,8 +1110,10 @@
         const p = (await api('GET', '/api/admin/posts?slug=' + encodeURIComponent(current))).post;
         if (!p || p.status !== 'published') throw new Error('This post is not live any more. Publish it first.');
         await Promise.all(['600 92px Geist', '400 34px Geist', '500 26px "Geist Mono"'].map((f) => document.fonts.load(f).catch(() => null)));
-        const pics = igPictures(p.body);
-        const use = pics.ours.slice(0, IG_MAX - 1);
+        // Which pictures is the server's call (`igPictures`): the post's
+        // ```instagram fence when it has one, else the post's own pictures.
+        const pics = p.instagram || { pictures: [], foreign: 0, fromFence: false };
+        const use = pics.pictures.slice(0, IG_MAX - 1);
         const of = 1 + use.length;
         const slides = [igCover(p, of)];
         for (let i = 0; i < use.length; i++) slides.push(await igPicture(use[i], p.slug, i + 2, of));
@@ -1125,8 +1123,11 @@
           $('igCaption').value = igDefaultCaption(p);
           $('igCaption').dataset.slug = p.slug;
         }
-        const notes = [`${of} slide${of === 1 ? '' : 's'}: a cover, then ${use.length ? 'the post’s ' + use.length + ' picture' + (use.length === 1 ? '' : 's') : 'no pictures (the post has none of its own)'}.`];
-        if (pics.ours.length > use.length) notes.push(`${pics.ours.length - use.length} more left out: a carousel holds ten.`);
+        const whose = pics.fromFence ? 'the ' + use.length + ' Instagram picture' + (use.length === 1 ? '' : 's') + ' from the post’s Instagram section'
+          : 'the post’s ' + use.length + ' picture' + (use.length === 1 ? '' : 's')
+            + ' (add an Instagram section from the Gallery menu to use 4:5 versions instead)';
+        const notes = [`${of} slide${of === 1 ? '' : 's'}: a cover, then ${use.length ? whose : 'no pictures (the post has none of its own)'}.`];
+        if (pics.pictures.length > use.length) notes.push(`${pics.pictures.length - use.length} more left out: a carousel holds ten.`);
         if (pics.foreign) notes.push(`${pics.foreign} picture${pics.foreign === 1 ? '' : 's'} from other sites left out.`);
         if (dirty) notes.push('You have unsaved changes; these slides are the live version.');
         const ig = await api('GET', '/api/admin/instagram').catch(() => null);
