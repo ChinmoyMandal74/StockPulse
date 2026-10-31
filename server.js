@@ -1491,7 +1491,10 @@ app.get('/blog/img/:id', route(async (req, res, next) => {
   const img = await store.readPostImage(id);
   if (!img) return res.status(404).type('text/plain').send('No such image.');
   res.set('Content-Type', img.mime);
-  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  // `s-maxage`: Vercel's edge keeps it a day, so Instagram's fetch (warmed by
+  // the post route) and a busy post are served without running this. A day,
+  // not a year, because an image can be deleted and the edge cannot be told.
+  res.set('Cache-Control', 'public, max-age=31536000, s-maxage=86400, immutable');
   res.send(img.bytes);
 }));
 
@@ -12287,6 +12290,7 @@ const IG_READY = !!(IG_ENV_TOKEN && /^\d+$/.test(IG_USER_ID));
 const IG_MARK = IG_ENV_TOKEN ? crypto.createHash('sha256').update(IG_ENV_TOKEN).digest('hex').slice(0, 16) : null;
 const IG_AGAIN_MS = 10 * 60 * 1000;      // the same pictures twice inside this is a double click
 const IG_WAIT_MS = 45000;                // how long each container may take to be ready
+const IG_REFETCH_MS = 4000;              // the pause before asking Instagram to fetch a picture again
 
 async function igCall(method, path, params, token, opts = {}) {
   const url = new URL(Instagram.HOST + (opts.bare ? '' : '/' + IG_VER) + path);
@@ -12438,6 +12442,12 @@ async function igPublish(req, res, blogSlug) {
   if (req.body?.dry) {
     return res.json({ ok: true, dry: true, kind, username: me.username, pictures: images.length, captionLength: [...caption].length });
   }
+  // WARM THE CDN FIRST. Each picture is fetched once from its public address,
+  // so Vercel's edge holds it (`s-maxage` on /blog/img) before Instagram asks
+  // and Instagram is answered from the cache, not by a cold function reading
+  // the database. Best effort: a failure here is not a reason to stop.
+  await Promise.all(urls.map((u) => fetch(u, { signal: AbortSignal.timeout(8000) })
+    .then((r) => r.arrayBuffer()).catch(() => null)));
   // One group is one published thing: the whole post, or one story.
   const groups = kind === 'story' ? urls.map((u, i) => ({ urls: [u], ids: [ids[i]] })) : [{ urls, ids }];
   const done = [];
@@ -12453,8 +12463,20 @@ async function igPublish(req, res, blogSlug) {
     // Instagram fetched the pictures one after another). allSettled, so no
     // poll is left running once one has failed.
     for (const url of g.urls) {
-      const c = await igCall('POST', '/' + IG_USER_ID + '/media',
-        kind === 'story' ? Instagram.storyParams(url) : Instagram.itemParams(url, single, caption), t.token);
+      const params = kind === 'story' ? Instagram.storyParams(url) : Instagram.itemParams(url, single, caption);
+      let c;
+      try {
+        c = await igCall('POST', '/' + IG_USER_ID + '/media', params, t.token);
+      } catch (e) {
+        // "The media could not be fetched" (9004) came back on 2026-10-31 for
+        // a picture our CDN log shows Instagram fetching with a 200. Instagram
+        // calls it transient, so ONE more try after a pause. A container is
+        // not a post (nothing is public until media_publish, and an unused
+        // one expires), so asking twice cannot post twice.
+        if (!/\(code 9004\b/.test(e.message)) throw e;
+        await new Promise((ok) => setTimeout(ok, IG_REFETCH_MS));
+        c = await igCall('POST', '/' + IG_USER_ID + '/media', params, t.token);
+      }
       made.push(c.id);
     }
     const waits = await Promise.allSettled(made.map((id) => igReady(id, t.token, Date.now() + IG_WAIT_MS)));
