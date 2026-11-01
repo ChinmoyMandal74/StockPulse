@@ -36,6 +36,11 @@ $runCmd = Join-Path $Root 'archive-report.run.cmd'
 Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At $Start
+# LOCAL WALL-CLOCK TIME (2026-11-01). New-ScheduledTaskTrigger writes the start
+# in UTC ("...Z"), which Task Scheduler reads as "synchronize across time
+# zones": the trigger then keeps its UTC instant and runs an hour early or
+# late when the clocks change. Without an offset it is local time.
+foreach ($t in @($trigger)) { $t.StartBoundary = ([datetime]::Parse($t.StartBoundary)).ToString('s') }
 
 # Started late if the laptop was asleep at 08:00, so the week is still mailed.
 $settings = New-ScheduledTaskSettingsSet `

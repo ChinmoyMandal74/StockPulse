@@ -43,6 +43,11 @@ $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Pat
 # Every hour for 23 hours from 00:05: 24 runs a day, the last at 23:05.
 $trigger = New-ScheduledTaskTrigger -Daily -At $Start
 $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $Start -RepetitionInterval (New-TimeSpan -Hours 1) -RepetitionDuration (New-TimeSpan -Hours 23)).Repetition
+# LOCAL WALL-CLOCK TIME (2026-11-01). New-ScheduledTaskTrigger writes the start
+# in UTC ("...Z"), which Task Scheduler reads as "synchronize across time
+# zones": the trigger then keeps its UTC instant and runs an hour early or
+# late when the clocks change. Without an offset it is local time.
+foreach ($t in @($trigger)) { $t.StartBoundary = ([datetime]::Parse($t.StartBoundary)).ToString('s') }
 
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `

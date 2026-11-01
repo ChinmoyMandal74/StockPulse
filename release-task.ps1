@@ -59,6 +59,11 @@ $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Pat
 $SatTime  = '05:00'
 $triggers = @($Times | ForEach-Object { New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $_ }) +
   @(New-ScheduledTaskTrigger -Weekly -DaysOfWeek Saturday -At $SatTime)
+# LOCAL WALL-CLOCK TIME (2026-11-01). New-ScheduledTaskTrigger writes the start
+# in UTC ("...Z"), which Task Scheduler reads as "synchronize across time
+# zones": the trigger then keeps its UTC instant and runs an hour early or
+# late when the clocks change. Without an offset it is local time.
+foreach ($t in @($triggers)) { $t.StartBoundary = ([datetime]::Parse($t.StartBoundary)).ToString('s') }
 
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `

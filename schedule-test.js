@@ -46,6 +46,12 @@ for (const j of S.JOBS.filter((x) => x.taskScript)) {
   ok(kind === 'weekdays' ? weekdays : kind === 'daily' ? daily : weekly, j.id + ': ' + (kind === 'weekdays' ? 'weekdays' : kind === 'daily' ? 'every day' : j.days.join(', ') + ' each week'));
   ok(/schedule-report\.js/.test(src), j.id + ': the script sends a report after registering');
   ok(!/[^\x00-\x7F]/.test(src), j.taskScript + ' is ASCII');
+  // New-ScheduledTaskTrigger writes UTC, which pins a trigger to its UTC
+  // instant across a clock change (2026-11-01): every script rewrites its
+  // triggers' StartBoundary to local time before registering.
+  if (/New-ScheduledTaskTrigger/.test(src)) {
+    ok(/\.StartBoundary = \(\[datetime\]::Parse\(\$t\.StartBoundary\)\)\.ToString\('s'\)/.test(src), j.taskScript + ' registers its triggers in local time');
+  }
 }
 
 // Every job's log link is a page the server serves (it once said /refresh-runs).
