@@ -84,6 +84,16 @@ const JOBS = [
     log: '/schedule',
   },
   {
+    // THE ARTICLE ARCHIVE'S WEEKLY EMAIL (2026-11-01, the owner: "create a
+    // schedule task on Saturday morning 8AM to send details on New Article
+    // Archive local copy"). On the laptop because the archive is.
+    id: 'archive', name: 'Article archive report', task: 'TickrLab archive report', host: 'laptop', script: 'archive-report.js', taskScript: 'archive-report-task.ps1',
+    days: ['Sat'], times: ['08:00'], minutes: 1,
+    spends: { kind: 'free', text: 'Free' },
+    what: 'Counts the local article text archive (news-archive.db, on the laptop only) and emails the owner the week: articles kept by day, companies and publishers, the readings the tone job scored beside them, and the file\'s size and growth.',
+    log: '/schedule',
+  },
+  {
     id: 'watchdog', name: 'Watchdog', task: null, host: 'vercel', cron: '30 23 * * *', minutes: 1,
     days: ALL_DAYS,
     spends: { kind: 'free', text: 'Free' },

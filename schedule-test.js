@@ -38,7 +38,12 @@ for (const j of S.JOBS.filter((x) => x.taskScript)) {
   }
   const weekdays = /Monday/.test(src) && !/-Daily/.test(src);
   const daily = /-Daily/.test(src);
-  ok(j.days.length === 5 ? weekdays : daily, j.id + ': ' + (j.days.length === 5 ? 'weekdays' : 'every day'));
+  // A weekly job (the archive report, Saturdays): -Weekly with exactly its days.
+  const FULL = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
+  const dow = /-DaysOfWeek\s+([A-Za-z, ]+?)\s+-At/.exec(src);
+  const weekly = /-Weekly/.test(src) && !daily && !!dow && JSON.stringify(dow[1].split(/\s*,\s*/).sort()) === JSON.stringify(j.days.map((d) => FULL[d]).sort());
+  const kind = j.days.length === 7 ? 'daily' : j.days.length === 5 && j.days.join() === S.WEEKDAYS.join() ? 'weekdays' : 'weekly';
+  ok(kind === 'weekdays' ? weekdays : kind === 'daily' ? daily : weekly, j.id + ': ' + (kind === 'weekdays' ? 'weekdays' : kind === 'daily' ? 'every day' : j.days.join(', ') + ' each week'));
   ok(/schedule-report\.js/.test(src), j.id + ': the script sends a report after registering');
   ok(!/[^\x00-\x7F]/.test(src), j.taskScript + ' is ASCII');
 }
@@ -88,6 +93,7 @@ const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab news', state: 'Disabled', triggers: [tr('Daily', '05:00'), tr('Daily', '09:00'), tr('Daily', '13:00'), tr('Daily', '17:00')] },
   { name: 'TickrLab news tone', state: 'Ready', triggers: [tr('Daily', '00:30')].concat(['07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26'].map((t) => tr('Weekly', t, 62)), ['06:30', '12:30', '18:30'].map((t) => tr('Weekly', t, 65))) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
+  { name: 'TickrLab archive report', state: 'Ready', triggers: [tr('Weekly', '08:00', 64)] },
 ] });
 // The same jobs as if every one ran on the laptop, with every task enabled:
 // the matching rules, and the fly jobs' task scripts still the way back.
@@ -125,6 +131,14 @@ r = good(); r.tasks.push({ name: 'TickrLab something new', state: 'Ready', trigg
 d = S.drift(r);
 ok(d.unknown.length === 1 && d.unknown[0].runs.join() === 'daily 11:00', 'a task nobody declared is listed', d.unknown);
 ok(S.drift(null).jobs.releases.status === 'missing', 'no report: nothing matches');
+// The archive report (2026-11-01): Saturdays 08:00 only.
+{ const aj = S.JOBS.find((j) => j.id === 'archive');
+  ok(aj && S.runsOn(aj, 'Sat').join() === '480' && ['Sun', 'Mon', 'Fri'].every((x) => S.runsOn(aj, x).length === 0) && S.whenText(aj) === '08:00, Sat', 'archive report: Saturdays at 08:00 and no other day', aj && [S.runsOn(aj, 'Sat'), S.whenText(aj)]);
+  ok(S.drift(good()).jobs.archive.status === 'ok', 'archive report: the weekly task matches');
+  let ra = good(); ra.tasks[6].triggers = [tr('Weekly', '08:00', 1)];
+  ok(S.drift(ra).jobs.archive.status === 'differs' && S.drift(ra).jobs.archive.onlyDeclared.join() === 'Sat 08:00', 'archive report: moved to Sunday, the missing Saturday is named', S.drift(ra).jobs.archive);
+  ra = good(); ra.tasks.splice(6, 1);
+  ok(S.drift(ra).jobs.archive.status === 'missing', 'archive report: an unregistered task is missing'); }
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

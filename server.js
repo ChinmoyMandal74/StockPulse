@@ -20830,6 +20830,109 @@ app.post('/api/cron/earnings-today', route(async (req, res) => {
   res.json({ sent: !!sent, companies: d.companies });
 }));
 
+// ---- The article archive's weekly email (2026-11-01) ------------------------
+// The owner: "create a schedule task on Saturday morning 8AM to send details on
+// New Article Archive local copy like how many articles collected this week,
+// Size of the local table". The archive is on the laptop only
+// (newsarchive.js), so archive-report.js counts it there and posts the
+// figures; this mails them to the operator, kind 'archive-report'. Counts
+// only reach the server: no article text, headline or address. The tone
+// job's own runs (news_tone_runs) are set beside them, so a week the archive
+// fell behind the readings shows.
+function archiveReportClean(b) {
+  const num = (v) => (Number.isFinite(Number(v)) && v != null && v !== '' ? Number(v) : null);
+  const str = (v, n) => (v == null ? null : String(v).replace(/[\u0000-\u001f]/g, ' ').slice(0, n || 80));
+  const list = (a, n) => (Array.isArray(a) ? a.slice(0, n).map((x) => ({ name: str(x && x.name, 60) || '—', n: num(x && x.n) || 0 })) : []);
+  if (!b || typeof b !== 'object') return null;
+  const w = b.week || {}, t = b.total || {};
+  return {
+    at: num(b.at), host: str(b.host, 60), file: str(b.file, 60), error: str(b.error, 200),
+    week: b.week ? { from: num(w.from), to: num(w.to), added: num(w.added) || 0, chars: num(w.chars) || 0, gz: num(w.gz) || 0,
+      companies: num(w.companies) || 0, pairs: num(w.pairs) || 0,
+      days: (Array.isArray(w.days) ? w.days.slice(0, 10) : []).filter((x) => x && /^\d{4}-\d\d-\d\d$/.test(String(x.d))).map((x) => ({ d: String(x.d), n: num(x.n) || 0 })),
+      publishers: list(w.publishers, 8), symbols: list(w.symbols, 10) } : null,
+    total: b.total ? { articles: num(t.articles) || 0, chars: num(t.chars) || 0, gz: num(t.gz) || 0, companies: num(t.companies) || 0,
+      first: str(t.first, 30), last: str(t.last, 30), fetched: num(t.fetched), fileBytes: num(t.fileBytes) || 0, walBytes: num(t.walBytes) || 0 } : null,
+  };
+}
+function archiveReportEmail(r, runs) {
+  const site = APP_URL || '';
+  const fmtN = (v) => Number(v || 0).toLocaleString('en-US');
+  const mb = (v) => (v >= 1e9 ? (v / 1e9).toFixed(2) + ' GB' : v >= 1e6 ? (v / 1e6).toFixed(1) + ' MB' : Math.round((v || 0) / 1e3) + ' KB');
+  const dayLabel = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+  const when = new Date(r.at || Date.now()).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric' });
+  const w = r.week, t = r.total;
+  // The tone job's readings over the same seven days (each article read once
+  // for each stock whose feed carried it, as the archive's `pairs`).
+  const scored = runs.reduce((s, x) => s + (Number(x.scored) || 0), 0);
+  const look = [];
+  if (r.error) look.push('The archive could not be read: ' + r.error);
+  if (w && t) {
+    const quiet = w.days.slice(1, -1).filter((x) => !x.n).map((x) => dayLabel(x.d));
+    if (quiet.length) look.push('No articles were kept on ' + quiet.join(', ') + '. The laptop may have been off, or the tone job stopped.');
+    if (t.fetched && (r.at || Date.now()) - t.fetched > 36 * 3600e3) look.push('Nothing has been kept for ' + Math.round(((r.at || Date.now()) - t.fetched) / 3600e3) + ' hours.');
+    if (scored && w.pairs < scored * 0.8) look.push(`The archive kept ${fmtN(w.pairs)} article readings against ${fmtN(scored)} the tone job scored this week.`);
+  }
+  const subject = r.error ? 'Article archive: could not be read' : `Article archive: ${fmtN(w.added)} articles this week, ${fmtN(t.articles)} in all`;
+  const intro = r.error ? 'The weekly count of the local article archive could not be made.'
+    : `${fmtN(w.added)} new articles were kept this week, from ${fmtN(w.companies)} companies; the archive holds ${fmtN(t.articles)} articles in ${mb(t.fileBytes)}.`;
+  const th = (x, right) => `<th${st(`padding:6px 8px;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:${MC.faint};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</th>`;
+  const td = (x, right) => `<td${st(`padding:7px 8px;font-size:13.5px;color:${MC.body};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</td>`;
+  const table = (head, rows) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse;margin:6px 0 18px')}><tr>${head}</tr>${rows.join('')}</table>`;
+  const h2 = (x) => `<h2${st(`margin:22px 0 4px;font-size:15px;font-weight:700;color:${MC.ink}`)}>${x}</h2>`;
+  let body = '';
+  const lines = [];
+  if (look.length) {
+    body += `<div class="em-warn"${st(`margin:16px 0;padding:12px 14px;border-left:3px solid ${JD_AMBER};color:${JD_AMBER};font-size:14px`)}>${look.map(mailEsc).join('<br>')}</div>`;
+    lines.push('To look at:', ...look.map((x) => '  - ' + x), '');
+  }
+  if (w && t) {
+    const perYear = w.gz * 52;
+    const rowsWeek = [
+      ['New articles kept', fmtN(w.added)], ['Companies', fmtN(w.companies)], ['Article readings (one per stock carrying it)', fmtN(w.pairs)],
+      ['Readings the tone job scored', runs.length ? fmtN(scored) : '—'], ['Text', fmtN(Math.round(w.chars / 1000)) + 'k characters'],
+      ['Stored, compressed', mb(w.gz) + (w.chars ? ' (' + Math.round(w.gz / w.chars * 100) + '% of the text)' : '')],
+    ];
+    const rowsAll = [
+      ['Articles', fmtN(t.articles)], ['Companies', fmtN(t.companies)],
+      ['Published', t.first && t.last ? dayLabel(String(t.first).slice(0, 10)) + ' to ' + dayLabel(String(t.last).slice(0, 10)) : '—'],
+      ['File size', mb(t.fileBytes) + (t.walBytes ? ' (' + mb(t.walBytes) + ' not yet merged)' : '')],
+      ['Average article', t.articles ? fmtN(Math.round(t.chars / t.articles)) + ' characters, ' + mb(t.gz / t.articles) + ' stored' : '—'],
+      ['At this week’s pace', mb(perYear) + ' a year'],
+      ['Last kept', t.fetched ? new Date(t.fetched).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) + ' ET' : '—'],
+    ];
+    const max = Math.max(1, ...w.days.map((x) => x.n));
+    const bar = (n) => `<span${st(`display:inline-block;height:9px;width:${Math.max(n ? 2 : 0, Math.round(n / max * 160))}px;background:#8b93a3;border-radius:2px;vertical-align:middle`)}></span>`;
+    body += h2('This week') + table(th('') + th('', true), rowsWeek.map(([k, v]) => `<tr>${td(mailEsc(k))}${td(mailEsc(v), true)}</tr>`))
+      + h2('Kept by day') + table(th('Day') + th('Articles', true) + th(''), w.days.map((x) => `<tr>${td(mailEsc(dayLabel(x.d)))}${td(fmtN(x.n), true)}${td(bar(x.n))}</tr>`))
+      + (w.publishers.length ? h2('Publishers this week') + table(th('Publisher') + th('Articles', true), w.publishers.map((x) => `<tr>${td(mailEsc(x.name))}${td(fmtN(x.n), true)}</tr>`)) : '')
+      + (w.symbols.length ? h2('Most covered companies this week') + table(th('Company') + th('Readings', true), w.symbols.map((x) => `<tr>${td(`<a href="${site}/stock/${encodeURIComponent(x.name)}"${st(`color:${MC.ink};font-weight:600;text-decoration:none`)}>${mailEsc(x.name)}</a>`)}${td(fmtN(x.n), true)}</tr>`)) : '')
+      + h2('The whole archive') + table(th('') + th('', true), rowsAll.map(([k, v]) => `<tr>${td(mailEsc(k))}${td(mailEsc(v), true)}</tr>`))
+      + `<p${st(`margin:4px 0 0;font-size:12.5px;color:${MC.mute}`)}>${mailEsc(r.file || 'news-archive.db')} on ${mailEsc(r.host || 'the laptop')}, the only copy: it is not in the database and not backed up by the site.</p>`;
+    lines.push('This week:', ...rowsWeek.map(([k, v]) => '  ' + k + ': ' + v), '', 'Kept by day:', ...w.days.map((x) => '  ' + dayLabel(x.d) + ': ' + fmtN(x.n)), '');
+    if (w.publishers.length) lines.push('Publishers this week:', ...w.publishers.map((x) => '  ' + x.name + ': ' + fmtN(x.n)), '');
+    if (w.symbols.length) lines.push('Most covered companies this week:', ...w.symbols.map((x) => '  ' + x.name + ': ' + fmtN(x.n)), '');
+    lines.push('The whole archive:', ...rowsAll.map(([k, v]) => '  ' + k + ': ' + v), '', (r.file || 'news-archive.db') + ' on ' + (r.host || 'the laptop') + ', the only copy: it is not in the database and not backed up by the site.');
+  }
+  const note = 'Sent to the site’s operator every Saturday at 8 AM by the laptop (archive-report.js), from the archive the article tone job keeps there.';
+  return { subject, html: emailShell({ heading: 'Article archive, week to ' + when, intro, body, note }), text: textShell({ heading: 'Article archive, week to ' + when, intro, lines, note }) };
+}
+app.post('/api/cron/archive-report', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const r = archiveReportClean(req.body);
+  if (!r || (!r.error && !(r.week && r.total))) return res.status(400).json({ error: 'The archive figures, or the error that stopped them.' });
+  const now = Date.now();
+  const from = r.week && r.week.from && r.week.from > now - 8 * 86400000 ? r.week.from : now - 7 * 86400000;
+  const runs = (await store.readToneRuns(from).catch(() => [])).filter((x) => x.startedAt < (r.week && r.week.to ? r.week.to : now));
+  const e = archiveReportEmail(r, runs);
+  if (req.query.dry === '1') return res.json({ dry: true, subject: e.subject, text: e.text, html: e.html });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sent = await sendMail({ kind: 'archive-report', to, subject: e.subject, text: e.text, html: e.html });
+  res.json({ sent: !!sent });
+}));
+
 // ---- The daily jobs email (2026-10-30) --------------------------------------
 // The owner: "one daily email on all scheduled task runs ... end of day .. may
 // be 8pm ... a high level summary". jobsdigest.js builds it from the records
