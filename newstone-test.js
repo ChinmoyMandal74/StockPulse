@@ -194,6 +194,9 @@ for (const [what, extra] of [
   ['absent', {}],
   ['present and favourable', { tone: 0.9, toneAvg: 0.9, newsTone: { avg: 0.9, count: 12 } }],
   ['present and lying', { tone: -1, toneAvg: -1, newsTone: { avg: -1, count: 99, positive: 0, negative: 99 } }],
+  // The facts asked of each article (2026-11-01) are data for research, never an input.
+  ['with the article facts, lying', { move_reason: 'The article attributes the fall to fraud.', consensus: [{ what: 'Q3 EPS', expected: 9, actual: 0.1, unit: 'usd' }],
+    analysts: [{ firm: 'Big Bank', action: 'cut_view' }, { firm: 'Other Bank', action: 'cut_estimate' }] }],
 ]) check(`same verdict with tone fields ${what}`, verdict(Object.assign({}, base, extra)), plain);
 
 // Which stocks are read (2026-10-20): the two semiconductor industries, and every S&P 500 member.
@@ -257,6 +260,60 @@ check('scope: no row', NewsTone.inScope(null, SP), false);
   check('daily: a late evening article belongs to its New York day', [d[1].d, d[1].n, d[1].avg], ['2026-10-25', 1, 0.5]);
   check('daily: a passing mention and an unreadable article are not counted (as the 7-day line)', [d[2].n, d[2].neg], [1, 1]);
   check('daily: nothing read, nothing', NewsTone.daily([]), []);
+}
+
+// The facts asked of each article (2026-11-01): every figure and firm must be
+// in the article text, the wording rule holds, and a bad fact is dropped
+// without touching the rest.
+{
+  const S = NewsTone.SCHEMA;
+  check('facts: the schema asks for move, consensus and analysts, all required', ['move', 'consensus', 'analysts'].map((k) => !!S.properties[k] && S.required.includes(k)), [true, true, true]);
+  const ci = S.properties.consensus.items, ai = S.properties.analysts.items;
+  check('facts: every object in the schema closes additionalProperties and requires each field',
+    [ci.additionalProperties, ai.additionalProperties, ci.required.length === Object.keys(ci.properties).length, ai.required.length === Object.keys(ai.properties).length], [false, false, true, true]);
+  check('facts: actual may be null, through anyOf', JSON.stringify(ci.properties.actual), JSON.stringify({ anyOf: [{ type: 'number' }, { type: 'null' }] }));
+  check('facts: the analyst actions name no rating', NewsTone.ANALYST_ACTIONS.some(([k, l]) => NewsTone.BANNED.test(k.replace(/_/g, ' ')) || NewsTone.BANNED.test(l)), false);
+  check('facts: the instructions ask for each fact', ['- move:', '- consensus:', '- analysts:'].map((s) => NewsTone.SYSTEM.includes(s)), [true, true, true]);
+
+  // numberInText: the exact forms only, standing alone.
+  const T = 'Analysts expected revenue of $112.95 billion and EPS of $1.98; it reported $2.00 a share, revenue up 10.2%, and 1,200 new staff. Order 123456.';
+  check('number: printed as is', NewsTone.numberInText(112.95, T), true);
+  check('number: a value printed with a trailing zero (2 as "2.00")', NewsTone.numberInText(2, T), true);
+  check('number: thousands separators', NewsTone.numberInText(1200, T), true);
+  check('number: a percent', NewsTone.numberInText(10.2, T), true);
+  check('number: a sign is not required ("up 10.2%" carries -10.2 too)', NewsTone.numberInText(-10.2, T), true);
+  check('number: never a rounding (113 is not "112.95")', NewsTone.numberInText(113, T), false);
+  check('number: never a conversion (112950000000 is not "$112.95 billion")', NewsTone.numberInText(112950000000, T), false);
+  check('number: never a piece of a longer number (1.9 is not "1.98", 2345 is not "123456")', [NewsTone.numberInText(1.9, T), NewsTone.numberInText(2345, T)], [false, false]);
+  check('number: not the leading digits of a decimal (112 is not "112.95")', NewsTone.numberInText(112, T), false);
+  check('number: not the tail of a longer number (3456 is not "123456", 95 is not "112.95")', [NewsTone.numberInText(3456, T), NewsTone.numberInText(95, T)], [false, false]);
+  check('number: null, NaN and strings are never found', [NewsTone.numberInText(null, T), NewsTone.numberInText(NaN, T), NewsTone.numberInText('1.98', T)], [false, false, false]);
+
+  const art = 'ServiceNow shares fell 27% after the company guided slower growth. Analysts had expected adjusted EPS of $0.96 against the $1.00 reported, and revenue of $4.09 billion. Morgan Stanley cut its estimate and KeyBanc kept its view.';
+  const good = { move: 'The article attributes the fall to slower guidance.',
+    consensus: [{ what: 'Q3 adjusted EPS', expected: 0.96, actual: 1.0, unit: 'usd' }, { what: 'Q3 revenue', expected: 4.09, actual: null, unit: 'usd_billions' }],
+    analysts: [{ firm: 'Morgan Stanley', action: 'cut_estimate' }, { firm: 'KeyBanc', action: 'kept_view' }] };
+  const f = NewsTone.checkFacts(good, art);
+  check('facts: a clean answer is kept whole', [f.move, f.consensus.length, f.analysts.length, f.dropped], ['The article attributes the fall to slower guidance.', 2, 2, []]);
+  check('facts: actual 1.0 found as "1.00", kept as a number', f.consensus[0].actual, 1);
+  const bad = NewsTone.checkFacts({
+    move: 'Shares fell, so investors should sell.',
+    consensus: [{ what: 'Q3 EPS', expected: 0.97, actual: null, unit: 'usd' }, { what: 'Q3 adjusted EPS', expected: 0.96, actual: 1.05, unit: 'usd' },
+      { what: 'Q3 revenue', expected: 4.09, actual: null, unit: 'dollars' }, { what: '', expected: 4.09, actual: null, unit: 'usd' }],
+    analysts: [{ firm: 'Goldman Sachs', action: 'cut_view' }, { firm: 'morgan stanley', action: 'cut_estimate' }, { firm: 'Morgan Stanley', action: 'cut_estimate' }, { firm: 'KeyBanc', action: 'downgrade' }],
+  }, art);
+  check('facts: a move using a banned word is dropped', bad.move, null);
+  check('facts: an expected figure not in the text is dropped', bad.consensus.some((c) => c.expected === 0.97), false);
+  check('facts: an actual not in the text is set to null, the expectation kept', bad.consensus.map((c) => [c.expected, c.actual]), [[0.96, null]]);
+  check('facts: an unknown unit and an empty label are dropped', bad.consensus.length, 1);
+  check('facts: a firm the article does not name is dropped; the same firm twice is kept once; an unknown action dropped', bad.analysts, [{ firm: 'morgan stanley', action: 'cut_estimate' }]);
+  check('facts: what was dropped is said', bad.dropped.length >= 6, true);
+  const empty = NewsTone.checkFacts({ move: '', consensus: [], analysts: [] }, art);
+  check('facts: "asked, and none" is empty arrays and a null move, never a failure', [empty.move, empty.consensus, empty.analysts], [null, [], []]);
+  check('facts: an answer without the fields (an older reading) gives the same', NewsTone.checkFacts({}, art).consensus, []);
+  const many = NewsTone.checkFacts({ move: 'x'.repeat(241), consensus: Array.from({ length: 9 }, () => ({ what: 'Q3 revenue', expected: 4.09, actual: null, unit: 'usd_billions' })), analysts: [] }, art);
+  check('facts: a move over 240 characters is dropped, and consensus stops at six', [many.move, many.consensus.length], [null, 6]);
+  check('facts: a 240-character move is kept', NewsTone.checkFacts({ move: 'x'.repeat(240), consensus: [], analysts: [] }, art).move.length, 240);
 }
 
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);

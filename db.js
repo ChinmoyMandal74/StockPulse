@@ -1709,6 +1709,13 @@ const ADDED_COLUMNS = [
   "alter table news_tone add column event integer",
   "alter table news_tone add column shadow_tone real",
   "alter table news_tone add column shadow_summary text",
+  // Facts the article states (2026-11-01, newstone.js checkFacts): the reason
+  // it gives for a share move, the expectations it quotes and the analyst
+  // actions it reports, each checked against the article text. JSON arrays;
+  // null on readings made before the question, [] when asked and none.
+  "alter table news_tone add column move_reason text",
+  "alter table news_tone add column consensus text",
+  "alter table news_tone add column analysts text",
   "alter table sec_facts add column dividends_per_share real",
   "alter table sec_facts add column interest_expense real",
   "alter table sec_facts add column current_assets real",
@@ -8380,10 +8387,10 @@ async function readNewsToneKnown(symbol, sinceIso) {
 async function writeNewsTone(row) {
   await init();
   await db.execute({
-    sql: `insert into news_tone (id, symbol, published_at, headline, source, url, status, reason, about, kind, tone, summary, complete, chars, host, model, attempts, scored_at, event)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    sql: `insert into news_tone (id, symbol, published_at, headline, source, url, status, reason, about, kind, tone, summary, complete, chars, host, model, attempts, scored_at, event, move_reason, consensus, analysts)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
           on conflict(id) do update set
-            event = excluded.event,
+            event = excluded.event, move_reason = excluded.move_reason, consensus = excluded.consensus, analysts = excluded.analysts,
             status = excluded.status, reason = excluded.reason, about = excluded.about, kind = excluded.kind,
             tone = excluded.tone, summary = excluded.summary, complete = excluded.complete, chars = excluded.chars,
             host = excluded.host, model = excluded.model, attempts = news_tone.attempts + 1, scored_at = excluded.scored_at
@@ -8392,8 +8399,29 @@ async function writeNewsTone(row) {
       row.status, row.reason || null, row.about || null, row.kind || null,
       row.tone == null ? null : Number(row.tone), row.summary || null, row.complete == null ? null : (row.complete ? 1 : 0),
       row.chars == null ? null : Number(row.chars), row.host || null, row.model || null, Date.now(),
-      row.event == null ? null : (row.event ? 1 : 0)],
+      row.event == null ? null : (row.event ? 1 : 0),
+      row.move_reason || null,
+      Array.isArray(row.consensus) ? JSON.stringify(row.consensus) : null,
+      Array.isArray(row.analysts) ? JSON.stringify(row.analysts) : null],
   });
+}
+
+// One stock's scored readings since a date with the facts asked of each
+// article (2026-11-01), for research and the text archive's catch-up: the
+// address, the reading, and move_reason / consensus / analysts parsed (null
+// on readings made before the question). The same seek on idx_news_tone_symbol.
+async function readNewsToneFacts(symbol, sinceIso) {
+  await init();
+  const r = await db.execute({
+    sql: `select id, url, headline, source, published_at, about, kind, tone, summary, event, move_reason, consensus, analysts from news_tone
+           where symbol = ? and published_at >= ? and status = 'scored' order by published_at`,
+    args: [symbol, sinceIso],
+  });
+  const json = (s) => { if (s == null) return null; try { return JSON.parse(s); } catch (e) { return null; } };
+  return r.rows.map((x) => ({ id: x.id, url: x.url, headline: x.headline, source: x.source, published_at: x.published_at,
+    about: x.about, kind: x.kind, tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null,
+    event: x.event == null ? null : Number(x.event) === 1,
+    move_reason: x.move_reason || null, consensus: json(x.consensus), analysts: json(x.analysts) }));
 }
 // THE NEWS FEED (2026-10-24): every scored reading published in a window,
 // across every company, on idx_news_tone_published. The caller narrows it to
@@ -8626,7 +8654,7 @@ module.exports = {
   // pressing Run again and a reader reporting a bug.
   isNetDrop,
   init,
-  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone, readNewsToneWindow, writeNewsToneShadow, readNewsToneUnshadowed,
+  readNewsToneList, readNewsToneSince, readNewsToneKnown, writeNewsTone, readNewsToneWindow, writeNewsToneShadow, readNewsToneUnshadowed, readNewsToneFacts,
   createAdminSession, readAdminSession, deleteAdminSession, readAuthThrottle, noteAuthFailure, clearAuthThrottle, readAuthSecret,
   readVerification, setVerification, consumeVerification, replaceUnverified, markVerified, claimUnverified,
   writeSecFacts, noteSecMiss, readSecFacts, readSecFactsSince, readSecState, readSecFiled, setSecLastFiled,

@@ -11,7 +11,10 @@
 // WHAT IS STORED: the tone, the kind, whether the article is about the
 // company, a summary in the model's own words, and the publisher's address.
 // NEVER the article text. Reading a page to describe it is one thing;
-// keeping or republishing it is the publisher's.
+// keeping or republishing it is the publisher's. Since 2026-11-01 three facts
+// the article states are stored as well (checkFacts), and the loader keeps
+// the text it read in a LOCAL file on the owner's machine for research
+// (newsarchive.js): never in the database, never deployed, never served.
 //
 // WHAT IT IS NOT: a forecast, a rating or a signal. It is the model's reading
 // of one article's wording, it never reaches the Signal, and every surface
@@ -202,6 +205,82 @@
     return stem.length >= 4 && new RegExp(`\\b${esc(stem)}\\b`, 'i').test(t);
   }
 
+  // ---- the facts asked for alongside the reading (2026-11-01) ----------------
+  // The owner, after a blog post leaned on two-sentence summaries for what
+  // analysts expected and why shares moved: "Let's go ahead with both" (a
+  // local archive of the text, and these fields). Three facts the article
+  // states, kept as data for research and never shown as the site's view:
+  //   move       the reason the article gives for a move in the company's
+  //              shares, in the model's words ("" when it gives none)
+  //   consensus  figures the article says analysts expected, with the actual
+  //              figure when it reports one
+  //   analysts   firms the article says changed or kept their view, and how;
+  //              never the rating or target itself
+  // EVERY FIGURE AND FIRM MUST BE IN THE ARTICLE TEXT (checkFacts), the rule
+  // releases.js keeps for press releases: a fact the text does not carry is
+  // dropped, never stored. A dropped fact never fails the reading.
+  const FACT_UNITS = ['usd', 'usd_millions', 'usd_billions', 'percent', 'other'];
+  const ANALYST_ACTIONS = [
+    ['raised_view', 'raised its view'], ['cut_view', 'cut its view'], ['kept_view', 'kept its view'],
+    ['raised_estimate', 'raised its estimate'], ['cut_estimate', 'cut its estimate'],
+    ['started_coverage', 'started coverage'], ['other', 'other'],
+  ];
+  const ANALYST_LABEL = Object.fromEntries(ANALYST_ACTIONS);
+  const MAX_CONSENSUS = 6, MAX_ANALYSTS = 20, MAX_MOVE = 240, MAX_WHAT = 60, MAX_FIRM = 60;
+
+  // Whether a number the model gave is printed in the text: the forms that
+  // are exactly that number (1.98 as "1.98" or "1.980"; 1200 as "1200" or
+  // "1,200"), never a rounding of it, standing alone (not a piece of a longer
+  // number). A sign is not required: "fell 3.5%" carries 3.5 for -3.5.
+  function numberForms(v) {
+    const a = Math.abs(Number(v));
+    const out = new Set();
+    for (let d = 0; d <= 4; d++) {
+      const s = a.toFixed(d);
+      if (Math.abs(Number(s) - a) > 1e-9) continue;
+      out.add(s);
+      out.add(Number(s).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
+    }
+    return [...out];
+  }
+  function numberInText(v, text) {
+    if (typeof v !== 'number' || !isFinite(v)) return false;
+    const t = String(text || '');
+    return numberForms(v).some((f) => new RegExp('(?<![\\d.,])' + f.replace(/[.,]/g, '\\$&') + '(?![\\d]|[.,]\\d)').test(t));
+  }
+
+  // The facts as they may be stored: { move, consensus, analysts, dropped }.
+  // `move` null when absent or refused; the arrays empty when nothing
+  // survived (an empty array means "asked, and none", unlike a null column on
+  // a reading made before the question).
+  function checkFacts(ans, text) {
+    const dropped = [];
+    const t = String(text || '');
+    let move = typeof (ans && ans.move) === 'string' ? ans.move.replace(/\s+/g, ' ').trim() : '';
+    if (move && (move.length > MAX_MOVE || BANNED.test(move))) { dropped.push('move: ' + (BANNED.test(move) ? 'a word the site does not use' : 'too long')); move = ''; }
+    const consensus = [];
+    for (const c of (Array.isArray(ans && ans.consensus) ? ans.consensus : [])) {
+      if (consensus.length >= MAX_CONSENSUS) { dropped.push('consensus: more than ' + MAX_CONSENSUS); break; }
+      const what = String((c && c.what) || '').replace(/\s+/g, ' ').trim();
+      if (!what || what.length > MAX_WHAT || BANNED.test(what)) { dropped.push('consensus: label'); continue; }
+      if (!FACT_UNITS.includes(c.unit)) { dropped.push('consensus: unit'); continue; }
+      if (!numberInText(c.expected, t)) { dropped.push('consensus: ' + what + ' expected not in the text'); continue; }
+      const actual = c.actual == null ? null : (numberInText(c.actual, t) ? c.actual : undefined);
+      if (actual === undefined) dropped.push('consensus: ' + what + ' actual not in the text');
+      consensus.push({ what, expected: c.expected, actual: actual === undefined ? null : actual, unit: c.unit });
+    }
+    const analysts = [];
+    const low = t.toLowerCase();
+    for (const x of (Array.isArray(ans && ans.analysts) ? ans.analysts : [])) {
+      if (analysts.length >= MAX_ANALYSTS) { dropped.push('analysts: more than ' + MAX_ANALYSTS); break; }
+      const firm = String((x && x.firm) || '').replace(/\s+/g, ' ').trim();
+      if (firm.length < 2 || firm.length > MAX_FIRM || !ANALYST_LABEL[x.action]) { dropped.push('analysts: shape'); continue; }
+      if (!low.includes(firm.toLowerCase())) { dropped.push('analysts: ' + firm + ' not in the text'); continue; }
+      if (!analysts.some((y) => y.firm.toLowerCase() === firm.toLowerCase() && y.action === x.action)) analysts.push({ firm, action: x.action });
+    }
+    return { move: move || null, consensus, analysts, dropped };
+  }
+
   // ---- the request to the model ----------------------------------------------
   const SCHEMA = {
     type: 'object',
@@ -213,8 +292,35 @@
       summary: { type: 'string' },
       complete: { type: 'boolean' },
       event: { type: 'boolean' },
+      move: { type: 'string' },
+      consensus: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            what: { type: 'string' },
+            expected: { type: 'number' },
+            actual: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+            unit: { type: 'string', enum: FACT_UNITS },
+          },
+          required: ['what', 'expected', 'actual', 'unit'],
+          additionalProperties: false,
+        },
+      },
+      analysts: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            firm: { type: 'string' },
+            action: { type: 'string', enum: ANALYST_ACTIONS.map((a) => a[0]) },
+          },
+          required: ['firm', 'action'],
+          additionalProperties: false,
+        },
+      },
     },
-    required: ['readable', 'about', 'kind', 'tone', 'summary', 'complete', 'event'],
+    required: ['readable', 'about', 'kind', 'tone', 'summary', 'complete', 'event', 'move', 'consensus', 'analysts'],
     additionalProperties: false,
   };
 
@@ -229,6 +335,9 @@
     '- summary: at most two short sentences, in your own words, saying what the article reports about the company. Plain facts. Do not quote the article beyond a few words. Do not repeat ratings or price targets, and never use the words buy, sell, hold, bullish, bearish, outperform, underperform, overweight or underweight: write "an analyst raised its view" or "an analyst cut its estimate" instead. No forecasts or advice of your own.',
     '- complete: false when the text stops early, is a teaser behind a paywall, or was cut off.',
     '- event: true when the article reports a new, dated event at the named company: results, guidance, a deal or merger, a contract, a product launch, a legal or regulatory decision, a leadership change, a dividend or buyback announcement, an insider or holdings filing. false for commentary, opinion, an analyst note, a price recap, a market roundup, a preview of something still to come, or background.',
+    '- move: when the article reports a move in the named company\'s share price and gives a reason for it, that reason in one short sentence of your own words, saying it is the article\'s explanation (for example "The article attributes the fall to weaker guidance for the next quarter."). "" when the article reports no move or gives no reason. Same wording rules as the summary.',
+    '- consensus: each figure the article says analysts (the consensus or a named firm) expected for the named company (revenue, earnings per share, or another reported measure). Never the company\'s own guidance, its past results, or a price target. what: a short label such as "Q3 revenue" or "Q3 adjusted EPS". expected: the number exactly as printed in the article, without currency signs, and unit saying how it is printed (usd for "$1.98", usd_billions for "$112.95 billion", usd_millions, percent, or other). actual: the reported figure the article sets against it, printed the same way, or null. Copy numbers as printed; never convert, round or calculate. [] when the article quotes no expectation.',
+    '- analysts: each research firm the article says changed or kept its view or estimate on the named company, with the firm written exactly as the article writes it and the action. Never the rating or price target itself. [] when there is none.',
   ].join('\n');
 
   function userPrompt(o) {
@@ -385,5 +494,6 @@
     label, feedUrl, canonUrl, parseFeed, sourceOf, robotsRules, robotsAllows,
     articleText, namesCompany, userPrompt, request, check, summarise, BANNED,
     importance, storyGroups, IMPORTANCE, IMP_HIGH, IMP_MED,
+    FACT_UNITS, ANALYST_ACTIONS, ANALYST_LABEL, numberInText, checkFacts,
   };
 });

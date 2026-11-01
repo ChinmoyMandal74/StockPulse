@@ -22,12 +22,20 @@
 //   node news-tone-load.js --commit                 # the last 7 days, every semiconductor stock
 //   node news-tone-load.js --commit --max-usd 3
 //   node news-tone-load.js --commit --only NVDA,MU --limit 30
+//   node news-tone-load.js --commit --archive-backfill --days 10 --only NOW,RDDT
+//
+// THE TEXT ARCHIVE AND THE FACTS (2026-11-01, newsarchive.js, newstone.js
+// checkFacts). On --commit, the text of every article the model is given is
+// also kept in the LOCAL archive (news-archive.db, never the database), and
+// each reading stores the facts the article states, checked against its text.
+// --archive-backfill fetches the text of readings already on file that the
+// archive lacks, politely as always, and calls no model.
 //
 // Yahoo's pages send more header bytes than Node accepts by default, so the
 // script re-launches itself with a larger limit (and the system CA store).
 const { spawnSync } = require('child_process');
 if (!process.execArgv.some((a) => a.startsWith('--max-http-header-size'))) {
-  const r = spawnSync(process.execPath, ['--use-system-ca', '--max-http-header-size=262144', __filename, ...process.argv.slice(2)], { stdio: 'inherit' });
+  const r = spawnSync(process.execPath, ['--use-system-ca', '--max-http-header-size=262144', '--disable-warning=ExperimentalWarning', __filename, ...process.argv.slice(2)], { stdio: 'inherit' });
   process.exit(r.status == null ? 1 : r.status);
 }
 
@@ -140,8 +148,24 @@ async function readPage(url) {
   return out;
 }
 
+// THE LOCAL TEXT ARCHIVE (newsarchive.js): opened on --commit only, and
+// bookkeeping like the run record. If it cannot be opened or written the run
+// goes on, says so once, and stores its readings as before.
+let archive = null, archiveOff = false, archived = 0, archiveFail = 0;
+function keepText(h, page) {
+  if (!COMMIT || archiveOff) return;
+  try {
+    if (!archive) archive = require('./newsarchive.js').open();
+    if (archive.put({ url: h.url, symbol: h.symbol, text: page.text, headline: h.headline, source: h.source, host: page.host, published_at: h.published_at }).added) archived++;
+  } catch (e) {
+    archiveFail++;
+    if (!archive) { archiveOff = true; console.log('  (the local text archive could not be opened: ' + String(e.message).slice(0, 80) + '; carrying on without it)'); }
+  }
+}
+
 class Stop extends Error {}
 let spent = 0, shadowSpent = 0, shadowN = 0, shadowFail = 0, shadowOff = false;
+let factsKept = 0, factsDropped = 0;
 // `shadow` puts the cost on the shadow's account, not the main budget's.
 async function askModel(body, shadow) {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -241,6 +265,41 @@ async function shadowBackfill(stocks) {
   console.log(`\nshadow catch-up: ${done} read, ${gone} no longer readable, ${shadowFail} failed; $${shadowSpent.toFixed(3)} spent`);
 }
 
+// THE TEXT ARCHIVE'S CATCH-UP (--archive-backfill): the readings already on
+// file for the last DAYS whose text the local archive does not hold. Each is
+// fetched again, politely, and kept; no model is asked and nothing in the
+// database changes. An article that has gone or turned unreadable since is
+// counted and left. Newest first, so a run cut by --max-minutes or --limit
+// has the most recent news.
+async function archiveBackfill(stocks) {
+  if (!COMMIT) { console.log('--archive-backfill writes the local archive only, so it needs --commit (it calls no model).'); return; }
+  archive = require('./newsarchive.js').open();
+  const since = new Date(Date.now() - DAYS * 86400000).toISOString();
+  let todo = [];
+  for (const s of stocks) {
+    for (const r of await store.readNewsToneFacts(s.symbol, since)) {
+      if (!archive.has(r.url)) todo.push(Object.assign({ symbol: s.symbol }, r));
+      else archive.carry(r.url, s.symbol);
+    }
+  }
+  const seen = new Set();
+  todo = todo.filter((h) => (seen.has(h.url + '|' + h.symbol) ? false : seen.add(h.url + '|' + h.symbol)))
+    .sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
+  if (LIMIT) todo = todo.slice(0, LIMIT);
+  console.log(`[${new Date().toISOString()}] text archive catch-up: ${todo.length} readings from the last ${DAYS} days not yet in ${require('./newsarchive.js').DEFAULT_PATH}`);
+  let kept = 0, gone = 0;
+  for (let i = 0; i < todo.length; i++) {
+    if (outOfTime()) { console.log(`Stopping: ${MAX_MINUTES} minutes; ${todo.length - i} left for the next run.`); break; }
+    const h = todo[i];
+    const page = await readPage(h.url);
+    if (!page.text) { gone++; continue; }
+    keepText(h, page);
+    kept++;
+    if ((i + 1) % 25 === 0) console.log(`  ${i + 1}/${todo.length} -- ${kept} kept, ${gone} no longer readable`);
+  }
+  console.log(`\ntext archive catch-up: ${kept} fetched, ${archived} new articles kept, ${gone} no longer readable; ${archive.count()} articles in the archive`);
+}
+
 // THE SCREENER'S TONE COLUMN (2026-10-21, the owner: "need to the article
 // tone on screener next to existing news column"). Every stock's last seven
 // days in one stored figure (app_meta fig:toneColumn), written here at the end
@@ -286,6 +345,7 @@ async function writeToneColumn(stocks) {
     .filter((s) => !ONLY || ONLY.has(String(s.symbol).toUpperCase()));
   // --column-only: write the screener's tone column and stop (no feeds, no model).
   if (process.argv.includes('--column-only')) { await writeToneColumn(stocks); return; }
+  if (process.argv.includes('--archive-backfill')) { await archiveBackfill(stocks); return; }
   if (process.argv.includes('--shadow-backfill')) {
     if (!SHADOW) throw new Error('--shadow-backfill needs --shadow <model>');
     await shadowBackfill(stocks);
@@ -343,6 +403,7 @@ async function writeToneColumn(stocks) {
       if (!page.text) { await write(h, { status: page.status, reason: page.reason, host: page.host, chars: page.chars }); continue; }
       const base = { host: page.host, chars: page.text.length };
       if (!NewsTone.namesCompany(page.text, h.symbol, h.name)) { await write(h, Object.assign({ status: 'skipped', reason: 'company not named' }, base)); continue; }
+      keepText(h, page);
       const input = { symbol: h.symbol, name: h.name, headline: h.headline, source: h.source, text: page.text };
       let got = await askModel(NewsTone.request(input, MODEL));
       // The shadow reads the same article now, from the same text: its own
@@ -369,13 +430,23 @@ async function writeToneColumn(stocks) {
         }
         a.summary = null;
       }
+      // The facts the article states, each checked against its text; what the
+      // text does not carry is dropped, and a dropped fact never fails the reading.
+      const facts = NewsTone.checkFacts(a, page.text);
+      if (facts.dropped.length) factsDropped += facts.dropped.length;
+      factsKept += (facts.move ? 1 : 0) + facts.consensus.length + facts.analysts.length;
       await write(h, Object.assign({ status: 'scored', reason: chk.ok ? null : 'summary withheld: ' + chk.problems.join('; '),
         about: a.about, kind: a.kind, tone: Math.round(a.tone * 100) / 100, summary: a.summary, complete: !!a.complete,
-        event: typeof a.event === 'boolean' ? a.event : null }, base));
+        event: typeof a.event === 'boolean' ? a.event : null,
+        move_reason: facts.move, consensus: facts.consensus, analysts: facts.analysts }, base));
       if (!COMMIT || shown < 3) {
         shown++;
         console.log(`  ${h.symbol} ${NewsTone.label(a.tone)} ${a.tone >= 0 ? '+' : ''}${Number(a.tone).toFixed(2)} [${a.kind}, ${a.about}${a.complete ? '' : ', partial'}] ${page.host}`
-          + `\n    ${String(h.headline).slice(0, 110)}\n    ${a.summary || '(summary withheld)'}`);
+          + `\n    ${String(h.headline).slice(0, 110)}\n    ${a.summary || '(summary withheld)'}`
+          + (facts.move ? `\n    move: ${facts.move}` : '')
+          + (facts.consensus.length ? `\n    consensus: ${facts.consensus.map((c) => c.what + ' ' + c.expected + (c.actual != null ? ' vs ' + c.actual : '') + ' ' + c.unit).join('; ')}` : '')
+          + (facts.analysts.length ? `\n    analysts: ${facts.analysts.map((x) => x.firm + ' ' + NewsTone.ANALYST_LABEL[x.action]).join('; ')}` : '')
+          + (facts.dropped.length ? `\n    dropped: ${facts.dropped.join('; ')}` : ''));
       }
     } catch (err) {
       if (err instanceof Stop) { console.log(err.message); Object.assign(RUN, { stop: 'stopped', left: todo.length - i, error: String(err.message).slice(0, 200) }); break; }
@@ -386,6 +457,8 @@ async function writeToneColumn(stocks) {
   console.log(`\n${tally.scored} scored, ${tally.skipped} skipped (company not named), ${tally.unreadable} unreadable, ${tally.failed} failed; $${spent.toFixed(2)} spent; ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   for (const [k, n] of Object.entries(why).sort((a, b) => b[1] - a[1])) console.log(`  ${n} x ${k}`);
   if (SHADOW) console.log(`  shadow ${SHADOW}: ${shadowN} read, ${shadowFail} failed, $${shadowSpent.toFixed(3)} spent (main ${MODEL}: $${spent.toFixed(3)})`);
+  console.log(`  facts: ${factsKept} kept, ${factsDropped} dropped (not in the article text, or broke a rule)`);
+  if (COMMIT) console.log(`  local text archive: ${archived} new articles kept` + (archiveFail ? `, ${archiveFail} could not be written` : '') + (archive ? ` (${archive.count()} in all)` : ''));
   await writeToneColumn(stocks);
   await recordRun({ scored: tally.scored, skipped: tally.skipped, unreadable: tally.unreadable, failed: tally.failed, spent, reasons: why });
   if (!COMMIT) console.log('DRY RUN: nothing written. Re-run with --commit.');
