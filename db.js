@@ -7919,7 +7919,7 @@ async function getSessionUser(token) {
     // account's live session would have kept working for up to its full 30
     // days and the feature would have looked like it did nothing. A gate
     // should refuse what it does not recognise.
-    sql: `select s.token as stoken, u.id, u.email, u.name, u.role, u.terms_version, s.expires_at
+    sql: `select s.token as stoken, u.id, u.email, u.name, u.role, u.terms_version, u.google_sub is not null as google, s.expires_at
           from sessions s join users u on u.id = s.user_id
           where s.token in (?, ?) and u.status = 'active'`,
     args: [key, String(token)],
@@ -7935,7 +7935,9 @@ async function getSessionUser(token) {
   if (row.stoken === String(token)) {
     await db.execute({ sql: 'update sessions set token = ? where token = ?', args: [key, String(token)] }).catch(() => {});
   }
-  return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role, termsVersion: row.terms_version || null };
+  // `google` is whether, never which: the close-account dialog needs to know
+  // whether the person has a password of their own to confirm with.
+  return { id: Number(row.id), email: row.email, name: row.name || null, role: row.role, termsVersion: row.terms_version || null, google: !!Number(row.google) };
 }
 
 async function deleteSession(token) {

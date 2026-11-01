@@ -1398,6 +1398,10 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock" /></svg>
                   <span class="nm">Change password</span>
                 </button>
+                <button class="pick" id="closeAcctBtn" style="display:none">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-trash" /></svg>
+                  <span class="nm">Close my account</span>
+                </button>
                 <button class="pick" id="logoutBtn">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-logout" /></svg>
                   <span class="nm">Sign out</span>
@@ -1559,6 +1563,28 @@
             <button type="button" class="btn" id="pwCancel">Cancel</button>
             <button type="submit" class="btn btn-primary" id="pwSave" style="padding:9px 15px">
               <span class="lbl">Update password</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog class="modal" id="closeAcctDialog">
+      <div class="core">
+        <h2>Close my account</h2>
+        <p class="sub">This deletes the account and everything saved with it: your themes, column
+          layout and views, alerts and paper positions. It cannot be undone. A mailing-list
+          subscription is separate: use the unsubscribe link in any email.</p>
+        <form id="closeAcctForm">
+          <div class="row-f">
+            <label for="closeAcctKey" id="closeAcctLabel">Your password</label>
+            <input type="password" id="closeAcctKey" autocomplete="current-password" required />
+          </div>
+          <div class="note" id="closeAcctNote"></div>
+          <div class="actions">
+            <button type="button" class="btn" id="closeAcctCancel">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="closeAcctGo" style="padding:9px 15px">
+              <span class="lbl">Close account</span>
             </button>
           </div>
         </form>
@@ -5940,6 +5966,8 @@
       }
       // An ADMIN_PASSWORD login has no user row behind it, so nothing to change.
       $('changePwBtn').style.display = currentUser && currentUser.email ? '' : 'none';
+      // An admin cannot close their own account (the server refuses too).
+      $('closeAcctBtn').style.display = currentUser && currentUser.email && currentUser.role !== 'admin' && currentUser.role !== 'owner' ? '' : 'none';
     }
 
     function doLogin() { window.location.href = '/login'; }
@@ -7068,6 +7096,50 @@
       } catch (err) {
         pwNote(err.message, 'err');
         $('pwSave').disabled = false;
+      }
+    });
+
+    // ---- close my account ----
+    // A Google account has no password the person knows, so it is confirmed
+    // by typing the account's address instead.
+    function closeNote(text, kind) {
+      const n = $('closeAcctNote');
+      n.className = 'note' + (text ? ' show ' + kind : '');
+      n.textContent = text || '';
+    }
+    $('closeAcctBtn').addEventListener('click', () => {
+      closePickers();
+      $('closeAcctForm').reset();
+      closeNote('');
+      const g = !!(currentUser && currentUser.google);
+      $('closeAcctLabel').textContent = g ? 'Type your email address to confirm' : 'Your password';
+      $('closeAcctKey').type = g ? 'email' : 'password';
+      $('closeAcctKey').autocomplete = g ? 'off' : 'current-password';
+      $('closeAcctGo').disabled = false;
+      $('closeAcctDialog').showModal();
+    });
+    $('closeAcctCancel').addEventListener('click', () => $('closeAcctDialog').close());
+    $('closeAcctForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const g = !!(currentUser && currentUser.google);
+      const v = $('closeAcctKey').value;
+      $('closeAcctGo').disabled = true;
+      closeNote('');
+      try {
+        // Not api(): a 401 here is a wrong confirmation, not a lapsed session.
+        const res = await fetch('/api/account/close', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify(g ? { email: v } : { password: v }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not close the account.');
+        closeNote('Your account is closed.', 'ok');
+        setTimeout(() => { window.location.href = '/login'; }, 1500);
+      } catch (err) {
+        closeNote(err.message, 'err');
+        $('closeAcctGo').disabled = false;
       }
     });
 

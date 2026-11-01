@@ -2632,7 +2632,7 @@ app.get('/api/me', route(async (req, res) => {
     admin,
     authRequired: AUTH_REQUIRED,
     signedIn: await isSignedIn(req),
-    user: u ? { email: u.email, name: u.name || null, role: u.role }
+    user: u ? { email: u.email, name: u.name || null, role: u.role, google: !!u.google }
       : (admin && AUTH_REQUIRED ? { email: null, name: null, role: ROLE_ADMIN } : null),
     signupCodeRequired: !!SIGNUP_CODE,
     // The sign-up page says whether new accounts wait for approval (2026-10-30).
@@ -3627,6 +3627,67 @@ app.post('/api/password', requireAuth, route(async (req, res) => {
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
 }));
+
+// Close your own account (2026-11-01, owner). The same `deleteUser` the admin
+// users page calls, so what goes and what is archived is decided in one place.
+// Confirmed with the account's password, or, for an account made with Google
+// (whose stored password is random and unknowable), by typing its address.
+// Wrong confirmations count against the password-change rule's limit, so a
+// stolen session cannot guess its way through. An admin cannot close their
+// own account here, as on the users page: demote first.
+app.post('/api/account/close', requireAuth, route(async (req, res) => {
+  const me = await currentUser(req);
+  if (!me) return res.status(400).json({ error: 'Only an account can be closed.' });
+  if (isAdminRole(me.role)) return res.status(409).json({ error: 'An admin account cannot be closed.' });
+  const key = 'close:' + Number(me.id);
+  const now = Date.now();
+  if (AuthSec.overLimit(await store.readAuthThrottle(key), now, MAX_FAILED, LOCK_MS)) {
+    return res.status(429).json({ error: 'Too many attempts. Please try again in 15 minutes.' });
+  }
+  const user = await store.findUserByEmail(me.email);
+  if (!user) return res.status(404).json({ error: 'Account not found.' });
+  const password = String(req.body?.password || '');
+  const typed = String(req.body?.email || '').trim().toLowerCase();
+  const ok = (password && await verifyPassword(password, user.salt, user.password_hash))
+    || (user.google_sub && typed && typed === String(me.email).toLowerCase());
+  if (!ok) {
+    await store.noteAuthFailure(key, now, LOCK_MS).catch(() => {});
+    return res.status(401).json({ error: me.google ? 'That is not the address of this account.' : 'Password is incorrect.' });
+  }
+  store.clearAuthThrottle(key).catch(() => {});
+  await store.deleteUser(Number(user.id));
+  logAct(req, 'account', 'closed', me.email);
+  sendClosedNotice(me.email, me.name).catch(() => {});
+  res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
+}));
+
+// The owner hears when somebody closes their account: facts only, and never
+// allowed to fail the closing.
+async function sendClosedNotice(email, name) {
+  if (!MAIL_READY) return false;
+  try {
+    const to = await operatorEmail();
+    if (!to) return false;
+    const who = name ? `${name} (${email})` : email;
+    const total = await store.countUsers();
+    const lines = [`Closed: ${fmtClock(Date.now())}`, `Accounts now: ${total}`];
+    return await sendMail({
+      kind: 'account-closed',
+      to,
+      subject: `Account closed: ${email}`,
+      text: textShell({ heading: 'An account was closed', intro: `${who} closed their account.`, lines }),
+      html: emailShell({
+        heading: 'An account was closed',
+        intro: `${who} closed their account.`,
+        body: lines.map((l) => `<p style="margin:6px 0;font-size:14px;color:${MC.ink}">${mailEsc(l)}</p>`).join(''),
+      }),
+    });
+  } catch (err) {
+    console.warn('closed notice: could not send (account closed anyway):', err.message);
+    return false;
+  }
+}
 
 // ============================================================================
 // Email
