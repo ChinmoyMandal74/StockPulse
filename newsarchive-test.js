@@ -32,9 +32,13 @@ check('get: an unknown address is null', A.get('https://example.com/b'), null);
 let threw = false; try { A.put({ url: 'https://example.com/c', text: '' }); } catch (e) { threw = true; }
 check('put: empty text is refused, not stored as an article', [threw, A.has('https://example.com/c')], [true, false]);
 check('count', A.count(), 1);
+// A reader open while the writer adds an article (the hourly run beside a research script).
+const R = NA.open(file);
+check('WAL: a second connection reads while the first writes', [A.db.prepare('pragma journal_mode').get().journal_mode, (A.put({ url: 'https://example.com/d', text: 'second article text', published_at: '2026-10-30T12:00:00.000Z' }), R.count())], ['wal', 2]);
+R.close();
 A.close();
 const B = NA.open(file);
-check('reopened: everything is still there', [B.count(), B.get(u).text === text], [1, true]);
+check('reopened: everything is still there', [B.count(), B.get(u).text === text], [2, true]);
 B.close();
 check('the default file is beside the code and gitignored', [path.basename(NA.DEFAULT_PATH), /^news-archive\.db$/m.test(fs.readFileSync(path.join(__dirname, '.gitignore'), 'utf8'))], ['news-archive.db', true]);
 fs.rmSync(dir, { recursive: true, force: true });

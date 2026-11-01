@@ -31,6 +31,10 @@ function open(file) {
   // test that never opens the file) can still load the module.
   const { DatabaseSync } = require('node:sqlite');
   const db = new DatabaseSync(file || process.env.NEWS_ARCHIVE_DB || DEFAULT_PATH);
+  // WAL, so a research script can read while the hourly run writes, and a
+  // wait rather than an error when two writers meet (a catch-up run beside a
+  // scheduled one).
+  db.exec('pragma busy_timeout = 10000; pragma journal_mode = wal;');
   db.exec(`
     create table if not exists articles (
       url          text primary key,
