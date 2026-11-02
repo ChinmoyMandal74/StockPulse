@@ -399,14 +399,15 @@ app.use(route(async (req, res, next) => {
 // `/` stays the screener for anyone signed in (where a daily user wants to
 // land); `/home` is the landing page for everyone, and the public pages'
 // Home links and the screener's menu point here. Signed in, its Sign in
-// button becomes a way back to the screener. Canonical is `/`, so search
+// button becomes a way back to the screener, and the bar's Guest preview goes. Canonical is `/`, so search
 // engines see one page.
 app.get('/home', route(async (req, res) => {
   const signedIn = await isSignedIn(req);
   if (!signedIn && anonLogOk(req)) logAct(req, 'page', 'home');
   let html = landingFigures(pageTemplate('landing.html').replace('%SUBSCRIBE%', () => subscribeBox('home')));
   // Every Sign in on the page (the bar and the footer) becomes the way back.
-  if (signedIn) html = html.replace(/<a (class="b signin" )?href="\/login">Sign in<\/a>/g, (m, cls) => '<a ' + (cls || '') + 'href="/">Open the screener</a>');
+  if (signedIn) html = html.replace(/<a (class="b signin" )?href="\/login">Sign in<\/a>/g, (m, cls) => '<a ' + (cls ? 'class="b signin open" ' : '') + 'href="/">Open Screener</a>')
+    .replace(/\s*<a class="b guest" href="\/login\?guest=1">Guest preview<\/a>/, '');
   res.type('html').send(html);
 }));
 

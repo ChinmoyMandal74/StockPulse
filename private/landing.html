@@ -42,21 +42,26 @@
     /* ---- top bar ---- */
     .lp-bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; background: color-mix(in srgb, var(--void) 82%, transparent);
               backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--hair); }
-    .lp-bar .w { display: flex; align-items: center; gap: 20px; height: 64px; }
-    .lp .mark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; }
+    .lp-bar .w { display: flex; align-items: center; gap: 14px; height: 64px; }
+    .lp .mark { white-space: nowrap; display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; text-decoration: none; letter-spacing: -0.02em; }
     .lp .glyph { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--green);
                  background: linear-gradient(160deg, color-mix(in srgb, var(--green) 22%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
                  border: 1px solid color-mix(in srgb, var(--green) 28%, transparent); }
     .lp .glyph svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .lp .beta { font: 600 10.5px var(--mono); letter-spacing: 0.12em; color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
                 border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
-    .lp-nav { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+    .lp-nav { display: flex; gap: 16px; white-space: nowrap; font-size: 14px; color: var(--muted); }
     .lp-nav a { text-decoration: none; } .lp-nav a:hover { color: var(--text); }
     .lp-bar .sp { flex: 1; }
     .lp .b { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--sans); text-decoration: none; padding: 10px 16px; border-radius: 10px;
              border: 1px solid var(--hair-2); color: var(--text); background: transparent; cursor: pointer; white-space: nowrap; }
     .lp .b:hover { border-color: var(--muted); }
     .lp .b.pri { background: var(--accent); border-color: var(--accent); color: var(--void); }
+    .lp-bar .b.signin { border-color: transparent; padding-left: 8px; padding-right: 8px; }
+    .lp-bar .b.signin:hover, .lp-bar .b.signin.open { border-color: var(--hair-2); }
+    .lp-bar .b.signin.open { padding-left: 16px; padding-right: 16px; }
+    .lp-bar .b.guest { border-color: var(--accent); color: var(--accent); }
+    .lp-bar .b.guest:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
     .lp .b.pri:hover { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
     .lp .b:focus-visible, .lp .tb:focus-visible, .lp summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -293,7 +298,7 @@
     .lp .lp-race p { max-width: 54ch; }
     .lp .lp-race .lp-race-cap { font: 12px var(--mono); color: var(--faint); }
 
-    @media (max-width: 1000px) { .lp-nav { display: none; } }
+    @media (max-width: 1180px) { .lp-nav { display: none; } }
     @media (max-width: 900px) {
       .lp-hero .w, .lp .lp-race, .lp .pane, .lp .pane.flip, .lp .honest, .lp .tone, .lp .three, .lp .two, .lp .two.who3, .lp .plans { grid-template-columns: 1fr; }
       .lp .stack { justify-self: center; max-width: 360px; } .lp .stackcap { justify-self: center; text-align: center; }
@@ -309,7 +314,7 @@
       .lp main > section { padding-block: 60px; }
       .lp-nums .w { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .lp .grid, .lp .depth { grid-template-columns: 1fr; }
-      .lp-bar .signin { display: none; }
+      .lp-bar .signin, .lp-bar .guest { display: none; }
       .lp .pane { padding: 20px; }
     }
   </style>
@@ -323,7 +328,8 @@
     <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/blog">Blog</a></nav>
     <span class="sp"></span>
     <a class="b signin" href="/login">Sign in</a>
-    <a class="b pri" href="/login?mode=register">Join the beta</a>
+    <a class="b guest" href="/login?guest=1">Guest preview</a>
+    <a class="b pri" href="/login?mode=register">Join Beta</a>
   </div>
 </header>
 
