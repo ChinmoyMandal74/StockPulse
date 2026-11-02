@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>IPO pipeline — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- The account watermark every data page carries: members and guests, never the admin. -->
+  <script src="/wmark.js" defer></script>
+  <style>
+    /* The shell is the Filings page's. Everything this page adds is prefixed ip- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 76ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .ip-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; flex-wrap: wrap; }
+    .ip-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair);
+              background: none; color: var(--muted); cursor: pointer; }
+    .ip-tab.on { color: var(--text); border-color: var(--accent); }
+    .ip-tab .ip-n { font-family: var(--mono); color: var(--faint); margin-left: 4px; }
+    .ip-bar input[type=search] { flex: 1; min-width: 200px; font: 500 12.5px var(--sans); color: var(--text); background: var(--surface-2);
+      border: 1px solid var(--hair-2); border-radius: 999px; padding: 7px 12px; }
+    .ip-bar input[type=search]::placeholder { color: var(--faint); }
+    .ip-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .ip-count { font-size: 12px; color: var(--faint); font-family: var(--mono); margin: 0 6px 10px; }
+    .ip-wrap { overflow-x: auto; }
+    .ip-wrap table { width: 100%; border-collapse: collapse; }
+    .ip-wrap th, .ip-wrap td { padding: 11px 16px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: top; }
+    .ip-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .ip-wrap td.ip-co b { display: block; font-weight: 600; color: var(--text); }
+    .ip-wrap td.ip-co span { display: block; color: var(--faint); font-size: 11.5px; margin-top: 2px; }
+    .ip-sym { font: 600 12.5px var(--mono); color: var(--text); }
+    .ip-sym a { color: inherit; text-decoration: none; }
+    .ip-sym a:hover { color: var(--accent); }
+    .ip-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; }
+    .ip-num { font-family: var(--mono); white-space: nowrap; }
+    .ip-day { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
+    .ip-st { display: inline-block; font: 600 11px var(--sans); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); white-space: nowrap; }
+    .ip-st.ip-filed { color: var(--text); border-color: var(--accent); }
+    .ip-st.ip-priced, .ip-st.ip-listed { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 55%, transparent); }
+    .ip-amb { color: var(--amber); }
+    .ip-more { font: 500 12px var(--sans); color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+    .ip-more:hover { text-decoration: underline; }
+    .ip-wrap tr.ip-open > td { border-bottom: 0; }
+    .ip-wrap tr.ip-list > td { padding-top: 0; }
+    .ip-files { display: grid; grid-template-columns: max-content max-content 1fr; gap: 6px 16px; margin: 0 0 4px; font-size: 12px; }
+    .ip-files .ip-form { font: 600 11px var(--mono); color: var(--muted); }
+    .ip-files a { color: var(--accent); text-decoration: none; }
+    .ip-files a:hover { text-decoration: underline; }
+    .ip-link { color: var(--accent); text-decoration: none; font-size: 12px; white-space: nowrap; }
+    .ip-link:hover { text-decoration: underline; }
+    .ip-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .ip-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 96ch; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+      <a class="btn hide-sm" href="/filings">Filings</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>SEC filings</span>
+      <h1>IPO pipeline</h1>
+      <p class="lede">Companies that have filed with the SEC to sell shares to the public for the first time in the
+        US, each with every registration filing on its record: the confidential drafts once the SEC releases them, the
+        public registration statement (Form S-1, or F-1 for a foreign company) and its amendments, the final
+        prospectus that sets the price, and any withdrawal. Read each morning from the SEC's index of the previous
+        business day. A company has no share price here until it trades.</p>
+    </header>
+
+    <div class="ip-bar">
+      <button class="ip-tab" data-f="reg">In registration<span class="ip-n" id="nreg"></span></button>
+      <button class="ip-tab" data-f="priced">Priced<span class="ip-n" id="npriced"></span></button>
+      <button class="ip-tab" data-f="listed">Listed<span class="ip-n" id="nlisted"></span></button>
+      <button class="ip-tab" data-f="withdrawn">Withdrawn<span class="ip-n" id="nwithdrawn"></span></button>
+      <button class="ip-tab" data-f="all">All<span class="ip-n" id="nall"></span></button>
+      <label class="ip-check" title="A national exchange (Nasdaq, NYSE, NYSE American, Cboe) named on the prospectus cover. Most small offerings that name none are sold without a listing."><input type="checkbox" id="exch" checked /> Names an exchange</label>
+      <input type="search" id="q" placeholder="Company, ticker or industry" aria-label="Find a company, ticker or industry" />
+    </div>
+    <div class="ip-count" id="count"></div>
+
+    <div class="bezel"><div class="core" style="padding:0"><div class="ip-wrap" id="list"><div class="ip-empty">Reading the filings&hellip;</div></div></div></div>
+
+    <p class="ip-foot">The proposed ticker, the exchange, the price range and the number of new shares the company
+      offers are read from the cover page of its newest registration statement; a range appears only once the
+      company prints one, normally in an amendment a week or two before pricing. "Priced" means the final
+      prospectus (Form 424B) is filed; "Listed" means the SEC now lists a ticker for the company. A registration
+      with no filing for nine months or more is marked in amber: many are never completed and never withdrawn.
+      Blank-cheque companies (SPACs) and companies that were already filing annual or quarterly reports are left
+      out. A filing is a record, not a reading of the company.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const qs = new URLSearchParams(location.search);
+    const TABS = ['reg', 'priced', 'listed', 'withdrawn', 'all'];
+    const state = { tab: TABS.includes(qs.get('show')) ? qs.get('show') : 'reg', open: new Set() };
+    let data = null;
+
+    const fmtDay = (s) => (s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+    const months = (from, to) => (from && to ? (new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / (30.44 * 86400000) : 0);
+    const money = (n) => '$' + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+    const big = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n.toLocaleString('en-US'));
+    const tabOf = (c) => (c.status === 'filed' || c.status === 'confidential' ? 'reg' : c.status);
+    const STATUS = { filed: 'Filed', confidential: 'Drafts released', priced: 'Priced', listed: 'Listed', withdrawn: 'Withdrawn' };
+    // The exchange the SEC lists for a trading company, else the one its prospectus names.
+    const NATIONAL = (c) => { const x = c.listedOn || c.exchange; return !!x && !/^OTC/i.test(x); };
+
+    async function load() {
+      try {
+        const r = await fetch('/api/ipos', { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
+        data = await r.json();
+        paint();
+      } catch (e) {
+        $('list').innerHTML = '<div class="ip-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    }
+    function paint() {
+      document.querySelectorAll('.ip-tab').forEach((b) => b.classList.toggle('on', b.dataset.f === state.tab));
+      if (!data) return;
+      const q = $('q').value.trim().toLowerCase(), exch = $('exch').checked;
+      const base = data.companies.filter((c) => (!exch || NATIONAL(c))
+        && (!q || [c.name, c.symbol, c.ticker, c.industry].some((v) => String(v || '').toLowerCase().includes(q))));
+      const n = { reg: 0, priced: 0, listed: 0, withdrawn: 0, all: base.length };
+      for (const c of base) n[tabOf(c)] = (n[tabOf(c)] || 0) + 1;
+      for (const t of TABS) $('n' + t).textContent = n[t] || 0;
+      const L = base.filter((c) => state.tab === 'all' || tabOf(c) === state.tab);
+      $('count').textContent = L.length + ' compan' + (L.length === 1 ? 'y' : 'ies')
+        + (data.queued ? ' · ' + data.queued + ' filing' + (data.queued === 1 ? '' : 's') + ' still to read' : '');
+      if (!L.length) { $('list').innerHTML = '<div class="ip-empty">No company matches.</div>'; return; }
+      $('list').innerHTML = '<table><thead><tr><th>Company</th><th>Ticker</th><th>Price</th><th>Status</th>'
+        + '<th class="hide-sm">First filed</th><th>Latest filing</th><th class="hide-sm"></th></tr></thead><tbody>'
+        + L.map(row).join('') + '</tbody></table>';
+    }
+    function row(c) {
+      const last = c.filings[c.filings.length - 1] || null;
+      const stale = tabOf(c) === 'reg' && months(c.lastFiled, data.today) >= 9;
+      const sym = c.ticker
+        ? '<span class="ip-sym">' + (c.tracked ? '<a href="/stock/' + encodeURIComponent(c.ticker) + '">' + we(c.ticker) + '</a>' : we(c.ticker)) + '</span><span class="ip-sub">' + we(c.listedOn || c.market || '') + '</span>'
+        : c.symbol ? '<span class="ip-sym">' + we(c.symbol) + '</span><span class="ip-sub">proposed' + (c.market ? ', ' + we(c.market) : '') + '</span>'
+        : '<span class="ip-sub">Not named yet</span>';
+      const price = c.price != null ? '<span class="ip-num">' + money(c.price) + '</span><span class="ip-sub">set ' + we(fmtDay(c.priced)) + '</span>'
+        : c.priceLow != null ? '<span class="ip-num">' + money(c.priceLow) + '&ndash;' + money(c.priceHigh) + '</span><span class="ip-sub">range</span>'
+        : c.status === 'listed' || c.status === 'priced' ? '<span class="ip-sub">&mdash;</span>'
+        : '<span class="ip-sub">No range yet</span>';
+      const shares = c.shares ? '<span class="ip-sub">' + big(c.shares) + ' new shares</span>' : '';
+      const open = state.open.has(c.cik);
+      // The state of incorporation for a US company; the SEC's country codes (V8, E9) mean nothing to a reader.
+      return '<tr class="' + (open ? 'ip-open' : '') + '">'
+        + '<td class="ip-co"><b>' + we(c.name) + '</b><span>' + we([c.industry, /^[A-Z]{2}$/.test(c.state || '') ? c.state : ''].filter(Boolean).join(' · ')) + '</span></td>'
+        + '<td>' + sym + '</td><td>' + price + shares + '</td>'
+        + '<td><span class="ip-st ip-' + we(c.status) + '">' + we(STATUS[c.status] || c.status || '—') + '</span>'
+        + (stale ? '<span class="ip-sub ip-amb">no filing for ' + Math.floor(months(c.lastFiled, data.today)) + ' months</span>' : '') + '</td>'
+        + '<td class="ip-day hide-sm">' + we(fmtDay(c.firstFiled)) + '</td>'
+        + '<td><span class="ip-day">' + we(fmtDay(c.lastFiled)) + '</span>' + (last ? '<span class="ip-sub">' + we(last.what) + '</span>' : '') + '</td>'
+        + '<td class="hide-sm"><button class="ip-more" data-cik="' + c.cik + '">' + (open ? 'Hide' : c.filings.length + ' filing' + (c.filings.length === 1 ? '' : 's')) + '</button></td></tr>'
+        + (open ? '<tr class="ip-list"><td></td><td colspan="6"><div class="ip-files">'
+          + [...c.filings].reverse().map((f) => '<span class="ip-day">' + we(fmtDay(f.filed)) + '</span><span class="ip-form">' + we(f.form) + '</span>'
+            + '<a href="' + we(f.url) + '" target="_blank" rel="noopener">' + we(f.what) + ' &#8599;</a>').join('')
+          + '</div><a class="ip-link" href="' + we(c.url) + '" target="_blank" rel="noopener">Every filing on sec.gov &#8599;</a></td></tr>' : '');
+    }
+    $('list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cik]');
+      if (!b) return;
+      const k = Number(b.dataset.cik);
+      state.open.has(k) ? state.open.delete(k) : state.open.add(k);
+      paint();
+    });
+    // The company name opens its filings too, which is how a phone reaches them.
+    $('list').addEventListener('click', (e) => {
+      const td = e.target.closest('td.ip-co');
+      if (!td) return;
+      const b = td.parentElement.querySelector('[data-cik]');
+      if (b) b.click();
+    });
+    const syncUrl = () => history.replaceState(null, '', '/ipos' + (state.tab !== 'reg' ? '?show=' + state.tab : ''));
+    document.querySelectorAll('.ip-tab').forEach((b) => b.addEventListener('click', () => { state.tab = b.dataset.f; syncUrl(); paint(); }));
+    $('exch').addEventListener('change', paint);
+    let timer = null;
+    $('q').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(paint, 150); });
+    paint();
+    load();
+  </script>
+</body>
+</html>

@@ -883,7 +883,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -2218,6 +2218,13 @@ app.get('/filings', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'filings');
   res.sendFile(path.join(__dirname, 'private', 'filings.html'));
+}));
+// Companies filing to go public (2026-11-02, ipos.js). Members, as /filings is.
+app.get('/ipos', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'ipos');
+  res.sendFile(path.join(__dirname, 'private', 'ipos.html'));
 }));
 // The news feed (2026-10-24): every AI-read article, by day and importance.
 app.get('/news', route(async (req, res) => {
@@ -14295,9 +14302,60 @@ async function secDailyOne(sym, cik) {
   } catch (e) { /* rides along */ }
   return { ok: true };
 }
+// COMPANIES FILING TO GO PUBLIC (2026-11-02; ipos.js). The index this check
+// reads also lists every S-1, F-1, final prospectus and withdrawal; those
+// lines are queued as each index is read (before the check moves past the
+// day, so none is lost), and after the check a few companies are taken off
+// the queue each call: the filing list, and the prospectus cover when it is
+// new. `done` holds until the queue is empty, so the nightly's loop over
+// this route works the queue down with no change to the nightly.
+const Ipos = require('./ipos.js');
+const IPO_N = 4, IPO_COVER_BYTES = 600000;
+// The start of a document: the SEC ignores a Range header, so the stream is
+// read to the limit and dropped (a cover is in the first 200KB).
+async function secHead(url, limit) {
+  const r = await fetch(url, { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+  if (!r.ok || !r.body) return { status: r.status, text: '' };
+  const reader = r.body.getReader(), parts = [];
+  let n = 0;
+  while (n < limit) { const { done, value } = await reader.read(); if (done) break; parts.push(value); n += value.length; }
+  reader.cancel().catch(() => {});
+  return { status: r.status, text: Buffer.concat(parts.map((p) => Buffer.from(p))).toString('latin1') };
+}
+async function ipoStep(n) {
+  // Priced companies with no ticker yet, looked at once a day.
+  const st0 = (await store.readIpoState().catch(() => null)) || { queue: [] };
+  const today = SecDaily.todayET();
+  if (st0.recheckDay !== today) {
+    const list = await store.readIpoCompanies().catch(() => null);
+    if (list) {
+      const q = Ipos.enqueue(st0, Ipos.rechecks(list, st0, today)).state;
+      q.recheckDay = today;
+      await store.writeIpoState(q);
+    }
+  }
+  return Ipos.step({
+    n,
+    readState: () => store.readIpoState(),
+    writeState: (st) => store.writeIpoState(st),
+    readCompany: (cik) => store.readIpoCompany(cik),
+    fetchSubs: async (cik) => {
+      const r = await fetch(Ipos.subsUrl(cik), { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+      return { status: r.status, json: r.ok ? await r.json() : null };
+    },
+    fetchOlder: async (name) => {
+      const r = await fetch(Ipos.olderUrl(name), { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' }, signal: AbortSignal.timeout(SEC_TIMEOUT_MS) });
+      return { status: r.status, json: r.ok ? await r.json() : null };
+    },
+    fetchCover: (url) => secHead(url, IPO_COVER_BYTES),
+    saveCompany: (row, hist) => store.writeIpoCompany(row, hist),
+    skipCompany: (cik, name, reason) => store.skipIpoCompany(cik, name, reason),
+  });
+}
 app.post('/api/sec/daily', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (!SEC_READY) return res.status(400).json({ error: 'No contact address configured for the SEC.' });
+  let ipoQueued = 0;
   const out = await SecDaily.step({
     today: SecDaily.todayET(), dates: SEC_DAILY_DATES, n: SEC_DAILY_N,
     readState: () => store.readSecDaily().catch(() => null),
@@ -14308,10 +14366,26 @@ app.post('/api/sec/daily', route(async (req, res) => {
     },
     fetchIndex: async (d) => {
       const r = await fetch(SecDaily.indexUrl(d), { headers: { 'User-Agent': SEC_UA }, signal: AbortSignal.timeout(30000) });
-      return { status: r.status, text: r.ok ? await r.text() : '' };
+      const text = r.ok ? await r.text() : '';
+      // Rides along: a failure here never stops the filings check.
+      if (text) try {
+        const q = Ipos.enqueue(await store.readIpoState(), Ipos.parseIndex(text));
+        if (q.added) await store.writeIpoState(q.state);
+        ipoQueued += q.added;
+      } catch (e) { console.error('ipo queue:', e.message); }
+      return { status: r.status, text };
     },
     readOne: secDailyOne,
   });
+  // The IPO queue after the filings check, unless the SEC asked us to slow down.
+  const slowed = (out.notes || []).some((s) => /slow down/.test(s));
+  if (!slowed) {
+    try {
+      const ipo = await ipoStep(IPO_N);
+      out.ipo = { queued: ipoQueued, kept: ipo.kept.length, skipped: ipo.skipped.length, remaining: ipo.remaining, notes: ipo.notes };
+      if (!ipo.done) out.done = false;
+    } catch (e) { out.ipo = { error: e.message }; }
+  }
   res.json(out);
 }));
 
@@ -16589,6 +16663,33 @@ app.get('/api/filings', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
   res.json(await filedDayPayload(String(req.query.date || ''), false, true));
+}));
+// Companies filing to go public (2026-11-02, ipos.js), for /ipos. Members,
+// as /filings is. Built once per change of the queue's stamp: the stamp is
+// one app_meta row, the build two small tables.
+let ipoCache = null;
+app.get('/api/ipos', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  const st = await store.readIpoState().catch(() => null);
+  const stamp = (st && st.at) || 0;
+  if (!ipoCache || ipoCache.stamp !== stamp) {
+    const [list, universe] = await Promise.all([store.readIpoCompanies(), store.readUniverse().catch(() => [])]);
+    const uni = new Set((universe || []).map((s) => String(s).toUpperCase()));
+    ipoCache = { stamp, body: {
+      at: stamp || null, queued: (st && Array.isArray(st.queue)) ? st.queue.length : 0, today: SecDaily.todayET(),
+      companies: list.map((c) => ({
+        cik: c.cik, name: c.name, industry: c.industry, state: c.state, status: c.status,
+        symbol: c.symbol, exchange: c.exchange, market: c.market, ticker: c.ticker, listedOn: c.listedOn,
+        tracked: !!(c.ticker && uni.has(String(c.ticker).toUpperCase())),
+        priceLow: c.priceLow, priceHigh: c.priceHigh, price: c.price, shares: c.shares,
+        firstFiled: c.firstFiled, lastFiled: c.lastFiled, priced: c.priced, url: Ipos.companyUrl(c.cik),
+        filings: c.filings.map((f) => ({ form: f.form, what: Ipos.FORM_NAMES[f.form] || f.form, filed: f.filed,
+          url: f.doc ? Ipos.docUrl(c.cik, f.accn, f.doc) : Ipos.filingUrl(c.cik, f.accn) })),
+      })),
+    } };
+  }
+  res.json(ipoCache.body);
 }));
 // One company's earnings releases as read (releases.js), newest first, with
 // the provider's EPS beside each. Signed in; a guest only for the guest stocks.

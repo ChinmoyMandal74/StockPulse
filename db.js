@@ -334,6 +334,45 @@ const SCHEMA = [
      primary key (symbol, d)
    )`,
   'create index if not exists idx_earnings_calendar_seen on earnings_calendar (last_seen)',
+  // Companies filing to go public (2026-11-02, ipos.js, /ipos). One row a
+  // company the daily index brought in: tracked = 1 is going public for the
+  // first time, 0 was left out (a SPAC, or already public) and is remembered
+  // so its next filing costs nothing. Its registration filings are kept
+  // one row each, never removed.
+  `create table if not exists ipo_companies (
+     cik         integer primary key,
+     name        text,
+     tracked     integer not null,
+     reason      text,
+     sic         text,
+     industry    text,
+     state       text,
+     status      text,
+     symbol      text,
+     exchange    text,
+     market      text,
+     ticker      text,
+     listed_on   text,
+     price_low   real,
+     price_high  real,
+     price       real,
+     shares      real,
+     cover_accn  text,
+     first_filed text,
+     last_filed  text,
+     priced      text,
+     checked_at  integer,
+     added_at    integer
+   )`,
+  'create index if not exists idx_ipo_companies_tracked on ipo_companies (tracked, last_filed)',
+  `create table if not exists ipo_filings (
+     cik    integer not null,
+     accn   text not null,
+     form   text not null,
+     filed  text not null,
+     doc    text,
+     primary key (cik, accn)
+   )`,
   // The laptop's scheduled tasks as schedule-report.js sent them, for
   // /schedule. One row an hour and one per task registration; kept, never
   // pruned, so a change to the schedule has a date.
@@ -5956,6 +5995,81 @@ async function readEarningsCalendarSeen(fromDay, seenSince) {
   return out;
 }
 
+// ---- companies filing to go public (ipos.js) ---------------------------
+// The queue and the day of the last recheck: one app_meta row.
+async function readIpoState() {
+  await init();
+  const r = await db.execute("select value from app_meta where key = 'ipo_pipeline'");
+  if (!r.rows.length) return null;
+  try { return JSON.parse(r.rows[0].value); } catch { return null; }
+}
+async function writeIpoState(obj) {
+  await init();
+  await db.execute({ sql: "insert or replace into app_meta (key, value) values ('ipo_pipeline', ?)", args: [JSON.stringify(obj || {})] });
+}
+const ipoRow = (x) => ({
+  cik: Number(x.cik), name: x.name || '', tracked: Number(x.tracked) || 0, reason: x.reason || null, sic: x.sic || null,
+  industry: x.industry || null, state: x.state || null, status: x.status || null, symbol: x.symbol || null, exchange: x.exchange || null,
+  market: x.market || null, ticker: x.ticker || null, listedOn: x.listed_on || null,
+  priceLow: x.price_low == null ? null : Number(x.price_low), priceHigh: x.price_high == null ? null : Number(x.price_high),
+  price: x.price == null ? null : Number(x.price), shares: x.shares == null ? null : Number(x.shares),
+  coverAccn: x.cover_accn || null, firstFiled: x.first_filed || null, lastFiled: x.last_filed || null, priced: x.priced || null,
+  checkedAt: x.checked_at == null ? null : Number(x.checked_at), addedAt: x.added_at == null ? null : Number(x.added_at),
+});
+// One company by CIK: a seek on the primary key.
+async function readIpoCompany(cik) {
+  await init();
+  const r = await db.execute({ sql: 'select * from ipo_companies where cik = ?', args: [Number(cik)] });
+  return r.rows.length ? ipoRow(r.rows[0]) : null;
+}
+// A kept company and its filings in one batch. Filings already stored stay
+// as they are (insert or ignore): the list only grows.
+async function writeIpoCompany(row, filings) {
+  await init();
+  const c = row || {};
+  const stmts = [{
+    sql: 'insert or replace into ipo_companies (cik, name, tracked, reason, sic, industry, state, status, symbol, exchange, market, ticker, listed_on, '
+      + 'price_low, price_high, price, shares, cover_accn, first_filed, last_filed, priced, checked_at, added_at) values (?, ?, 1, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    args: [Number(c.cik), c.name || '', c.sic || null, c.industry || null, c.state || null, c.status || null, c.symbol || null, c.exchange || null,
+      c.market || null, c.ticker || null, c.listedOn || null, c.priceLow == null ? null : c.priceLow, c.priceHigh == null ? null : c.priceHigh,
+      c.price == null ? null : c.price, c.shares == null ? null : c.shares, c.coverAccn || null, c.firstFiled || null, c.lastFiled || null,
+      c.priced || null, c.checkedAt || null, c.addedAt || null],
+  }];
+  for (const f of filings || []) {
+    if (!f || !f.accn || !f.form || !f.filed) continue;
+    stmts.push({ sql: 'insert or ignore into ipo_filings (cik, accn, form, filed, doc) values (?, ?, ?, ?, ?)', args: [Number(c.cik), String(f.accn), String(f.form), String(f.filed), f.doc || null] });
+  }
+  for (let i = 0; i < stmts.length; i += 200) await db.batch(stmts.slice(i, i + 200), 'write');
+}
+// A company left out, remembered with the reason. Never over a kept one,
+// except when ipo-load.js --recheck judges every company again (`replace`).
+async function skipIpoCompany(cik, name, reason, replace) {
+  await init();
+  await db.execute({ sql: 'insert or ' + (replace ? 'replace' : 'ignore') + ' into ipo_companies (cik, name, tracked, reason, checked_at, added_at) values (?, ?, 0, ?, ?, ?)',
+    args: [Number(cik), String(name || ''), String(reason || '').slice(0, 200), Date.now(), Date.now()] });
+}
+// The companies left out, with their reasons, for ipo-load.js --recheck.
+async function readIpoSkipped() {
+  await init();
+  const r = await db.execute('select cik, name, reason from ipo_companies indexed by idx_ipo_companies_tracked where tracked = 0');
+  return r.rows.map((x) => ({ cik: Number(x.cik), name: x.name || '', reason: x.reason || '' }));
+}
+// Every kept company with its filings, for /ipos. Two small tables: the kept
+// companies through their index, then the filings of those companies.
+async function readIpoCompanies() {
+  await init();
+  const r = await db.execute('select * from ipo_companies indexed by idx_ipo_companies_tracked where tracked = 1 order by last_filed desc');
+  const out = r.rows.map(ipoRow);
+  const by = new Map(out.map((c) => [c.cik, Object.assign(c, { filings: [] })]));
+  const ciks = [...by.keys()];
+  for (let i = 0; i < ciks.length; i += 400) {
+    const part = ciks.slice(i, i + 400);
+    const f = await db.execute({ sql: 'select cik, accn, form, filed, doc from ipo_filings where cik in (' + part.map(() => '?').join(',') + ') order by filed, accn', args: part });
+    for (const x of f.rows) { const c = by.get(Number(x.cik)); if (c) c.filings.push({ accn: String(x.accn), form: String(x.form), filed: String(x.filed), doc: x.doc || null }); }
+  }
+  return out;
+}
+
 async function readSecEventsSince(since) {
   await init();
   const r = await db.execute({
@@ -8866,6 +8980,7 @@ module.exports = {
   readPriceExtremes, writePriceExtremes, maxCloseBetween, firstBarDates,
   readDrawdownStats, writeDrawdownStats, readCloseSeries,
   writeSecEvents, readSecEvents, readSecEventsSince, writeEarningsCalendar, readEarningsCalendarNext, readEarningsCalendarSeen,
+  readIpoState, writeIpoState, readIpoCompany, writeIpoCompany, skipIpoCompany, readIpoCompanies, readIpoSkipped,
   writeSecHolders, readSecHolders, readSecHolderAccns, readSecHoldersSince, readSecHoldersBy,
   writeInstHoldings, readInstHolding, readInstSummaries, writeCusipMap,
   writeOptions, readOptionsState, readOptionsHistory, readOptionsAll,
