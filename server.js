@@ -7450,7 +7450,7 @@ const STARTER_SCREENS = [
   // The second adds the industry comparison as its own leg, so the narrowing
   // is visible. Sorted by size, not by any reading: a list, not a ranking.
   sc('grwprof0', 'Value and growth', 'Growing and profitable',
-    'Revenue up 5% or more on a year earlier, a net margin of 5% or more and free cash flow not negative — at any price.',
+    'Revenue up 10% or more on a year earlier, a net margin of 10% or more and free cash flow not negative — at any price.',
     { filters: { growthProfile: 'Growing, profitable' }, sort: { key: 'marketCap', dir: -1 },
       columns: ['growthProfile', 'valueVsIndustry', 'revenueGrowthYoY', 'profitMargin', 'fcfMargin', 'peerPe', 'marketCap', 'av:Balanced', 'spMember'] }),
   sc('grwprof1', 'Value and growth', 'Growing, profitable, below its industry',

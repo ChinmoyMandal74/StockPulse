@@ -8,13 +8,13 @@ Two axes of three, so every company is in exactly one cell. The owner's list had
 
 | | Profitable | Thin margin | Loss-making |
 |---|---|---|---|
-| **Growing** (revenue +5% or more) | Growing, profitable | Growing, thin margin | Growing, loss-making |
-| **Flat** (within 5%) | Flat, profitable | Flat, thin margin | Flat, loss-making |
+| **Growing** (revenue +10% or more) | Growing, profitable | Growing, thin margin | Growing, loss-making |
+| **Steady** (between) | Steady, profitable | Steady, thin margin | Steady, loss-making |
 | **Shrinking** (−5% or less) | Shrinking, profitable | Shrinking, thin margin | Shrinking, loss-making |
 
-- **"Flat" and "Shrinking", not "Stagnant" and "Declining"**: the words describe the figures, not the company (no rankings rule).
-- **Growth**: the filings' newest quarters (up to four) summed against the same quarters a year before, the Compounding now sum `crNowRevG`, where it is read; else `revenueGrowthYoY` (the newest quarter against its year-ago quarter, by the source rule). Measured: 460 of the 581 Growing, profitable rows read on the filings sum. ±5% because inflation alone is about 3%, and a band this wide keeps a word from changing every quarter.
-- **Profit**: `profitMargin` (twelve months) and `fcfMargin`. Profitable is 5% or more with free cash flow not negative; Loss-making is a net margin below zero; Thin margin is between, or a paper profit while burning cash. No free cash flow figure: the net margin alone. **Financial Services** reads the net margin alone (free cash flow means nothing for a bank). **Real Estate** reads the free cash flow margin where there is one (a REIT's net income is depreciation-heavy).
+- **"Steady" and "Shrinking", not "Stagnant" and "Declining"**: the words describe the figures, not the company (no rankings rule).
+- **Growth**: the filings' newest quarters (up to four) summed against the same quarters a year before, the Compounding now sum `crNowRevG`, where it is read; else `revenueGrowthYoY` (the newest quarter against its year-ago quarter, by the source rule). Measured: 460 of the 581 Growing, profitable rows read on the filings sum. Growing is +10% or more, Shrinking −5% or less, Steady between (the band is asymmetric since the raise below; "Flat" was renamed Steady then, because a company up 8% is not flat).
+- **Profit**: `profitMargin` (twelve months) and `fcfMargin`. Profitable is a 10% net margin or more with free cash flow not negative; Loss-making is a net margin below zero; Thin margin is between, or a paper profit while burning cash. No free cash flow figure: the net margin alone. **Financial Services** reads the net margin alone (free cash flow means nothing for a bank). **Real Estate** reads the free cash flow margin where there is one (a REIT's net income is depreciation-heavy).
 - **Pre-revenue**: under $50M of revenue over twelve months, dollar reporters only (a yen figure under 50M is not small). A company's revenue of 0 is real (Viking, Revolution Medicines) and is Pre-revenue.
 - **Funds are blank**: every fund's profile carries `revenueTtm: 0`, and all 24 read Pre-revenue before the explicit fund check. The in-memory page check caught it.
 - Either axis unknown is a blank, never a guess (null is not zero).
@@ -37,7 +37,13 @@ P/E vs peers (`peerPe`) in words: **Below industry** under 0.8×, **In line** 0.
 
 The Valuation banner **12**, Profitability **8**, `PAD_SPAN` **176**, the error row **151**, the empty row **153**, the profitability fund run `naRun(8)`.
 
-### Measured at launch (production's data in memory, 1,282 rows)
+### Raised the same day
+
+The owner, on 581 rows reading Growing, profitable: *"Raise the criteria and reduce the growing profitable list"*. Counted at nine settings over production's rows before choosing: growth and margin at 10%/10% gave 287; 15%/10% gave 177; 15%/15% gave 137; a free cash flow floor of 5% or 10% on top of 10%/10% took off only 7 and 23. **10% growth and a 10% net margin, free cash flow not negative**, now `GP_GROW` 10, `GP_SHRINK` 5, `GP_MARGIN` 10.
+
+After: Steady, profitable 288 · Growing, profitable 287 · Steady, thin margin 238 · Growing, thin margin 186 · Growing, loss-making 91 · Steady, loss-making 56 · Pre-revenue 35 · Shrinking, loss-making 33 · Shrinking, thin margin 24 · Shrinking, profitable 19 · blank 25. Growing, profitable and Below industry together: **41** (was 102). Value vs industry is unchanged.
+
+### Measured at launch, before the raise (production's data in memory, 1,282 rows)
 
 Growing, profitable 581 · Flat, profitable 185 · Growing, thin margin 160 · Growing, loss-making 115 · Flat, thin margin 73 · Pre-revenue 35 · Shrinking, loss-making 33 · Flat, loss-making 32 · Shrinking, profitable 31 · Shrinking, thin margin 12 · blank 25 (24 funds). Value vs industry: Below 270 · In line 508 · Above 322 · blank 182. Growing, profitable and Below industry together: 102.
 

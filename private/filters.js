@@ -117,15 +117,17 @@
   // in exactly one cell and no case is missing (the owner's list had no
   // "shrinking but still profitable", the mature company, and no separate
   // "growing, loss-making", the young one):
-  //   growth   revenue against a year earlier: Growing at +5% or more,
-  //            Shrinking at -5% or less, Flat between. Inflation alone is
-  //            about 3%, and a band this wide keeps a company from changing
-  //            word every quarter. The filings' newest quarters summed against
+  //   growth   revenue against a year earlier: Growing at +10% or more,
+  //            Shrinking at -5% or less, Steady between. Raised from +5%
+  //            the same day (the owner: "Raise the criteria and reduce the
+  //            growing profitable list"): at 5% and a 5% margin, 581 of
+  //            1,282 rows read Growing, profitable; at 10% and 10%, 287.
+  //            Steady, not Flat: a company up 8% is not flat. The filings' newest quarters summed against
   //            the same quarters a year before (up to four, the Compounding
   //            now sum, crNowRevG) where read; else the newest quarter against
   //            its year-ago quarter (revenueGrowthYoY, by the source rule).
   //   profit   net margin over twelve months and free cash flow: Profitable
-  //            at a 5% net margin or more and free cash flow not negative;
+  //            at a 10% net margin or more (raised from 5%, as above) and free cash flow not negative;
   //            Loss-making below a zero net margin; Thin margin between, or
   //            profitable on paper while burning cash. Free cash flow means
   //            nothing for a bank or an insurer, so Financial Services reads
@@ -136,9 +138,9 @@
   // percentage off a base that small says nothing. Either axis unknown is a
   // blank, never a guess. A description, not a rating: display only, read by
   // no Signal rule.
-  const GP_GROW = 5, GP_MARGIN = 5, GP_PRE_REVENUE = 50e6;
+  const GP_GROW = 10, GP_SHRINK = 5, GP_MARGIN = 10, GP_PRE_REVENUE = 50e6;
   const GP_ORDER = ['Growing, profitable', 'Growing, thin margin', 'Growing, loss-making',
-    'Flat, profitable', 'Flat, thin margin', 'Flat, loss-making',
+    'Steady, profitable', 'Steady, thin margin', 'Steady, loss-making',
     'Shrinking, profitable', 'Shrinking, thin margin', 'Shrinking, loss-making', 'Pre-revenue'];
   const fin = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
   function growthProfileRead(r) {
@@ -158,7 +160,7 @@
     if (r.sector === 'Financial Services') { cashOk = true; basis = 'net only'; }
     else if (r.sector === 'Real Estate' && fm != null) { m = fm; cashOk = true; basis = 'fcf'; }
     if (g == null || m == null) return null;
-    const gw = g >= GP_GROW ? 'Growing' : g <= -GP_GROW ? 'Shrinking' : 'Flat';
+    const gw = g >= GP_GROW ? 'Growing' : g <= -GP_SHRINK ? 'Shrinking' : 'Steady';
     const pw = m < 0 ? 'loss-making' : m >= GP_MARGIN && cashOk ? 'profitable' : 'thin margin';
     return { label: gw + ', ' + pw, g, gBasis, pm, fm, basis };
   }
@@ -596,7 +598,7 @@
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
     CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf, holderDays, LOWS_SIZE,
     DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,
-    GP_GROW, GP_MARGIN, GP_PRE_REVENUE, GP_ORDER, growthProfileRead, growthProfileOf,
+    GP_GROW, GP_SHRINK, GP_MARGIN, GP_PRE_REVENUE, GP_ORDER, growthProfileRead, growthProfileOf,
     PV_LOW, PV_HIGH, PV_ORDER, valueVsIndustryRead, valueVsIndustryOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,
