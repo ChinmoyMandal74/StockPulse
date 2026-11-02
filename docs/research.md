@@ -418,3 +418,36 @@ The list of stocks is today's, so companies that failed and were dropped are mis
 | 2016–2026 | −0.06 pts [−0.31, +0.20] | −0.01 [−0.40, +0.39] |
 | 2016–2019 | −0.11 [−0.38, +0.10] | −0.06 [−0.48, +0.24] |
 | 2020–2026 | −0.02 [−0.41, +0.32] | +0.02 [−0.57, +0.61] |
+
+## 20. After the midterms: the S&P 500 in the year after each midterm election — 2026-11-02
+
+*Family: Calendar · Verdict: No edge · Horizon: 1 to 2 months, and a year · Data: S&P 500 and Nasdaq Composite daily closes, price only · Sample: 76 November election days, 1950–2025, 19 of them midterms*
+
+### The idea
+A chart circulating before the November 3, 2026 midterms said the S&P 500 had risen in the twelve months after every midterm since 1950. If the midterm year marks a better than usual stretch, the months after election day should do better than the same months in other years.
+
+### What was done
+For every November election day from 1950 to 2025 (the first Tuesday after the first Monday), the index's change from that day's close to the close 21 and 42 trading days later, and to the same date a year later. The 19 midterm years were set against the 57 others (56 for the full year, whose 2025 window is not complete), and the four years of the presidential cycle against each other. Checked as well: the midterms before 1950 (1938, 1942, 1946), the calendar year after each midterm instead of election day to election day, the deepest fall within each midterm window, and the Nasdaq from 1974.
+
+### Outcome
+Over one and two months, no edge: after midterms the index rose 15 times in 19 at both horizons, +1.6% and +3.9% on average, against +1.1% and +2.7% after other election days (t about 0.4 and 0.9). Over a full year the record is real in this sample: 19 of 19 higher, +15.1% on average against +7.3% for other years (t about 2.6), and the Nasdaq 12 of 13 (+25.3%). It rests partly on the choices: since 1938 it is 20 of 22 (1938 −5.1%, 1946 +0.1%), and by calendar year after the midterm it is 17 of 19. Every window had a fall of at least 4% on the way, 33% in the year containing the 1987 crash.
+
+### What follows
+Nothing for the screener or the Signal: the one horizon where the midterm year stands out is a year, well beyond the one to two months the research here is held to, and it is a statement about the index, not a stock. Written up for members as the blog post "After the midterms" (draft, 2026-11-02).
+
+### Caveats
+Nineteen observations, one per four years. The pattern was picked from many possible calendar patterns before it was tested here, so its t-statistic overstates the evidence; it did keep working after it became widely known (14 of 14 since 1970). Price only: dividends would raise every figure. Before March 1957 the index covered 90 companies. Windows of 21 and 42 days from the same date each year do not overlap.
+
+### Numbers
+| From each November election day | Midterm years | Other years |
+|---|---|---|
+| 21 trading days: higher, average | 15 of 19, +1.6% | 39 of 57, +1.1% |
+| 42 trading days: higher, average | 15 of 19, +3.9% | 42 of 57, +2.7% |
+| One year: higher, average | 19 of 19, +15.1% | 38 of 56, +7.3% |
+
+| Place in the cycle, one year on | Average | Higher |
+|---|---|---|
+| After a midterm | +15.1% | 19 of 19 |
+| The year before a presidential election | +9.7% | 16 of 19 |
+| After a presidential election | +8.6% | 12 of 19 |
+| The year after a presidential election | +3.3% | 10 of 18 |
