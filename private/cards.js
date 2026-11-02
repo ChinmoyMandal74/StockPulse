@@ -2732,6 +2732,58 @@
         + '</div></div>' + chromeFoot();
     }
 
+    // ---- How it's built ----------------------------------------------------
+    //
+    // THE OWNER, 2026-11-02: "create one slide in promo on the technical
+    // architecture of this tool, You can put this under brand". Four stages,
+    // source to screen, each a row of tiles. It restates facts from code (the
+    // schedule, the source rule, the AI checks, the hosts), the /help bargain:
+    // if one changes, this card changes with it. The detail lives in
+    // docs/context/architecture-card.md.
+    //
+    // EVERGREEN, like the other Brand cards: no date, no count, reads no data.
+    // The one year on it, 1998, is where the price archive starts and stays.
+    function tplArch() {
+      const STAGES = [
+        ['Sources', 'Read where it is published', [
+          ['Twelve Data', 'Daily prices since 1998, and company fundamentals'],
+          ['SEC EDGAR', 'Reports, 8-Ks, insider trades, 13F, 13D/G and fund holdings'],
+          ['FINRA', 'Short interest, twice a month'],
+          ['OCC', 'Options open interest'],
+          ['News feeds', 'Headlines for every company'],
+          ['Earnings calendars', 'The report dates companies announce'],
+        ]],
+        ['Collect and check', 'On a schedule, every trading day', [
+          ['Scheduled jobs', 'Prices every 30 minutes in market hours; a full run before the open and after the close'],
+          ['AI reading', 'A Claude model reads each results release and news article; every figure it returns must appear in the text'],
+          ['The source rule', 'Each company figure from the release while newest, then the filing, then Twelve Data'],
+        ]],
+        ['Store', 'One database, history kept', [
+          ['Turso', 'Hosted SQLite: every price, filing, holding and reading'],
+          ['History kept', 'New figures are added by date, beside the old ones'],
+          ['Research copy', 'Backtests run on a local copy, never on the live data'],
+        ]],
+        ['Measure and show', 'The same method for every stock', [
+          ['Readings', 'Returns, trend, volume and fundamentals, worked out one way for all'],
+          ['The Signal', 'Ordered rules, first match wins; it names the rule that fired'],
+          ['Vercel', 'Serves the screener, stock pages, the phone page and these cards'],
+        ]],
+      ];
+      const rows = STAGES.map(([h, g, tiles], i) => '<li class="ar-st">'
+        + `<div class="ar-lab"><span class="ar-n">${String(i + 1).padStart(2, '0')}</span>`
+        + `<b class="ar-h">${esc(h)}</b><span class="ar-g">${esc(g)}</span></div>`
+        + '<div class="ar-tiles">' + tiles.map(([n, d]) => `<div class="ar-t"><b>${esc(n)}</b><span>${esc(d)}</span></div>`).join('') + '</div>'
+        + '</li>').join('');
+      return chromeTop(false)
+        + '<div class="s-body"><div class="ar-in">'
+        + '<span class="s-kick">Tickr Lab · under the hood</span>'
+        + '<h2 class="s-title">How it’s built<br><span class="dim">from source to screen</span></h2>'
+        + `<ol class="ar-map">${rows}</ol>`
+        + '<p class="ar-say"><b>Every figure traces back to a public source.</b> '
+        + 'Measured the same way, after every close.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
     // ---- render ------------------------------------------------------------
 
     // ---- Range -----------------------------------------------------------
@@ -14337,7 +14389,7 @@
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase, golive: () => tplShowcase(true),
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
-    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload,
+    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload, arch: tplArch,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     buybacks: tplBuybacks,
@@ -16991,6 +17043,52 @@
     .sz-story .dc-item { grid-template-columns: 76px minmax(0, 1fr); }
     .sz-story .dc-close { font-size: 28px; }
     .sz-story .dc-where { font-size: 24px; }
+
+    /* ---- How it's built --------------------------------------------------
+       Tokens only, no signal colour: the card makes no up/down reading. The
+       stages share the body's height, the type grows with the shape. */
+    .ar-in { display: flex; flex-direction: column; height: 100%; }
+    .ar-map { list-style: none; margin: 34px 0 0; padding: 0; flex: 1; min-height: 0;
+              display: flex; flex-direction: column; justify-content: space-between; gap: 18px; position: relative; }
+    .ar-map::before { content: ""; position: absolute; left: 24px; top: 24px; bottom: 24px; width: 2px;
+                      background: color-mix(in srgb, var(--accent) 40%, transparent); }
+    .ar-st { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; position: relative; }
+    .ar-lab { display: grid; grid-template-columns: 50px minmax(0, 1fr); column-gap: 14px; row-gap: 4px; align-items: center; }
+    .ar-n { grid-row: span 2; width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+            background: var(--accent); color: var(--card-ground); font: 700 20px var(--mono); }
+    .ar-h { font: 700 28px var(--sans); line-height: 1.1; letter-spacing: -0.01em; color: var(--text); }
+    .ar-g { font: 400 18px/1.3 var(--sans); color: var(--muted); }
+    .ar-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .ar-t { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 14px;
+            background: color-mix(in srgb, var(--text) 6%, var(--card-ground)); border: 1px solid var(--hair); }
+    .ar-t b { font: 700 23px var(--sans); line-height: 1.15; color: var(--text); }
+    .ar-t span { font: 400 18px/1.35 var(--sans); color: var(--muted); }
+    .ar-say { margin: 26px 0 0; padding-top: 20px; border-top: 1px solid var(--hair); font: 400 23px/1.4 var(--sans); color: var(--muted); }
+    .ar-say b { color: var(--text); font-weight: 600; }
+    .sz-square .ar-map { margin-top: 20px; gap: 10px; }
+    .sz-square .ar-st { grid-template-columns: 200px minmax(0, 1fr); }
+    .sz-square .ar-lab { grid-template-columns: 42px minmax(0, 1fr); column-gap: 12px; }
+    .sz-square .ar-n { width: 42px; height: 42px; font-size: 17px; }
+    .sz-square .ar-map::before { left: 20px; }
+    .sz-square .ar-h { font-size: 23px; }
+    .sz-square .ar-g { font-size: 15px; }
+    .sz-square .ar-tiles { gap: 8px; }
+    .sz-square .ar-t { padding: 10px 13px; gap: 4px; }
+    .sz-square .ar-t b { font-size: 19px; }
+    .sz-square .ar-t span { font-size: 15.5px; }
+    .sz-square .ar-say { margin-top: 14px; padding-top: 12px; font-size: 18px; }
+    .sz-story .ar-map { margin-top: 44px; }
+    .sz-story .ar-st { grid-template-columns: 1fr; gap: 16px; }
+    .sz-story .ar-map::before { top: 28px; bottom: 28px; left: 28px; }
+    .sz-story .ar-lab { grid-template-columns: 56px minmax(0, 1fr); column-gap: 16px; }
+    .sz-story .ar-n { width: 56px; height: 56px; font-size: 22px; }
+    .sz-story .ar-h { font-size: 38px; }
+    .sz-story .ar-g { font-size: 24px; }
+    .sz-story .ar-tiles { margin-left: 72px; gap: 12px; }
+    .sz-story .ar-t { padding: 20px 20px; gap: 8px; }
+    .sz-story .ar-t b { font-size: 27px; }
+    .sz-story .ar-t span { font-size: 22px; }
+    .sz-story .ar-say { font-size: 27px; }
 
     /* ---- Too much to read ----------------------------------------------
        Every colour is a token or a color-mix() of one. Green and red only

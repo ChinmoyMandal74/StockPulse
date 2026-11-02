@@ -2640,6 +2640,7 @@
       { id: 'showcase', name: 'Showcase', note: 'The site in a laptop and a phone, drawn from today\u2019s data, under a headline of your own' },
       { id: 'golive', name: 'LinkedIn', note: 'Tickr Lab is now live: the launch card, with the site in a laptop and a phone from today’s data. Post 4:5 is the size for a LinkedIn or Instagram feed' },
       { id: 'overload', name: 'Too much to read', note: 'A cartoon: charts, filings and jargon swirling round someone reading it all on their own' },
+      { id: 'arch', name: 'How it’s built', note: 'The technical architecture on one slide: the sources, the scheduled jobs and AI checks, the database, and what serves the pages' },
       { id: 'disclaimer', name: 'Disclaimer', note: 'The house position, in the terms page’s own words' },
       { id: 'avatar', name: 'Profile picture', note: 'The mark alone — pick Square, then download' },
       { id: 'spyears', name: 'S&P 500 returns by year', note: 'How many of the S&P 500’s stocks returned what in one year, with the equal-weighted and cap-weighted averages and the S&P 500 fund. One year a slide, 2007 on' },
@@ -2782,6 +2783,7 @@
       ['showcase', 'Showcase'],
       ['golive', 'LinkedIn'],
       ['overload', 'Too much to read'],
+      ['arch', 'How it’s built'],
       ['disclaimer', 'Disclaimer'],
       ['avatar', 'Profile picture'],
     ];
@@ -4492,7 +4494,8 @@
           const el = node.parentNode;
           // .ov-art: the Too much to read cartoon's bubbles are jargon (ETF, IPO,
           // BETA, RSI ...), several of them somebody's ticker, never a company.
-          if (!el || el.closest('a') || el.closest('.s-top') || el.closest('.ov-art') || el.closest('style, script')) continue;
+          // .ar-map: How it's built names data sources (OCC, FINRA), not stocks.
+          if (!el || el.closest('a') || el.closest('.s-top') || el.closest('.ov-art') || el.closest('.ar-map') || el.closest('style, script')) continue;
           const raw = node.nodeValue || '';
           const t = raw.trim();
           if (t.length < 2 || t.length > 60) continue;
