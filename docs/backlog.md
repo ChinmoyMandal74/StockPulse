@@ -2625,6 +2625,80 @@ What is left is entry 55.
   and print no cash flow statement in their release. A per-company tag list,
   or the release's cash flow read for them, would close it.
 
+## 56. Good results, sold anyway: strong reports that fell hard the next day — 2026-11-01
+
+*Area: Research · Status: Open · Note: the owner, after the Reddit post: "Can you find stocks similar to reddit, where fundamentals are good, guidance is also given but the price action after results are not in line", then "Add this to backlog .. need to do more work on this topic"*
+
+**The question.** A company reports a strong quarter (growing, profitable,
+guidance given or raised) and the shares still fall sharply the next session.
+Is that an overreaction that tends to come back, or the start of a longer slide?
+Reddit is the example: revenue +53%, profit above estimates, next day −29.2%,
+and it had already fallen 21% after its July report and kept falling.
+
+**This is not PEAD (entry 1).** PEAD asks whether a beat keeps drifting the same
+way, and it came back flat here (research.md entries 15 and 18). This asks the
+opposite, conditional question: strong results with a sharply negative
+reaction. The double-top/bottom study's finding, that stocks which have just
+made a sharp move in either direction tend to lag, points the other way and has
+to be beaten, not assumed.
+
+**The first screen (2026-11-01, by hand from analysis.db).** Releases filed
+October 1 to 30, 2026 in `earnings_releases`: revenue up 10% or more on a year
+earlier, net income above zero, guidance in the release (`guides` or
+`guide_kind`), next-session move −7% or worse. Fifteen companies, with the
+14-day RSI at the October 30 close:
+
+| | Reported | Growth | Guidance | Day after | P/E | From 52w high | RSI |
+|---|---|---|---|---|---|---|---|
+| RDDT | Oct 29 | 53% | given | −29.2% | 19 | −65% | 17 |
+| INTC | Oct 29 | 21% | given | −28.6% | — | −53% | 25 |
+| NOW | Oct 28 | 21% | raised | −26.9% | 82 | −44% | 27 |
+| FFIV | Oct 27 | 13% | first issued | −20.4% | 27 | −29% | 23 |
+| FTNT | Oct 28 | 20% | raised | −20.1% | 44 | −30% | 27 |
+| LPLA | Oct 27 | 17% | given | −15.2% | 16 | −28% | 33 |
+| TWLO | Oct 29 | 20% | raised | −15.2% | 26 | −32% | 30 |
+| CSGP | Oct 27 | 14% | raised | −14.0% | 69 | −57% | 49 |
+| SNDK | Oct 29 | 378% | given | −13.5% | 9 | −51% | 33 |
+| LRCX | Oct 21 | 54% | given | −11.8% | 36 | −45% | 34 |
+| FORM | Oct 28 | 38% | given | −11.6% | 40 | −45% | 33 |
+| BE | Oct 22 | 138% | raised | −11.2% | 125 | −41% | 39 |
+| BAND | Oct 29 | 22% | raised | −10.9% | — | −40% | 46 |
+| ESI | Oct 21 | 52% | raised | −8.9% | 40 | −30% | 45 |
+| ALGM | Oct 29 | 29% | given | −7.6% | 204 | −56% | 38 |
+
+**Work to do, in order:**
+
+- **(a) The backtest.** Every results release since 2017 is already read
+  (`release-history-load.js`, about 39,000 results releases). Same filter,
+  each event's window starting at the close of the reaction session (the
+  report is after hours for nearly all, so the jump is outside the window),
+  forward 21 and 42 sessions against the equal-weight universe and SPY, before
+  and from 2020, monthly block bootstrap. Cuts worth reading: size of the fall
+  (−7 to −15%, worse than −15%), guidance raised against merely given, RSI
+  below 30 after the fall, P/E against its own history, and a second bad
+  reaction in a row (Reddit's case). Filter on `filed`, never the period end.
+  Written up on `/research` whatever it shows.
+- **(b) Guidance against expectations.** We store what each company guided to
+  and whether it raised, not what analysts expected, and the market reacts to
+  the gap: Reddit raised nothing and guided below consensus; ServiceNow and
+  Fortinet raised and still fell. The consensus is in the articles (the local
+  article archive, `newsarchive.js`, since 2026-10-22) and sometimes in the
+  release text (`releasearchive.js`, back to 2017); a model reading could pull
+  "guided X against Y expected". Going forward only for the articles.
+- **(c) Why each one fell.** From the full articles: outlook below
+  consensus, a user or volume miss, margin guidance, slowing growth, a sector
+  move (the chip-equipment group fell with a sector that peaked in June). A
+  category per event would let (a) be cut by reason.
+- **(d) Track this cohort forward.** The fifteen above as an out-of-sample
+  record from October 30, 2026: one and two months on, against SPY and the
+  equal-weight average. Cheap and honest whatever (a) finds.
+- **(e) A standing check each season.** If (a) shows anything, a saved screen
+  or a weekly list after each earnings season; if it does not, the list is
+  still useful as a description ("strong report, weak reaction") on the stock
+  page or a promo card, never as a buy call.
+
+Survivorship applies (the universe is today's). Descriptive wording only.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
