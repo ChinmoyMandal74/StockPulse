@@ -494,6 +494,9 @@
     // would be the screener asserting the opposite of what its own data says.
     // Not in FUND_HAS either: a fund has no industry and no peer group.
     ['value', 'P/E vs peers',   (s) => V.ratio(s.peerPe)],
+    // The same comparison in words, with price-to-sales standing in where
+    // there is no P/E (filters.js valueVsIndustryOf). Uncoloured, as above.
+    ['value', 'Value vs industry', (s) => V.text(s.valueVsIndustry)],
     // PEG follows the four P/E rows rather than sitting between them: a PEG is
     // a P/E with growth divided into it, so it reads beside the multiples and
     // not through the middle of them. (It led them until the Valuation group
@@ -511,6 +514,9 @@
     // to read, misleading to watch for changes.
     ['value', 'FCF yield',      (s) => V.lvl(s.fcfYield)],
     ['value', 'Enterprise value',(s) => V.money(s.enterpriseValue, s.currency)],
+    // Growth and profit in one word (filters.js growthProfileOf): a
+    // description of the business, not a grade, so no colour.
+    ['profit', 'Growth & profit', (s) => V.text(s.growthProfile)],
     ['profit', 'Gross margin',   (s) => V.lvl(s.grossMargin)],
     ['profit', 'Operating margin',(s) => V.pct(s.operatingMargin)],
     ['profit', 'Profit margin',  (s) => V.pct(s.profitMargin)],

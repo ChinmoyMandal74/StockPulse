@@ -67,6 +67,8 @@ const COLUMN = {
   trailingPe: S.td,
   peLive: 'Worked out here: Price over EPS TTM',
   peerPe: 'Twelve Data forward P/E, against its industry, worked out here',
+  valueVsIndustry: 'Worked out here from P/E vs peers, else P/S against its industry',
+  growthProfile: 'Worked out here from revenue growth, Profit Margin and FCF Margin',
   peg: 'Twelve Data (analysts’ estimate)',
   evToSales: 'Worked out here: enterprise value (by the source rule) over Revenue TTM',
   priceToOcf: 'Worked out here from Market Cap and Op Cash TTM',

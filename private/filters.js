@@ -21,7 +21,8 @@
   const RATING_FOR = { qualityScore: 'qualityRating' };
   const TEXT_KEYS = new Set(['symbol', 'shortName', 'actionGuards', 'portfolios', 'lastEvent', 'lastHolder', 'erGuide', 'erSummary', 'staleIssues']);
   const CAT_KEYS = new Set(['companyType', 'actionTrend', 'actionEntry', 'actionFund', 'maCrossRank', 'fresh3mHigh',
-    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange', 'erVsEstWord', 'crNow']);
+    'exchange', 'capBand', 'instrumentType', 'filer', 'ddState', 'spMember', 'erTenQ', 'erGuideChange', 'erVsEstWord', 'crNow',
+    'growthProfile', 'valueVsIndustry']);
 
   // ---- Size by market cap ---------------------------------------------------
   // It lives HERE because four surfaces need it and none of them may own it:
@@ -109,6 +110,78 @@
     for (const b of DD_STATES) if (below < b.under) return b.label;
     return null;
   }
+
+  // GROWTH AND PROFIT, ONE WORD A COMPANY (2026-11-02, the owner: "a
+  // classification column ... Growing and Profitable, Growing not profitable,
+  // Stagnant but Profitable ..."). Two axes of three, so every company lands
+  // in exactly one cell and no case is missing (the owner's list had no
+  // "shrinking but still profitable", the mature company, and no separate
+  // "growing, loss-making", the young one):
+  //   growth   revenue against a year earlier: Growing at +5% or more,
+  //            Shrinking at -5% or less, Flat between. Inflation alone is
+  //            about 3%, and a band this wide keeps a company from changing
+  //            word every quarter. The filings' newest quarters summed against
+  //            the same quarters a year before (up to four, the Compounding
+  //            now sum, crNowRevG) where read; else the newest quarter against
+  //            its year-ago quarter (revenueGrowthYoY, by the source rule).
+  //   profit   net margin over twelve months and free cash flow: Profitable
+  //            at a 5% net margin or more and free cash flow not negative;
+  //            Loss-making below a zero net margin; Thin margin between, or
+  //            profitable on paper while burning cash. Free cash flow means
+  //            nothing for a bank or an insurer, so Financial Services reads
+  //            the net margin alone; a REIT's net income is depreciation-
+  //            heavy, so Real Estate reads the free cash flow margin where
+  //            there is one. No free cash flow figure: the net margin alone.
+  // Under $50M of revenue a year (dollar reporters) is Pre-revenue: a growth
+  // percentage off a base that small says nothing. Either axis unknown is a
+  // blank, never a guess. A description, not a rating: display only, read by
+  // no Signal rule.
+  const GP_GROW = 5, GP_MARGIN = 5, GP_PRE_REVENUE = 50e6;
+  const GP_ORDER = ['Growing, profitable', 'Growing, thin margin', 'Growing, loss-making',
+    'Flat, profitable', 'Flat, thin margin', 'Flat, loss-making',
+    'Shrinking, profitable', 'Shrinking, thin margin', 'Shrinking, loss-making', 'Pre-revenue'];
+  const fin = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));
+  function growthProfileRead(r) {
+    if (!r || r.error) return null;
+    // A FUND HAS NO REVENUE LINE, AND ITS PROFILE SAYS 0. Measured on the
+    // live screen: all 24 funds carry revenueTtm 0 and read Pre-revenue
+    // without this. A company's 0 is real (Viking, Revolution Medicines).
+    if (r.instrumentType === 'ETF' || r.companyType === 'ETF') return null;
+    const usd = !r.currency || r.currency === 'USD';
+    const rev = fin(r.revenueTtm);
+    if (usd && rev != null && rev < GP_PRE_REVENUE) return { label: 'Pre-revenue', rev };
+    const g4 = fin(r.crNowRevG), gq = fin(r.revenueGrowthYoY);
+    const g = g4 != null ? g4 : gq;
+    const gBasis = g4 != null ? 'filings' : 'quarter';
+    const pm = fin(r.profitMargin), fm = fin(r.fcfMargin);
+    let basis = 'net', m = pm, cashOk = fm == null || fm >= 0;
+    if (r.sector === 'Financial Services') { cashOk = true; basis = 'net only'; }
+    else if (r.sector === 'Real Estate' && fm != null) { m = fm; cashOk = true; basis = 'fcf'; }
+    if (g == null || m == null) return null;
+    const gw = g >= GP_GROW ? 'Growing' : g <= -GP_GROW ? 'Shrinking' : 'Flat';
+    const pw = m < 0 ? 'loss-making' : m >= GP_MARGIN && cashOk ? 'profitable' : 'thin margin';
+    return { label: gw + ', ' + pw, g, gBasis, pm, fm, basis };
+  }
+  function growthProfileOf(r) { const x = growthProfileRead(r); return x ? x.label : null; }
+
+  // AGAINST ITS OWN INDUSTRY, IN WORDS (2026-11-02, the same request: "combined
+  // with valuation within respective PE group ... may be that can be a
+  // separate column"). P/E vs peers (peerPe, stamped server-side: forward P/E
+  // over the industry median, five names or more) where there is one; else,
+  // for a loss-maker or a company without a forward P/E, price-to-sales over
+  // its industry's median (peerPs, dollar reporters only, the same floor).
+  // Below industry under 0.8x, Above industry over 1.25x, In line between.
+  // "Below", never "cheap": a description, read by no rule.
+  const PV_LOW = 0.8, PV_HIGH = 1.25;
+  const PV_ORDER = ['Below industry', 'In line', 'Above industry'];
+  function valueVsIndustryRead(r) {
+    if (!r || r.error) return null;
+    const pe = fin(r.peerPe), ps = fin(r.peerPs);
+    const x = pe != null && pe > 0 ? pe : ps != null && ps > 0 ? ps : null;
+    if (x == null) return null;
+    return { label: x < PV_LOW ? PV_ORDER[0] : x > PV_HIGH ? PV_ORDER[2] : PV_ORDER[1], x, basis: x === pe ? 'P/E' : 'P/S' };
+  }
+  function valueVsIndustryOf(r) { const x = valueVsIndustryRead(r); return x ? x.label : null; }
 
   // DAYS TO COVER FOR A HOLDER (2026-10-26, the owner: "Like how we have Short
   // Days to cover ... Insiders Days to Cover and Instit Days to Cover"). The
@@ -523,6 +596,8 @@
     RATING_FOR, TEXT_KEYS, CAT_KEYS, SCREEN_ONLY_KEYS, BOUND_KEYS, BLANK,
     CAP_BANDS, CAP_ORDER, CAP_RANGE, capBandOf, holderDays, LOWS_SIZE,
     DD_STATES, DD_ORDER, DD_RANGE, DD_MIN_HISTORY, ddStateOf,
+    GP_GROW, GP_MARGIN, GP_PRE_REVENUE, GP_ORDER, growthProfileRead, growthProfileOf,
+    PV_LOW, PV_HIGH, PV_ORDER, valueVsIndustryRead, valueVsIndustryOf,
     maCrossWord, filterValue, filterKind, parseNumTerm,
     adviceMove, adviceMoveIs, MOVES,
     compileNum, compileText, compileFilter, screenRows,

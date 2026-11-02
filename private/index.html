@@ -1629,8 +1629,8 @@
         <th class="group grp-risk" data-group="risk" colspan="8">Risk</th>
         <th class="group grp-react" data-group="react" colspan="6">Reactions</th>
         <th class="group grp-size" data-group="size" colspan="6" title="The income statement over the last twelve months (TTM). Each header says its period.">Income statement · TTM</th>
-        <th class="group grp-value" data-group="value" colspan="11" title="Today’s price over a twelve-month figure (TTM), book at the quarter end (Q end), or an estimate (Fwd). Each header says its period.">Valuation</th>
-        <th class="group grp-profit" data-group="profit" colspan="7" title="Margins and returns over the last twelve months (TTM), except where a header says otherwise.">Profitability · TTM</th>
+        <th class="group grp-value" data-group="value" colspan="12" title="Today’s price over a twelve-month figure (TTM), book at the quarter end (Q end), or an estimate (Fwd). Each header says its period.">Valuation</th>
+        <th class="group grp-profit" data-group="profit" colspan="8" title="Margins and returns over the last twelve months (TTM), except where a header says otherwise.">Profitability · TTM</th>
         <th class="group grp-growth" data-group="growth" colspan="2" title="The latest quarter against the same quarter a year earlier (Q YoY).">Growth · Q YoY</th>
         <th class="group grp-finpos" data-group="finpos" colspan="7" title="The balance sheet at the latest quarter end (Q end).">Balance sheet · Q end</th>
         <th class="group grp-cflow" data-group="cflow" colspan="2" title="Cash flow over the last twelve months (TTM). Twelve Data’s free cash flow is levered free cash flow; see /sources.">Cash flow · TTM</th>
@@ -1725,6 +1725,7 @@
         <th class="grp-value" data-key="trailingPe" title="Trailing price/earnings as the DATA PROVIDER reports it — the last twelve months of actual earnings, unlike the Fwd P/E beside it, which is an estimate. It arrives with the company profile, which is re-pulled about weekly, so it is struck at a close up to seven days old and will not divide exactly against the Price column: that is what the Live P/E beside it is for. Blank or meaningless for a loss-maker.">Trail<br>P/E<span class="ptag">TTM</span></th>
         <th class="grp-value" data-key="peLive" title="The same trailing price/earnings, recomputed here from today's Price and the EPS TTM column — so it moves with every intraday refresh and always divides against the Price on this row, where the provider's Trail P/E beside it is struck at whenever the profile was last pulled. A dash where the company loses money: a multiple off a loss is arithmetic, not cheapness, and sorting this column would otherwise put every loss-maker at the top as the cheapest thing on screen. NA for a fund — the provider's weighted figure for the holdings cannot be reproduced from a single EPS.">Live<br>P/E<span class="ptag">TTM</span></th>
         <th class="grp-value" data-key="peerPe" title="Forward P/E as a multiple of the median forward P/E of its own industry. 0.62× means it costs 38% less than the typical company it is measured against; 1.40× means 40% more. A 25× semiconductor is cheap for a semiconductor and a 15× bank is dear for a bank — which the Fwd P/E column beside this one cannot say. Struck over the whole screener rather than the index, and only where the industry holds five or more companies with a usable multiple, which is about four stocks in five; the cell's own tooltip names the group and its median so the figure can be checked against the Fwd P/E on the same row. Blank where that group is too small, where no industry is recorded yet, or where the company loses money: a multiple off a loss is arithmetic, not cheapness. Deliberately uncoloured — measured over this universe the cheapest third of each industry grow more slowly, earn thinner margins and score lower on Quality than the dearest third, so cheap here is a fact to read beside the others on the row and not a signal.">P/E vs<br>peers<span class="ptag">Fwd</span></th>
+        <th class="left grp-value" data-key="valueVsIndustry" title="Where the stock is valued against the median company in its own industry, in words: Below industry under 0.8×, In line 0.8× to 1.25×, Above industry over 1.25×. Measured on the forward P/E (the P/E vs peers column beside it) where there is one; for a loss-maker or a company with no forward estimate, on price-to-sales against its industry’s median instead, dollar reporters only, and the cell’s tooltip says which. Only where the industry holds five or more companies with the measure. A description of where the price sits, not a judgement of value.">Value vs<br>industry</th>
         <th class="grp-value" data-key="peg" title="PEG ratio &mdash; &lt;1 cheap, &gt;2 expensive. Shown for reference but excluded from the Quality score when the company is loss-making: the feed still returns a healthy-looking figure there (0.16 for a company losing $878M), which is meaningless. It leads the three P/E columns rather than sitting among them: a PEG is earnings growth priced in, so it belongs beside them and not between them.">PEG<span class="ptag">Fwd</span></th>
         <th class="grp-value" data-key="priceToBook" title="Price ÷ book value per share, most recent quarter. The classic value measure; of little use for asset-light software and misleading for banks.">P/B<span class="ptag">Q end</span></th>
         <th class="grp-value" data-key="priceToSales" title="Price ÷ revenue per share (TTM). The one valuation measure that still works for a company with no profits.">P/S<span class="ptag">TTM</span></th>
@@ -1732,6 +1733,7 @@
         <th class="grp-value" data-key="evToEbitda" title="Enterprise value ÷ EBITDA — a valuation that counts debt, so it compares a leveraged company with a debt-free one fairly.">EV/<br>EBITDA<span class="ptag">TTM</span></th>
         <th class="grp-value" data-key="priceToOcf" title="Market value over trailing operating cash flow: the price of a dollar of cash from operations, before capital spending. Blank where operating cash flow was negative, and for a company reporting in another currency.">P /<br>Op Cash<span class="ptag">TTM</span></th>
         <th class="grp-value" data-key="earningsYield" title="Earnings yield: trailing earnings per share over the price, in percent, which is the P/E turned over. Unlike the P/E it reads for a loss-maker, as a negative figure, so loss-making companies sort where they belong rather than vanishing. A description, not a return.">Earn<br>Yield<span class="ptag">TTM</span></th>
+        <th class="left grp-profit" data-key="growthProfile" title="Growth and profit in one word. Growing: revenue up 5% or more on a year earlier; Shrinking: down 5% or more; Flat: between (inflation alone is about 3%). Revenue growth is the latest quarters in the company’s filings (up to four) against the same quarters a year earlier, or else the latest quarter’s. Profitable: a net margin over twelve months of 5% or more and free cash flow not negative; Loss-making: a net loss; Thin margin: between, or a profit on paper while burning cash. A bank or insurer is read on its net margin alone, a REIT on its free cash flow margin. Pre-revenue: under $50M of revenue a year. A description, not a rating.">Growth &amp;<br>profit</th>
         <th class="grp-profit" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="operatingMargin" title="Operating margin over twelve months, from the results release and the filings — the cleanest read on the business itself: after the cost of running it, before financing and tax. Where neither gives four quarters it is Twelve Data’s, which is mostly the latest quarter’s; the cell says which.">Op<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin<span class="ptag">TTM</span></th>
@@ -2531,6 +2533,29 @@
         return `<td class="name left grp-risk nocard na" title="No 52-week high to measure from.">\u2014</td>`;
       }
       return `<td class="name left grp-risk nocard${s.ddState === 'Near high' ? ' na' : ''}"${attr(Filters.DD_RANGE[s.ddState] || '')}>${we(s.ddState)}</td>`;
+    }
+    // Growth & profit and Value vs industry: words from filters.js, stamped by
+    // the server. The tooltip says which figures put the company there, so a
+    // word can be checked against the columns it came from. No colour: these
+    // describe a business, they do not grade it.
+    function growthProfileCell(s) {
+      const x = Filters.growthProfileRead(s);
+      if (!x) return `<td class="left grp-profit na" title="Not read: revenue growth or the net margin is not on file.">—</td>`;
+      if (x.label === 'Pre-revenue') return `<td class="left grp-profit"${attr('Under $50M of revenue over twelve months, too small a base for a growth reading.')}>Pre-revenue</td>`;
+      const sg = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%';
+      const gTxt = 'revenue ' + sg(x.g) + (x.gBasis === 'filings' ? ' over the latest quarters in the filings against a year earlier' : ' in the latest quarter against a year earlier');
+      const pTxt = x.basis === 'fcf' ? 'free cash flow margin ' + sg(x.fm) + ' (a REIT is read on cash, not net income)'
+        : 'net margin ' + sg(x.pm) + (x.basis === 'net only' ? ' (a financial company is read on its net margin alone)'
+          : x.fm != null ? ', free cash flow margin ' + sg(x.fm) : ', no free cash flow figure');
+      return `<td class="left grp-profit"${attr(x.label + ': ' + gTxt + '; ' + pTxt + '. A description, not a rating.')}>${we(x.label)}</td>`;
+    }
+    function valueVsIndustryCell(s) {
+      const x = Filters.valueVsIndustryRead(s);
+      if (!x) return `<td class="left grp-value na" title="Not read: no industry group of five or more to compare against, or no usable P/E or P/S.">—</td>`;
+      const t = x.basis === 'P/E'
+        ? `Forward P/E ${x.x.toFixed(2)}× the median of its industry (${s.industry || 'its industry'})`
+        : `No usable P/E, so price-to-sales: ${x.x.toFixed(2)}× the median of its industry (${s.industry || 'its industry'})`;
+      return `<td class="left grp-value"${attr(t + '. Below industry is under 0.8×, Above industry over 1.25×. A description, not a judgement of value.')}>${we(x.label)}</td>`;
     }
     // Median days from a drawdown's bottom back to the old high. Days up to
     // two months, then months, the stock page's own wording.
@@ -3557,6 +3582,8 @@
         : k === 'actionFund' ? ActionRules.FUND_ORDER
         : k === 'capBand' ? Filters.CAP_ORDER
         : k === 'ddState' ? Filters.DD_ORDER
+        : k === 'growthProfile' ? Filters.GP_ORDER
+        : k === 'valueVsIndustry' ? Filters.PV_ORDER
         // A boolean has a natural order and the alphabet gets it backwards:
         // a reader scanning a Yes/No pair expects Yes first.
         : k.startsWith('av:') ? ActionRules.ACTIONS : null);
@@ -3983,7 +4010,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="149">${s.error}</td>
+            <td class="na" colspan="151">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4096,6 +4123,7 @@
           ${numCell(s.trailingPe, 'grp-value', tdT)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.peLive, 'grp-value', liveTitle)}
           ${isFund ? naRun(1, 'grp-value') : peerCell(s, 'grp-value')}
+          ${isFund ? naRun(1, 'grp-value') : valueVsIndustryCell(s)}
           ${isFund ? naRun(1, 'grp-value') : pegCell(s.peg, 'grp-value', tdT)}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToBook, 'grp-value', srcT('priceToBook'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToSales, 'grp-value', srcT('priceToSales'))}
@@ -4103,7 +4131,8 @@
           ${isFund ? naRun(1, 'grp-value') : numCell(s.evToEbitda, 'grp-value', srcT('evToEbitda'))}
           ${isFund ? naRun(1, 'grp-value') : numCell(s.priceToOcf, 'grp-value', liveTitle)}
           ${isFund ? naRun(1, 'grp-value') : signedPctCell(s.earningsYield, 'grp-value', liveTitle, 2)}
-          ${isFund ? naRun(7, 'grp-profit') : `
+          ${isFund ? naRun(8, 'grp-profit') : `
+          ${growthProfileCell(s)}
           ${marginCell(s.grossMargin, 'grp-profit', srcT('grossMargin'))}
           ${pctCell(s.operatingMargin, 'grp-profit', srcT('operatingMargin'))}
           ${pctCell(s.profitMargin, 'grp-profit', srcT('profitMargin'))}
@@ -4174,7 +4203,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 174;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 176;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4358,7 +4387,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="151">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="153">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -4395,6 +4424,10 @@
           ? (x.capBand ? Filters.CAP_ORDER.length - 1 - Filters.CAP_ORDER.indexOf(x.capBand) : null)
         // Deepest first on a first click, the way the distance beside it sorts.
         : sortKey === 'ddState' ? (x.ddState ? Filters.DD_ORDER.indexOf(x.ddState) : null)
+        // The grid's own order, Growing, profitable first on a first click and
+        // Pre-revenue last; Above industry first, as the highest P/E vs peers is.
+        : sortKey === 'growthProfile' ? (x.growthProfile ? Filters.GP_ORDER.length - 1 - Filters.GP_ORDER.indexOf(x.growthProfile) : null)
+        : sortKey === 'valueVsIndustry' ? (x.valueVsIndustry ? Filters.PV_ORDER.indexOf(x.valueVsIndustry) : null)
         // By date, so a first click brings the newest filings to the top.
         : sortKey === 'lastEvent' ? (x.lastEventDate ? new Date(x.lastEventDate + 'T12:00:00').getTime() : null)
         : sortKey === 'lastHolder' ? (x.lastHolderDate ? new Date(x.lastHolderDate + 'T12:00:00').getTime() : null)

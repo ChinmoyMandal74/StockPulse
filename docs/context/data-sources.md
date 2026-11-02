@@ -152,3 +152,5 @@ A third re-read of every company (`sec-reread.js`) loaded the new tags, quarters
 ## Sources as members see them (2026-10-30)
 
 `/fields` gives every screener column a short Source line from `fieldsource.js`. The source-rule columns take theirs from `sourcerule.js` (FIELDS, NO_TD), so a change to the rule shows there without an edit; a change to any other column's source (a new provider, a column moving from Twelve Data to the filings) updates its entry in `fieldsource.js` in the same commit as /sources.
+
+**Two words built on the rule's figures (2026-11-02, `growth-profile.md`).** Growth & profit reads the source rule's `profitMargin`, `fcfMargin` and `revenueGrowthYoY` (else the filings' four-quarter revenue sum) after `stampSources`; Value vs industry reads P/E vs peers (Twelve Data's forward P/E) and, where there is none, P/S against the industry (the rule's `priceToSales`, dollar reporters only). Neither is stored, and neither is a Signal input. Listed on `/sources` (td-release-map.js) and `/fields` (fieldsource.js).

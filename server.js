@@ -4881,6 +4881,10 @@ function stampCapDerived(rows) {
     // The word for the distance below the 52-week high (filters.js). Derived
     // on the way out like the size band, never stored, and read by no rule.
     r.ddState = Filters.ddStateOf(r.pctFromHigh, r.historyDays);
+    // Growth and profit in words (filters.js growthProfileOf), after the
+    // source rule above has laid its margins and growth over the row. Display
+    // only: stamped on the way out, never stored, read by no rule.
+    r.growthProfile = Filters.growthProfileOf(r);
     const cap = Number(r.marketCap);
     const pct = Number(r.todayPct);
     r.capChangeToday = (cap > 0 && Number.isFinite(pct)) ? cap * pct / 100 : null;
@@ -5043,6 +5047,34 @@ function stampPeerValue(rows) {
     // the Fwd P/E column beside it rather than asking to be trusted -- and so
     // a group that fell short can say by how much.
     r.peerPeCount = r.industry ? ((by.get(r.industry) || []).length) : 0;
+  }
+  // PRICE-TO-SALES AGAINST THE INDUSTRY (2026-11-02), for the Value vs
+  // industry word (filters.js valueVsIndustryOf) where there is no P/E to
+  // compare: a loss-maker, or no forward estimate. The same median and the
+  // same five-name floor. DOLLAR REPORTERS ONLY, on both sides of the ratio:
+  // the market value is in dollars and the revenue in the reporting
+  // currency, so a yen reporter's P/S is not a multiple at all.
+  const ps = (r) => ((!r.currency || r.currency === 'USD') && Number(r.priceToSales) > 0 ? Number(r.priceToSales) : null);
+  const byPs = new Map();
+  for (const r of rows) {
+    if (!r || !r.symbol || !r.industry || ps(r) == null) continue;
+    if (!byPs.has(r.industry)) byPs.set(r.industry, []);
+    byPs.get(r.industry).push(ps(r));
+  }
+  const medPs = new Map();
+  for (const [ind, v] of byPs) {
+    if (v.length < PEER_MIN) continue;
+    v.sort((a, b) => a - b);
+    const h = v.length / 2;
+    medPs.set(ind, v.length % 2 ? v[(v.length - 1) / 2] : (v[h - 1] + v[h]) / 2);
+  }
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    const m = r.industry ? medPs.get(r.industry) : null;
+    const v = ps(r);
+    r.peerPs = (m > 0 && v != null) ? Math.round(v / m * 100) / 100 : null;
+    r.peerPsMedian = m > 0 ? m : null;
+    r.valueVsIndustry = Filters.valueVsIndustryOf(r);
   }
 }
 
@@ -7412,6 +7444,19 @@ const STARTER_SCREENS = [
     { filters: { peerPe: '<=0.6', revenueGrowthYoY: '>0', profitMargin: '>0', qualityScore: '>=6' },
       sort: { key: 'peerPe', dir: 1 },
       columns: ['peerPe', 'forwardPe', 'revenueGrowthYoY', 'profitMargin', 'qualityScore', 'marketCap', 'av:Balanced', 'spMember'] }),
+  // THE GROWTH & PROFIT WORD AS A SCREEN (2026-11-02), with no price cut, which
+  // the two "cheap ... growing and profitable" screens above both carry: a
+  // company growing 20% on a 25% margin at 35x forward earnings is in neither.
+  // The second adds the industry comparison as its own leg, so the narrowing
+  // is visible. Sorted by size, not by any reading: a list, not a ranking.
+  sc('grwprof0', 'Value and growth', 'Growing and profitable',
+    'Revenue up 5% or more on a year earlier, a net margin of 5% or more and free cash flow not negative — at any price.',
+    { filters: { growthProfile: 'Growing, profitable' }, sort: { key: 'marketCap', dir: -1 },
+      columns: ['growthProfile', 'valueVsIndustry', 'revenueGrowthYoY', 'profitMargin', 'fcfMargin', 'peerPe', 'marketCap', 'av:Balanced', 'spMember'] }),
+  sc('grwprof1', 'Value and growth', 'Growing, profitable, below its industry',
+    'The same, narrowed to companies valued below the median of their own industry (forward P/E, or price-to-sales where there is no P/E).',
+    { filters: { growthProfile: 'Growing, profitable', valueVsIndustry: 'Below industry' }, sort: { key: 'marketCap', dir: -1 },
+      columns: ['growthProfile', 'valueVsIndustry', 'peerPe', 'revenueGrowthYoY', 'profitMargin', 'fcfMargin', 'marketCap', 'av:Balanced', 'spMember'] }),
   sc('disconct', 'Value and growth', "Business improving, price isn't", 'Revenue growing 25%+ while the price fell 10%+ over three months.',
     { filters: { revenueGrowthYoY: '>25', threeMonthPct: '<-10' }, sort: { key: 'revenueGrowthYoY', dir: -1 },
       columns: ['revenueGrowthYoY', 'threeMonthPct', 'oneMonthPct', 'grossMargin', 'forwardPe', 'av:Balanced', 'spMember'] }),
