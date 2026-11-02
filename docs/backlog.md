@@ -2699,6 +2699,40 @@ earlier, net income above zero, guidance in the release (`guides` or
 
 Survivorship applies (the universe is today's). Descriptive wording only.
 
+## 57. Company logos, hand-picked this time — 2026-11-02
+
+*Area: Promo · Status: Open · Note: the owner, shown a third-party "Earnings this week" grid of logo tiles: "See how beautiful this is … we never managed to get good looking icons for stocks", then "add a backlog". Reverses the 2026-09-14 removal only on the owner's decision*
+
+**Why it looked good.** One treatment for every mark: the same light rounded
+tile, the same padding, each logo scaled to the same visual weight. The grid
+does the rest.
+
+**Why it failed before** ([logos.md](context/logos.md)). The bulk provider's
+marks (Twelve Data `/logo`) lagged rebrands by years and sat on white boxes
+that fought the dark theme; about 11 of 93 symbols, mostly ETFs, had none. The
+same faults show in the grid that prompted this: OKLO wears AltC Acquisition's
+mark (the SPAC it merged into in 2024), Lumentum and Cardinal Health are too
+small to read, DTI's is illegible.
+
+**The shape, if done.**
+- **Curated, not bulk.** One vector file per symbol, checked by eye, with the
+  source and date noted. Start with the 20 guest symbols and the companies on
+  posted cards, not the whole universe.
+- **One tile.** A light rounded square in both themes (a token, not a written
+  colour), the mark fitted to a fixed optical size. Anything without a file
+  falls back to the existing typographic monogram (`.lg`), so a gap never
+  shows.
+- **Narrow first.** Promo cards (an "Earnings this week" grid from
+  `earnings_calendar` would be the natural first card) and the stock page
+  masthead; not every screener row.
+- **Staleness.** Each file carries a checked-on date; a rename or ticker change
+  in the universe flags its logo for review.
+
+**To decide first.** Logos are other companies' trademarks. Showing them to
+identify the company is common practice, but it reverses the standing "no
+company logos" convention in CLAUDE.md, which changes in the same commit if
+this goes ahead.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
