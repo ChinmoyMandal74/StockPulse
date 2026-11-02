@@ -20914,6 +20914,12 @@ function archiveReportClean(b) {
       publishers: list(w.publishers, 8), symbols: list(w.symbols, 10) } : null,
     total: b.total ? { articles: num(t.articles) || 0, chars: num(t.chars) || 0, gz: num(t.gz) || 0, companies: num(t.companies) || 0,
       first: str(t.first, 30), last: str(t.last, 30), fetched: num(t.fetched), fileBytes: num(t.fileBytes) || 0, walBytes: num(t.walBytes) || 0 } : null,
+    // The release text archive (releasearchive.js), when the laptop has one.
+    releases: b.releases && typeof b.releases === 'object' ? (b.releases.error ? { error: str(b.releases.error, 200) } : {
+      file: str(b.releases.file, 60), added: num(b.releases.added) || 0, addedGz: num(b.releases.addedGz) || 0,
+      releases: num(b.releases.releases) || 0, chars: num(b.releases.chars) || 0, gz: num(b.releases.gz) || 0,
+      companies: num(b.releases.companies) || 0, first: str(b.releases.first, 12), last: str(b.releases.last, 12),
+      fetched: num(b.releases.fetched), misses: num(b.releases.misses) || 0, fileBytes: num(b.releases.fileBytes) || 0 }) : null,
   };
 }
 function archiveReportEmail(r, runs) {
@@ -20975,7 +20981,26 @@ function archiveReportEmail(r, runs) {
     if (w.symbols.length) lines.push('Most covered companies this week:', ...w.symbols.map((x) => '  ' + x.name + ': ' + fmtN(x.n)), '');
     lines.push('The whole archive:', ...rowsAll.map(([k, v]) => '  ' + k + ': ' + v), '', (r.file || 'news-archive.db') + ' on ' + (r.host || 'the laptop') + ', the only copy: it is not in the database and not backed up by the site.');
   }
-  const note = 'Sent to the site’s operator every Saturday at 8 AM by the laptop (archive-report.js), from the archive the article tone job keeps there.';
+  // THE RELEASE TEXT ARCHIVE (2026-11-01): the earnings releases' text, kept
+  // by the releases job and filled back to 2017 by release-archive-load.js.
+  const rl = r.releases;
+  if (rl && rl.error) {
+    body += h2('Earnings release archive') + `<p class="em-warn"${st(`margin:4px 0;font-size:14px;color:${JD_AMBER}`)}>Could not be read: ${mailEsc(rl.error)}</p>`;
+    lines.push('', 'Earnings release archive: could not be read: ' + rl.error);
+  } else if (rl) {
+    const rowsRel = [
+      ['Kept this week', fmtN(rl.added) + (rl.added ? ' (' + mb(rl.addedGz) + ' stored)' : '')],
+      ['Releases', fmtN(rl.releases)], ['Companies', fmtN(rl.companies)],
+      ['Filed', rl.first && rl.last ? dayLabel(rl.first) + ', ' + rl.first.slice(0, 4) + ' to ' + dayLabel(rl.last) + ', ' + rl.last.slice(0, 4) : '—'],
+      ['Text', fmtN(Math.round(rl.chars / 1e6)) + 'M characters, ' + mb(rl.gz) + ' stored'],
+      ['File size', mb(rl.fileBytes)],
+      ['Exhibits the SEC no longer serves', fmtN(rl.misses)],
+    ];
+    body += h2('Earnings release archive') + table(th('') + th('', true), rowsRel.map(([k, v]) => `<tr>${td(mailEsc(k))}${td(mailEsc(v), true)}</tr>`))
+      + `<p${st(`margin:4px 0 0;font-size:12.5px;color:${MC.mute}`)}>${mailEsc(rl.file || 'releases-archive.db')}: the text of each results press release, kept by the releases job. It can be rebuilt from sec.gov.</p>`;
+    lines.push('', 'Earnings release archive:', ...rowsRel.map(([k, v]) => '  ' + k + ': ' + v));
+  }
+  const note = 'Sent to the site’s operator every Saturday at 8 AM by the laptop (archive-report.js), from the archives the article tone and releases jobs keep there.';
   return { subject, html: emailShell({ heading: 'Article archive, week to ' + when, intro, body, note }), text: textShell({ heading: 'Article archive, week to ' + when, intro, lines, note }) };
 }
 app.post('/api/cron/archive-report', route(async (req, res) => {

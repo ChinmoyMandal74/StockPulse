@@ -78,6 +78,22 @@ function figures(A, file, now) {
   };
 }
 
+// The release text archive (releasearchive.js, 2026-11-01) for the same week:
+// counts only, as for the articles.
+function releaseFigures(R, file, now) {
+  const one = (sql, ...args) => R.db.prepare(sql).get(...args);
+  const from = now - 7 * DAY;
+  const tot = one('select count(*) n, sum(chars) chars, sum(length(body)) gz, count(distinct symbol) companies, min(filed) first, max(filed) last, max(fetched_at) fetched from releases');
+  const wk = one('select count(*) n, sum(chars) chars, sum(length(body)) gz from releases where fetched_at >= ? and fetched_at < ?', from, now);
+  const wal = fileSize(file + '-wal');
+  return {
+    file: path.basename(file), added: Number(wk.n) || 0, addedGz: Number(wk.gz) || 0,
+    releases: Number(tot.n) || 0, chars: Number(tot.chars) || 0, gz: Number(tot.gz) || 0, companies: Number(tot.companies) || 0,
+    first: tot.first || null, last: tot.last || null, fetched: tot.fetched == null ? null : Number(tot.fetched),
+    misses: Number(one('select count(*) n from misses').n) || 0, fileBytes: fileSize(file) + wal,
+  };
+}
+
 async function main() {
   const NA = require('./newsarchive.js');
   const file = process.env.NEWS_ARCHIVE_DB || NA.DEFAULT_PATH;
@@ -90,6 +106,11 @@ async function main() {
     // The email still goes: an archive that cannot be read is the news.
     body = { at: Date.now(), host: require('os').hostname(), error: String(e.message).split('\n')[0].slice(0, 200) };
   }
+  try {
+    const RA = require('./releasearchive.js');
+    const rf = process.env.RELEASE_ARCHIVE_DB || RA.DEFAULT_PATH;
+    if (fs.existsSync(rf)) { const R = RA.open(rf); try { body.releases = releaseFigures(R, rf, body.at); } finally { R.close(); } }
+  } catch (e) { body.releases = { error: String(e.message).split('\n')[0].slice(0, 200) }; }
   if (DRY) { console.log(JSON.stringify(body, null, 2)); return; }
   const secret = fromEnvFile('CRON_SECRET');
   const base = (fromEnvFile('APP_URL') || 'https://www.tickrlab.com').replace(/\/+$/, '');
@@ -108,4 +129,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { figures };
+module.exports = { figures, releaseFigures };

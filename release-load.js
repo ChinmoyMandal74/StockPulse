@@ -249,6 +249,22 @@ const UA = String(process.env.SEC_UA || (contact ? 'Tickr Lab (' + contact + ')'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 
+// THE LOCAL TEXT ARCHIVE (releasearchive.js, 2026-11-01): the release text
+// this run read, kept on this machine for research. Never fails the run: an
+// archive that will not open or write is reported once and left.
+let archive, archiveDead = false, archived = 0;
+function keepText(e, meta, row, text) {
+  if (archiveDead) return;
+  try {
+    archive = archive || require('./releasearchive.js').open();
+    if (archive.put({ accn: e.accn, symbol: e.symbol, filed: e.filed, text, url: meta.url, exhibit: meta.exhibit,
+      period_end: row.periodEnd || null, period_label: row.periodLabel || null, is_results: !!row.isResults }).added) archived++;
+  } catch (err) {
+    archiveDead = true;
+    console.log('  (the local text archive could not be written: ' + String(err.message).slice(0, 100) + ')');
+  }
+}
+
 class Stop extends Error {}
 let secCalls = 0;
 async function sec(url) {
@@ -543,6 +559,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
         }
         ({ row, problems } = Rel.toRow(got.ans, text, meta));
         if (row.isResults && aiAns) row.aiPoints = Rel.aiPoints(aiAns, text, problems);
+        if (COMMIT) keepText(e, meta, row, text);
       }
       read++;
       if (row.isResults) results++; else notResults++;
@@ -602,7 +619,7 @@ const etDay = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Y
   if (COMMIT) { try { await writeSourced(); } catch (err) { console.log('  source rule failed: ' + String(err.message).slice(0, 120)); } }
   if (COMMIT) { try { await writeRecon(); } catch (err) { console.log('  recon failed: ' + String(err.message).slice(0, 120)); } }
   console.log(`  done: ${read} read (${results} results, ${notResults} not), ${flagged} with a figure refused, ${failed} to retry; `
-    + `${COMMIT ? written + ' written' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
+    + `${COMMIT ? written + ' written, ' + archived + ' kept in the local text archive' : 'nothing written'}; $${spent.toFixed(4)}; ${secCalls} SEC fetches; ${Math.round((Date.now() - t0) / 1000)}s`);
   await recordRun();
   await mailDigest();
   await mailList();

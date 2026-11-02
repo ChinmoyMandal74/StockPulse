@@ -43,3 +43,8 @@ news-archive.db-shm
 
 # earndate-compare.js research snapshots, local only
 earndate-compare-*.json
+releases-archive.db
+releases-archive.db-wal
+releases-archive.db-shm
+release-archive-load.lock
+release-archive.log
