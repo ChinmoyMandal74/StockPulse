@@ -59,15 +59,22 @@
     .sw-what { margin: 0 6px 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 110ch; }
     .sw-wrap { overflow-x: auto; }
     .sw-wrap table { width: 100%; border-collapse: collapse; }
-    .sw-wrap th, .sw-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
-    .sw-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; user-select: none; }
+    .sw-wrap th, .sw-wrap td { padding: 9px 7px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
+    .sw-wrap th:first-child, .sw-wrap td:first-child { padding-left: 16px; }
+    .sw-wrap th:last-child, .sw-wrap td:last-child { padding-right: 16px; }
+    /* Headings wrap to their words so a long name ("From 52-week high") does not set the column's width. */
+    .sw-wrap th { font-weight: 500; color: var(--faint); font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.06em;
+                  white-space: normal; vertical-align: bottom; min-width: 4.2em; cursor: pointer; user-select: none; }
+    /* The word columns may wrap too: "Growing, profitable" over two lines. */
+    .sw-wrap th .sw-h { display: inline-block; max-width: 7.2em; }
+    .sw-wrap td.sw-wd { white-space: normal; min-width: 8ch; line-height: 1.35; }
     .sw-wrap th:hover { color: var(--text); }
     .sw-wrap th.sw-on { color: var(--text); }
     .sw-wrap th.sw-r, .sw-wrap td.sw-r { text-align: right; }
     .sw-wrap tr.sw-grp > td { border-top: 2px solid var(--hair-2); }
     .sw-co a { font: 600 12.5px var(--mono); color: var(--text); text-decoration: none; }
     .sw-co a:hover { color: var(--accent); }
-    .sw-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+    .sw-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-num { font-family: var(--mono); }
     .sw-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; font-family: var(--mono); }
     .sw-up { color: var(--green); }
@@ -146,7 +153,7 @@
     const COLS = [
       { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
       { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '</td>', sort: (r) => r.group },
-      { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
+      { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
       { k: 'filed', t: 'Reported', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
       { k: 'guidance', t: 'Guidance', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
       { k: 'reaction', t: 'Reaction', screen: true, r: true, title: 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). The date under it is the day.',
@@ -156,10 +163,10 @@
       { k: 'rsi', t: 'RSI', r: true, title: 'Relative strength index, 14-day, at the latest close.', cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.rsi) ? Number(r.rsi).toFixed(0) : '—') + '</td>', num: true },
       { k: 'pe', t: 'P/E', r: true, title: 'Trailing twelve months, as the data provider reports it; a dash off a loss.', cell: (r) => '<td class="sw-r sw-num">' + mult(r.pe) + '</td>', num: true },
       { k: 'fpe', t: 'Fwd P/E', r: true, cell: (r) => '<td class="sw-r sw-num">' + mult(r.fpe) + '</td>', num: true },
-      { k: 'valueVsIndustry', t: 'Value vs industry', cell: (r) => '<td>' + we(r.valueVsIndustry || '—') + '</td>', sort: (r) => r.valueVsIndustry || '' },
+      { k: 'valueVsIndustry', t: 'Value vs industry', cell: (r) => '<td class="sw-wd">' + we(r.valueVsIndustry || '—') + '</td>', sort: (r) => r.valueVsIndustry || '' },
       { k: 'revGrowth', t: 'Revenue growth', r: true, title: 'The latest quarter on the same quarter a year earlier.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.revGrowth, true) + '</td>', num: true },
       { k: 'profitMargin', t: 'Profit margin', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
-      { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td>' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
+      { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td class="sw-wd">' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
     ];
     const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || v !== 'watch'));
 
@@ -198,7 +205,7 @@
       }
       if (!L.length) { $('list').innerHTML = '<div class="sw-empty">No company matches in this window.</div>'; return; }
       const grouped = state.view === 'watch' && !c;
-      $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '>' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</th>').join('') + '</tr></thead><tbody>'
+      $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '><span class="sw-h">' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</span></th>').join('') + '</tr></thead><tbody>'
         + L.map((r, i) => r.missing
           ? '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '><td class="sw-co"><b class="sw-num">' + we(r.symbol) + '</b></td><td class="sw-grpname">' + we(r.group) + '</td><td colspan="' + (cols.length - 2) + '" class="sw-faint">Not on the screener</td></tr>'
           : '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '>' + cols.map((x) => x.cell(r)).join('') + '</tr>').join('')
