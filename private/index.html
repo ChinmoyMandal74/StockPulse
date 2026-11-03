@@ -1241,10 +1241,6 @@
            title="Consolidated — every theme, sector, industry and size band side by side">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>Consolidated
         </a>
-        <a class="btn" id="compareLink" href="/compare" target="_blank" rel="noopener"
-           title="Compare two stocks side by side">
-          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>Compare
-        </a>
         <!-- Three pages that lived in the ... menu until 2026-10-28, brought up
              to the bar. Ids unchanged: News and Paper positions are members'
              pages and hide for guests with the research link; Earnings results
@@ -1255,11 +1251,16 @@
         </a>
         <a class="btn" id="resultsLink" href="/results" target="_blank" rel="noopener"
            title="Earnings results — the latest results releases, read by AI">
-          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>Earnings results
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>Earnings
         </a>
         <a class="btn" id="paperLink" href="/paper" target="_blank" rel="noopener"
            title="Paper positions — a pretend account to open and close positions in">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Paper positions
+        </a>
+        <!-- Members: companies whose shares fell, in three views (2026-11-03); in the ... menu until the owner moved it here the same day. Hidden for guests with the research link. -->
+        <a class="btn" id="selloffLink" href="/selloff" target="_blank" rel="noopener"
+           title="Selloff watch — companies whose shares fell, in three views">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Selloff watch
         </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
@@ -1339,6 +1340,11 @@
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock" /></svg>
                 <span class="nm">Read-only note</span>
               </button>
+              <!-- Compare: on the bar until 2026-11-03, moved here by the owner. Same id; the href still follows the view's top symbol. -->
+              <a class="pick" id="compareLink" href="/compare" target="_blank" rel="noopener" title="Compare two stocks side by side">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-columns" /></svg>
+                <span class="nm">Compare</span>
+              </a>
               <a class="pick" href="/m">
                 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-phone" /></svg>
                 <span class="nm">Phone version</span>
@@ -1380,11 +1386,6 @@
                 <a class="pick" href="/ipos" id="iposLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                   <span class="nm">IPO pipeline</span>
-                </a>
-                <!-- Members: companies whose shares fell, in three views (2026-11-03). -->
-                <a class="pick" href="/selloff" id="selloffLink">
-                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
-                  <span class="nm">Selloff watch</span>
                 </a>
                 <!-- The corporate site, which / no longer shows once signed in (2026-10-23). -->
                 <a class="pick" href="/home" id="homeLink">

@@ -1,6 +1,6 @@
 ## Selloff watch — `/selloff` (2026-11-03, owner's request)
 
-**Members (never guests), from the screener menu after IPO pipeline.** Three tables the owner had been sent by email made a page: *"create a new menu ... and on the page shows these 3 tables as separate views"*. The owner asked for the name "Trading Opportunities"; asked whether that fit the no-recommendation rule, they chose **Selloff watch**. Live, not frozen: each load reads the latest served rows.
+**Members (never guests), on the screener bar after Paper positions** (in the `⋯` menu for its first day). Three tables the owner had been sent by email made a page: *"create a new menu ... and on the page shows these 3 tables as separate views"*. The owner asked for the name "Trading Opportunities"; asked whether that fit the no-recommendation rule, they chose **Selloff watch**. Live, not frozen: each load reads the latest served rows.
 
 Files: `selloff.js` (pure: the release test, the reaction day, the screens, the watchlist), `selloff-test.js` (30 checks), `private/selloff.html`, routes `/selloff` and `/api/selloff` in server.js beside `/ipos`.
 
