@@ -130,6 +130,11 @@ const blank = S.workbookSheets({ views: { tech: [S.fields({ symbol: 'B', rsi: nu
 ok(blank.slice(2).filter((x) => x === 0).length === 0, 'a blank figure is empty, never 0', blank);
 ok(/Nov 3, 2026/.test(wb[3].rows[0][1]) && /Eastern$/.test(wb[3].rows[0][1]), 'About: prices as of, in Eastern time', wb[3].rows[0]);
 
+// Today: the latest session's move, blank when the row has none.
+ok(S.fields({ symbol: 'X', todayPct: -2.345 }, null).today === -2.345 && [null, '', undefined].every((v) => S.fields({ symbol: 'X', todayPct: v }, null).today === null), 'today carried; a missing move is blank, not zero');
+const wbT = S.workbookSheets({ views: { tech: [S.fields({ symbol: 'X', todayPct: -2.345 }, null)] } })[0];
+ok(wbT.rows[0][wbT.cols.findIndex((c) => c[0] === 'Today (%)')] === -2.35, 'Excel: Today (%) as a number, two decimals');
+
 // Market cap: carried as a number with its currency; a blank stays blank, never 0.
 const cap1 = S.fields({ symbol: 'X', marketCap: 2.1e12, currency: 'USD' }, null);
 ok(cap1.cap === 2.1e12 && cap1.currency === 'USD', 'market cap and currency are carried');

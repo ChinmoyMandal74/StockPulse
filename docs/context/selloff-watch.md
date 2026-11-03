@@ -68,3 +68,10 @@ An **Export to Excel** button on the bar downloads `/api/selloff.xlsx?days=N`, f
 
 ## Default tab (2026-11-03)
 The page opens on the **AI watchlist** (owner). `DEFAULT_VIEW` in the page; the address stays `/selloff` for it, and the two screens are `?show=tech` and `?show=nontech`. The blog post links `/selloff?show=watch`, which still works.
+
+## Today (2026-11-03)
+A **Today** column on all three tables, after Market cap (owner: "add todays performance").
+- **Data:** `fields()` carries `today` from the row's `todayPct`, the screener's own Today: the previous close to the latest price during trading, or to the close.
+- **Display:** one decimal; green for a rise and red for a fall, since it is a price move. A missing move is a dash.
+- **Excel:** the workbook has `Today (%)`, explained on the About sheet.
+- **Freshness:** the page's held answer is keyed on the snapshot stamp, so it follows the intraday refreshes.

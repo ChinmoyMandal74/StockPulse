@@ -177,6 +177,8 @@
       { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
       { k: 'cap', t: 'Market cap', r: true, title: 'Market value at the latest price, as on the screener.',
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
+      { k: 'today', t: 'Today', r: true, title: 'The latest session’s price change, as on the screener: the previous close to the latest price.',
+        cell: (r) => '<td class="sw-r">' + (isNum(r.today) ? '<span class="sw-num ' + (r.today < 0 ? 'sw-dn' : r.today > 0 ? 'sw-up' : '') + '">' + (r.today > 0 ? '+' : r.today < 0 ? '−' : '') + Math.abs(r.today).toFixed(1) + '%</span>' : '<span class="sw-faint">—</span>') + '</td>', num: true },
       { k: 'filed', t: 'Reported', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
       { k: 'guidance', t: 'Guidance', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
       { k: 'reaction', t: 'Reaction', screen: true, r: true, title: 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). The date under it is the day.',
@@ -242,7 +244,7 @@
       const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
       $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
         + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
-        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener. '
+        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close. '
         + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
     }
     $('list').addEventListener('click', (e) => {
