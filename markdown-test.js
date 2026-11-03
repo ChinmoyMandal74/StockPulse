@@ -69,5 +69,21 @@ check('a link in the title is not written inside the img tag', /<img[^>]*<a\s/i.
 check('the title keeps its words', /title="t \[l\]\(https:\/\/e\.com\)"/.test(titled), true);
 check('a NUL in the source cannot forge a placeholder', md('a \u00000\u0000 b'), '<p>a 0 b</p>');
 
+console.log('pipe tables');
+const t1 = md('Before\n\n| Company | Cap | RSI |\n|---|---:|:---:|\n| [MU](/stock/MU) | $1.0T | 37 |\n| **SNDK** | $166B | 30 |\n\nAfter');
+check('a table between two paragraphs', t1,
+  '<p>Before</p>\n<div class="ptable" tabindex="0"><table><thead><tr><th>Company</th><th class="r">Cap</th><th class="c">RSI</th></tr></thead><tbody>'
+  + '<tr><td><a href="/stock/MU">MU</a></td><td class="r">$1.0T</td><td class="c">37</td></tr>'
+  + '<tr><td><strong>SNDK</strong></td><td class="r">$166B</td><td class="c">30</td></tr></tbody></table></div>\n<p>After</p>');
+check('a table straight after a heading, closed by the next heading', md('## A\n| x | y |\n|---|---|\n| 1 | 2 |\n## B'),
+  '<h3>A</h3>\n<div class="ptable" tabindex="0"><table><thead><tr><th>x</th><th>y</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table></div>\n<h3>B</h3>');
+check('cells are escaped', md('| a |\n|---|\n| <img src=x onerror=alert(1)> |').includes('&lt;img src=x onerror=alert(1)&gt;'), true);
+check('a cell cannot inject a class', tags(md('| a |\n|---|\n| " class="x |')).some((t) => /class="x/.test(t)), false);
+check('a short row is padded, a long one trimmed to the header', md('| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |'),
+  '<div class="ptable" tabindex="0"><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td></td></tr><tr><td>1</td><td>2</td></tr></tbody></table></div>');
+check('no separator row: the lines stay a paragraph', md('| not | a table |\n| just | text |'), '<p>| not | a table | | just | text |</p>');
+check('a pipe line inside code stays code', md('```\n| a | b |\n|---|---|\n```'), '<pre><code>\n| a | b |\n|---|---|\n</code></pre>');
+check('a table at the very end is closed', md('| a |\n|---|\n| 1 |').endsWith('</table></div>'), true);
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

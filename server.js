@@ -1280,6 +1280,17 @@ const PAGE_SKIN = {
       + (i.alt ? `<figcaption>${i.alt}</figcaption>` : '')
       + '</figure>').join('')
     + '</div>',
+  // A TABLE (2026-11-03, for a data-heavy post with no charts). The cells arrive
+  // already rendered by the inline rules, so escaped; alignment is one of three
+  // fixed classes, never text from the post. The wrapper scrolls sideways on a
+  // phone, and takes focus so a keyboard can scroll it too.
+  table: (head, align, rows) => {
+    const a = (i) => (align[i] === 'right' ? ' class="r"' : align[i] === 'center' ? ' class="c"' : '');
+    return '<div class="ptable" tabindex="0"><table><thead><tr>'
+      + head.map((h, i) => `<th${a(i)}>${h}</th>`).join('') + '</tr></thead><tbody>'
+      + rows.map((r) => '<tr>' + r.map((c, i) => `<td${a(i)}>${c}</td>`).join('') + '</tr>').join('')
+      + '</tbody></table></div>';
+  },
 };
 
 function renderMarkdown(src, skin) {
@@ -1351,8 +1362,24 @@ function renderMarkdown(src, skin) {
     }
     gal = null;
   };
+  // A PIPE TABLE: a header row, a separator row of dashes (a colon at the right
+  // end aligns right, at both ends centres), then the rows. Without a proper
+  // separator the lines stay what they were, a paragraph.
+  let tbl = null;
+  const closeTable = () => {
+    if (!tbl) return;
+    const rows = tbl;
+    tbl = null;
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+    const sep = rows.length > 1 ? cells(rows[1]) : null;
+    if (!sep || !sep.every((c) => /^:?-{3,}:?$/.test(c))) { for (const l of rows) para.push(l.trim()); closePara(); return; }
+    const align = sep.map((c) => (c.endsWith(':') ? (c.startsWith(':') ? 'center' : 'right') : ''));
+    const head = cells(rows[0]);
+    out.push(S.table(head.map(inline), align, rows.slice(2).map((l) => { const c = cells(l); return head.map((_, i) => inline(c[i] || '')); })));
+  };
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, '');
+    if (tbl && !/^\s*\|/.test(line)) closeTable();
     if (/^```/.test(line)) {
       closePara(); closeList(); closeQuote();
       const info = line.slice(3).trim().toLowerCase();
@@ -1374,6 +1401,7 @@ function renderMarkdown(src, skin) {
       continue;
     }
     if (code) { out.push(esc(raw)); continue; }
+    if (/^\s*\|/.test(line)) { closePara(); closeList(); closeQuote(); (tbl = tbl || []).push(line); continue; }
     if (!line.trim()) { closePara(); closeList(); closeQuote(); continue; }
     let m;
     if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) {
@@ -1413,6 +1441,7 @@ function renderMarkdown(src, skin) {
     closeList(); closeQuote();
     para.push(line.trim());
   }
+  closeTable();
   closeGallery();
   closePara(); closeList(); closeQuote();
   if (code) out.push('</code></pre>');
@@ -3956,6 +3985,14 @@ const emailSkin = () => ({
   // the page in order, each with its caption, which is what the reader would
   // have seen anyway had they swiped through all of them.
   gallery: (items) => items.map((i) => emailSkin().fig(i.src, i.alt, '', '')).join(''),
+  // Inline styles on every cell, as everywhere in a mail.
+  table: (head, align, rows) => {
+    const cell = (i, th) => st(`padding:6px 8px;border-bottom:1px solid ${MC.line};text-align:${align[i] || 'left'};white-space:nowrap;font-family:${MAIL_SANS};font-size:${th ? '11px' : '13px'};color:${th ? MC.mute : MC.body}${th ? ';font-weight:700' : ''}`);
+    return '<div' + st('margin:0 0 18px;overflow-x:auto') + '><table role="table" cellpadding="0" cellspacing="0" border="0"' + st('border-collapse:collapse;width:100%') + '><tr>'
+      + head.map((h, i) => `<th${cell(i, true)}>${h}</th>`).join('') + '</tr>'
+      + rows.map((r) => '<tr>' + r.map((c, i) => `<td${cell(i, false)}>${c}</td>`).join('') + '</tr>').join('')
+      + '</table></div>';
+  },
 });
 
 // The plain-text half. Derived from the MARKDOWN rather than from the HTML,

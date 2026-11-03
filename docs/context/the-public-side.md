@@ -173,3 +173,17 @@ Every post now puts its pictures at `"wide"`, so the two-column layout's text co
 
 ### One column is the default for every new post (2026-10-31, owner: "adopt this for all future post unless I explicity ask for two column")
 The editor's picture-size menu on `/posts` now starts on **Full width — one column** (`"wide"`), and the other three are labelled as beside the text, two columns. The studio's Post to blog writes its card picture as `"wide"` too (`blogBody` in promo.html), where it used to be the rail picture of a two-column draft. A two-column post now needs a picture inserted at one of the beside-the-text sizes, or the word removed from one picture's markdown.
+
+## Tables in posts (2026-11-03)
+The blog markdown (`renderMarkdown`) reads **pipe tables**: a header row, then a separator row of three or more dashes per cell, then the rows.
+- **Alignment:** a colon at the right end of a separator cell (`---:`) aligns the column right; colons at both ends centre it.
+- **Without a proper separator row,** the lines stay a paragraph.
+- **Cells** go through the inline rules, so links and bold work and everything is escaped. Alignment is one of two fixed classes (`r`, `c`), never text from the post.
+- **Rows:** a short row is padded and a long one trimmed to the header.
+- **Skins:** `PAGE_SKIN.table` writes `<div class="ptable" tabindex="0"><table>`; the email skin writes the same with inline styles.
+- **On the post page (`private/post.html`):**
+  - headings and word cells wrap, and right-aligned figures stay on one line in the mono face;
+  - the box scrolls sideways when it must;
+  - in a one-column post it breaks out of the 720px measure up to 1100px, as a wide picture does.
+- **Tests:** `markdown-test.js`, the pipe tables section.
+- **First used:** by the data post `ai-watchlist-2026-11-03`.
