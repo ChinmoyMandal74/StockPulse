@@ -2914,6 +2914,25 @@ async function writeJobsDigestMark(day) {
   await init();
   await db.execute({ sql: "insert or replace into app_meta (key, value) values ('jobs_digest_mark', ?)", args: [String(day)] });
 }
+// The price alerts (2026-11-03, the owner: "send admin emails when price
+// refresh job fails ... if a stock falls off Twelve Data inform Admin"), two
+// small JSON marks so each says a thing once:
+//   price_alert  { intraday | nightly: { day, at, error, recovered } }
+//   td_unserved  { SYMBOL: { kind: 'none' | 'stale', last, since } }
+async function readMetaJson(key) {
+  await init();
+  const r = await db.execute({ sql: 'select value from app_meta where key = ?', args: [key] });
+  if (!r.rows.length) return {};
+  try { const v = JSON.parse(String(r.rows[0].value || '{}')); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
+}
+async function writeMetaJson(key, v) {
+  await init();
+  await db.execute({ sql: 'insert or replace into app_meta (key, value) values (?, ?)', args: [key, JSON.stringify(v || {})] });
+}
+const readPriceAlerts = () => readMetaJson('price_alert');
+const writePriceAlerts = (v) => writeMetaJson('price_alert', v);
+const readTdUnserved = () => readMetaJson('td_unserved');
+const writeTdUnserved = (v) => writeMetaJson('td_unserved', v);
 // The nightly's refresh email, held until its later steps are on file
 // (2026-10-30): { runId, subject, text, html, at }, one at a time. Null clears it.
 async function readHeldNightlyMail() {
@@ -8878,7 +8897,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved,
   listSubscribers,
   deleteSubscriber,
   readSentFor,

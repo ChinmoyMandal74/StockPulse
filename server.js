@@ -8941,6 +8941,7 @@ async function runPriceSlice() {
       if (redo.refusal) return redo.refusal;
       Object.assign(got, redo.got);
     }
+    await noteUnserved(slice, got);
     const bars = await persistBars(slice, got, T);
     T.mark('persist-bars');
     console.log(`bars: +${bars.inserted} rows across ${bars.symbols} symbols ` +
@@ -9439,6 +9440,7 @@ async function computeStocks(asOf, opts = {}) {
           Object.assign(liveSeries, redo.got);
         }
         const deepSet = new Set([...deepSyms, ...stragglers]);
+        await noteUnserved(toFetch, liveSeries);
 
         // Join: the live bars, then the archive strictly older than them. The
         // live copy wins on any shared date — that is what upgrades a
@@ -10054,6 +10056,69 @@ async function pullPricesFor(syms, depthFor, deadline) {
     Object.assign(got, normalizeBySymbol(raw, chunk));
   }
   return { got };
+}
+
+// PRICE ALERTS (2026-11-03, pricealert.js): the owner hears, by email, when a
+// price job fails (once a day per job, then an all-clear) and when a stock
+// falls off Twelve Data (once, and again when it comes back). Bookkeeping:
+// nothing here ever fails a price round.
+const PriceAlert = require('./pricealert.js');
+async function priceAlertMail(kind, heading, intro, lines, link) {
+  if (!MAIL_READY) return false;
+  const to = await operatorEmail();
+  if (!to) return false;
+  const note = 'Sent by the price refresh itself, once per event.';
+  const body = lines.map((l) => '<p style="margin:0 0 8px;font-size:14px;line-height:1.6">' + htmlEsc(l) + '</p>').join('')
+    + (link ? mailButton(link, 'Open refresh runs') : '');
+  return sendMail({ kind, to, subject: `[Tickr Lab] ${heading}`, text: textShell({ heading, intro, lines: link ? lines.concat(link) : lines, note }),
+    html: emailShell({ heading, intro, body, note }) });
+}
+async function priceJobFailed(job, error) {
+  try {
+    const now = Date.now(), today = SecDaily.todayET();
+    const d = PriceAlert.onFail(await store.readPriceAlerts(), job, today, error, now);
+    if (!d.send) return false;
+    await store.writePriceAlerts(d.state);
+    const name = PriceAlert.JOBS[job] || job;
+    return await priceAlertMail('price-alert', `${name} failed`,
+      `The ${name.toLowerCase()} failed at ${fmtEt(now)} New York. Prices on the site stay as they were until a run succeeds.`,
+      ['What the server said: ' + String(error || 'unknown').slice(0, 300),
+        'You get this once a day for this job, and a short note when it works again.'],
+      APP_URL ? `${APP_URL}/refreshes` : '');
+  } catch (e) { console.warn('price alert (failed) not sent:', e && e.message); return false; }
+}
+async function priceJobOk(job) {
+  try {
+    const now = Date.now(), today = SecDaily.todayET();
+    const d = PriceAlert.onOk(await store.readPriceAlerts(), job, today, now);
+    if (!d.send) return false;
+    await store.writePriceAlerts(d.state);
+    const name = PriceAlert.JOBS[job] || job;
+    return await priceAlertMail('price-alert', `${name} working again`,
+      `The ${name.toLowerCase()} succeeded at ${fmtEt(now)} New York, after failing at ${fmtEt(d.failedAt)}.`,
+      ['The earlier failure: ' + String(d.error || 'unknown').slice(0, 300)], '');
+  } catch (e) { console.warn('price alert (ok) not sent:', e && e.message); return false; }
+}
+// After a LIVE price pull only (never an as-of one): what was asked, what came back.
+async function noteUnserved(asked, got) {
+  try {
+    const today = SecDaily.todayET();
+    const u = PriceAlert.unserved(asked, got, await store.readTdUnserved(), today);
+    if (u.skipped || (!u.gone.length && !u.back.length)) return false;
+    await store.writeTdUnserved(u.state);
+    const names = await store.readNames().catch(() => ({}));
+    const who = (s) => s + (names && names[s] ? ' (' + names[s] + ')' : '');
+    const lines = u.gone.map((g) => who(g.symbol) + ': ' + (g.kind === 'none' ? 'no data at all from Twelve Data' : 'Twelve Data’s newest price is from ' + g.last + ', against ' + u.top + ' for the rest'))
+      .concat(u.back.map((b) => who(b.symbol) + ': priced again (newest ' + b.last + ')'));
+    lines.push('Adding or removing a ticker is your call; removing one keeps its history (retireSymbol). It is listed once here, and again if it comes back.');
+    const heading = u.gone.length ? `${u.gone.length} stock${u.gone.length === 1 ? '' : 's'} no longer priced by Twelve Data` : `${u.back.length} stock${u.back.length === 1 ? '' : 's'} priced again`;
+    return await priceAlertMail('td-unserved', heading,
+      u.gone.length ? 'A live price pull asked Twelve Data for these and got nothing, or only a price weeks old. They usually have been acquired, delisted or renamed.' : 'Twelve Data is serving these again.',
+      lines, '');
+  } catch (e) { console.warn('unserved alert not sent:', e && e.message); return false; }
+}
+function fmtEt(t) {
+  return t ? new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'an earlier run';
 }
 
 const LIGHT_BARS = Number(process.env.TD_LIGHT_BARS || 12);
@@ -21645,7 +21710,12 @@ async function nyseState() {
   }
 }
 
-app.all('/api/cron/intraday', route(async (req, res) => {
+// A thrown error in a price job mails before route() answers 500 (the
+// function may be frozen once it has answered, so nothing goes after).
+const withPriceAlert = (job, fn) => async (req, res) => {
+  try { return await fn(req, res); } catch (err) { await priceJobFailed(job, err && err.message); throw err; }
+};
+app.all('/api/cron/intraday', route(withPriceAlert('intraday', async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ error: 'GET or POST.' });
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
@@ -21701,12 +21771,14 @@ app.all('/api/cron/intraday', route(async (req, res) => {
       await recordRound(runId, r.opts, r.m, r.ms,
         { error: r.out.error, refused: r.out.status === 429, phases: r.T.steps() });
       await trackSafe(store.finishRun(runId, { status: 'failed', error: r.out.error }));
+      await priceJobFailed('intraday', r.out.error);
       return res.status(r.out.status).json({ error: r.out.error, runId });
     }
     r.m.credits += market.known ? 1 : 0;
     await recordRound(runId, r.opts, r.m, r.ms,
       { loaded: r.opts.pricedAfter, total: r.opts.priceTotal, phases: r.T.steps() });
     console.log(`intraday: priced ${r.out.served} symbols (light) at ${clock.label} New York`);
+    await priceJobOk('intraday');
     return res.json({ ok: true, ran: true, light: true, runId, served: r.out.served,
       priced: r.opts.pricedAfter, total: r.opts.priceTotal, rounds, ny: clock.label });
   }
@@ -21717,6 +21789,7 @@ app.all('/api/cron/intraday', route(async (req, res) => {
   if (!r.ok) {
     await recordRound(runId, opts, m, ms, { error: r.error, refused: r.status === 429 });
     await trackSafe(store.finishRun(runId, { status: 'failed', error: r.error }));
+    await priceJobFailed('intraday', r.error);
     return res.status(r.status).json({ error: r.error, runId });
   }
   // MOVE THE PRICE CURSOR ON. This call was missing entirely, which is what
@@ -21734,10 +21807,11 @@ app.all('/api/cron/intraday', route(async (req, res) => {
     rows: r.payload.stocks.length, phases: r.payload.phaseSteps });
   await trackSafe(store.finishRun(runId, { status: 'complete', loaded: fin.loaded, total: fin.total }));
   console.log(`intraday: refreshed ${r.payload.stocks.length} symbols at ${clock.label} New York`);
+  await priceJobOk('intraday');
   res.json({ ok: true, ran: true, runId, ny: clock.label, market, updatedAt: r.payload.updatedAt });
-}));
+})));
 
-app.post('/api/cron/refresh', route(async (req, res) => {
+app.post('/api/cron/refresh', route(withPriceAlert('nightly', async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   if (!API_KEY) return res.status(500).json({ error: 'No API key configured.' });
 
@@ -21846,14 +21920,18 @@ app.post('/api/cron/refresh', route(async (req, res) => {
   const { r, m, ms } = await metered(() => computeStocks(null, opts));
   if (!r.ok) {
     await recordRound(runId, opts, m, ms, { error: r.error, refused: r.status === 429 });
+    // A 429 is the provider asking the loop to wait, and the loop retries;
+    // a nightly that never gets through ends in the give-up below, which mails.
+    if (r.status !== 429) await priceJobFailed('nightly', r.error);
     return res.status(r.status).json({ error: r.error, runId });
   }
   await notePriceRound(opts);
   const fin = await finishLiveRefresh(r.payload);
   await recordRound(runId, opts, m, ms, { loaded: fin.loaded, total: fin.total,
     rows: r.payload.stocks.length, phases: r.payload.phaseSteps });
+  await priceJobOk('nightly');
   res.json({ ok: true, runId, ...fin, ...(startInfo || {}) });
-}));
+})));
 
 // Lets the job clean up after itself when it gives up, and report what it got.
 // Same idempotency as everywhere else: only the caller that clears the flag mails.
@@ -21861,6 +21939,7 @@ app.delete('/api/cron/refresh', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   const cleared = await endRefresh();
   if (cleared) await closeRun(cleared, 'incomplete');
+  if (cleared) await priceJobFailed('nightly', 'the nightly refresh gave up before every stock was refreshed (run ' + (cleared.runId || '?') + ')');
   res.json({ ok: true, reported: await sendRefreshReport(cleared) });
 }));
 

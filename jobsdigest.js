@@ -178,7 +178,7 @@ function build(src, nowMs) {
   // The day's mail: how much went out, any refused, and the watchdog's alerts
   // (it records no run; it mails only when something is wrong).
   const mail = (src.mail || []).filter((m) => etDay(m.at) === today && m.kind !== 'jobs-digest');
-  const ALERTS = ['watchdog', 'quota-alert', 'ig-token'];
+  const ALERTS = ['watchdog', 'quota-alert', 'ig-token', 'price-alert', 'td-unserved'];
   const alerts = mail.filter((m) => ALERTS.includes(m.kind));
   for (const a of alerts) issues.push('Alert mailed: ' + a.subject.replace(/^\[Tickr Lab\]\s*/, ''));
   const failedMail = mail.filter((m) => !m.ok);
