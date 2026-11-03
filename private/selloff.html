@@ -156,7 +156,9 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const qs = new URLSearchParams(location.search);
     const VIEWS = ['tech', 'nontech', 'watch'];
-    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : 'tech', days: Number(qs.get('days')) || null, sort: null, dir: 1 };
+    // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
+    const DEFAULT_VIEW = 'watch';
+    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null, sort: null, dir: 1 };
     let data = null;
 
     const fmtDay = (s) => (s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—');
@@ -250,7 +252,7 @@
       if (state.sort === k) state.dir = -state.dir; else { state.sort = k; state.dir = 1; }
       paint();
     });
-    const syncUrl = () => history.replaceState(null, '', '/selloff' + (state.view !== 'tech' ? '?show=' + state.view : ''));
+    const syncUrl = () => history.replaceState(null, '', '/selloff' + (state.view !== DEFAULT_VIEW ? '?show=' + state.view : ''));
     document.querySelectorAll('.sw-tab').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.v; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
     $('days').addEventListener('change', () => { state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
     // Where the heading stops: the bottom of the floating nav, which keeps one height but is measured, not assumed.

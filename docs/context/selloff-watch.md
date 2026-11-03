@@ -65,3 +65,6 @@ An **Export to Excel** button on the bar downloads `/api/selloff.xlsx?days=N`, f
   - The watchlist sheet adds Group, Source and every AI theme a company is in.
 - **File:** written by `xlsx.js`; the activity log gets `export selloff.xlsx`.
 - **Checks:** the browser test opens the file in Excel itself (read-only, through COM). It checks the sheet names, a row per company, the worst reaction first with market cap as a number, and the filters.
+
+## Default tab (2026-11-03)
+The page opens on the **AI watchlist** (owner). `DEFAULT_VIEW` in the page; the address stays `/selloff` for it, and the two screens are `?show=tech` and `?show=nontech`. The blog post links `/selloff?show=watch`, which still works.
