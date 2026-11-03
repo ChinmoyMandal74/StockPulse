@@ -10025,11 +10025,27 @@ async function pullPricesFor(syms, depthFor, deadline) {
   const got = {};
   for (let i = 0; i < syms.length; i += PRICE_CHUNK) {
     const chunk = syms.slice(i, i + PRICE_CHUNK);
-    const raw = await fetchJson(
-      `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}` +
-      `&interval=1day${depthFor(chunk)}&apikey=${API_KEY}`,
-      { budget: deadline - Date.now() }
-    );
+    let raw;
+    try {
+      raw = await fetchJson(
+        `${TD_BASE}/time_series?symbol=${encodeURIComponent(chunk.join(','))}` +
+        `&interval=1day${depthFor(chunk)}&apikey=${API_KEY}`,
+        { budget: deadline - Date.now() }
+      );
+    } catch (err) {
+      // NOT FOUND IS AN ANSWER, NOT A FAILURE (2026-11-03). In a batch an
+      // unknown symbol is an error inside the payload; asked ALONE it is the
+      // whole response, HTTP 404. QRVO left the provider overnight, became the
+      // only straggler of its slice, was re-pulled deep by itself, and that 404
+      // threw away the slice's 1,281 served prices: every intraday round of
+      // the day ended with nothing written. The chunk's symbols are simply not
+      // served; every caller already treats an absent symbol as unpriced.
+      if (/^HTTP 404\b/.test(String(err && err.message))) {
+        console.warn(`prices: not found at the provider, left unpriced: ${chunk.join(',').slice(0, 200)}`);
+        continue;
+      }
+      throw err;
+    }
     // A top-level error (bad key, rate limit) comes back as {status:"error"}.
     if (raw && raw.status === 'error') {
       return { refusal: { ok: false, status: raw.code === 429 ? 429 : 502,
