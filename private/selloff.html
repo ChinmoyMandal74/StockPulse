@@ -57,10 +57,18 @@
     .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
     .sw-win select { font: 500 12px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 10px; }
     .sw-what { margin: 0 6px 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 110ch; }
-    /* Frozen heading row (owner, 2026-11-03). The bezel's core clips, so the heading cannot stick to the page:
-       the table scrolls in its own box, one window tall less the floating nav, and the heading sticks to its top. */
-    .sw-wrap { overflow: auto; max-height: calc(100dvh - 96px); }
-    .sw-wrap thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); box-shadow: inset 0 -1px 0 var(--hair-2); }
+    /* Frozen heading row (owner, 2026-11-03), on the page's one scroll ("I don't like 2 scrollbars"). Sticky needs
+       every box between the heading and the page to leave overflow alone, so on wide screens, where the table fits,
+       neither this card's core nor the wrap clips; the heading sticks just under the floating nav (--sw-stick, measured).
+       Narrow screens keep the sideways scroll inside the card, and with it an ordinary heading. */
+    .sw-card > .core { overflow: visible; }
+    .sw-wrap { overflow: visible; }
+    .sw-wrap thead th { position: sticky; top: var(--sw-stick, 70px); z-index: 2; background: var(--surface); box-shadow: inset 0 -1px 0 var(--hair-2); }
+    /* Once the heading is pinned, the band above it (around the floating nav) is painted, so rows pass under it
+       rather than showing round the nav. */
+    body.sw-stuck .island-wrap { background: var(--bg); box-shadow: inset 0 -1px 0 var(--hair); }
+    .sw-wrap thead th:first-child { border-top-left-radius: 20px; }
+    .sw-wrap thead th:last-child { border-top-right-radius: 20px; }
     .sw-wrap table { width: 100%; border-collapse: collapse; }
     .sw-wrap th, .sw-wrap td { padding: 9px 7px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
     .sw-wrap th:first-child, .sw-wrap td:first-child { padding-left: 16px; }
@@ -87,6 +95,7 @@
     .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
+    @media (max-width: 1180px) { .sw-card > .core { overflow: hidden; } .sw-wrap { overflow-x: auto; } .sw-wrap thead th { position: static; } }
   </style>
 </head>
 <body>
@@ -130,7 +139,7 @@
     </div>
     <p class="sw-what" id="what"></p>
 
-    <div class="bezel"><div class="core" style="padding:0"><div class="sw-wrap" id="list"><div class="sw-empty">Reading the screener&hellip;</div></div></div></div>
+    <div class="bezel sw-card"><div class="core" style="padding:0"><div class="sw-wrap" id="list"><div class="sw-empty">Reading the screener&hellip;</div></div></div></div>
 
     <p class="sw-foot" id="foot"></p>
   </main>
@@ -229,6 +238,17 @@
     const syncUrl = () => history.replaceState(null, '', '/selloff' + (state.view !== 'tech' ? '?show=' + state.view : ''));
     document.querySelectorAll('.sw-tab').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.v; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
     $('days').addEventListener('change', () => { state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
+    // Where the heading stops: the bottom of the floating nav, which keeps one height but is measured, not assumed.
+    const stick = () => { const n = document.querySelector('.island-wrap'); if (n) document.documentElement.style.setProperty('--sw-stick', Math.round(n.getBoundingClientRect().height) + 'px'); };
+    addEventListener('resize', stick);
+    stick();
+    const stuck = () => {
+      const th = document.querySelector('#list thead th');
+      const on = !!th && getComputedStyle(th).position === 'sticky' && document.getElementById('list').getBoundingClientRect().top < parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sw-stick') || 70);
+      document.body.classList.toggle('sw-stuck', on);
+    };
+    addEventListener('scroll', stuck, { passive: true });
+    addEventListener('resize', stuck);
     paint();
     load();
   </script>

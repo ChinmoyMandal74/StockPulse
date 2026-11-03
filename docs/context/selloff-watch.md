@@ -23,4 +23,11 @@ The scratch scripts behind the 2026-11-02 emails tested `guides || guide_kind`. 
 - In-memory end to end over production's snapshot and release column with the local copy's bars (29 checks): anonymous and guest refused at the API and the page, `.html` gated; RDDT's reaction recomputed by hand from the bars; LITE's P/E a dash, MU's the provider's; every row drawn with a cell under every heading, a fall drawn red, sorting by RSI, the window control hidden on the watchlist, no sideways scroll at 390px, no script errors.
 
 ## Frozen heading (2026-11-03)
-The heading row stays put while the rows scroll (the owner asked to "freeze panes on the row heading"). The bezel core clips its contents (`overflow: hidden`), so a heading cannot stick to the page. Instead `.sw-wrap` scrolls in its own box, `max-height: calc(100dvh - 96px)` (one window tall less the floating nav), and `thead th` is `position: sticky; top: 0` on an opaque `--surface` background. Checked by scrolling the box 400px at 1440x900 and 1280x700. With the sticky rule removed, those checks fail.
+The heading row stays put while the page scrolls (owner: "freeze panes on the row heading").
+- **First version:** the table scrolled in its own box with the heading sticky inside it. The owner turned it down the same day: "I don't like 2 scrollbars on the page".
+- **Now it uses the page's one scroll.** A sticky heading needs every box between it and the page to leave `overflow` alone. So on screens wider than 1180px, where every tab's table fits (checked at 1200, 1280, 1440 and 1920):
+  - neither this card's core (`.sw-card > .core`, which clips by default in app.css) nor `.sw-wrap` clips;
+  - `thead th` sticks at `--sw-stick`, the floating nav's height, measured in script.
+- **Once stuck,** `body.sw-stuck` paints the nav's band with `--bg`, so rows pass under it instead of showing round the nav.
+- **At 1180px and narrower,** the card scrolls sideways again and the heading is ordinary.
+- **Tests:** the browser test checks that the table has no scroll of its own, the heading waits under the nav while the rows move, and the band is painted. With the sticky rule removed, the checks fail; with the band rule removed, they fail too.
