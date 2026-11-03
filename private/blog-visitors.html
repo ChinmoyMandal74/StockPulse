@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Blog visitors — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The shell is Selloff watch's. Everything this page adds is prefixed bv- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 80ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .bv-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .bv-tile { padding: 16px 18px; border: 1px solid var(--hair); border-radius: 18px; background: color-mix(in srgb, var(--surface) 70%, transparent); min-width: 0; }
+    .bv-tile .bv-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
+    .bv-tile .bv-v { margin-top: 8px; font: 600 28px/1 var(--mono); letter-spacing: -0.03em; }
+    .bv-tile .bv-s { margin-top: 6px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+    .bv-tile.bv-out .bv-v { color: var(--muted); }
+
+    .bv-sec { margin: 0 0 14px; }
+    .bv-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 16px 18px 6px; }
+    .bv-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .bv-legend { font-size: 11.5px; color: var(--faint); display: inline-flex; gap: 14px; align-items: center; }
+    .bv-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    .bv-sw-old { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+    .bv-sw-new { background: var(--accent); }
+
+    .bv-chart { padding: 10px 18px 16px; }
+    .bv-bars { display: flex; align-items: flex-end; gap: 2px; height: 180px; border-bottom: 1px solid var(--hair-2); }
+    .bv-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; height: 100%; cursor: default; }
+    .bv-bar span { display: block; width: 100%; }
+    .bv-bar .bv-new { background: var(--accent); border-radius: 0 0 1px 1px; }
+    .bv-bar .bv-old { background: color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 2px 2px 0 0; }
+    .bv-bar:hover .bv-new { background: var(--text); }
+    .bv-bar:hover .bv-old { background: color-mix(in srgb, var(--text) 50%, transparent); }
+    .bv-axis { position: relative; height: 18px; margin-top: 5px; font: 10.5px var(--mono); color: var(--faint); }
+    .bv-axis span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+    .bv-tip { min-height: 18px; margin-top: 6px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+    .bv-wrap { overflow-x: auto; }
+    .bv-wrap table { width: 100%; border-collapse: collapse; }
+    .bv-wrap th, .bv-wrap td { padding: 9px 10px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; white-space: nowrap; }
+    .bv-wrap th:first-child, .bv-wrap td:first-child { padding-left: 18px; }
+    .bv-wrap th:last-child, .bv-wrap td:last-child { padding-right: 18px; }
+    .bv-wrap th { font-weight: 500; color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .bv-wrap .bv-r { text-align: right; }
+    .bv-wrap tr:last-child td { border-bottom: 0; }
+    .bv-num { font-family: var(--mono); }
+    .bv-title { white-space: normal !important; min-width: 22ch; line-height: 1.35; }
+    .bv-title a { color: var(--text); text-decoration: none; }
+    .bv-title a:hover { color: var(--accent); }
+    .bv-meter { display: inline-block; width: 70px; height: 5px; border-radius: 3px; background: var(--hair); vertical-align: middle; margin-left: 8px; overflow: hidden; }
+    .bv-meter b { display: block; height: 100%; background: var(--accent); }
+    .bv-tag { display: inline-block; font-size: 10.5px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--hair-2); color: var(--muted); }
+    .bv-tag.bv-warn { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+    .bv-faint { color: var(--faint); }
+
+    .bv-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .bv-pair > * { min-width: 0; }
+    .bv-rows { padding: 6px 18px 16px; display: grid; gap: 10px; }
+    .bv-row { display: grid; grid-template-columns: 11em 1fr 4.5em; gap: 12px; align-items: center; font-size: 12.5px; }
+    .bv-row .bv-track { height: 8px; border-radius: 4px; background: var(--hair); overflow: hidden; }
+    .bv-row .bv-track b { display: block; height: 100%; background: color-mix(in srgb, var(--accent-2) 75%, transparent); }
+    .bv-row .bv-num { text-align: right; color: var(--muted); }
+
+    .bv-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .bv-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .bv-pair { grid-template-columns: 1fr; } .bv-row { grid-template-columns: 8em 1fr 4em; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/admin"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Admin</a>
+      <a class="btn hide-sm" href="/blog">Blog</a>
+      <a class="btn hide-sm" href="/activity">Activity log</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Admin</span>
+      <h1>Blog visitors</h1>
+      <p class="lede">Who reads the blog, from the activity log. Your own visits are left out, signed in or not, and so are
+        the fetches Instagram and Facebook make when a link is posted, and crawlers that open every post at once. A visitor is one internet address.</p>
+    </header>
+
+    <div class="bv-tiles" id="tiles"><div class="bv-tile"><div class="bv-k">Reading the log&hellip;</div></div></div>
+
+    <section class="bezel bv-sec"><div class="core" style="padding:0">
+      <div class="bv-head"><h2>Visitors by day</h2>
+        <span class="bv-legend"><span><i class="bv-sw-new"></i>first visit</span><span><i class="bv-sw-old"></i>seen before</span></span></div>
+      <div class="bv-chart" id="chart"></div>
+    </div></section>
+
+    <section class="bezel bv-sec"><div class="core" style="padding:0">
+      <div class="bv-head"><h2>Pages</h2><span class="bv-legend">most visitors first, the index at the top</span></div>
+      <div class="bv-wrap" id="pages"></div>
+    </div></section>
+
+    <div class="bv-pair">
+      <section class="bezel"><div class="core" style="padding:0">
+        <div class="bv-head"><h2>Who they were</h2><span class="bv-legend">views</span></div>
+        <div class="bv-rows" id="who"></div>
+      </div></section>
+      <section class="bezel"><div class="core" style="padding:0">
+        <div class="bv-head"><h2>Posts read per visitor</h2><span class="bv-legend">visitors</span></div>
+        <div class="bv-rows" id="depth"></div>
+      </div></section>
+    </div>
+
+    <section class="bezel bv-sec"><div class="core" style="padding:0">
+      <div class="bv-head"><h2>Latest views</h2><span class="bv-legend">the newest 60, Eastern time</span></div>
+      <div class="bv-wrap" id="recent"></div>
+    </div></section>
+
+    <p class="bv-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const n = (v) => Number(v || 0).toLocaleString('en-US');
+    const fmtDay = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const fmtTs = (ts) => new Date(ts).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const fmtDate = (ts) => new Date(ts).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+    const STATUS = { published: '', draft: '<span class="bv-tag bv-warn">not published</span>', gone: '<span class="bv-tag bv-warn">deleted</span>' };
+
+    function tiles(d) {
+      const t = d.totals, x = d.excluded;
+      const out = x.admin + x.adminAddress + x.meta + x.sweep;
+      $('tiles').innerHTML = [
+        ['Visitors', n(t.visitors), n(t.views) + ' views since ' + (d.from ? fmtDate(d.from) : '—')],
+        ['Last 7 days', n(d.last7.visitors), n(d.last7.views) + ' views'],
+        ['Last 30 days', n(d.last30.visitors), n(d.last30.views) + ' views'],
+        ['Came back', n(t.returning), 'visitors seen on two days or more'],
+      ].map((r) => '<div class="bv-tile"><div class="bv-k">' + r[0] + '</div><div class="bv-v">' + r[1] + '</div><div class="bv-s">' + r[2] + '</div></div>').join('')
+        + '<div class="bv-tile bv-out"><div class="bv-k">Left out</div><div class="bv-v">' + n(out) + '</div><div class="bv-s">'
+        + n(x.admin + x.adminAddress) + ' yours (' + n(x.adminAddress) + ' signed out), ' + n(x.meta) + ' Meta crawlers, ' + n(x.sweep) + ' from ' + n(x.sweepAddresses) + ' addresses that opened every post at once</div></div>';
+    }
+
+    function chart(d) {
+      const L = d.daily;
+      const max = Math.max(1, ...L.map((x) => x.visitors));
+      $('chart').innerHTML = '<div class="bv-bars" id="bars">' + L.map((x, i) => {
+        const h = (x.visitors / max) * 100, hn = (x.newVisitors / max) * 100;
+        return '<div class="bv-bar" data-i="' + i + '" title="' + we(fmtDay(x.day) + ': ' + x.visitors + ' visitors, ' + x.newVisitors + ' new, ' + x.views + ' views') + '">'
+          + '<span class="bv-new" style="height:' + hn + '%"></span><span class="bv-old" style="height:' + (h - hn) + '%"></span></div>';
+      }).join('') + '</div><div class="bv-axis" id="axis"></div><div class="bv-tip" id="tip">Most in one day: ' + n(max) + ' visitors. Point at a bar for its day.</div>';
+      // A label each Monday (every other one when the range is long), placed as HTML under the bars.
+      const mondays = L.map((x, i) => [x, i]).filter(([x]) => new Date(x.day + 'T12:00:00').getDay() === 1);
+      const step = mondays.length > 9 ? 2 : 1;
+      $('axis').innerHTML = mondays.filter((_, k) => k % step === 0).map(([x, i]) =>
+        '<span style="left:' + ((i + 0.5) / L.length * 100) + '%">' + we(new Date(x.day + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + '</span>').join('');
+      $('bars').addEventListener('mouseover', (e) => {
+        const b = e.target.closest('.bv-bar'); if (!b) return;
+        const x = L[Number(b.dataset.i)];
+        $('tip').textContent = fmtDay(x.day) + ': ' + x.visitors + ' visitors (' + x.newVisitors + ' new), ' + x.views + ' views';
+      });
+    }
+
+    function pages(d) {
+      if (!d.pages.length) { $('pages').innerHTML = '<div class="bv-empty">No blog views in the log.</div>'; return; }
+      const max = Math.max(1, ...d.pages.map((p) => p.visitors));
+      $('pages').innerHTML = '<table><thead><tr><th>Page</th><th class="bv-r">Visitors</th><th class="bv-r hide-sm">Views</th><th class="bv-r">Last 7 days</th><th class="hide-sm">First read</th><th>Last read</th><th></th></tr></thead><tbody>'
+        + d.pages.map((p) => '<tr>'
+          + '<td class="bv-title">' + (p.status === 'published' ? '<a href="/blog' + (p.index ? '' : '/' + encodeURIComponent(p.slug)) + '">' + we(p.title) + '</a>' : we(p.title)) + '</td>'
+          + '<td class="bv-r bv-num">' + n(p.visitors) + '<span class="bv-meter hide-sm"><b style="width:' + (p.visitors / max * 100) + '%"></b></span></td>'
+          + '<td class="bv-r bv-num hide-sm">' + n(p.views) + '</td>'
+          + '<td class="bv-r bv-num">' + (p.visitors7 ? n(p.visitors7) : '<span class="bv-faint">—</span>') + '</td>'
+          + '<td class="bv-num hide-sm">' + we(fmtDate(p.first)) + '</td>'
+          + '<td class="bv-num">' + we(fmtDate(p.last)) + '</td>'
+          + '<td>' + (STATUS[p.status] || '') + '</td>'
+          + '</tr>').join('') + '</tbody></table>';
+    }
+
+    function bars(id, rows) {
+      const max = Math.max(1, ...rows.map((r) => r[1]));
+      $(id).innerHTML = rows.map((r) => '<div class="bv-row"><span>' + we(r[0]) + '</span><span class="bv-track"><b style="width:' + (r[1] / max * 100) + '%"></b></span><span class="bv-num">' + n(r[1]) + '</span></div>').join('');
+    }
+
+    function recent(d) {
+      if (!d.recent.length) { $('recent').innerHTML = '<div class="bv-empty">Nothing yet.</div>'; return; }
+      $('recent').innerHTML = '<table><thead><tr><th>When</th><th>Page</th><th>Who</th><th class="hide-sm">Address</th></tr></thead><tbody>'
+        + d.recent.map((r) => '<tr><td class="bv-num">' + we(fmtTs(r.ts)) + '</td><td class="bv-title">' + we(r.title) + '</td><td>' + we(r.who) + '</td><td class="bv-num bv-faint hide-sm">' + we(r.ip) + '</td></tr>').join('')
+        + '</tbody></table>';
+    }
+
+    async function load() {
+      try {
+        const r = await fetch('/api/blog-visitors', { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for the admin.' : 'The server answered ' + r.status + '.');
+        const d = await r.json();
+        tiles(d); chart(d); pages(d); recent(d);
+        bars('who', [['Not signed in', d.who.anonymous], ['Guests', d.who.guest], ['Members', d.who.member]]);
+        bars('depth', [['The index only', d.depth[0]], ['One post', d.depth[1]], ['Two posts', d.depth[2]], ['Three or more', d.depth['3+']]]);
+        $('foot').textContent = 'From the activity log, which keeps about ' + d.keepDays + ' days. Left out: every view by an admin account, every view from an address an admin account has used '
+          + '(so your own visits while signed out), and every view from Meta’s network (' + d.metaRanges + ' published address ranges), which is Instagram and Facebook fetching a post when its link is shared, and every view from an address that opened ' + d.sweepPosts + ' or more different posts within ten minutes, which no reader does and crawlers do. '
+          + 'The log keeps no browser or referring page, so slower crawlers, search engines among them, are counted as visitors and the real number of readers is lower. '
+          + 'An address seen without signing in is logged at most 60 times in ten minutes. Several people behind one address count once; one person on two networks counts twice.';
+      } catch (e) {
+        $('tiles').innerHTML = '<div class="bv-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

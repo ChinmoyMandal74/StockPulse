@@ -114,6 +114,9 @@ const ALLOWED = [
   // The per-kind timing rollup on /activity. Same bounded table and the same one
   // admin page load; it reads two columns over rows already pruned to 60 days.
   /select kind, ms from activity where ms is not null/i,
+  // The blog's rows for /blog-visitors (blogvisits.js), on one admin page load.
+  // Same bounded table; measured 2026-11-03 at 11,014 rows, 936 of them blog views.
+  /select ts, user, detail, ip from activity where kind = 'page'/i,
   /select symbol, count\(\*\) as n from news group by symbol/i,
   // The News column's 7-day count, once per screener load. Same bounded table
   // (pruned to 21 days and 25 items a symbol — 5,849 rows on 2026-09-16), and

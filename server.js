@@ -881,7 +881,7 @@ app.get('/login', (req, res) => {
 // gated .html answered 200 to anyone with the URL, as did every research JSON
 // file. Locally it worked, which is exactly why it went unnoticed.
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
-                      '/activity.html': '/activity', '/promo.html': '/promo',
+                      '/activity.html': '/activity', '/blog-visitors.html': '/blog-visitors', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
                       '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/selloff', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
@@ -2305,6 +2305,12 @@ app.get('/refreshes', route(async (req, res) => {
 app.get('/activity', route(async (req, res) => {
   if (!(await isAdmin(req))) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'private', 'activity.html'));
+}));
+
+// Who reads the blog, with the admin and Meta's crawlers left out (blogvisits.js).
+app.get('/blog-visitors', route(async (req, res) => {
+  if (!(await isAdmin(req))) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'private', 'blog-visitors.html'));
 }));
 
 // The promo studio: fixed marketing-card templates rendered from tonight's
@@ -16839,6 +16845,7 @@ app.get('/api/ipos', requireAuth, route(async (req, res) => {
 // read held per trading day and candidate set, since bars change once a day.
 // The answer is held per snapshot stamp, release column and window.
 const Selloff = require('./selloff.js');
+const BlogVisits = require('./blogvisits.js');
 let selloffBars = null, selloffHeld = null;
 app.get('/api/selloff', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -22082,6 +22089,16 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
 // The activity log's own three routes, beside the visitor log they mirror.
 app.get('/api/activity', requireAdmin, route(async (req, res) => {
   res.json(await store.readActivityStats(500));
+}));
+
+// /blog-visitors: the blog rows of the activity log, summarised by blogvisits.js.
+// Post titles from every post, published or not, so a draft that was read is named.
+app.get('/api/blog-visitors', requireAdmin, route(async (req, res) => {
+  const [log, posts] = await Promise.all([store.readBlogVisitLog(), store.readPosts({ publishedOnly: false })]);
+  res.json(Object.assign(BlogVisits.summarize({
+    views: log.views, adminUsers: log.adminUsers, adminIps: log.adminIps,
+    posts: posts.map((p) => ({ slug: p.slug, title: p.title, status: p.status })), now: Date.now(),
+  }), { keepDays: 60, metaRanges: BlogVisits.META_V4.length, sweepPosts: BlogVisits.SWEEP_POSTS }));
 }));
 
 // Wipe it. Irreversible — the client confirms with the count first.

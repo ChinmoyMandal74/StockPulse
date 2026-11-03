@@ -7506,6 +7506,25 @@ function timingByKind(rows) {
   return out;
 }
 
+// The blog's views for /blog-visitors (blogvisits.js), and what it needs to
+// leave the admin out: the admin accounts, and every address those accounts
+// (and the password cookie, 'admin' or 'open') have used anywhere in the log.
+// Whole-table reads like readActivityStats's, of a table pruned to 60 days.
+async function readBlogVisitLog() {
+  await init();
+  const [views, admins, ips] = await Promise.all([
+    db.execute("select ts, user, detail, ip from activity where kind = 'page' and (detail = 'blog' or detail like 'post:%')"),
+    db.execute("select email from users where role = 'admin'"),
+    db.execute(`select distinct ip from activity
+                where ip is not null and (user in ('admin', 'open') or user in (select email from users where role = 'admin'))`),
+  ]);
+  return {
+    views: views.rows.map((r) => ({ ts: r.ts, user: r.user == null ? null : String(r.user), detail: r.detail == null ? null : String(r.detail), ip: r.ip == null ? null : String(r.ip) })),
+    adminUsers: admins.rows.map((r) => String(r.email)),
+    adminIps: ips.rows.map((r) => String(r.ip)),
+  };
+}
+
 // Wipes the log, like clearVisitors — the autoincrement resets too.
 async function clearActivity() {
   await init();
@@ -8815,6 +8834,7 @@ module.exports = {
   clearVisitors,
   logActivity,
   readActivityStats,
+  readBlogVisitLog,
   clearActivity,
   pruneActivity,
   pruneVisitors,
