@@ -100,6 +100,7 @@ const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab news tone', state: 'Ready', triggers: [tr('Daily', '00:30')].concat(['07:26', '08:26', '09:26', '10:26', '11:26', '12:26', '13:26', '14:26', '15:26', '17:26', '18:26'].map((t) => tr('Weekly', t, 62)), ['06:30', '12:30', '18:30'].map((t) => tr('Weekly', t, 65))) },
   { name: 'TickrLab schedule report', state: 'Ready', triggers: [tr('Daily', '00:05', null, 'PT1H', 'PT23H')] },
   { name: 'TickrLab archive report', state: 'Ready', triggers: [tr('Weekly', '08:00', 64)] },
+  { name: 'TickrLab local copy', state: 'Ready', triggers: [tr('Weekly', '18:50', 62), tr('Weekly', '06:00', 64)] },
 ] });
 // The same jobs as if every one ran on the laptop, with every task enabled:
 // the matching rules, and the fly jobs' task scripts still the way back.

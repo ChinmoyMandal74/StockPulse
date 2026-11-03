@@ -49,6 +49,18 @@ const ADAPT = {
     at: r.startedAt, count: n0(r.results), spent: n0(r.spent),
     ...endState(r, now),
   })),
+  // The local research copy writes no run record anywhere (it never writes to
+  // Turso), so its run is what Task Scheduler says in the laptop's latest
+  // report: the last start and its result. One run a day, so the last is it.
+  localcopy: (src) => {
+    const job = S.JOBS.find((j) => j.id === 'localcopy');
+    const tk = ((src.report && src.report.tasks) || []).find((t) => t.name === job.task);
+    const at = tk && tk.lastRun ? Date.parse(tk.lastRun) : NaN;
+    if (!Number.isFinite(at)) return [];
+    const code = tk.lastResult == null ? null : Number(tk.lastResult);
+    if (code === 267009) return [{ at, state: 'running' }];
+    return [{ at, state: code === 0 ? 'ok' : 'problem', why: code === 0 ? null : 'Task Scheduler result 0x' + (code == null ? '?' : code.toString(16)) }];
+  },
 };
 function refreshRecs(runs, kind, now) {
   return (runs || []).filter((r) => r.kind === kind && r.trigger === 'scheduled').map((r) => ({
@@ -96,6 +108,7 @@ const PHRASE = {
   news: (t) => plural(t.count, 'headline') + ' added',
   tone: (t) => plural(t.count, 'article') + ' scored, ' + money(t.spent) + (t.left ? '; ' + plural(t.left, 'article') + ' left for the next run' : ''),
   releases: (t) => plural(t.count, 'results release') + ' read, ' + money(t.spent),
+  localcopy: () => 'analysis.db brought up to date',
 };
 
 // src: { refresh, news, tone, releases, report, mail }, each today's (or a

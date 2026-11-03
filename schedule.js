@@ -94,6 +94,17 @@ const JOBS = [
     log: '/schedule',
   },
   {
+    // THE LOCAL RESEARCH COPY (2026-11-02, the owner, reading the jobs email:
+    // "I don't see anything here on local DB update for earning and sec
+    // filings"). Synced by hand until then. On the laptop because the file is.
+    id: 'localcopy', name: 'Local research copy', task: 'TickrLab local copy', host: 'laptop', script: 'analysis-db.js', taskScript: 'localcopy-task.ps1',
+    days: WEEKDAYS, times: ['18:50'], minutes: 3,
+    extra: [{ days: ['Sat'], times: ['06:00'] }],
+    spends: { kind: 'free', text: 'Free in credits and API money; reads Turso rows: about 35,000 on a weekday, about 385,000 on Saturday' },
+    what: 'Copies the day\'s new rows into analysis.db on the laptop, the local copy every backtest and blog table reads: bars and fundamentals, and the filings tables (earnings_releases, sec_facts). Weekdays the filings tables\' recent rows only; Saturday both whole, catching what the window misses. Never writes to Turso.',
+    log: '/schedule',
+  },
+  {
     id: 'watchdog', name: 'Watchdog', task: null, host: 'vercel', cron: '30 23 * * *', minutes: 1,
     days: ALL_DAYS,
     spends: { kind: 'free', text: 'Free' },

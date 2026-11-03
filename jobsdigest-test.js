@@ -24,6 +24,8 @@ const TASKS = [
   { name: 'TickrLab news tone', state: 'Ready', lastResult: 0, triggers: [] },
   { name: 'TickrLab schedule report', state: 'Running', lastResult: 267009, triggers: [] },
   { name: 'TickrLab nightly', state: 'Disabled', lastResult: 0, triggers: [] },
+  { name: 'TickrLab archive report', state: 'Ready', lastResult: 0, triggers: [] },
+  { name: 'TickrLab local copy', state: 'Ready', lastRun: '2026-10-29T18:50:01.0000000-04:00', lastResult: 0, triggers: [] },
 ];
 function clean() {
   return {
@@ -149,6 +151,25 @@ ok(job(d, 'nightly').status === 'ok' && job(d, 'nightly').steps[1].pending && /1
 src = clean(); delete src.refresh[0].steps;
 d = J.build(src, NOW);
 ok(realIssues(d).includes('Nightly refresh: 04:00 the step results were not saved') && !job(d, 'nightly').steps[0].pending, 'steps missing long after the refresh are named', d.issues);
+
+// The local research copy: its run is Task Scheduler's last start and result.
+const withCopy = (over) => { const x = clean(); x.report = { at: NOW - 55 * 60000, tasks: TASKS.map((t) => (t.name === 'TickrLab local copy' ? Object.assign({}, t, over) : t)) }; return x; };
+d = J.build(clean(), NOW);
+ok(job(d, 'localcopy').runs === '1 of 1 ran' && job(d, 'localcopy').what === 'analysis.db brought up to date' && job(d, 'localcopy').status === 'ok', 'local copy: the 18:50 run, from the laptop report', job(d, 'localcopy'));
+d = J.build(withCopy({ lastResult: 1 }), NOW);
+ok(job(d, 'localcopy').status === 'issue' && realIssues(d).includes('Local research copy: 18:50 Task Scheduler result 0x1'), 'local copy: a failed run is named', d.issues);
+d = J.build(withCopy({ lastResult: 267009 }), NOW);
+ok(job(d, 'localcopy').status === 'running', 'local copy: a run still going is running, not a failure', job(d, 'localcopy'));
+d = J.build(withCopy({ lastRun: '2026-10-28T18:50:01.0000000-04:00' }), NOW);
+ok(realIssues(d).includes('Local research copy: the 18:50 run did not start'), 'local copy: only yesterday’s run on file is a missed run today', d.issues);
+d = J.build(withCopy({ lastRun: null }), NOW);
+ok(job(d, 'localcopy').missed[0] === '18:50', 'local copy: never run is a missed run', job(d, 'localcopy'));
+{
+  const SAT2 = Date.parse('2026-10-31T20:00:00-04:00');
+  const x = { refresh: [], news: [], tone: [], releases: [], mail: [], report: { at: SAT2 - 600000, tasks: TASKS.map((t) => (t.name === 'TickrLab local copy' ? Object.assign({}, t, { lastRun: '2026-10-31T06:00:02.0000000-04:00' }) : t)) } };
+  d = J.build(x, SAT2);
+  ok(job(d, 'localcopy').runs === '1 of 1 ran', 'local copy: Saturday’s 06:00 run', job(d, 'localcopy'));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

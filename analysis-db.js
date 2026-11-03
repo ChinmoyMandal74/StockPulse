@@ -4,6 +4,10 @@
 //   node --use-system-ca analysis-db.js --full       # rebuild from scratch
 //   node --use-system-ca analysis-db.js --path X.db  # somewhere else
 //   node --use-system-ca analysis-db.js --stats      # what is in the copy
+//   node --use-system-ca analysis-db.js --sec        # also the filings tables, whole
+//   node --use-system-ca analysis-db.js --sec --recent  # filings tables, recent rows only
+//   node --use-system-ca analysis-db.js --scheduled  # the task: --sec, --recent except Saturdays
+//                                                    # (localcopy-task.ps1)
 //
 // Why this exists: every factor test so far has pulled the whole archive over
 // the network, which takes ~41s when it works and fails outright when it does
@@ -45,13 +49,29 @@ const TABLES = [
   // with --sec, since a non-dated table is replaced whole on every sync and
   // sec_facts is ~270,000 rows. Its symbols come from sec_state (one row a
   // company), never a distinct over sec_facts, which would scan it.
-  { name: 'sec_facts', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state' },
+  // `recent`: the window a --recent sync re-reads instead of the whole table
+  // (see RECENT below).
+  { name: 'sec_facts', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state', recent: { col: 'period_end', days: 400 } },
   { name: 'splits', dated: false, bySymbol: false, optIn: '--sec' },
   // The AI readings of the results releases (2026-10-29, for comparing them
   // with the 10-Q and the price provider): ~42,000 wide rows, copied a company
   // at a time on the (symbol, filed) index, with --sec.
-  { name: 'earnings_releases', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state' },
+  { name: 'earnings_releases', dated: false, bySymbol: true, optIn: '--sec', symbolsSql: 'select symbol from sec_state', recent: { col: 'filed', days: 120 } },
 ];
+
+// --recent (2026-11-02, for the scheduled evening sync): the two filings tables
+// re-read only their recent rows, upserted on their primary keys, rather than
+// replaced whole. A whole --sec copy reads ~350,000 Turso rows; this reads a
+// few thousand, each company a seek on (symbol, period_end) or (symbol, filed).
+// What it misses (an old period restated, a 10-K's earlier years, a release
+// re-read long after it was filed, a row deleted upstream) the whole copy picks
+// up, which the schedule runs on Saturdays.
+//
+// --scheduled is what the task runs: --sec, and --recent unless it is Saturday.
+const SCHEDULED = process.argv.includes('--scheduled');
+const SATURDAY = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' }).format(new Date()) === 'Sat';
+const SEC = process.argv.includes('--sec') || SCHEDULED;
+const RECENT = !FULL && (process.argv.includes('--recent') || (SCHEDULED && !SATURDAY));
 
 // Re-pull this many days on top of what is already local. The archive rewrites
 // recent bars — Twelve Data returns a provisional close for a session still in
@@ -95,7 +115,7 @@ function showStats(local) {
   const remote = createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
   const t0 = Date.now();
   console.log(`local copy : ${DB_PATH}`);
-  console.log(`mode       : ${FULL ? 'FULL — rebuilding every table' : 'incremental'}\n`);
+  console.log(`mode       : ${FULL ? 'FULL — rebuilding every table' : 'incremental'}${SEC ? (RECENT ? ', filings tables recent rows only' : ', filings tables whole') : ''}\n`);
 
   // The schema is copied from the source rather than restated, so a column added
   // upstream arrives here without this file needing to know about it.
@@ -105,7 +125,7 @@ function showStats(local) {
 
   let grand = 0;
   for (const t of TABLES) {
-    if (t.optIn && !process.argv.includes(t.optIn)) continue;
+    if (t.optIn === '--sec' ? !SEC : t.optIn && !process.argv.includes(t.optIn)) continue;
     const ddl = sqlFor.get(t.name);
     if (!ddl) { console.log(`  ${t.name.padEnd(22)} not present upstream, skipped`); continue; }
     if (FULL) local.exec(`drop table if exists "${t.name}"`);
@@ -126,7 +146,15 @@ function showStats(local) {
         since = d.toISOString().slice(0, 10);
       }
     }
-    if (!t.dated) local.exec(`delete from "${t.name}"`);
+    // A recent window only on a table already filled locally; an empty one is
+    // copied whole, so --recent can never leave a partial table behind.
+    let recentFrom = null;
+    if (RECENT && t.recent && present && local.prepare(`select 1 x from "${t.name}" limit 1`).get()) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - t.recent.days);
+      recentFrom = d.toISOString().slice(0, 10);
+    }
+    if (!t.dated && !recentFrom) local.exec(`delete from "${t.name}"`);
 
     // Column list from the local table, so the insert cannot drift from the DDL.
     const cols = local.prepare(`pragma table_info("${t.name}")`).all().map((c) => c.name);
@@ -148,6 +176,7 @@ function showStats(local) {
       const where = [], args = [];
       if (g[0] !== null) { where.push(`symbol in (${g.map(() => '?').join(',')})`); args.push(...g); }
       if (since) { where.push('d >= ?'); args.push(since); }
+      if (recentFrom) { where.push(`"${t.recent.col}" >= ?`); args.push(recentFrom); }
       const r = await remote.execute({
         sql: `select ${cols.map((c) => `"${c}"`).join(', ')} from "${t.name}"` +
           (where.length ? ` where ${where.join(' and ')}` : ''),
@@ -172,7 +201,7 @@ function showStats(local) {
       process.stdout.write(`\r  ${t.name.padEnd(22)} ${n(got).padStart(10)} rows`);
     }
     grand += got;
-    console.log(`\r  ${t.name.padEnd(22)} ${n(got).padStart(10)} rows${since ? `  (since ${since})` : ''}          `);
+    console.log(`\r  ${t.name.padEnd(22)} ${n(got).padStart(10)} rows${since ? `  (since ${since})` : ''}${recentFrom ? `  (${t.recent.col} since ${recentFrom})` : ''}          `);
   }
 
   // Indexes analysis wants, which the app's schema does not have: every
