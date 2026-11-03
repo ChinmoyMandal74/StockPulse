@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Selloff watch — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- The account watermark every data page carries: members and guests, never the admin. -->
+  <script src="/wmark.js" defer></script>
+  <script src="/releaseview.js"></script>
+  <style>
+    /* The shell is the IPO pipeline's. Everything this page adds is prefixed sw- . */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex;
+                   justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex;
+      align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 80ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+
+    .sw-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; flex-wrap: wrap; }
+    .sw-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair);
+              background: none; color: var(--muted); cursor: pointer; }
+    .sw-tab.on { color: var(--text); border-color: var(--accent); }
+    .sw-tab .sw-n { font-family: var(--mono); color: var(--faint); margin-left: 4px; }
+    .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
+    .sw-win select { font: 500 12px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 10px; }
+    .sw-what { margin: 0 6px 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 110ch; }
+    .sw-wrap { overflow-x: auto; }
+    .sw-wrap table { width: 100%; border-collapse: collapse; }
+    .sw-wrap th, .sw-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
+    .sw-wrap th { font-weight: 500; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; user-select: none; }
+    .sw-wrap th:hover { color: var(--text); }
+    .sw-wrap th.sw-on { color: var(--text); }
+    .sw-wrap th.sw-r, .sw-wrap td.sw-r { text-align: right; }
+    .sw-wrap tr.sw-grp > td { border-top: 2px solid var(--hair-2); }
+    .sw-co a { font: 600 12.5px var(--mono); color: var(--text); text-decoration: none; }
+    .sw-co a:hover { color: var(--accent); }
+    .sw-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+    .sw-num { font-family: var(--mono); }
+    .sw-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; font-family: var(--mono); }
+    .sw-up { color: var(--green); }
+    .sw-dn { color: var(--red); }
+    .sw-faint { color: var(--faint); }
+    .sw-grpname { color: var(--muted); font-size: 11.5px; }
+    .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+      <a class="btn hide-sm" href="/filings">Filings</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Screens</span>
+      <h1>Selloff watch</h1>
+      <p class="lede">Companies whose shares have fallen, in three views, each with the same readings from the
+        screener. Two views are screens over the latest results releases: companies that reported strong numbers and
+        fell anyway. The third is a list of 25 AI-linked names published elsewhere, set beside our own figures. These
+        are descriptions of what happened, not a reading of what comes next: whether strong results followed by a
+        sharp fall tell anything about the following months has not been tested.</p>
+    </header>
+
+    <div class="sw-bar">
+      <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
+      <button class="sw-tab" data-v="nontech">Non-tech: growing, profitable, fell after results<span class="sw-n" id="nnontech"></span></button>
+      <button class="sw-tab" data-v="watch">AI selloff watchlist<span class="sw-n" id="nwatch"></span></button>
+      <label class="sw-win" id="winWrap">Releases from the past
+        <select id="days" aria-label="How far back a results release counts"></select>
+      </label>
+    </div>
+    <p class="sw-what" id="what"></p>
+
+    <div class="bezel"><div class="core" style="padding:0"><div class="sw-wrap" id="list"><div class="sw-empty">Reading the screener&hellip;</div></div></div></div>
+
+    <p class="sw-foot" id="foot"></p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const qs = new URLSearchParams(location.search);
+    const VIEWS = ['tech', 'nontech', 'watch'];
+    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : 'tech', days: Number(qs.get('days')) || null, sort: null, dir: 1 };
+    let data = null;
+
+    const fmtDay = (s) => (s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—');
+    const isNum = (v) => v != null && v !== '' && Number.isFinite(Number(v));
+    const pct = (v, signed) => (isNum(v) ? (signed && v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(0) + '%' : '—');
+    // Green and red mean the price rose or fell: the moves and the distance from the high, nothing else.
+    const move = (v) => (isNum(v) ? '<span class="sw-num ' + (v < 0 ? 'sw-dn' : v > 0 ? 'sw-up' : '') + '">' + pct(v, true) + '</span>' : '<span class="sw-faint">—</span>');
+    const mult = (v) => (isNum(v) ? (v >= 100 ? Math.round(v) : Number(v).toFixed(1)) + 'x' : '—');
+    const guide = (g) => (!g ? '<span class="sw-faint">—</span>' : g === 'given' ? '<span class="sw-faint">Given</span>' : (window.ReleaseView ? ReleaseView.changeTag(g) : we(g)));
+
+    // One column list; the screens add the reaction, the watchlist its group.
+    const COLS = [
+      { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
+      { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '</td>', sort: (r) => r.group },
+      { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
+      { k: 'filed', t: 'Reported', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
+      { k: 'guidance', t: 'Guidance', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
+      { k: 'reaction', t: 'Reaction', screen: true, r: true, title: 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). The date under it is the day.',
+        cell: (r) => '<td class="sw-r">' + move(r.reaction) + '<span class="sw-sub">' + we(fmtDay(r.reactionOn)) + '</span></td>', num: true },
+      { k: 'since', t: 'Since', screen: true, r: true, title: 'The reaction day’s close to the latest price.', cell: (r) => '<td class="sw-r">' + move(r.since) + '</td>', num: true },
+      { k: 'fromHigh', t: 'From 52-week high', r: true, cell: (r) => '<td class="sw-r">' + move(r.fromHigh) + '</td>', num: true },
+      { k: 'rsi', t: 'RSI', r: true, title: 'Relative strength index, 14-day, at the latest close.', cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.rsi) ? Number(r.rsi).toFixed(0) : '—') + '</td>', num: true },
+      { k: 'pe', t: 'P/E', r: true, title: 'Trailing twelve months, as the data provider reports it; a dash off a loss.', cell: (r) => '<td class="sw-r sw-num">' + mult(r.pe) + '</td>', num: true },
+      { k: 'fpe', t: 'Fwd P/E', r: true, cell: (r) => '<td class="sw-r sw-num">' + mult(r.fpe) + '</td>', num: true },
+      { k: 'valueVsIndustry', t: 'Value vs industry', cell: (r) => '<td>' + we(r.valueVsIndustry || '—') + '</td>', sort: (r) => r.valueVsIndustry || '' },
+      { k: 'revGrowth', t: 'Revenue growth', r: true, title: 'The latest quarter on the same quarter a year earlier.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.revGrowth, true) + '</td>', num: true },
+      { k: 'profitMargin', t: 'Profit margin', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
+      { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td>' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
+    ];
+    const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || v !== 'watch'));
+
+    function what() {
+      const d = data.drop, g = data.minGrowth, w = data.days;
+      if (state.view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
+      if (state.view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
+      return 'A list of 25 AI-linked names in five groups, as published by ' + data.watchSource + ', with Tickr Lab’s own figures. The list is theirs and is not a screen: it does not change as prices move.';
+    }
+
+    async function load() {
+      try {
+        const r = await fetch('/api/selloff' + (state.days ? '?days=' + state.days : ''), { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
+        data = await r.json();
+        state.days = data.days;
+        $('days').innerHTML = data.windows.map((n) => '<option value="' + n + '"' + (n === data.days ? ' selected' : '') + '>' + n + ' days</option>').join('');
+        paint();
+      } catch (e) {
+        $('list').innerHTML = '<div class="sw-empty">' + we(e.message || 'Something went wrong.') + '</div>';
+      }
+    }
+    function paint() {
+      document.querySelectorAll('.sw-tab').forEach((b) => b.classList.toggle('on', b.dataset.v === state.view));
+      $('winWrap').style.display = state.view === 'watch' ? 'none' : '';
+      if (!data) return;
+      for (const v of VIEWS) $('n' + v).textContent = data.views[v].filter((r) => !r.missing).length;
+      $('what').textContent = what();
+      const cols = colsFor(state.view);
+      let L = data.views[state.view].slice();
+      const c = state.sort && cols.find((x) => x.k === state.sort);
+      if (c) {
+        const val = c.num ? (r) => (isNum(r[c.k]) ? Number(r[c.k]) : null) : c.sort;
+        // A blank sorts last whichever way.
+        L.sort((a, b) => { const x = val(a), y = val(b); if (x == null || x === '') return 1; if (y == null || y === '') return -1; return (x < y ? -1 : x > y ? 1 : 0) * state.dir; });
+      }
+      if (!L.length) { $('list').innerHTML = '<div class="sw-empty">No company matches in this window.</div>'; return; }
+      const grouped = state.view === 'watch' && !c;
+      $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '>' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</th>').join('') + '</tr></thead><tbody>'
+        + L.map((r, i) => r.missing
+          ? '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '><td class="sw-co"><b class="sw-num">' + we(r.symbol) + '</b></td><td class="sw-grpname">' + we(r.group) + '</td><td colspan="' + (cols.length - 2) + '" class="sw-faint">Not on the screener</td></tr>'
+          : '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '>' + cols.map((x) => x.cell(r)).join('') + '</tr>').join('')
+        + '</tbody></table>';
+      const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
+      $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
+        + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
+        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year. '
+        + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
+    }
+    $('list').addEventListener('click', (e) => {
+      const th = e.target.closest('th[data-k]');
+      if (!th) return;
+      const k = th.dataset.k;
+      if (state.sort === k) state.dir = -state.dir; else { state.sort = k; state.dir = 1; }
+      paint();
+    });
+    const syncUrl = () => history.replaceState(null, '', '/selloff' + (state.view !== 'tech' ? '?show=' + state.view : ''));
+    document.querySelectorAll('.sw-tab').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.v; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
+    $('days').addEventListener('change', () => { state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
+    paint();
+    load();
+  </script>
+</body>
+</html>

@@ -1381,6 +1381,11 @@
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
                   <span class="nm">IPO pipeline</span>
                 </a>
+                <!-- Members: companies whose shares fell, in three views (2026-11-03). -->
+                <a class="pick" href="/selloff" id="selloffLink">
+                  <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>
+                  <span class="nm">Selloff watch</span>
+                </a>
                 <!-- The corporate site, which / no longer shows once signed in (2026-10-23). -->
                 <a class="pick" href="/home" id="homeLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-help" /></svg>
@@ -5939,7 +5944,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'iposLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'iposLink', 'selloffLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

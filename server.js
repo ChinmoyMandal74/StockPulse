@@ -883,7 +883,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/selloff', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -2225,6 +2225,13 @@ app.get('/ipos', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'ipos');
   res.sendFile(path.join(__dirname, 'private', 'ipos.html'));
+}));
+// Selloff watch (2026-11-03, selloff.js). Members, as /ipos is.
+app.get('/selloff', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'selloff');
+  res.sendFile(path.join(__dirname, 'private', 'selloff.html'));
 }));
 // The news feed (2026-10-24): every AI-read article, by day and importance.
 app.get('/news', route(async (req, res) => {
@@ -16743,6 +16750,47 @@ app.get('/api/ipos', requireAuth, route(async (req, res) => {
     } };
   }
   res.json(ipoCache.body);
+}));
+// SELLOFF WATCH (2026-11-03, selloff.js), for /selloff. Members, as /ipos is.
+// The screener's own served rows (every read-path stamp, so the words and the
+// Trail P/E are the screener's), the stored release column, and for the
+// screens' candidates only, their bars since the window opened: one bounded
+// read held per trading day and candidate set, since bars change once a day.
+// The answer is held per snapshot stamp, release column and window.
+const Selloff = require('./selloff.js');
+let selloffBars = null, selloffHeld = null;
+app.get('/api/selloff', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  const days = Selloff.WINDOWS.includes(Number(req.query.days)) ? Number(req.query.days) : Selloff.DEFAULT_DAYS;
+  if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
+    releaseColHeld = { at: Date.now(), fig: await store.readFigure('releaseColumn').catch(() => null) };
+  }
+  const fig = releaseColHeld.fig, rels = (fig && fig.rows) || {};
+  const ver = await store.snapshotUpdatedAt().catch(() => null);
+  const key = [ver, fig && fig.at, days].join('|');
+  if (selloffHeld && selloffHeld.key === key) return res.json(selloffHeld.body);
+  const snap = await readSnapshot();
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
+  await serveStamps(rows);
+  stampCapDerived(rows);
+  stampPeerValue(rows);
+  const today = SecDaily.todayET();
+  const want = [...new Set([...Selloff.candidates('tech', rows, rels, days, today), ...Selloff.candidates('nontech', rows, rels, days, today)])].sort();
+  const since = Selloff.shiftDay(today, -(days + 10));
+  const barKey = today + '|' + since + '|' + want.join(',');
+  if (!selloffBars || selloffBars.key !== barKey) selloffBars = { key: barKey, by: want.length ? await store.readBarsWindow(want, since, today) : {} };
+  const body = {
+    at: snap && snap.updatedAt ? snap.updatedAt : null, releasesAt: (fig && fig.at) || null, today, days, windows: Selloff.WINDOWS,
+    drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source,
+    views: {
+      tech: Selloff.screen('tech', rows, rels, selloffBars.by, days, today),
+      nontech: Selloff.screen('nontech', rows, rels, selloffBars.by, days, today),
+      watch: Selloff.watch(rows, rels),
+    },
+  };
+  selloffHeld = { key, body };
+  res.json(body);
 }));
 // One company's earnings releases as read (releases.js), newest first, with
 // the provider's EPS beside each. Signed in; a guest only for the guest stocks.

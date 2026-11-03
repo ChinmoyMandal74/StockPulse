@@ -2697,6 +2697,8 @@ earlier, net income above zero, guidance in the release (`guides` or
   still useful as a description ("strong report, weak reaction") on the stock
   page or a promo card, never as a buy call.
 
+**2026-11-03: (e)'s description is live** as the Tech view of `/selloff` (members; `selloff.js`, see `docs/context/selloff-watch.md`), recomputed on each load over the newest results release in a 30 to 90 day window, with the reaction taken as the worse of the filing day and the day after. The backtest (a) is still not done, and the page says the pattern is untested.
+
 Survivorship applies (the universe is today's). Descriptive wording only.
 
 ## 57. Company logos, hand-picked this time — 2026-11-02
