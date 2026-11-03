@@ -4918,6 +4918,14 @@ function stampCapDerived(rows) {
     const px = Number(r.price);
     const eps = Number(r.dilutedEpsTtm);
     r.peLive = (px > 0 && eps > 0) ? px / eps : null;
+    // THE VENDOR'S OWN P/E, WITHHELD OFF A LOSS (2026-11-03). Twelve Data's
+    // `trailing_pe` disagrees with its own diluted EPS from the same payload
+    // on 120 rows: a positive multiple beside a loss (GILD 17.9 on -3.13, F
+    // 12.0 on -1.88, LITE 164.7 on -92.96), seemingly struck off an adjusted
+    // figure. Same rule as the live P/E: a known loss per share is a dash.
+    // Display only, on the way out: the stored profile keeps the vendor's
+    // number and no rule reads either. An unknown EPS leaves it alone.
+    if (r.dilutedEpsTtm != null && r.dilutedEpsTtm !== '' && eps < 0) r.trailingPe = null;
 
     // DERIVED READINGS (2026-10-19, the owner, after Stockanalysis.com's
     // statistics page). All from fields already on the row, stamped on the way
