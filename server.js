@@ -16884,10 +16884,8 @@ app.get('/api/ipos', requireAuth, route(async (req, res) => {
 const Selloff = require('./selloff.js');
 const BlogVisits = require('./blogvisits.js');
 let selloffBars = null, selloffHeld = null;
-app.get('/api/selloff', requireAuth, route(async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
-  const days = Selloff.WINDOWS.includes(Number(req.query.days)) ? Number(req.query.days) : Selloff.DEFAULT_DAYS;
+// The answer for one window, shared by the page's JSON and the Excel download.
+async function selloffAnswer(days) {
   if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
     releaseColHeld = { at: Date.now(), fig: await store.readFigure('releaseColumn').catch(() => null) };
   }
@@ -16899,7 +16897,7 @@ app.get('/api/selloff', requireAuth, route(async (req, res) => {
   const pf = await readPortfolios().catch(() => null);
   const pfKey = pf ? Selloff.AI_THEMES.map(([t]) => (pf[t] || []).join(',')).join(';') : '';
   const key = [ver, fig && fig.at, days, pfKey].join('|');
-  if (selloffHeld && selloffHeld.key === key) return res.json(selloffHeld.body);
+  if (selloffHeld && selloffHeld.key === key) return selloffHeld.body;
   const snap = await readSnapshot();
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
   await serveStamps(rows);
@@ -16921,7 +16919,34 @@ app.get('/api/selloff', requireAuth, route(async (req, res) => {
     },
   };
   selloffHeld = { key, body };
-  res.json(body);
+  return body;
+}
+const selloffDays = (q) => (Selloff.WINDOWS.includes(Number(q)) ? Number(q) : Selloff.DEFAULT_DAYS);
+app.get('/api/selloff', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  res.json(await selloffAnswer(selloffDays(req.query.days)));
+}));
+// The same three tables as an Excel workbook (2026-11-03): a sheet a tab, every
+// figure a number Excel can sort and filter, and a sheet saying what each means.
+app.get('/api/selloff.xlsx', requireAuth, route(async (req, res) => {
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  const body = await selloffAnswer(selloffDays(req.query.days));
+  const X = require('./xlsx.js');
+  const sheets = Selloff.workbookSheets(body).map((sh, i) => {
+    const head = sh.cols.map(([h]) => ({ v: h, s: X.S.head }));
+    const rows = sh.rows.map((r) => r.map((v, j) => (typeof v === 'number' && sh.cols[j][2] ? { v, s: X.S.num2 } : v)));
+    const opts = sh.cols.length > 2
+      ? { widths: sh.cols.map(([, w]) => w), freeze: 1, tab: i === 0, autoFilter: 'A1:' + X.colName(sh.cols.length - 1) + (rows.length + 1) }
+      : { widths: sh.cols.map(([, w]) => w) };
+    return { name: X.sheetName(sh.name), xml: X.sheetXml([head, ...rows], opts) };
+  });
+  const buf = X.workbook(sheets);
+  logAct(req, 'export', 'selloff.xlsx');
+  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.set('Content-Disposition', 'attachment; filename="tickrlab-selloff-watch-' + body.today + '.xlsx"');
+  res.set('Cache-Control', 'private, no-store');
+  res.send(buf);
 }));
 // One company's earnings releases as read (releases.js), newest first, with
 // the provider's EPS beside each. Signed in; a guest only for the guest stocks.

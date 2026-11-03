@@ -54,3 +54,14 @@ The third tab was "AI selloff watchlist", the 25 names from Instagram. It is now
 - **Each row carries:** `from` ('list', or the theme it came in by) and `themes` (every AI theme it is in). The page shows `from` under the group name, with the themes in its tooltip.
 
 **Live themes.** The stored snapshot's theme memberships change only at a refresh. So `/api/selloff` reads `readPortfolios()` on each request and stamps `membershipOf` onto the rows, as the screener does, and its held answer is keyed on the AI themes' members. The browser test edits a theme in the in-memory database and sees the change on the next load.
+
+## Export to Excel (2026-11-03)
+An **Export to Excel** button on the bar downloads `/api/selloff.xlsx?days=N`, for the window chosen on the page. Members only: guests get 403, anonymous visitors 401.
+- **One answer, two routes:** `selloffAnswer(days)` builds the result; both `/api/selloff` and the download read it, so the file always matches the page.
+- **Sheets** (`selloff.js` `workbookSheets`): Tech, Non-tech, AI watchlist, and About (what each column means, prices-as-of time, the rules).
+  - Every figure is a number: percent as a number of percent, market value in $ billions.
+  - A blank figure is an empty cell, never 0.
+  - Heading row frozen, with filters.
+  - The watchlist sheet adds Group, Source and every AI theme a company is in.
+- **File:** written by `xlsx.js`; the activity log gets `export selloff.xlsx`.
+- **Checks:** the browser test opens the file in Excel itself (read-only, through COM). It checks the sheet names, a row per company, the worst reaction first with market cap as a number, and the filters.

@@ -110,6 +110,26 @@ ok(pw[0] === 'BIGPW' && pw.indexOf('NOCAP') > pw.indexOf('BIGPW'), 'a blank mark
 const order = [...new Set(aw.map((r) => r.group))];
 ok(JSON.stringify(order) === JSON.stringify(S.GROUP_ORDER.filter((g) => g !== 'Hyperscalers')), 'groups in their order (no hyperscaler in this fixture)', order);
 
+// ---- The Excel sheets.
+const wb = S.workbookSheets({ at: '2026-11-03T19:17:51Z', days: 45, drop: S.DROP, minGrowth: 10, watchSource: 'x',
+  views: { tech: [Object.assign({}, t0, { cap: 2.1e12, sector: 'Technology' })], nontech: [], watch: [Object.assign({}, aw.find((r) => r.symbol === 'SKHY')), { symbol: 'GONE', group: 'Compute', from: 'list', themes: [], missing: true }] } });
+ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,About', 'four sheets: a tab each, and About');
+const tsh = wb[0], hcol = (sh, h) => sh.cols.findIndex((c) => c[0] === h);
+ok(tsh.rows.length === 1 && tsh.rows[0].length === tsh.cols.length, 'tech: one row, a cell under every heading');
+ok(tsh.rows[0][hcol(tsh, 'Market cap ($B)')] === 2100 && tsh.rows[0][hcol(tsh, 'Reaction (%)')] === -12 && tsh.rows[0][hcol(tsh, 'RSI (14-day)')] === 31, 'figures are numbers: $B, percent, RSI', tsh.rows[0]);
+ok(tsh.cols[hcol(tsh, 'Reaction (%)')][2] === true && tsh.cols[hcol(tsh, 'Company')][2] === false, 'numeric columns are marked so');
+ok(tsh.rows[0][hcol(tsh, 'Guidance')] === 'Given', 'guidance in words');
+ok(wb[1].rows.length === 0, 'an empty screen is an empty sheet, headings kept');
+const wsh = wb[2];
+const sk = wsh.rows.find((r) => r[0] === 'SKHY');
+ok(sk[hcol(wsh, 'Group')] === 'Memory' && sk[hcol(wsh, 'Source')] === 'Memory' && sk[hcol(wsh, 'AI themes')] === 'Memory', 'watchlist: group, source and themes', sk);
+ok(sk[hcol(wsh, 'P/E (trailing)')] === 20 && sk[hcol(wsh, 'Reaction (%)')] === undefined && hcol(wsh, 'Reaction (%)') === -1, 'the watchlist has no reaction columns');
+const gone = wsh.rows.find((r) => r[0] === 'GONE');
+ok(gone[hcol(wsh, 'Company')] === 'Not on the screener' && gone[hcol(wsh, 'Group')] === 'Compute' && gone[hcol(wsh, 'RSI (14-day)')] === null, 'a name not on the screener: said so, figures empty', gone);
+const blank = S.workbookSheets({ views: { tech: [S.fields({ symbol: 'B', rsi: null, marketCap: '' }, null)] } })[0].rows[0];
+ok(blank.slice(2).filter((x) => x === 0).length === 0, 'a blank figure is empty, never 0', blank);
+ok(/Nov 3, 2026/.test(wb[3].rows[0][1]) && /Eastern$/.test(wb[3].rows[0][1]), 'About: prices as of, in Eastern time', wb[3].rows[0]);
+
 // Market cap: carried as a number with its currency; a blank stays blank, never 0.
 const cap1 = S.fields({ symbol: 'X', marketCap: 2.1e12, currency: 'USD' }, null);
 ok(cap1.cap === 2.1e12 && cap1.currency === 'USD', 'market cap and currency are carried');

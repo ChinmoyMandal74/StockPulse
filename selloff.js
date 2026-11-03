@@ -189,10 +189,85 @@ function watch(rows, rels) {
   return out.sort((a, b) => (gi(a.group) - gi(b.group)) || ((b.cap == null ? -1 : b.cap) - (a.cap == null ? -1 : a.cap)) || (a.symbol < b.symbol ? -1 : 1));
 }
 
+// THE EXCEL DOWNLOAD (2026-11-03): the answer /api/selloff serves, as sheets.
+// Each sheet is { name, cols: [[heading, width, numeric]], rows }; a figure is
+// a number (percent as a number of percent, market value in $ billions) so it
+// sorts and filters in Excel, and a blank stays empty, never 0. server.js
+// turns these into the file with xlsx.js.
+const GUIDE_WORD = { raised: 'Raised', lowered: 'Lowered', mixed: 'Mixed', initiated: 'Initiated', reaffirmed: 'Reaffirmed', withdrawn: 'Withdrawn', given: 'Given' };
+function workbookSheets(body) {
+  const r1 = (v) => (num(v) == null ? null : Math.round(num(v) * 10) / 10);
+  const r2 = (v) => (num(v) == null ? null : Math.round(num(v) * 100) / 100);
+  const bn = (v) => (num(v) == null ? null : Math.round(num(v) / 1e7) / 100);
+  const txt = (v) => (v == null || v === '' ? null : String(v));
+  const guide = (g) => (g ? GUIDE_WORD[g] || String(g) : null);
+  const readings = [
+    ['From 52-week high (%)', 12, true, (r) => r1(r.fromHigh)],
+    ['RSI (14-day)', 9, true, (r) => r1(r.rsi)],
+    ['P/E (trailing)', 9, true, (r) => r2(r.pe)],
+    ['Fwd P/E', 9, true, (r) => r2(r.fpe)],
+    ['Value vs industry', 16, false, (r) => txt(r.valueVsIndustry)],
+    ['Revenue growth (%)', 11, true, (r) => r1(r.revGrowth)],
+    ['Profit margin (%)', 11, true, (r) => r1(r.profitMargin)],
+    ['Growth & profit', 22, false, (r) => txt(r.growthProfile)],
+  ];
+  const company = [
+    ['Symbol', 9, false, (r) => r.symbol],
+    ['Company', 30, false, (r) => txt(r.name)],
+  ];
+  const where = [
+    ['Sector', 20, false, (r) => txt(r.sector)],
+    ['Industry', 30, false, (r) => txt(r.industry)],
+    ['Market cap ($B)', 12, true, (r) => bn(r.cap)],
+  ];
+  const release = [
+    ['Reported', 11, false, (r) => txt(r.filed)],
+    ['Guidance', 11, false, (r) => guide(r.guidance)],
+  ];
+  const screenCols = [...company, ...where, ...release,
+    ['Reaction (%)', 10, true, (r) => r1(r.reaction)],
+    ['Reaction day', 11, false, (r) => txt(r.reactionOn)],
+    ['Since reaction (%)', 11, true, (r) => r1(r.since)],
+    ...readings];
+  const watchCols = [...company,
+    ['Group', 20, false, (r) => r.group],
+    ['Source', 30, false, (r) => (r.from === 'list' ? 'Published list' : txt(r.from))],
+    ['AI themes', 40, false, (r) => (r.themes && r.themes.length ? r.themes.join('; ') : null)],
+    ...where, ...release, ...readings];
+  const sheet = (name, cols, rows) => ({
+    name, cols: cols.map(([h, w, n]) => [h, w, n]),
+    rows: rows.map((r) => (r.missing ? cols.map(([h], j) => (j === 0 ? r.symbol : h === 'Group' ? r.group : h === 'Company' ? 'Not on the screener' : null)) : cols.map((c) => c[3](r)))),
+  });
+  const v = (body && body.views) || {};
+  const at = body && body.at ? new Date(body.at).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' Eastern' : 'not known';
+  const d = (body && body.drop) || DROP;
+  const about = [
+    ['Prices as of', at],
+    ['Results releases filed in the past', (body && body.days) + ' days (the window chosen on the page)'],
+    ['Tech', 'Technology and Communication Services companies whose newest results release showed revenue up ' + ((body && body.minGrowth) || MIN_GROWTH) + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.'],
+    ['Non-tech', 'Every other sector, the same release test, reading Growing, profitable and Below industry or In line on value, with a fall of ' + Math.abs(d.nontech) + '% or more on the reaction day.'],
+    ['AI watchlist', 'The 25 names published by ' + ((body && body.watchSource) || WATCH.source) + ', joined by every company in the AI themes (' + AI_THEMES.map((t) => t[0]).join(', ') + '), each company once, grouped; largest market value first within a group.'],
+    ['Reaction', 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). Reaction day is that day.'],
+    ['Since reaction', 'The reaction day’s close to the latest price.'],
+    ['From 52-week high', 'The latest price against the highest close of the past year.'],
+    ['P/E', 'Trailing twelve months as the data provider reports it; empty when its own earnings per share are a loss.'],
+    ['Revenue growth, profit margin, the two descriptions', 'As the screener shows them: the results release while it is the newest report, then the SEC filings, else the data provider. Revenue growth is the latest quarter on the same quarter a year earlier.'],
+    ['Market cap', 'Market value at the latest price, in billions of US dollars.'],
+    ['Empty cells', 'A figure that is not known. Never a zero.'],
+    ['', 'Descriptions of what happened, not a reading of what comes next. Nothing here is a recommendation to trade. Tickr Lab, tickrlab.com.'],
+  ];
+  return [
+    sheet('Tech', screenCols, v.tech || []),
+    sheet('Non-tech', screenCols, v.nontech || []),
+    sheet('AI watchlist', watchCols, v.watch || []),
+    { name: 'About', cols: [['Item', 34, false], ['What it means', 120, false]], rows: about },
+  ];
+}
+
 function shiftDay(day, n) {
   const t = new Date(day + 'T12:00:00Z');
   t.setUTCDate(t.getUTCDate() + n);
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
