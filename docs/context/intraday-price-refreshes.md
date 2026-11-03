@@ -91,3 +91,14 @@ Every intraday round on 2026-11-03 (09:32 to 11:15) was recorded `abandoned` wit
 - **A stock fell off Twelve Data** (kind `td-unserved`): after every live price pull (`runPriceSlice`, and `computeStocks`' live path, never an as-of pull) `noteUnserved(asked, got)` names any symbol not served at all, or served with a newest bar more than 7 days behind the pull's newest; once, and again when it comes back. A pull that served under half of what it asked is a provider problem and says nothing. It names; it never removes (the universe is the owner's call).
 - Both kinds join the jobs email's alert list (`jobsdigest.js` ALERTS).
 - Verified: `pricealert-test.js` (19 checks); the real intraday route end to end against a stub Twelve Data and a stub mail provider on an in-memory database (13 checks: QRVO alone answering 404 no longer fails the round and is named with WBD as stale; nothing repeated; a 502 mails once; the next success mails the all-clear once). Reverting the thrown-error alert fails 5 of them, removing the unserved check fails the first mail check.
+
+## When the nightly gives up (2026-11-03, run 539)
+**What happened.** Run 539 (4 PM) stopped at the 60-round ceiling. Every price had been refreshed, and 412 of 529 company profiles re-pulled. The list was double the usual because the 4 AM run (524) had failed on Qorvo's 404, so the evening carried both lists.
+
+**What was wrong.** The give-up alert said "failed ... Prices on the site stay as they were", which was not true.
+
+**What it does now.** `DELETE /api/cron/refresh` reads the run record, and `PriceAlert.giveUpNotice(run)` words the alert:
+- **Every price live:** "Nightly refresh incomplete". It says prices are current, and how many profiles were left for the next run.
+- **Otherwise:** "failed", as before, now with how many prices did come in.
+
+It is still once a day per job. Tested by `pricealert-test.js` and by an end-to-end run of the route with a stub mail provider; with the fix reverted, that check fails.

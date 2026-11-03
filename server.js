@@ -10116,16 +10116,20 @@ async function priceAlertMail(kind, heading, intro, lines, link) {
   return sendMail({ kind, to, subject: `[Tickr Lab] ${heading}`, text: textShell({ heading, intro, lines: link ? lines.concat(link) : lines, note }),
     html: emailShell({ heading, intro, body, note }) });
 }
-async function priceJobFailed(job, error) {
+// `notice` (optional, PriceAlert.giveUpNotice): a title and lead that say what
+// the run did, for a nightly that stopped with the prices done.
+async function priceJobFailed(job, error, notice) {
   try {
     const now = Date.now(), today = SecDaily.todayET();
     const d = PriceAlert.onFail(await store.readPriceAlerts(), job, today, error, now);
     if (!d.send) return false;
     await store.writePriceAlerts(d.state);
     const name = PriceAlert.JOBS[job] || job;
-    return await priceAlertMail('price-alert', `${name} failed`,
-      `The ${name.toLowerCase()} failed at ${fmtEt(now)} New York. Prices on the site stay as they were until a run succeeds.`,
-      ['What the server said: ' + String(error || 'unknown').slice(0, 300),
+    const nt = notice && notice.title ? notice : null;
+    return await priceAlertMail('price-alert', nt ? nt.title : `${name} failed`,
+      nt ? `${nt.lead} Stopped at ${fmtEt(now)} New York.`
+        : `The ${name.toLowerCase()} failed at ${fmtEt(now)} New York. Prices on the site stay as they were until a run succeeds.`,
+      [(nt ? '' : 'What the server said: ') + String(error || 'unknown').slice(0, 300),
         'You get this once a day for this job, and a short note when it works again.'],
       APP_URL ? `${APP_URL}/refreshes` : '');
   } catch (e) { console.warn('price alert (failed) not sent:', e && e.message); return false; }
@@ -22014,7 +22018,12 @@ app.delete('/api/cron/refresh', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
   const cleared = await endRefresh();
   if (cleared) await closeRun(cleared, 'incomplete');
-  if (cleared) await priceJobFailed('nightly', 'the nightly refresh gave up before every stock was refreshed (run ' + (cleared.runId || '?') + ')');
+  if (cleared) {
+    // Say what the run did: every price in and only profiles left is "incomplete", not a failure.
+    const run = cleared.runId ? await store.readRun(cleared.runId).catch(() => null) : null;
+    const nt = PriceAlert.giveUpNotice(run, cleared.runId);
+    await priceJobFailed('nightly', nt.detail, nt);
+  }
   res.json({ ok: true, reported: await sendRefreshReport(cleared) });
 }));
 

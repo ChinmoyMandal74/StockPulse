@@ -77,4 +77,34 @@ function unserved(asked, got, state, today) {
   return { state: s, gone, back, skipped: false, top };
 }
 
-module.exports = { STALE_DAYS, JOBS, onFail, onOk, unserved, newestOf, dayDiff };
+// WHEN THE NIGHTLY GIVES UP, SAY WHAT IT DID (2026-11-03). Run 539 stopped at
+// the 60-round ceiling with every price refreshed and 412 of 529 company
+// profiles re-pulled (the morning run had failed, so the evening carried both
+// lists), and the alert said "Prices on the site stay as they were", which was
+// wrong. From the run record: every price live means the prices are fine and
+// only the profiles not reached wait for the next run, "incomplete"; otherwise
+// it is a failure, as before. `run` may be null (no record): then the old words.
+function giveUpNotice(run, runId) {
+  const id = (run && run.id) || runId || '?';
+  const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  const total = n(run && run.total), live = n(run && run.pricesLive), prof = n(run && run.profiles), targets = n(run && run.targets), rounds = n(run && run.rounds);
+  if (total && live != null && live >= total) {
+    const left = targets != null && prof != null ? Math.max(0, targets - prof) : null;
+    return {
+      kind: 'incomplete',
+      title: 'Nightly refresh incomplete',
+      lead: `The nightly refresh stopped before re-pulling every company profile. Every price was refreshed (${live.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}), so prices on the site are current.`,
+      detail: (prof != null && targets != null ? `${prof.toLocaleString('en-US')} of ${targets.toLocaleString('en-US')} company profiles (fundamentals) were re-pulled` : 'Not every company profile was re-pulled')
+        + (rounds != null ? ` in ${rounds} rounds` : '') + (left ? `; the other ${left.toLocaleString('en-US')} keep yesterday’s figures and are first in line at the next run` : '') + ` (run ${id}).`,
+    };
+  }
+  return {
+    kind: 'failed',
+    title: null,
+    lead: null,
+    detail: 'the nightly refresh gave up before every stock was refreshed'
+      + (total && live != null ? ` (${live.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} prices refreshed)` : '') + ` (run ${id})`,
+  };
+}
+
+module.exports = { STALE_DAYS, JOBS, onFail, onOk, unserved, newestOf, dayDiff, giveUpNotice };

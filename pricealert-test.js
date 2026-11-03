@@ -44,5 +44,19 @@ ok(outage.skipped && !outage.gone.length, 'served under half: a provider problem
 ok(A.unserved([], {}, {}, '2026-11-03').skipped, 'nothing asked, nothing said');
 ok(A.unserved(['aapl', 'qrvo'], { AAPL: bar('2026-11-03') }, {}, '2026-11-03').gone[0].symbol === 'QRVO', 'symbols compared in upper case');
 
+// ---- The nightly giving up: say what it did. Run 539's own figures.
+const r539 = { id: 539, total: 1282, pricesLive: 1282, targets: 529, profiles: 412, rounds: 61 };
+let g = A.giveUpNotice(r539);
+ok(g.kind === 'incomplete' && g.title === 'Nightly refresh incomplete', 'every price in, profiles left: incomplete, not failed', g);
+ok(/Every price was refreshed \(1,282 of 1,282\)/.test(g.lead) && /prices on the site are current/.test(g.lead) && !/stay as they were/.test(g.lead), 'the lead says the prices are current', g.lead);
+ok(/412 of 529 company profiles/.test(g.detail) && /in 61 rounds/.test(g.detail) && /other 117 keep yesterday/.test(g.detail) && /\(run 539\)/.test(g.detail), 'the detail counts the profiles left', g.detail);
+g = A.giveUpNotice({ id: 524, total: 1282, pricesLive: 0, targets: 284, profiles: 3, rounds: 3 });
+ok(g.kind === 'failed' && g.title === null && /0 of 1,282 prices refreshed/.test(g.detail), 'prices not in: still a failure, with the count', g);
+g = A.giveUpNotice({ id: 600, total: 1282, pricesLive: 1100, targets: 200, profiles: 200, rounds: 40 });
+ok(g.kind === 'failed', 'some prices missing: a failure');
+g = A.giveUpNotice(null, 777);
+ok(g.kind === 'failed' && g.detail === 'the nightly refresh gave up before every stock was refreshed (run 777)', 'no run record: the old words');
+ok(A.giveUpNotice({ id: 1, total: 1282, pricesLive: null }).kind === 'failed', 'an unknown price count is not taken as complete');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
