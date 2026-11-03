@@ -94,6 +94,7 @@
     .sw-dn { color: var(--red); }
     .sw-faint { color: var(--faint); }
     .sw-grpname { color: var(--muted); font-size: 11.5px; }
+    .sw-from { display: block; color: var(--faint); font-size: 10.5px; margin-top: 2px; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
@@ -134,7 +135,7 @@
     <div class="sw-bar">
       <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
       <button class="sw-tab" data-v="nontech">Non-tech: growing, profitable, fell after results<span class="sw-n" id="nnontech"></span></button>
-      <button class="sw-tab" data-v="watch">AI selloff watchlist<span class="sw-n" id="nwatch"></span></button>
+      <button class="sw-tab" data-v="watch">AI watchlist<span class="sw-n" id="nwatch"></span></button>
       <label class="sw-win" id="winWrap">Releases from the past
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
@@ -166,7 +167,8 @@
     // One column list; the screens add the reaction, the watchlist its group.
     const COLS = [
       { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
-      { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '</td>', sort: (r) => r.group },
+      // The group, and under it why the company is here: the published list, or the theme it came in by.
+      { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '<span class="sw-from" title="' + we(fromTitle(r)) + '">' + we(r.from === 'list' ? 'Published list' : r.from || '') + '</span></td>', sort: (r) => GROUPS.indexOf(r.group) },
       { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
       { k: 'cap', t: 'Market cap', r: true, title: 'Market value at the latest price, as on the screener.',
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
@@ -184,13 +186,17 @@
       { k: 'profitMargin', t: 'Profit margin', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
       { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td class="sw-wd">' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
     ];
+    const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
+    const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
     const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || v !== 'watch'));
 
     function what() {
       const d = data.drop, g = data.minGrowth, w = data.days;
       if (state.view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
       if (state.view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
-      return 'A list of 25 AI-linked names in five groups, as published by ' + data.watchSource + ', with Tickr Lab’s own figures. The list is theirs and is not a screen: it does not change as prices move.';
+      const L = data.views.watch, n = L.filter((r) => r.from === 'list').length;
+      return 'AI-linked companies in eight groups, largest first within each: the ' + n + ' published by ' + data.watchSource + ', and every company in your AI themes (AI - Optical Networking, AI - Power Generation, Memory, Neoclouds, Hyperscalers, and Cloud Infra, Hardware & Networking), each company once. '
+        + 'The line under each group says where it came from. It follows the themes as they stand; it is not a screen and does not change as prices move.';
     }
 
     async function load() {

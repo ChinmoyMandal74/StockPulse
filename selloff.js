@@ -41,6 +41,29 @@ const WATCH = {
   ],
 };
 
+// THE AI WATCHLIST (owner, 2026-11-03: "there are many more AI related stocks
+// in my theme ... combine logically into one big list"). The 25 above, joined
+// by every company in the owner's AI themes, each company once, in one of the
+// groups below. Read live from the rows' themes: a name added to a theme
+// appears here on the next load. ETFs are left out, as the screens leave them.
+//
+// Where a company goes, first rule that applies:
+//   1. On the 25: the group it was published in.
+//   2. PLACE, by hand: the foundries beside TSMC in Compute, and Intel.
+//   3. Industry Semiconductor Equipment & Materials: Semicap.
+//   4. Its first theme in AI_THEMES order, mapped to a group. Neoclouds comes
+//      before Cloud Infra so CoreWeave reads as a neocloud.
+const AI_THEMES = [
+  ['Memory', 'Memory'],
+  ['AI - Power Generation', 'Power'],
+  ['AI - Optical Networking', 'Networking'],
+  ['Neoclouds', 'Neoclouds'],
+  ['Hyperscalers', 'Hyperscalers'],
+  ['Cloud Infra, Hardware & Networking', 'Servers & data centres'],
+];
+const PLACE = { GFS: 'Compute', TSEM: 'Compute', UMC: 'Compute', INTC: 'Compute' };
+const GROUP_ORDER = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
+
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const pos = (v) => (num(v) > 0 ? num(v) : null);
 
@@ -141,14 +164,29 @@ function screen(view, rows, rels, barsBy, days, today) {
 
 // The watchlist, in its groups and order; a symbol not on the screener is
 // listed as such rather than dropped.
+// Every company once, grouped as above; within a group, largest market value
+// first (a blank last). `from` says why it is here: 'list' for the 25, else
+// the theme. `themes` names every AI theme it is in.
 function watch(rows, rels) {
   const by = new Map((rows || []).filter((r) => r && r.symbol).map((r) => [r.symbol, r]));
-  const out = [];
-  for (const [group, syms] of WATCH.groups) for (const s of syms) {
-    const row = by.get(s);
-    out.push(row ? Object.assign(fields(row, rels && rels[s]), { group }) : { symbol: s, group, missing: true });
+  const placed = new Map();
+  for (const [group, syms] of WATCH.groups) for (const s of syms) placed.set(s, { group, from: 'list' });
+  for (const [theme, group] of AI_THEMES) {
+    for (const row of by.values()) {
+      if (placed.has(row.symbol) || row.instrumentType === 'ETF' || row.error) continue;
+      if (!(row.portfolios || []).includes(theme)) continue;
+      const g = PLACE[row.symbol] || (row.industry === 'Semiconductor Equipment & Materials' ? 'Semicap' : group);
+      placed.set(row.symbol, { group: g, from: theme });
+    }
   }
-  return out;
+  const out = [];
+  for (const [s, p] of placed) {
+    const row = by.get(s);
+    const themes = row ? AI_THEMES.map((t) => t[0]).filter((t) => (row.portfolios || []).includes(t)) : [];
+    out.push(row ? Object.assign(fields(row, rels && rels[s]), p, { themes }) : { symbol: s, group: p.group, from: p.from, themes, missing: true });
+  }
+  const gi = (g) => { const i = GROUP_ORDER.indexOf(g); return i < 0 ? GROUP_ORDER.length : i; };
+  return out.sort((a, b) => (gi(a.group) - gi(b.group)) || ((b.cap == null ? -1 : b.cap) - (a.cap == null ? -1 : a.cap)) || (a.symbol < b.symbol ? -1 : 1));
 }
 
 function shiftDay(day, n) {
@@ -157,4 +195,4 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };

@@ -16856,13 +16856,19 @@ app.get('/api/selloff', requireAuth, route(async (req, res) => {
   }
   const fig = releaseColHeld.fig, rels = (fig && fig.rows) || {};
   const ver = await store.snapshotUpdatedAt().catch(() => null);
-  const key = [ver, fig && fig.at, days].join('|');
+  // The AI watchlist reads the themes as they stand now, as the screener does,
+  // so a name added to a theme shows on the next load; the held answer is keyed
+  // on those themes' members too.
+  const pf = await readPortfolios().catch(() => null);
+  const pfKey = pf ? Selloff.AI_THEMES.map(([t]) => (pf[t] || []).join(',')).join(';') : '';
+  const key = [ver, fig && fig.at, days, pfKey].join('|');
   if (selloffHeld && selloffHeld.key === key) return res.json(selloffHeld.body);
   const snap = await readSnapshot();
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
   await serveStamps(rows);
   stampCapDerived(rows);
   stampPeerValue(rows);
+  if (pf) for (const r of rows) r.portfolios = membershipOf(r.symbol, pf);
   const today = SecDaily.todayET();
   const want = [...new Set([...Selloff.candidates('tech', rows, rels, days, today), ...Selloff.candidates('nontech', rows, rels, days, today)])].sort();
   const since = Selloff.shiftDay(today, -(days + 10));

@@ -73,11 +73,42 @@ ok(S.screen('tech', rows, rels, {}, 45, today).length === 0, 'no bars, no row');
 
 // ---- The watchlist.
 const w = S.watch([row('MU', { lastEarningsDate: '2026-09-23' }), row('ASML', { lastEarningsDate: '2026-10-15T00:00:00' })], { MU: rel({ filed: '2026-09-24' }) });
-ok(w.length === 25 && w[0].symbol === 'MU' && w[0].group === 'Memory' && w[24].symbol === 'MRVL' && w[24].group === 'Compute', '25 names in their groups and order');
+ok(w.length === 25 && w[0].symbol === 'MU' && w[0].group === 'Memory' && w[24].symbol === 'TSM' && w[24].group === 'Compute', '25 names in their groups; no market caps, so A to Z within a group', [w[0], w[24]].map((r) => r.symbol));
+ok(w.every((r) => r.from === 'list'), 'with no themes, every name is from the list');
 ok(w[0].filed === '2026-09-24', 'the release date when there is one');
 const asml = w.find((r) => r.symbol === 'ASML');
 ok(asml.filed === '2026-10-15' && asml.guidance === null, 'no release: the provider report date, no guidance', asml);
 ok(w.find((r) => r.symbol === 'NVDA').missing === true, 'a name not on the screener is listed as missing');
+
+// ---- The owner's AI themes joined in, each company once.
+const th = (sym, themes, o) => row(sym, Object.assign({ portfolios: themes }, o));
+const aw = S.watch([
+  th('MU', ['Memory'], { marketCap: 4e11 }),                                                       // on the list: stays in its list group
+  th('SKHY', ['Memory'], { marketCap: 9e11 }),
+  th('VEND', ['AI - Optical Networking'], { industry: 'Semiconductor Equipment & Materials', marketCap: 5e9 }),
+  th('GFS', ['AI - Optical Networking'], { marketCap: 2e10 }),
+  th('ALAB', ['Cloud Infra, Hardware & Networking', 'AI - Optical Networking'], { marketCap: 3e10 }),
+  th('CRWV', ['Cloud Infra, Hardware & Networking', 'Neoclouds'], { marketCap: 5e10 }),
+  th('DELL', ['Cloud Infra, Hardware & Networking'], { marketCap: 1e11 }),
+  th('DRAM', ['Memory', 'ETFs'], { instrumentType: 'ETF', marketCap: 1e9 }),
+  th('QBTS', ['Quantum Computing Pure Play'], { marketCap: 1e10 }),
+  th('NOCAP', ['AI - Power Generation'], { marketCap: null }),
+  th('BIGPW', ['AI - Power Generation'], { marketCap: 9e10 }),
+], {});
+const at = (s) => aw.find((r) => r.symbol === s);
+ok(aw.length === 25 + 8, 'the 25 and eight theme names; the ETF and the quantum name left out', aw.length);
+ok(new Set(aw.map((r) => r.symbol)).size === aw.length, 'each company once');
+ok(at('MU').group === 'Memory' && at('MU').from === 'list' && at('MU').themes.join() === 'Memory', 'a list name keeps its group, and its themes are named');
+ok(at('SKHY').group === 'Memory' && at('SKHY').from === 'Memory', 'a theme name joins the matching group');
+ok(at('VEND').group === 'Semicap' && at('GFS').group === 'Compute', 'equipment makers go to Semicap, the foundries to Compute');
+ok(at('ALAB').group === 'Networking' && at('CRWV').group === 'Neoclouds' && at('DELL').group === 'Servers & data centres', 'two themes: the first in order wins');
+ok(!at('DRAM') && !at('QBTS'), 'no ETF, no theme outside the AI list');
+const mem = aw.filter((r) => r.group === 'Memory').map((r) => r.symbol);
+ok(mem[0] === 'SKHY' && mem[1] === 'MU', 'largest market value first within a group', mem);
+const pw = aw.filter((r) => r.group === 'Power').map((r) => r.symbol);
+ok(pw[0] === 'BIGPW' && pw.indexOf('NOCAP') > pw.indexOf('BIGPW'), 'a blank market value sorts after a known one', pw);
+const order = [...new Set(aw.map((r) => r.group))];
+ok(JSON.stringify(order) === JSON.stringify(S.GROUP_ORDER.filter((g) => g !== 'Hyperscalers')), 'groups in their order (no hyperscaler in this fixture)', order);
 
 // Market cap: carried as a number with its currency; a blank stays blank, never 0.
 const cap1 = S.fields({ symbol: 'X', marketCap: 2.1e12, currency: 'USD' }, null);

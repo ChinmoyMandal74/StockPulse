@@ -37,3 +37,20 @@ The owner asked for a market cap column. It sits after Company (and after Group 
 - **Data:** `fields()` carries `cap` (`marketCap`, null when blank) and `currency`.
 - **Display:** the page draws it with the screener's own `RowCard.fmtMktCap`, loading `/rowcard.js`, so it reads exactly as the screener does.
 - **Checks:** every tab still fits at 1200px.
+
+## The AI watchlist (2026-11-03)
+The third tab was "AI selloff watchlist", the 25 names from Instagram. It is now **AI watchlist**.
+- **Owner's request:** "there are many more AI related stocks in my theme"; asked how to join them, "combine logically into one big list".
+- **Themes chosen by the owner:** AI - Optical Networking, AI - Power Generation, Memory, Cloud Infra, Hardware & Networking, Hyperscalers, Neoclouds. Quantum Computing was not chosen.
+- **The list:** the 25, then every company in those themes, each once. On 2026-11-03 that was 81 companies. ETFs are left out (the Memory theme's DRAM), as the screens leave them out.
+
+**Grouping (`selloff.js` `watch`), first rule that applies:**
+1. A name on the 25 keeps its published group.
+2. `PLACE` puts GFS, TSEM, UMC (foundries, beside TSMC) and INTC in Compute.
+3. Industry Semiconductor Equipment & Materials goes to Semicap (ONTO, AXTI, AEHR).
+4. Otherwise the company's first theme in `AI_THEMES` order, mapped to a group: Memory → Memory, Power Generation → Power, Optical → Networking, Neoclouds, Hyperscalers, Cloud Infra → Servers & data centres. Neoclouds is ordered before Cloud Infra so CoreWeave reads as a neocloud.
+
+- **Order:** groups in `GROUP_ORDER`; within a group, the largest market value first, blanks last.
+- **Each row carries:** `from` ('list', or the theme it came in by) and `themes` (every AI theme it is in). The page shows `from` under the group name, with the themes in its tooltip.
+
+**Live themes.** The stored snapshot's theme memberships change only at a refresh. So `/api/selloff` reads `readPortfolios()` on each request and stamps `membershipOf` onto the rows, as the screener does, and its held answer is keyed on the AI themes' members. The browser test edits a theme in the in-memory database and sees the change on the next load.
