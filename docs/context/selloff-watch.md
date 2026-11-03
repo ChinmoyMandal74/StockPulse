@@ -21,3 +21,6 @@ The scratch scripts behind the 2026-11-02 emails tested `guides || guide_kind`. 
 ### Verified
 - `selloff-test.js`: 30 checks over the release test's edges (exactly +10%, a zero profit, withdrawn guidance), the reaction in its four shapes, both screens' filters and the watchlist.
 - In-memory end to end over production's snapshot and release column with the local copy's bars (29 checks): anonymous and guest refused at the API and the page, `.html` gated; RDDT's reaction recomputed by hand from the bars; LITE's P/E a dash, MU's the provider's; every row drawn with a cell under every heading, a fall drawn red, sorting by RSI, the window control hidden on the watchlist, no sideways scroll at 390px, no script errors.
+
+## Frozen heading (2026-11-03)
+The heading row stays put while the rows scroll (the owner asked to "freeze panes on the row heading"). The bezel core clips its contents (`overflow: hidden`), so a heading cannot stick to the page. Instead `.sw-wrap` scrolls in its own box, `max-height: calc(100dvh - 96px)` (one window tall less the floating nav), and `thead th` is `position: sticky; top: 0` on an opaque `--surface` background. Checked by scrolling the box 400px at 1440x900 and 1280x700. With the sticky rule removed, those checks fail.
