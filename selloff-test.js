@@ -79,5 +79,10 @@ const asml = w.find((r) => r.symbol === 'ASML');
 ok(asml.filed === '2026-10-15' && asml.guidance === null, 'no release: the provider report date, no guidance', asml);
 ok(w.find((r) => r.symbol === 'NVDA').missing === true, 'a name not on the screener is listed as missing');
 
+// Market cap: carried as a number with its currency; a blank stays blank, never 0.
+const cap1 = S.fields({ symbol: 'X', marketCap: 2.1e12, currency: 'USD' }, null);
+ok(cap1.cap === 2.1e12 && cap1.currency === 'USD', 'market cap and currency are carried');
+ok([null, '', undefined].every((v) => S.fields({ symbol: 'X', marketCap: v }, null).cap === null), 'a missing market cap is blank, not zero');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

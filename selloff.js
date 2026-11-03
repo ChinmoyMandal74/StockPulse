@@ -98,6 +98,8 @@ function fields(row, rel) {
     fromHigh: num(row.pctFromHigh), rsi: num(row.rsi), pe: pos(row.trailingPe), fpe: pos(row.forwardPe),
     valueVsIndustry: row.valueVsIndustry || null, revGrowth: num(row.revenueGrowthYoY), profitMargin: num(row.profitMargin),
     growthProfile: row.growthProfile || null,
+    // Market value, the one money figure reliably in dollars; shown as the screener shows it.
+    cap: num(row.marketCap), currency: row.currency || null,
   };
 }
 

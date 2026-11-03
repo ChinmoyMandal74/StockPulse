@@ -31,3 +31,9 @@ The heading row stays put while the page scrolls (owner: "freeze panes on the ro
 - **Once stuck,** `body.sw-stuck` paints the nav's band with `--bg`, so rows pass under it instead of showing round the nav.
 - **At 1180px and narrower,** the card scrolls sideways again and the heading is ordinary.
 - **Tests:** the browser test checks that the table has no scroll of its own, the heading waits under the nav while the rows move, and the band is painted. With the sticky rule removed, the checks fail; with the band rule removed, they fail too.
+
+## Market cap (2026-11-03)
+The owner asked for a market cap column. It sits after Company (and after Group or Sector), on all three tabs.
+- **Data:** `fields()` carries `cap` (`marketCap`, null when blank) and `currency`.
+- **Display:** the page draws it with the screener's own `RowCard.fmtMktCap`, loading `/rowcard.js`, so it reads exactly as the screener does.
+- **Checks:** every tab still fits at 1200px.
