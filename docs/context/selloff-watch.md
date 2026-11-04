@@ -105,3 +105,6 @@ The owner asked for no descriptive text on the page: "Remove all these texts for
 - **Removed:** the paragraph under the heading, and the line above each tab's table.
 - **Where the rule went:** each tab's rule is now its tooltip (`what(view)` sets the tab's `title`).
 - **Kept:** the footnote under the table, with the definitions and "Nothing here is a recommendation to trade".
+
+## Tab order (2026-11-03)
+AI watchlist is the first tab (owner), then Tech, Non-tech and Bouncing off the lows. It is also the tab the page opens on.
