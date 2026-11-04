@@ -298,7 +298,13 @@ async function readOne(sym, e, meta, text, facts) {
   if (!UA) throw new Stop('no SEC user agent: set SEC_UA, REPORT_TO or MAIL_FROM');
   const [snap, ids] = await Promise.all([store.readSnapshot(), store.readFilerIds()]);
   let rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && r.instrumentType !== 'ETF' && ids[r.symbol]);
-  if (SYMBOLS.length) rows = rows.filter((r) => SYMBOLS.includes(r.symbol));
+  if (SYMBOLS.length) {
+    rows = rows.filter((r) => SYMBOLS.includes(r.symbol));
+    // A stock added today is not in the snapshot until the nightly builds its
+    // row, but its filer id is known once its filings are read. Named here, it
+    // is read anyway (only the symbol is used below).
+    for (const s of SYMBOLS) if (ids[s] && !rows.some((r) => r.symbol === s)) rows.push({ symbol: s });
+  }
   rows.sort((x, y) => (Number(y.marketCap) || 0) - (Number(x.marketCap) || 0));
   if (SKIP) rows = rows.slice(SKIP);
   if (LIMIT) rows = rows.slice(0, LIMIT);

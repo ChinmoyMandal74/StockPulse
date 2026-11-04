@@ -48,3 +48,19 @@ The owner: "Can you add a feature to disable a theme site wide by admin" (an inv
 - **The manager sees everything.** `/themes` sends `?all=1` on every call; an admin asking so gets every theme plus `disabled`, anyone else the filtered list. Rename carries the switch to the new name; delete drops it from the list.
 - **At once, not at the next refresh.** Stored snapshot rows carry the memberships of the last refresh, so `snapshotCached` re-stamps them from the filtered list whenever it reads (every 20 s at most per instance), and the switch drops that cache. A group page's basket cache (ten minutes per instance) can still serve a theme for up to ten minutes after it goes off.
 - Tests (scratchpad): `theme-off-test.js`, 18 checks as admin and member; `theme-off-page.js`, 8 checks on the drawn page.
+
+
+### Fire and safety names, added 2026-11-04 (owner)
+The owner asked to add the fire and safety companies not yet tracked and to load all their history, SEC and earnings data included: **NSSC** (Napco Security), **FSS** (Federal Signal), **BRC** (Brady), **REZI** (Resideo). Each was checked first as a single US common-stock listing at Twelve Data. No theme was asked for, so none was made. What was run, in order:
+- **The add:** `addManyToUniverse` plus `writeNames`, the same calls as `POST /api/universe/bulk`.
+- **`onboard.js --commit --only ...`:** prices to 2006 (REZI from its 2018 listing), record close, short interest (about 200 readings each) and splits.
+- **SEC filings:** `POST /api/sec/refresh?mode=missing` with the cron secret. It read all four, 1,061 facts, and resolved their CIKs.
+- **Other SEC history:** `sec-events-load.js`, `sec-holders-load.js` and `sec-segments-load.js`, each `--only`, then `drawdown-load.js` and `options-load.js`.
+- **Earnings releases:** `release-history-load.js --symbols`, 114 since 2017 for $0.23. **Federal Signal files no results 8-K** (its 8-Ks are items 7.01, 8.01, 5.0x and 2.01), so it has none. Its figures come from its 10-Q and 10-K and from Twelve Data.
+- **`tech_history`:** `build-tech-history.js --only`, 3,325 marks from 2007. It reads the local copy, whose incremental sync brings only recent bars for a new stock, so the four stocks' full bars were copied into `analysis.db` first.
+
+Insider trades needed nothing: the quarterly loads keep every filer, so 12 to 40 transactions each were already stored, and the daily walk takes them now they are tracked. The 13F and N-PORT loaders take them at the next quarterly load.
+
+What a script cannot do is the Twelve Data profile and earnings history (the one-stock refresh needs an admin session). The nightly takes stocks with no profile first, and **a new stock has no snapshot row until then**.
+
+**`release-history-load.js --symbols` now also reads a named company that is not in the snapshot yet**, provided its SEC filer id is known. It used to take its list only from snapshot rows, so on the add day it found 0 companies.

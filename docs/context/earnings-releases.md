@@ -479,3 +479,7 @@ The owner: "if the earning results that you fetch can also be stored locally so 
 - **Reading it:** `R.each({ from, to, symbol, resultsOnly })` yields every release with its text, oldest first; `R.forSymbol`, `R.get(accn)`.
 - **Weekly:** the Saturday archive email (`archive-report.js`, `/api/cron/archive-report`) has an Earnings release archive section: kept this week, releases, companies, filed range, size, misses.
 - `releasearchive-test.js` (14 checks).
+
+
+### A stock added today (2026-11-04)
+`release-history-load.js --symbols X` now reads X even when it has no snapshot row yet (that row arrives with the next nightly), provided its SEC filer id is known. The loop uses only the symbol. Before this, the run for the four fire and safety stocks found 0 companies; after it, 114 releases were read. See `adding-a-stock.md`.
