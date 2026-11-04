@@ -115,3 +115,6 @@ The owner asked for less space above the tables.
 - **Heading:** now 30 to 40px (was 38 to 58px).
 - **Spacing:** smaller margins, and the nav sits 12px from the top.
 - **Result:** the tabs start about 130px from the top at 1440px, which the browser test checks.
+
+## The Brand card (2026-11-03)
+The promo studio has a Brand › Ideas card that restates this page's four views and their rules (`ideas-card.md`). Change it with any threshold, group or column.

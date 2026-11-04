@@ -2784,6 +2784,42 @@
         + '</div></div>' + chromeFoot();
     }
 
+    // ---- Brand › Ideas (2026-11-03) ----------------------------------------
+    // The owner: "create promo slide under brand template called Ideas. Keep it
+    // a one slide with enough info on these ideas". The four views of the
+    // Ideas page (/ideas, selloff.js) and the readings every name carries.
+    // Evergreen like How it's built: fixed text, no date, no count, reads no
+    // data. IT RESTATES THE PAGE'S RULES: when a threshold in selloff.js
+    // (MIN_GROWTH, DROP) or the bouncelw screen changes, this changes with it.
+    function tplIdeas() {
+      const VIEWS = [
+        ['AI watchlist', 'AI-linked companies, each once, largest first', [
+          'Memory · Power · Networking · Semicap', 'Compute · Neoclouds · Hyperscalers', 'Servers & data centres']],
+        ['Strong results, fell anyway', 'Technology and communication companies', [
+          'Revenue up 10% or more on the year', 'A net profit, and guidance given', 'Shares down 7% or more on the reaction day']],
+        ['Growing, profitable, fell after results', 'Every other sector', [
+          'The same results test', 'Growing, profitable, valued at or below its industry', 'Shares down 5% or more on the reaction day']],
+        ['Bouncing off the lows', 'Low in the range, turning up', [
+          'In the bottom 30% of its 52-week range', 'Up more than 3% over the past month', 'And up over the past two weeks']],
+      ];
+      const READINGS = ['Market cap', 'Today', 'From 52-week high', 'RSI', 'P/E and forward P/E', 'Value vs industry',
+        'Revenue growth', 'Profit margin', 'Growth & profit', 'The Signal and the rule that fired'];
+      const cards = VIEWS.map(([h, g, rules], i) => '<li class="id-v">'
+        + `<div class="id-hd"><span class="id-n">${String(i + 1).padStart(2, '0')}</span>`
+        + `<span><b class="id-h">${esc(h)}</b><span class="id-g">${esc(g)}</span></span></div>`
+        + '<ul class="id-r">' + rules.map((r) => `<li>${esc(r)}</li>`).join('') + '</ul></li>').join('');
+      return chromeTop(false)
+        + '<div class="s-body"><div class="id-in">'
+        + '<span class="s-kick">Tickr Lab · Ideas</span>'
+        + '<h2 class="s-title">Ideas<br><span class="dim">four ways to look at the market</span></h2>'
+        + `<ol class="id-map">${cards}</ol>`
+        + '<div class="id-rd"><span class="id-rl">Every name carries</span>'
+        + '<span class="id-chips">' + READINGS.map((r) => `<span class="id-c">${esc(r)}</span>`).join('') + '</span></div>'
+        + '<p class="id-say"><b>Live on the Ideas page, and in one Excel download.</b> '
+        + 'What happened, not what happens next.</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
     // ---- render ------------------------------------------------------------
 
     // ---- Range -----------------------------------------------------------
@@ -14389,7 +14425,7 @@
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase, golive: () => tplShowcase(true),
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
     bubble: tplBubble, stock: tplStock, day: tplDay, secsnap: tplSecSnap, spotlight: tplSpotlight,
-    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload, arch: tplArch,
+    disclaimer: tplDisclaimer, howto: tplHowTo, evolution: tplEvolution, overload: tplOverload, arch: tplArch, ideas: tplIdeas,
     flow: tplFlow, histogram: tplHistogram,
     treemap: tplTreemap, waterfall: tplWaterfall, shortmoves: tplShortMoves,
     buybacks: tplBuybacks,
@@ -17089,6 +17125,50 @@
     .sz-story .ar-t b { font-size: 27px; }
     .sz-story .ar-t span { font-size: 22px; }
     .sz-story .ar-say { font-size: 27px; }
+    .id-in { display: flex; flex-direction: column; height: 100%; }
+    /* The four views fill the height between the title and the readings, so no shape is left with a gap. */
+    .id-map { list-style: none; margin: 30px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 16px; flex: 1 1 auto; min-height: 0; }
+    .id-v { display: flex; flex-direction: column; gap: 18px; padding: 26px 26px; border-radius: 16px;
+            background: color-mix(in srgb, var(--text) 4%, transparent); border: 1px solid var(--hair); min-width: 0; }
+    .id-hd { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 14px; align-items: start; }
+    .id-hd > span:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .id-n { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font: 700 18px var(--mono);
+            color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+    .id-h { font: 700 30px var(--sans); line-height: 1.12; letter-spacing: -0.01em; color: var(--text); }
+    .id-g { font: 400 20px/1.3 var(--sans); color: var(--muted); }
+    .id-r { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+    .id-r li { position: relative; padding-left: 20px; font: 400 22px/1.32 var(--sans); color: var(--text); }
+    .id-r li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    .id-rd { margin: 26px 0 0; display: flex; flex-direction: column; gap: 10px; }
+    .id-rl { font: 600 15px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .id-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .id-c { padding: 8px 14px; border-radius: 999px; font: 500 19px var(--sans); color: var(--text); border: 1px solid var(--hair); background: color-mix(in srgb, var(--text) 3%, transparent); }
+    .id-say { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid var(--hair); font: 400 22px/1.4 var(--sans); color: var(--muted); }
+    .id-say b { color: var(--text); font-weight: 600; }
+    .sz-square .id-map { margin-top: 16px; gap: 10px; }
+    .sz-square .id-v { padding: 18px 20px; gap: 12px; }
+    .sz-square .id-hd { grid-template-columns: 42px minmax(0, 1fr); column-gap: 12px; }
+    .sz-square .id-n { width: 42px; height: 42px; font-size: 16px; }
+    .sz-square .id-h { font-size: 25px; }
+    .sz-square .id-g { font-size: 17px; }
+    .sz-square .id-r { gap: 8px; }
+    .sz-square .id-r li { font-size: 19px; padding-left: 17px; }
+    .sz-square .id-rd { margin-top: 12px; gap: 7px; }
+    .sz-square .id-rl { font-size: 13px; }
+    .sz-square .id-chips { gap: 6px; }
+    .sz-square .id-c { padding: 5px 11px; font-size: 15.5px; }
+    .sz-square .id-say { padding-top: 11px; font-size: 17px; }
+    .sz-story .id-map { margin-top: 40px; grid-template-columns: 1fr; gap: 16px; }
+    .sz-story .id-v { padding: 24px 26px; gap: 14px; }
+    .sz-story .id-hd { grid-template-columns: 54px minmax(0, 1fr); column-gap: 16px; }
+    .sz-story .id-n { width: 54px; height: 54px; font-size: 21px; }
+    .sz-story .id-h { font-size: 32px; }
+    .sz-story .id-g { font-size: 22px; }
+    .sz-story .id-r li { font-size: 23px; padding-left: 20px; }
+    .sz-story .id-rd { margin-top: 30px; }
+    .sz-story .id-rl { font-size: 18px; }
+    .sz-story .id-c { padding: 9px 15px; font-size: 21px; }
+    .sz-story .id-say { font-size: 26px; }
 
     /* ---- Too much to read ----------------------------------------------
        Every colour is a token or a color-mix() of one. Green and red only
