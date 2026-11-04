@@ -181,20 +181,18 @@
     <section class="bezel card" id="afterAdd"><div class="core">
       <span class="lbl">After you add stocks &mdash; what to do</span>
       <ol class="aa-steps">
-        <li><b>Load their history, the same day, from your computer.</b> In the project folder run
-          <code>node --use-system-ca onboard.js --commit</code>. It loads the full price history, the record close,
-          short-interest history back to 2017 and split history for every stock still waiting, at about
-          21 API credits a stock. <b>Do it before the next price refresh</b> &mdash; a refresh that meets
-          stocks with no price history times out. It will not start during a nightly run (7:25&ndash;8:20 AM
-          and 7:25&ndash;8:20 PM Eastern, weekdays); wait for the window to pass. Run it without
-          <code>--commit</code> first to see what it would do.</li>
-        <li><b>Company data arrives on its own</b> with the next nightly run (new stocks go first): profile,
-          fundamentals, earnings history, SEC filings, news and splits. To have it now, after step 1, press
-          Fill missing on <a href="/refreshes">Refresh runs</a> (about 81 credits a stock, about seven stocks a minute).</li>
-        <li><b>Insider trades, after the filings have been fetched</b> (the day after the add): reload the current
-          quarter with <code>node --use-system-ca insider-load.js --commit --quarters 1 --force</code>.</li>
+        <li><b>Nothing else to press.</b> Within half an hour of the add (the laptop task <i>TickrLab onboard</i>,
+          every half hour from 7:05 AM to 10:05 PM), <code>onboard.js</code> loads everything for every stock still
+          waiting: the full price history, record close, short interest and splits; the company profile and
+          earnings history; the SEC filings, 8-K events, 13D/13G holders, revenue segments, drawdowns and options;
+          the earnings releases since 2017; the local research copy, the release text archive and the Signal
+          history; and the source rule. About 101 API credits a stock. It keeps out of the nightly runs and the
+          intraday price slots by itself. The laptop has to be on.</li>
+        <li><b>To load them straight away</b>, run <code>node --use-system-ca onboard.js --commit</code> in the
+          project folder (without <code>--commit</code> it only shows what it would do).</li>
         <li><b>Check <a href="/onboarding">New stocks</a>.</b> It lists every stock added that is not finished
-          yet, piece by piece, and clears once the history is in.</li>
+          yet, piece by piece, and clears once the run has finished it. Insider trades, 13F and fund holders,
+          news and tone arrive on their own.</li>
       </ol>
       <p class="warn">Two things cannot be filled in for the past and start from the day of the add: the recorded
         fundamentals history and how long a stock has held its Signal. Removing stocks is different: after a

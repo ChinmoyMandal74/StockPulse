@@ -24,6 +24,17 @@
 - **The command names no symbol**, so the copy on the page and on `/holdings` after an add cannot go stale. `/holdings` now shows it in place of the bare `backfill-bars` command.
 - `GET /api/onboarding` (admin) reports per pending stock: profile, filings status, first bar, record close, short-reading count, splits. State tables and per-symbol seeks only.
 
+### One click: the add is all (2026-11-04)
+The owner, on the checklist below: "This should all be one one click of a button somehow". **`onboard.js` now runs every step of the checklist**, and the laptop task **`TickrLab onboard`** (`onboard-task.ps1`, every half hour 07:05 to 22:05, declared in `schedule.js` as `onboard`) runs it with `--auto` for whatever is waiting. So the add on `/themes` is the click; the stock is loaded by the next half-hour run.
+
+- **Waiting** is unchanged (added after `ONBOARD_SINCE`, no `onboard_state` row), so most runs read one small query and end silently.
+- **Remote steps through the cron secret**: `/api/admin/refresh-stock` now takes the cron secret as well as an admin (`cronOrAdmin`), so the profile needs no press of the Refresh button; `/api/sec/refresh?mode=missing` is looped until `remaining` is 0; `/api/sources/build?symbols=` last. A 429 or 503 is waited out (70 s, five tries).
+- **Twelve Data**: before the price loaders and each profile it waits while `Schedule.busyAt` names a slot or window; a run that starts inside a nightly window stops (`--force` overrides), and `--auto` exits 0 so the task stays green.
+- **One run at a time**: `onboard.lock` holds the pid (and the task is `IgnoreNew`, three-hour limit). The log is `onboard.log`.
+- **The record**: `onboard_state.steps` says "all 16 steps" or names the steps that failed; finished still means bars stored.
+- `/onboarding` and the After you add card on `/themes` say so. The laptop has to be on; running `onboard.js --commit` by hand does the same at once.
+- The task has to be registered once on the laptop: `.onboard-task.ps1` (Claude was refused Task Scheduler registration as persistence, so the owner runs it).
+
 ### The whole checklist, local copy included (2026-11-04)
 The owner, after the fire and safety adds: "When we add a new stock how do I make sure everything is refresh including local copy". Everything below names the stocks with `--only A,B` (`--symbols` for the releases loader). Twelve Data steps (1, 2) stay off :15 and :45, 09:32 and the nightly windows; the rest cost no Twelve Data credits.
 

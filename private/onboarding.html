@@ -107,9 +107,9 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Admin</span>
       <h1>New stocks</h1>
-      <p class="lede">What a newly added stock still needs, and the one command that loads it. Most of a
-        stock’s data arrives on its own within a day; four pieces of history do not, and are loaded from
-        your machine.</p>
+      <p class="lede">What a newly added stock still needs. The laptop task <i>TickrLab onboard</i> loads all of
+        it within half an hour of the add (every half hour, 7:05 AM to 10:05 PM), with
+        <code class="in">onboard.js</code>; the command below does the same at once.</p>
     </header>
 
     <div id="body"><p class="loading">Reading…</p></div>
@@ -120,18 +120,13 @@
         <li><b>Add it.</b> On the Admin page (Add a ticker, or Add many at once) or from Index membership.
           The data provider is asked whether it can price each symbol, at 1 credit each; one it cannot
           price is refused.</li>
-        <li><b>Run the command on your machine</b>, in the project folder:
-          <code class="in">node --use-system-ca onboard.js --commit</code>.
-          Without <code class="in">--commit</code> it only prints what it would do. It loads the full price
-          history, the record close, the short-interest history and the split history for every stock listed
-          above, then marks them finished. A few stocks take a minute or two.
-          <b>For more than a handful, run it before the next price refresh</b> — a stock with no price
-          history is otherwise pulled inside the refresh itself, and a large batch has run one past its
-          time limit before.</li>
-        <li><b>Leave the rest to the nightly run</b> (4:00 AM and 4:00 PM Eastern on weekdays), or press
-          <a href="/refreshes?do=refreshmissing">Fill missing</a> to pull company data now. The command
-          refuses to start inside either nightly window, because both would be competing for the same
-          API credits.</li>
+        <li><b>Nothing else to do.</b> Within half an hour the laptop task runs
+          <code class="in">node --use-system-ca onboard.js --commit</code> for every stock listed above: the full
+          price history, record close, short interest and splits; the profile and earnings history; the SEC filings,
+          8-K events, 13D/13G holders, revenue segments, drawdowns and options; the earnings releases since 2017;
+          the local research copy, release text and Signal history; and the source rule. About 101 credits a stock.
+          It waits out the intraday price slots and does not start in a nightly window (4:00 AM and 4:00 PM
+          Eastern). The laptop has to be on; to load at once, run the same command yourself.</li>
         <li><b>Check back here.</b> A stock leaves the list above once the command has run for it. The
           <a href="/quality">Data quality</a> page shows anything still thin.</li>
       </ol>
@@ -144,18 +139,22 @@
         <tbody>
           <tr><td><b>Name and the provider check</b></td><td class="wait">On its own</td><td>The moment you add it</td></tr>
           <tr><td><b>Prices, about 300 days</b></td><td class="wait">On its own</td><td>Next price refresh, every half hour in market hours</td></tr>
-          <tr><td><b>Profile, fundamentals, sector, industry</b></td><td class="wait">On its own</td><td>Next nightly run, which takes new stocks first; or Fill missing</td></tr>
+          <tr><td><b>Profile, fundamentals, sector, industry</b></td><td class="wait">On its own</td><td>The onboard run, or the next nightly</td></tr>
           <tr><td><b>Earnings history, up to 40 quarters</b></td><td class="wait">On its own</td><td>With the profile</td></tr>
-          <tr><td><b>SEC filings and announcement dates</b></td><td class="wait">On its own</td><td>Next nightly run, never-fetched companies first</td></tr>
+          <tr><td><b>SEC filings and announcement dates</b></td><td class="wait">On its own</td><td>The onboard run, or the next nightly</td></tr>
           <tr><td><b>S&amp;P 500 membership</b></td><td class="wait">On its own</td><td>Immediately</td></tr>
           <tr><td><b>News</b></td><td class="wait">On its own</td><td>Next news run, or when its page is opened</td></tr>
           <tr><td><b>Split history, from now on</b></td><td class="wait">On its own</td><td>Nightly: a new stock, or a newly reported split</td></tr>
-          <tr><td><b>Full price history, up to 20 years</b></td><td class="todo">The command</td><td>Until then the 5-year return and long chart ranges are blank</td></tr>
-          <tr><td><b>Record close</b></td><td class="todo">The command</td><td>Needs the full price history first</td></tr>
-          <tr><td><b>Short-interest history, back to 2017</b></td><td class="todo">The command</td><td>Only the newest reading arrives on its own</td></tr>
-          <tr><td><b>Split history, straight away</b></td><td class="todo">The command</td><td>Otherwise the next nightly run</td></tr>
-          <tr><td><b>Insider transactions</b></td><td class="todo">Separately</td><td>Reload the current quarter:
-            <code class="in">node --use-system-ca insider-load.js --commit --quarters 1 --force</code>, after its filings have been fetched</td></tr>
+          <tr><td><b>Full price history, up to 20 years</b></td><td class="todo">The onboard run</td><td>Until then the 5-year return and long chart ranges are blank</td></tr>
+          <tr><td><b>Record close</b></td><td class="todo">The onboard run</td><td>Needs the full price history first</td></tr>
+          <tr><td><b>Short-interest history, back to 2017</b></td><td class="todo">The onboard run</td><td>Only the newest reading arrives on its own</td></tr>
+          <tr><td><b>Split history, straight away</b></td><td class="todo">The onboard run</td><td>Otherwise the next nightly run</td></tr>
+          <tr><td><b>8-K events, 13D/13G holders, revenue segments</b></td><td class="todo">The onboard run</td><td>From the SEC, after its filings</td></tr>
+          <tr><td><b>Drawdowns and options open interest</b></td><td class="todo">The onboard run</td><td>Otherwise a slice a night</td></tr>
+          <tr><td><b>Earnings releases since 2017</b></td><td class="todo">The onboard run</td><td>Read by Claude Haiku, capped at $2 a run</td></tr>
+          <tr><td><b>Local research copy, release text, Signal history</b></td><td class="todo">The onboard run</td><td>On the laptop</td></tr>
+          <tr><td><b>Source rule</b></td><td class="todo">The onboard run</td><td>Otherwise the next daily filings pass</td></tr>
+          <tr><td><b>Insider transactions</b></td><td class="wait">On its own</td><td>The quarterly loads keep every filer; the daily walk takes the rest</td></tr>
           <tr><td><b>Day-by-day fundamentals, days the signal has held</b></td><td>Cannot be loaded</td><td>Both start from the day the stock is added</td></tr>
         </tbody>
       </table></div>
@@ -181,7 +180,7 @@
       html += '<h2>Nothing to finish</h2><p class="ok" id="none">Every stock added since this page was built has had its history loaded.</p>';
     } else {
       html += '<h2>' + rows.length + (rows.length === 1 ? ' stock needs' : ' stocks need') + ' its history loaded</h2>'
-        + '<p>Run this on your machine, in the project folder. It covers every stock in the table, and nothing else.</p>'
+        + '<p>The laptop task loads these within half an hour. To do it now, run this in the project folder; it covers every stock in the table, and nothing else.</p>'
         + '<div class="cmd"><code id="cmd">' + esc(d.command) + '</code><button class="btn sm" id="copy" type="button">Copy</button></div>'
         + '<div class="tw"><table id="tbl"><thead><tr><th>Symbol</th><th>Added</th><th>Company data</th><th>Filings</th>'
         + '<th>Prices from</th><th>Record close</th><th>Short history</th><th>Splits</th></tr></thead><tbody>'
@@ -195,7 +194,7 @@
           + '<td>' + (r.shortRows > 1 ? yes(r.shortRows + ' readings') : todo(r.shortRows === 1 ? 'latest only' : 'to load')) + '</td>'
           + '<td>' + (r.splits ? yes('in place') : todo('to load')) + '</td></tr>').join('')
         + '</tbody></table></div>'
-        + '<p>Amber is what the command loads. Grey arrives on its own.</p>';
+        + '<p>Amber and grey are both loaded by the run.</p>';
     }
     html += '</div></div>';
     const rec = d.recent || [];

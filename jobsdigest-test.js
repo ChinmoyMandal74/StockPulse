@@ -26,6 +26,7 @@ const TASKS = [
   { name: 'TickrLab nightly', state: 'Disabled', lastResult: 0, triggers: [] },
   { name: 'TickrLab archive report', state: 'Ready', lastResult: 0, triggers: [] },
   { name: 'TickrLab local copy', state: 'Ready', lastRun: '2026-10-29T18:50:01.0000000-04:00', lastResult: 0, triggers: [] },
+  { name: 'TickrLab onboard', state: 'Ready', lastResult: 0, triggers: [] },
 ];
 function clean() {
   return {

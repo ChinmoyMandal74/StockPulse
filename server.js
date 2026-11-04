@@ -9163,7 +9163,10 @@ app.post('/api/recon/refresh-finish', requireAdmin, route(async (req, res) => {
   res.json({ rewritten: rows.length, caughtUp: rows.filter((x) => x.tdCurrent).length, stillBehind: rows.filter((x) => !x.tdCurrent).map((x) => x.symbol) });
 }));
 
-app.post('/api/admin/refresh-stock', requireAdmin, route(async (req, res) => {
+// The cron secret too (2026-11-04): onboard.js pulls a new stock's profile
+// through it, so an add on /themes needs no press of the Refresh button.
+app.post('/api/admin/refresh-stock', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   res.set('Cache-Control', 'no-store');
   const symbol = String(req.query.symbol || '').trim().toUpperCase();
   if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });

@@ -48,3 +48,6 @@ releases-archive.db-wal
 releases-archive.db-shm
 release-archive-load.lock
 release-archive.log
+
+onboard.log
+onboard.lock

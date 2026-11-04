@@ -105,6 +105,16 @@ const JOBS = [
     log: '/schedule',
   },
   {
+    // NEW STOCKS FINISHED BY THEMSELVES (2026-11-04, the owner: "This should
+    // all be one one click of a button somehow"). On the laptop because the
+    // local copy and the release text archive are.
+    id: 'onboard', name: 'New stocks', task: 'TickrLab onboard', host: 'laptop', script: 'onboard.js', taskScript: 'onboard-task.ps1',
+    days: ALL_DAYS, repeat: { start: '07:05', every: 30, last: '22:05' }, minutes: 1,
+    spends: { kind: 'twelve', text: 'Nothing when no stock is waiting (one small read). A stock: about 101 Twelve Data credits (prices, splits, profile) and cents of Claude Haiku for its releases; it waits out the intraday slots and skips the nightly windows' },
+    what: 'Finds stocks added on /themes and not yet loaded, and loads everything: full price history, record close, short interest, splits, profile and earnings history, SEC filings, 8-K events, 13D/13G holders, segments, drawdowns, options, earnings releases since 2017, the local copy, release text and Signal history, and the source rule (onboard.js).',
+    log: '/onboarding',
+  },
+  {
     id: 'watchdog', name: 'Watchdog', task: null, host: 'vercel', cron: '30 23 * * *', minutes: 1,
     days: ALL_DAYS,
     spends: { kind: 'free', text: 'Free' },
