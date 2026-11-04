@@ -75,3 +75,13 @@ A **Today** column on all three tables, after Market cap (owner: "add todays per
 - **Display:** one decimal; green for a rise and red for a fall, since it is a price move. A missing move is a dash.
 - **Excel:** the workbook has `Today (%)`, explained on the About sheet.
 - **Freshness:** the page's held answer is keyed on the snapshot stamp, so it follows the intraday refreshes.
+
+## Signal (2026-11-03)
+A **Signal** column, last on all three tables (owner: "Add Signal at the end, Feel free to increase the width of the table").
+- **Shown:** the word, with the rule that fired under it; never the word alone.
+- **Colour:** `/Strong/` green and `/Weak/` red, as the screener draws it.
+- **Sorting:** by strength, strongest first, blanks last.
+- **Excel:** the workbook has Signal and "Signal: the rule that fired", explained on the About sheet.
+- **Where it comes from.** `/api/selloff` scores the Signal on the way out exactly as `/api/stocks` does (`await sourcedNow()`, then `scoreActionInto(rows)`), before the stamps. So the word and the rule are the screener's own, over the source rule's figures. Display only: nothing new is read by the rules.
+- **Check:** the browser test compares every row on all three tabs (103) with what `/api/stocks` serves for the same company.
+- **Width:** the page's width went from 1280 to 1600px. The narrow layout (sideways scroll inside the card, ordinary heading) now starts below 1280px instead of 1180px; every tab is checked to fit at 1280, 1440, 1600 and 1920.

@@ -16904,6 +16904,11 @@ async function selloffAnswer(days) {
   if (selloffHeld && selloffHeld.key === key) return selloffHeld.body;
   const snap = await readSnapshot();
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
+  // The Signal as the screener serves it: scored on the way out over the
+  // source rule's figures, exactly as /api/stocks does, so the word and the
+  // rule that fired are the screener's own. Display only; nothing new feeds it.
+  await sourcedNow().catch(() => null);
+  scoreActionInto(rows);
   await serveStamps(rows);
   stampCapDerived(rows);
   stampPeerValue(rows);

@@ -125,6 +125,8 @@ function fields(row, rel) {
     cap: num(row.marketCap), currency: row.currency || null,
     // The latest session's move, as the screener's Today column has it.
     today: num(row.todayPct),
+    // The Signal and the rule that fired, always together (never one alone).
+    signal: row.action || null, signalWhy: row.action ? (row.actionFlag || null) : null,
   };
 }
 
@@ -212,6 +214,8 @@ function workbookSheets(body) {
     ['Revenue growth (%)', 11, true, (r) => r1(r.revGrowth)],
     ['Profit margin (%)', 11, true, (r) => r1(r.profitMargin)],
     ['Growth & profit', 22, false, (r) => txt(r.growthProfile)],
+    ['Signal', 22, false, (r) => txt(r.signal)],
+    ['Signal: the rule that fired', 30, false, (r) => txt(r.signalWhy)],
   ];
   const company = [
     ['Symbol', 9, false, (r) => r.symbol],
@@ -257,6 +261,7 @@ function workbookSheets(body) {
     ['Revenue growth, profit margin, the two descriptions', 'As the screener shows them: the results release while it is the newest report, then the SEC filings, else the data provider. Revenue growth is the latest quarter on the same quarter a year earlier.'],
     ['Market cap', 'Market value at the latest price, in billions of US dollars.'],
     ['Today', 'The latest session’s price change: the previous close to the latest price (during trading) or to the close.'],
+    ['Signal', 'The screener’s mechanical reading of strength under its Balanced rules (Very Weak, Weak, Neutral, Strong – Elevated Risk, Strong, Very Strong), with the rule that fired. A description of where the stock stands on those rules, not an instruction to trade.'],
     ['Empty cells', 'A figure that is not known. Never a zero.'],
     ['', 'Descriptions of what happened, not a reading of what comes next. Nothing here is a recommendation to trade. Tickr Lab, tickrlab.com.'],
   ];

@@ -19,7 +19,7 @@
   <style>
     /* The shell is the IPO pipeline's. Everything this page adds is prefixed sw- . */
     body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
-    .page { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+    .page { position: relative; z-index: 1; max-width: 1600px; margin: 0 auto; padding: 0 32px; }
     .aura {
       background:
         radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 62%),
@@ -63,7 +63,7 @@
     /* Frozen heading row (owner, 2026-11-03), on the page's one scroll ("I don't like 2 scrollbars"). Sticky needs
        every box between the heading and the page to leave overflow alone, so on wide screens, where the table fits,
        neither this card's core nor the wrap clips; the heading sticks just under the floating nav (--sw-stick, measured).
-       Narrow screens keep the sideways scroll inside the card, and with it an ordinary heading. */
+       Narrow screens (under 1280px since the Signal column) keep the sideways scroll inside the card, and with it an ordinary heading. */
     .sw-card > .core { overflow: visible; }
     .sw-wrap { overflow: visible; }
     .sw-wrap thead th { position: sticky; top: var(--sw-stick, 70px); z-index: 2; background: var(--surface); box-shadow: inset 0 -1px 0 var(--hair-2); }
@@ -94,12 +94,17 @@
     .sw-up { color: var(--green); }
     .sw-dn { color: var(--red); }
     .sw-faint { color: var(--faint); }
+    .sw-wrap td.sw-sig { white-space: normal; min-width: 11ch; max-width: 19ch; line-height: 1.3; }
+    .sw-sig b { font-weight: 600; font-size: 12px; }
+    .sw-sig-up { color: var(--green); }
+    .sw-sig-dn { color: var(--red); }
+    .sw-why { font-family: var(--sans); white-space: normal; }
     .sw-grpname { color: var(--muted); font-size: 11.5px; }
     .sw-from { display: block; color: var(--faint); font-size: 10.5px; margin-top: 2px; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
     .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
-    @media (max-width: 1180px) { .sw-card > .core { overflow: hidden; } .sw-wrap { overflow-x: auto; } .sw-wrap thead th { position: static; } }
+    @media (max-width: 1279px) { .sw-card > .core { overflow: hidden; } .sw-wrap { overflow-x: auto; } .sw-wrap thead th { position: static; } }
   </style>
 </head>
 <body>
@@ -192,7 +197,15 @@
       { k: 'revGrowth', t: 'Revenue growth', r: true, title: 'The latest quarter on the same quarter a year earlier.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.revGrowth, true) + '</td>', num: true },
       { k: 'profitMargin', t: 'Profit margin', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
       { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td class="sw-wd">' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
+      // The Signal, with the rule that fired under it (never the word alone), coloured as the screener colours it.
+      { k: 'signal', t: 'Signal', title: 'The screener’s Signal under its Balanced rules, and the rule that fired. A reading of strength, not an instruction to trade.',
+        cell: (r) => (r.signal
+          ? '<td class="sw-sig"><b class="' + (/Strong/.test(r.signal) ? 'sw-sig-up' : /Weak/.test(r.signal) ? 'sw-sig-dn' : '') + '">' + we(r.signal) + '</b>' + (r.signalWhy ? '<span class="sw-sub sw-why">' + we(r.signalWhy) + '</span>' : '') + '</td>'
+          : '<td class="sw-faint">—</td>'),
+        sort: (r) => { const i = SIGNALS.indexOf(r.signal); return i < 0 ? null : i; } },
     ];
+    // Strongest first when sorted.
+    const SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
     const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
     const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
     const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || v !== 'watch'));
@@ -244,7 +257,7 @@
       const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
       $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
         + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
-        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close. '
+        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
         + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
     }
     $('list').addEventListener('click', (e) => {
