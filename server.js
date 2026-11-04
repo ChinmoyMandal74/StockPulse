@@ -16911,7 +16911,9 @@ async function selloffAnswer(days) {
   const screens = await store.readScreens().catch(() => null);
   const bscr = (screens || []).find((x) => x.id === Selloff.BOUNCE_ID) || STARTER_SCREENS.find((x) => x.id === Selloff.BOUNCE_ID) || null;
   const bdef = (bscr && bscr.def) || {};
-  const key = [ver, fig && fig.at, days, pfKey, JSON.stringify(bdef)].join('|');
+  // Article tone, the screener's Tone 7D figure, laid onto the rows sent.
+  const tfig = await toneColumnFig().catch(() => null);
+  const key = [ver, fig && fig.at, days, pfKey, JSON.stringify(bdef), tfig && tfig.at].join('|');
   if (selloffHeld && selloffHeld.key === key) return selloffHeld.body;
   const snap = await readSnapshot();
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
@@ -16932,6 +16934,7 @@ async function selloffAnswer(days) {
   const body = {
     at: snap && snap.updatedAt ? snap.updatedAt : null, releasesAt: (fig && fig.at) || null, today, days, windows: Selloff.WINDOWS,
     drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source,
+    toneAt: (tfig && tfig.at) || null, toneBand: (tfig && tfig.band) || NewsTone.BAND,
     bounceScreen: bscr ? { name: bscr.name, description: bscr.description || '', rule: selloffRuleText(bdef) } : null,
     views: {
       tech: Selloff.screen('tech', rows, rels, selloffBars.by, days, today),
@@ -16940,6 +16943,7 @@ async function selloffAnswer(days) {
       bounce: bscr ? Selloff.bounce(Filters.screenRows(bdef, rows), rels) : [],
     },
   };
+  Selloff.withTone(body.views, tfig && tfig.rows);
   selloffHeld = { key, body };
   return body;
 }

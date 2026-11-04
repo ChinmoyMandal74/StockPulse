@@ -2803,7 +2803,7 @@
           'In the bottom 30% of its 52-week range', 'Up more than 3% over the past month', 'And up over the past two weeks']],
       ];
       const READINGS = ['Market cap', 'Today', 'From 52-week high', 'RSI', 'P/E and forward P/E', 'Value vs industry',
-        'Revenue growth', 'Profit margin', 'Growth & profit', 'The Signal and the rule that fired'];
+        'Revenue growth', 'Profit margin', 'Growth & profit', 'The Signal and the rule that fired', 'Article tone, 7 days'];
       const cards = VIEWS.map(([h, g, rules], i) => '<li class="id-v">'
         + `<div class="id-hd"><span class="id-n">${String(i + 1).padStart(2, '0')}</span>`
         + `<span><b class="id-h">${esc(h)}</b><span class="id-g">${esc(g)}</span></span></div>`

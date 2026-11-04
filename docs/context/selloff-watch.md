@@ -118,3 +118,14 @@ The owner asked for less space above the tables.
 
 ## The Brand card (2026-11-03)
 The promo studio has a Brand › Ideas card that restates this page's four views and their rules (`ideas-card.md`). Change it with any threshold, group or column.
+
+## Article tone (2026-11-04)
+A **Tone 7D** column, last on all four tabs, after Signal (owner: "add article tone field at the end similar to what is shown on screener").
+- **What it is:** the screener's Tone 7D, from the same stored figure (`toneColumn`, written by the tone loader at the end of each run, read through `toneColumnFig()`, held two minutes). That is the seven-day average reading from −1 to +1, with the number of articles read beside it.
+- **How it gets there:** `Selloff.withTone(views, rows)` lays `tone: {avg, n, pos, neg}` onto the rows `/api/selloff` sends, never onto a snapshot row. The held answer is keyed on the figure's `at`, so a new tone run shows on the next load. The body carries `toneAt` and `toneBand`.
+- **Drawn** as on the screener: blue at +0.25 or more and orange at −0.25 or less (never green or red: a reading of words, not a price), the count beside it in faint type, linked to the stock page's articles (`#tone`), with a tooltip giving the read, positive and negative counts. Nothing read in seven days is a dash. Sorts by the average; blanks last.
+- **Excel:** "Tone 7D (−1 to +1)" and "Articles read (7D)", explained on the About sheet.
+- **Never an input to the Signal**, as everywhere.
+- **Width:** to keep every tab fitting at 1280px, cell padding went from 7 to 6px, the Signal column's maximum from 19 to 17 characters, and company names now cut off at 14 characters instead of 16.
+- **Checks:** `selloff-test.js` (67) covers `withTone` and the Excel columns. The browser test (137) seeds a tone figure and checks the drawn value, count, link, blue and orange, the sort, and the fit at 1280px. With the `withTone` call removed, its three tone checks fail.
+- The Brand › Ideas card's readings row now ends with "Article tone, 7 days".

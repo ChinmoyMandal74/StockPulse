@@ -11,7 +11,7 @@ The owner: "create promo slide under brand template called Ideas. Keep it a one 
 3. **Growing, profitable, fell after results** (every other sector): the same results test; growing, profitable, valued at or below its industry; down 5% or more.
 4. **Bouncing off the lows:** the bottom 30% of the 52-week range, up more than 3% over a month, and up over two weeks.
 
-**Readings:** market cap, Today, from 52-week high, RSI, P/E and forward P/E, value vs industry, revenue growth, profit margin, growth & profit, and the Signal with the rule that fired.
+**Readings:** market cap, Today, from 52-week high, RSI, P/E and forward P/E, value vs industry, revenue growth, profit margin, growth & profit, the Signal with the rule that fired, and article tone over seven days (added 2026-11-04).
 
 **It restates the page's rules.** If `MIN_GROWTH` or `DROP` in `selloff.js`, the `bouncelw` screen, the AI groups or the page's columns change, this card changes in the same commit.
 
@@ -27,6 +27,6 @@ The owner: "create promo slide under brand template called Ideas. Keep it a one 
 - **Story:** the boxes stack in one column.
 
 **Tested** with scratchpad `id-test.js` (built from `ar-test.js` by `make-id-test.js`): 85 checks in the real studio across three shapes and three grounds.
-- **Content:** four views, twelve rules, ten readings; the rules' figures on the card; no banned words; no links.
+- **Content:** four views, twelve rules, eleven readings; the rules' figures on the card; no banned words; no links.
 - **Layout:** no box or reading clipped, overlapping or off the card; title, views, readings, line and foot stacked inside the artboard.
 - **Style:** no green or red; smallest text at least 13px; no page errors.

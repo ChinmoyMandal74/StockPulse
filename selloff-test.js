@@ -150,5 +150,19 @@ const cap1 = S.fields({ symbol: 'X', marketCap: 2.1e12, currency: 'USD' }, null)
 ok(cap1.cap === 2.1e12 && cap1.currency === 'USD', 'market cap and currency are carried');
 ok([null, '', undefined].every((v) => S.fields({ symbol: 'X', marketCap: v }, null).cap === null), 'a missing market cap is blank, not zero');
 
+// Article tone: the stored Tone 7D rows laid onto every view's rows; nothing read is null, never 0.
+const tv = { tech: [S.fields({ symbol: 'A' }, null)], watch: [S.fields({ symbol: 'B' }, null), { symbol: 'GONE', missing: true, group: 'Compute' }], bounce: [S.fields({ symbol: 'C' }, null)] };
+S.withTone(tv, { A: [-0.412, 9, 1, 6], B: [0.3, 4, 3, 0], GONE: [0.5, 1, 1, 0] });
+ok(tv.tech[0].tone && tv.tech[0].tone.avg === -0.412 && tv.tech[0].tone.n === 9 && tv.tech[0].tone.pos === 1 && tv.tech[0].tone.neg === 6, 'tone: average, read, positive, negative', tv.tech[0].tone);
+ok(tv.watch[0].tone.avg === 0.3 && tv.bounce[0].tone === null, 'every view gets it; a company with nothing read is null');
+ok(!('tone' in tv.watch[1]), 'a name not on the screener is left alone');
+S.withTone(tv, null);
+ok(tv.tech[0].tone === null, 'no stored figure: every tone blank');
+S.withTone(tv, { A: [-0.412, 9, 1, 6] });
+const wbTone = S.workbookSheets({ views: tv })[0];
+const tci = wbTone.cols.findIndex((c) => /^Tone 7D/.test(c[0]));
+ok(tci === wbTone.cols.length - 2 && wbTone.rows[0][tci] === -0.41 && wbTone.rows[0][tci + 1] === 9, 'Excel: Tone 7D and articles read as the last two columns', wbTone.rows[0].slice(-2));
+ok(S.workbookSheets({ views: tv })[3].rows[0].slice(-2).every((x) => x === null), 'Excel: no tone, both cells empty');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

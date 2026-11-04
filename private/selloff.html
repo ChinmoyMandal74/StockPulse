@@ -66,7 +66,7 @@
     .sw-wrap thead th:first-child { border-top-left-radius: 20px; }
     .sw-wrap thead th:last-child { border-top-right-radius: 20px; }
     .sw-wrap table { width: 100%; border-collapse: collapse; }
-    .sw-wrap th, .sw-wrap td { padding: 9px 7px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
+    .sw-wrap th, .sw-wrap td { padding: 9px 6px; border-bottom: 1px solid var(--hair); font-size: 12.5px; text-align: left; vertical-align: middle; white-space: nowrap; }
     .sw-wrap th:first-child, .sw-wrap td:first-child { padding-left: 16px; }
     .sw-wrap th:last-child, .sw-wrap td:last-child { padding-right: 16px; }
     /* Headings wrap to their words so a long name ("From 52-week high") does not set the column's width. */
@@ -81,17 +81,22 @@
     .sw-wrap tr.sw-grp > td { border-top: 2px solid var(--hair-2); }
     .sw-co a { font: 600 12.5px var(--mono); color: var(--text); text-decoration: none; }
     .sw-co a:hover { color: var(--accent); }
-    .sw-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; }
+    .sw-co span { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-num { font-family: var(--mono); }
     .sw-sub { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; font-family: var(--mono); }
     .sw-up { color: var(--green); }
     .sw-dn { color: var(--red); }
     .sw-faint { color: var(--faint); }
-    .sw-wrap td.sw-sig { white-space: normal; min-width: 11ch; max-width: 19ch; line-height: 1.3; }
+    .sw-wrap td.sw-sig { white-space: normal; min-width: 11ch; max-width: 17ch; line-height: 1.3; }
     .sw-sig b { font-weight: 600; font-size: 12px; }
     .sw-sig-up { color: var(--green); }
     .sw-sig-dn { color: var(--red); }
     .sw-why { font-family: var(--sans); white-space: normal; }
+    .sw-tone a.sw-tn-v { font-family: var(--mono); font-size: 12px; color: var(--muted); text-decoration: none; }
+    .sw-tone.sw-tn-pos a.sw-tn-v { color: var(--blue); }
+    .sw-tone.sw-tn-neg a.sw-tn-v { color: var(--orange); }
+    .sw-tone a.sw-tn-v:hover { text-decoration: underline; }
+    .sw-tone .sw-tn-n { margin-left: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
     .sw-grpname { color: var(--muted); font-size: 11.5px; }
     .sw-from { display: block; color: var(--faint); font-size: 10.5px; margin-top: 2px; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
@@ -198,7 +203,19 @@
           ? '<td class="sw-sig"><b class="' + (/Strong/.test(r.signal) ? 'sw-sig-up' : /Weak/.test(r.signal) ? 'sw-sig-dn' : '') + '">' + we(r.signal) + '</b>' + (r.signalWhy ? '<span class="sw-sub sw-why">' + we(r.signalWhy) + '</span>' : '') + '</td>'
           : '<td class="sw-faint">—</td>'),
         sort: (r) => { const i = SIGNALS.indexOf(r.signal); return i < 0 ? null : i; } },
+      // Article tone, as the screener's Tone 7D draws it: blue and orange, never green and red (a reading of words, not a price).
+      { k: 'tone', t: 'Tone 7D', r: true, title: 'Article tone over the last seven days, as on the screener: the average of an AI model’s reading of how each article mainly about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. A description of what was written, not a forecast, and never an input to the Signal. Click a figure for the articles.',
+        cell: (r) => toneCell(r), sort: (r) => (r.tone ? r.tone.avg : null) },
     ];
+    function toneCell(r) {
+      const t = r.tone;
+      if (!t || !isNum(t.avg)) return '<td class="sw-r sw-faint" title="No article read in the last seven days">—</td>';
+      const band = Number(data.toneBand) || 0.25, a = t.avg;
+      const num = (a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(2);
+      const word = a >= band ? 'positive' : a <= -band ? 'negative' : 'neutral';
+      const tip = 'Last seven days: ' + t.n + ' article' + (t.n === 1 ? '' : 's') + ' read, ' + t.pos + ' positive, ' + t.neg + ' negative; average ' + num + ' (' + word + '). Click for the articles.';
+      return '<td class="sw-r sw-tone' + (a >= band ? ' sw-tn-pos' : a <= -band ? ' sw-tn-neg' : '') + '" title="' + we(tip) + '"><a class="sw-tn-v" href="/stock/' + encodeURIComponent(r.symbol) + '#tone">' + num + '</a><span class="sw-tn-n">' + we(String(t.n)) + '</span></td>';
+    }
     // Strongest first when sorted.
     const SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
     const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];

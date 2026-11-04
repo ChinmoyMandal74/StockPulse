@@ -196,6 +196,23 @@ function watch(rows, rels) {
   return out.sort((a, b) => (gi(a.group) - gi(b.group)) || ((b.cap == null ? -1 : b.cap) - (a.cap == null ? -1 : a.cap)) || (a.symbol < b.symbol ? -1 : 1));
 }
 
+// ARTICLE TONE (2026-11-04, the owner: "add article tone field at the end
+// similar to what is shown on screener"): the screener's Tone 7D figure, laid
+// onto the rows these views send (never onto a snapshot row) from the stored
+// toneColumn rows, { SYM: [average, read, positive, negative] }. A company
+// with nothing read in the seven days gets tone null, drawn as a dash.
+function withTone(views, toneRows) {
+  const t = toneRows || {};
+  for (const list of Object.values(views || {})) {
+    for (const r of list || []) {
+      if (!r || r.missing) continue;
+      const x = t[r.symbol];
+      r.tone = Array.isArray(x) && num(x[0]) != null ? { avg: num(x[0]), n: num(x[1]), pos: num(x[2]), neg: num(x[3]) } : null;
+    }
+  }
+  return views;
+}
+
 // THE EXCEL DOWNLOAD (2026-11-03): the answer /api/selloff serves, as sheets.
 // Each sheet is { name, cols: [[heading, width, numeric]], rows }; a figure is
 // a number (percent as a number of percent, market value in $ billions) so it
@@ -219,6 +236,8 @@ function workbookSheets(body) {
     ['Growth & profit', 22, false, (r) => txt(r.growthProfile)],
     ['Signal', 22, false, (r) => txt(r.signal)],
     ['Signal: the rule that fired', 30, false, (r) => txt(r.signalWhy)],
+    ['Tone 7D (−1 to +1)', 11, true, (r) => (r.tone ? r2(r.tone.avg) : null)],
+    ['Articles read (7D)', 10, true, (r) => (r.tone ? r.tone.n : null)],
   ];
   const company = [
     ['Symbol', 9, false, (r) => r.symbol],
@@ -265,6 +284,7 @@ function workbookSheets(body) {
     ['Market cap', 'Market value at the latest price, in billions of US dollars.'],
     ['Today', 'The latest session’s price change: the previous close to the latest price (during trading) or to the close.'],
     ['Signal', 'The screener’s mechanical reading of strength under its Balanced rules (Very Weak, Weak, Neutral, Strong – Elevated Risk, Strong, Very Strong), with the rule that fired. A description of where the stock stands on those rules, not an instruction to trade.'],
+    ['Tone 7D', 'Article tone over the last seven days, as on the screener: the average of an AI model’s reading of how each article mainly about the company leans, from −1 to +1, with the number read. A description of what was written, not a forecast, and never an input to the Signal.'],
     ['Empty cells', 'A figure that is not known. Never a zero.'],
     ['', 'Descriptions of what happened, not a reading of what comes next. Nothing here is a recommendation to trade. Tickr Lab, tickrlab.com.'],
   ];
@@ -300,4 +320,4 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, withTone, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
