@@ -113,7 +113,7 @@ ok(JSON.stringify(order) === JSON.stringify(S.GROUP_ORDER.filter((g) => g !== 'H
 // ---- The Excel sheets.
 const wb = S.workbookSheets({ at: '2026-11-03T19:17:51Z', days: 45, drop: S.DROP, minGrowth: 10, watchSource: 'x',
   views: { tech: [Object.assign({}, t0, { cap: 2.1e12, sector: 'Technology' })], nontech: [], watch: [Object.assign({}, aw.find((r) => r.symbol === 'SKHY')), { symbol: 'GONE', group: 'Compute', from: 'list', themes: [], missing: true }] } });
-ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,About', 'four sheets: a tab each, and About');
+ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,Bouncing off the lows,About', 'five sheets: a tab each, and About');
 const tsh = wb[0], hcol = (sh, h) => sh.cols.findIndex((c) => c[0] === h);
 ok(tsh.rows.length === 1 && tsh.rows[0].length === tsh.cols.length, 'tech: one row, a cell under every heading');
 ok(tsh.rows[0][hcol(tsh, 'Market cap ($B)')] === 2100 && tsh.rows[0][hcol(tsh, 'Reaction (%)')] === -12 && tsh.rows[0][hcol(tsh, 'RSI (14-day)')] === 31, 'figures are numbers: $B, percent, RSI', tsh.rows[0]);
@@ -128,7 +128,17 @@ const gone = wsh.rows.find((r) => r[0] === 'GONE');
 ok(gone[hcol(wsh, 'Company')] === 'Not on the screener' && gone[hcol(wsh, 'Group')] === 'Compute' && gone[hcol(wsh, 'RSI (14-day)')] === null, 'a name not on the screener: said so, figures empty', gone);
 const blank = S.workbookSheets({ views: { tech: [S.fields({ symbol: 'B', rsi: null, marketCap: '' }, null)] } })[0].rows[0];
 ok(blank.slice(2).filter((x) => x === 0).length === 0, 'a blank figure is empty, never 0', blank);
-ok(/Nov 3, 2026/.test(wb[3].rows[0][1]) && /Eastern$/.test(wb[3].rows[0][1]), 'About: prices as of, in Eastern time', wb[3].rows[0]);
+ok(/Nov 3, 2026/.test(wb[4].rows[0][1]) && /Eastern$/.test(wb[4].rows[0][1]), 'About: prices as of, in Eastern time', wb[4].rows[0]);
+
+// ---- Bouncing off the lows: the rows the screen picked, shaped, in its order.
+const bn = S.bounce([row('LOW1', { range52Pos: 3, twoWeekPct: 1.7, oneMonthPct: 7.3 }), row('LOW2', { range52Pos: 9, twoWeekPct: null, oneMonthPct: 4.6 }), { symbol: 'BAD', error: 'x' }], { LOW1: rel({ filed: '2026-10-28' }) });
+ok(bn.map((r) => r.symbol).join() === 'LOW1,LOW2', 'the picked rows in their order; an error row dropped');
+ok(bn[0].range52 === 3 && bn[0].w2 === 1.7 && bn[0].m1 === 7.3 && bn[0].filed === '2026-10-28' && bn[0].guidance === 'given', 'the screen’s readings and the release', bn[0]);
+ok(bn[1].w2 === null, 'a missing move stays blank');
+const wbB = S.workbookSheets({ bounceScreen: { description: 'Low in the range.', rule: '52W range ..30' }, views: { bounce: bn } });
+const bsh = wbB[3];
+ok(bsh.rows.length === 2 && bsh.rows[0][bsh.cols.findIndex((c) => /52-week range/.test(c[0]))] === 3 && bsh.rows[1][bsh.cols.findIndex((c) => c[0] === '2 weeks (%)')] === null, 'Excel: the bounce sheet, range and moves as numbers, blanks empty');
+ok(wbB[4].rows.some((r) => r[0] === 'Bouncing off the lows' && r[1].includes('Low in the range. (52W range ..30)')), 'About explains the screen with its rule');
 
 // Today: the latest session's move, blank when the row has none.
 ok(S.fields({ symbol: 'X', todayPct: -2.345 }, null).today === -2.345 && [null, '', undefined].every((v) => S.fields({ symbol: 'X', todayPct: v }, null).today === null), 'today carried; a missing move is blank, not zero');

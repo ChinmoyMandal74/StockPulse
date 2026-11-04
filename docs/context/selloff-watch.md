@@ -85,3 +85,11 @@ A **Signal** column, last on all three tables (owner: "Add Signal at the end, Fe
 - **Where it comes from.** `/api/selloff` scores the Signal on the way out exactly as `/api/stocks` does (`await sourcedNow()`, then `scoreActionInto(rows)`), before the stamps. So the word and the rule are the screener's own, over the source rule's figures. Display only: nothing new is read by the rules.
 - **Check:** the browser test compares every row on all three tabs (103) with what `/api/stocks` serves for the same company.
 - **Width:** the page's width went from 1280 to 1600px. The narrow layout (sideways scroll inside the card, ordinary heading) now starts below 1280px instead of 1180px; every tab is checked to fit at 1280, 1440, 1600 and 1920.
+
+## Bouncing off the lows (2026-11-03)
+A fourth tab (owner: "Remember we have the bouncing off the lows, Can you add this as a 4th option"), `?show=bounce`.
+- **Source:** it is the screener's own stored screen `bouncelw`, read on every request from `store.readScreens()` (the starter definition if none is stored) and run through `Filters.screenRows`, as the screener and the phone run it. An edit to the screen on the screener shows here at once; the held answer is keyed on the screen's definition.
+- **Rule today:** 52-week range position 30 or lower, 1 month over +3%, 2 weeks over 0%. Lowest in the range first.
+- **Columns:** the usual readings, plus 52-week range (0 at the low, 100 at the high), 2 weeks and 1 month. It has no reaction columns and no window control.
+- **Excel:** a "Bouncing off the lows" sheet, and a line on the About sheet giving the screen's rule.
+- **Check:** the browser test compares its companies and order with `Filters.screenRows` over what `/api/stocks` serves: 98 on the test data.

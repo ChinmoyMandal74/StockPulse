@@ -131,17 +131,19 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Screens</span>
       <h1>Selloff watch</h1>
-      <p class="lede">Companies whose shares have fallen, in three views, each with the same readings from the
-        screener. Two views are screens over the latest results releases: companies that reported strong numbers and
-        fell anyway. The third is a list of 25 AI-linked names published elsewhere, set beside our own figures. These
-        are descriptions of what happened, not a reading of what comes next: whether strong results followed by a
-        sharp fall tell anything about the following months has not been tested.</p>
+      <p class="lede">Companies whose shares have fallen, in four views, each with the same readings from the
+        screener. The AI watchlist is AI-linked companies: 25 published elsewhere and every company in our AI
+        themes. Two views are screens over the latest results releases: companies that reported strong numbers and
+        fell anyway. Bouncing off the lows is the screener's screen of that name: low in the 52-week range but up
+        over the past month and fortnight. These are descriptions of what happened, not a reading of what comes
+        next: whether any of these patterns tells anything about the following months has not been tested.</p>
     </header>
 
     <div class="sw-bar">
       <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
       <button class="sw-tab" data-v="nontech">Non-tech: growing, profitable, fell after results<span class="sw-n" id="nnontech"></span></button>
       <button class="sw-tab" data-v="watch">AI watchlist<span class="sw-n" id="nwatch"></span></button>
+      <button class="sw-tab" data-v="bounce">Bouncing off the lows<span class="sw-n" id="nbounce"></span></button>
       <label class="sw-win" id="winWrap">Releases from the past
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
@@ -160,7 +162,9 @@
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const qs = new URLSearchParams(location.search);
-    const VIEWS = ['tech', 'nontech', 'watch'];
+    const VIEWS = ['tech', 'nontech', 'watch', 'bounce'];
+    // The two results screens have a reaction day and a window; the list and the bounce screen do not.
+    const SCREENS = ['tech', 'nontech'];
     // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
     const DEFAULT_VIEW = 'watch';
     const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null, sort: null, dir: 1 };
@@ -171,6 +175,8 @@
     const pct = (v, signed) => (isNum(v) ? (signed && v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(0) + '%' : '—');
     // Green and red mean the price rose or fell: the moves and the distance from the high, nothing else.
     const move = (v) => (isNum(v) ? '<span class="sw-num ' + (v < 0 ? 'sw-dn' : v > 0 ? 'sw-up' : '') + '">' + pct(v, true) + '</span>' : '<span class="sw-faint">—</span>');
+    // A move with one decimal, for the short horizons; green up, red down.
+    const moveD = (v) => (isNum(v) ? '<span class="sw-num ' + (v < 0 ? 'sw-dn' : v > 0 ? 'sw-up' : '') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1) + '%</span>' : '<span class="sw-faint">—</span>');
     const mult = (v) => (isNum(v) ? (v >= 100 ? Math.round(v) : Number(v).toFixed(1)) + 'x' : '—');
     const guide = (g) => (!g ? '<span class="sw-faint">—</span>' : g === 'given' ? '<span class="sw-faint">Given</span>' : (window.ReleaseView ? ReleaseView.changeTag(g) : we(g)));
 
@@ -184,6 +190,10 @@
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
       { k: 'today', t: 'Today', r: true, title: 'The latest session’s price change, as on the screener: the previous close to the latest price.',
         cell: (r) => '<td class="sw-r">' + (isNum(r.today) ? '<span class="sw-num ' + (r.today < 0 ? 'sw-dn' : r.today > 0 ? 'sw-up' : '') + '">' + (r.today > 0 ? '+' : r.today < 0 ? '−' : '') + Math.abs(r.today).toFixed(1) + '%</span>' : '<span class="sw-faint">—</span>') + '</td>', num: true },
+      { k: 'range52', t: '52-week range', only: 'bounce', r: true, title: 'Where the price sits in its 52-week range: 0 at the low, 100 at the high.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.range52) ? Math.round(r.range52) : '—') + '</td>', num: true },
+      { k: 'w2', t: '2 weeks', only: 'bounce', r: true, title: 'The price change over the past two weeks.', cell: (r) => '<td class="sw-r">' + moveD(r.w2) + '</td>', num: true },
+      { k: 'm1', t: '1 month', only: 'bounce', r: true, title: 'The price change over the past month.', cell: (r) => '<td class="sw-r">' + moveD(r.m1) + '</td>', num: true },
       { k: 'filed', t: 'Reported', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
       { k: 'guidance', t: 'Guidance', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
       { k: 'reaction', t: 'Reaction', screen: true, r: true, title: 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). The date under it is the day.',
@@ -208,12 +218,16 @@
     const SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
     const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
     const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
-    const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || v !== 'watch'));
+    const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || SCREENS.includes(v)));
 
     function what() {
       const d = data.drop, g = data.minGrowth, w = data.days;
       if (state.view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
       if (state.view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
+      if (state.view === 'bounce') {
+        const b = data.bounceScreen;
+        return b ? 'The screener’s screen “' + b.name + '”: ' + b.description + ' (' + b.rule + '). Lowest in the 52-week range first. The same screen as on the screener, so a change made to it there shows here too.' : 'The screen is not available.';
+      }
       const L = data.views.watch, n = L.filter((r) => r.from === 'list').length;
       return 'AI-linked companies in eight groups, largest first within each: the ' + n + ' published by ' + data.watchSource + ', and every company in your AI themes (AI - Optical Networking, AI - Power Generation, Memory, Neoclouds, Hyperscalers, and Cloud Infra, Hardware & Networking), each company once. '
         + 'The line under each group says where it came from. It follows the themes as they stand; it is not a screen and does not change as prices move.';
@@ -234,8 +248,8 @@
     }
     function paint() {
       document.querySelectorAll('.sw-tab').forEach((b) => b.classList.toggle('on', b.dataset.v === state.view));
-      $('winWrap').style.display = state.view === 'watch' ? 'none' : '';
-      $('xlsx').style.marginLeft = state.view === 'watch' ? 'auto' : '';
+      $('winWrap').style.display = SCREENS.includes(state.view) ? '' : 'none';
+      $('xlsx').style.marginLeft = SCREENS.includes(state.view) ? '' : 'auto';
       if (!data) return;
       for (const v of VIEWS) $('n' + v).textContent = data.views[v].filter((r) => !r.missing).length;
       $('what').textContent = what();

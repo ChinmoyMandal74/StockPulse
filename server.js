@@ -16900,7 +16900,12 @@ async function selloffAnswer(days) {
   // on those themes' members too.
   const pf = await readPortfolios().catch(() => null);
   const pfKey = pf ? Selloff.AI_THEMES.map(([t]) => (pf[t] || []).join(',')).join(';') : '';
-  const key = [ver, fig && fig.at, days, pfKey].join('|');
+  // Bouncing off the lows is the screener's stored screen, run as the screener
+  // runs it; read each time (an edited screen shows at once) and keyed on its rule.
+  const screens = await store.readScreens().catch(() => null);
+  const bscr = (screens || []).find((x) => x.id === Selloff.BOUNCE_ID) || STARTER_SCREENS.find((x) => x.id === Selloff.BOUNCE_ID) || null;
+  const bdef = (bscr && bscr.def) || {};
+  const key = [ver, fig && fig.at, days, pfKey, JSON.stringify(bdef)].join('|');
   if (selloffHeld && selloffHeld.key === key) return selloffHeld.body;
   const snap = await readSnapshot();
   const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
@@ -16921,15 +16926,20 @@ async function selloffAnswer(days) {
   const body = {
     at: snap && snap.updatedAt ? snap.updatedAt : null, releasesAt: (fig && fig.at) || null, today, days, windows: Selloff.WINDOWS,
     drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source,
+    bounceScreen: bscr ? { name: bscr.name, description: bscr.description || '', rule: selloffRuleText(bdef) } : null,
     views: {
       tech: Selloff.screen('tech', rows, rels, selloffBars.by, days, today),
       nontech: Selloff.screen('nontech', rows, rels, selloffBars.by, days, today),
       watch: Selloff.watch(rows, rels),
+      bounce: bscr ? Selloff.bounce(Filters.screenRows(bdef, rows), rels) : [],
     },
   };
   selloffHeld = { key, body };
   return body;
 }
+// A screen's filters in words, for the page and the workbook: "52-week range ..30 · 1 month >3 · 2 weeks >0".
+const SELLOFF_KEY_WORDS = { range52Pos: '52-week range', oneMonthPct: '1 month %', twoWeekPct: '2 weeks %', pctFromHigh: 'From 52-week high %', rsi: 'RSI' };
+const selloffRuleText = (def) => Object.entries((def && def.filters) || {}).map(([k, v]) => (SELLOFF_KEY_WORDS[k] || k) + ' ' + v).join(' · ');
 const selloffDays = (q) => (Selloff.WINDOWS.includes(Number(q)) ? Number(q) : Selloff.DEFAULT_DAYS);
 app.get('/api/selloff', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');

@@ -127,6 +127,9 @@ function fields(row, rel) {
     today: num(row.todayPct),
     // The Signal and the rule that fired, always together (never one alone).
     signal: row.action || null, signalWhy: row.action ? (row.actionFlag || null) : null,
+    // What the Bouncing off the lows screen reads: where the price sits in its
+    // 52-week range (0 the low, 100 the high) and the two short moves.
+    range52: num(row.range52Pos), w2: num(row.twoWeekPct), m1: num(row.oneMonthPct),
   };
 }
 
@@ -265,12 +268,30 @@ function workbookSheets(body) {
     ['Empty cells', 'A figure that is not known. Never a zero.'],
     ['', 'Descriptions of what happened, not a reading of what comes next. Nothing here is a recommendation to trade. Tickr Lab, tickrlab.com.'],
   ];
+  const bounceCols = [...company, ...where, ...release,
+    ['52-week range (0 low, 100 high)', 12, true, (r) => r1(r.range52)],
+    ['2 weeks (%)', 9, true, (r) => r1(r.w2)],
+    ['1 month (%)', 9, true, (r) => r1(r.m1)],
+    ...readings];
+  const bs = (body && body.bounceScreen) || null;
+  if (bs) about.splice(5, 0, ['Bouncing off the lows', 'The screener’s screen of that name: ' + (bs.description || '') + ' (' + (bs.rule || '') + '). Lowest in the range first.']);
   return [
     sheet('Tech', screenCols, v.tech || []),
     sheet('Non-tech', screenCols, v.nontech || []),
     sheet('AI watchlist', watchCols, v.watch || []),
+    sheet('Bouncing off the lows', bounceCols, v.bounce || []),
     { name: 'About', cols: [['Item', 34, false], ['What it means', 120, false]], rows: about },
   ];
+}
+
+// BOUNCING OFF THE LOWS (owner, 2026-11-03: "add this as a 4th option"). The
+// screener's own stored screen `bouncelw`, run by server.js through
+// Filters.screenRows exactly as the screener and the phone run it, so an edit
+// to the screen shows here too. This only shapes the rows it picked, in the
+// screen's own order.
+const BOUNCE_ID = 'bouncelw';
+function bounce(picked, rels) {
+  return (picked || []).filter((r) => r && r.symbol && !r.error).map((r) => fields(r, rels && rels[r.symbol]));
 }
 
 function shiftDay(day, n) {
@@ -279,4 +300,4 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
