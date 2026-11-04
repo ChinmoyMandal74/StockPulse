@@ -172,7 +172,7 @@
 
     // One column list; the screens add the reaction, the watchlist its group.
     const COLS = [
-      { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
+      { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '" target="_blank" rel="noopener">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
       // The group, and under it why the company is here: the published list, or the theme it came in by.
       { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '<span class="sw-from" title="' + we(fromTitle(r)) + '">' + we(r.from === 'list' ? 'Published list' : r.from || '') + '</span></td>', sort: (r) => GROUPS.indexOf(r.group) },
       { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
@@ -214,7 +214,7 @@
       const num = (a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a).toFixed(2);
       const word = a >= band ? 'positive' : a <= -band ? 'negative' : 'neutral';
       const tip = 'Last seven days: ' + t.n + ' article' + (t.n === 1 ? '' : 's') + ' read, ' + t.pos + ' positive, ' + t.neg + ' negative; average ' + num + ' (' + word + '). Click for the articles.';
-      return '<td class="sw-r sw-tone' + (a >= band ? ' sw-tn-pos' : a <= -band ? ' sw-tn-neg' : '') + '" title="' + we(tip) + '"><a class="sw-tn-v" href="/stock/' + encodeURIComponent(r.symbol) + '#tone">' + num + '</a><span class="sw-tn-n">' + we(String(t.n)) + '</span></td>';
+      return '<td class="sw-r sw-tone' + (a >= band ? ' sw-tn-pos' : a <= -band ? ' sw-tn-neg' : '') + '" title="' + we(tip) + '"><a class="sw-tn-v" href="/stock/' + encodeURIComponent(r.symbol) + '#tone" target="_blank" rel="noopener">' + num + '</a><span class="sw-tn-n">' + we(String(t.n)) + '</span></td>';
     }
     // Strongest first when sorted.
     const SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];

@@ -129,3 +129,6 @@ A **Tone 7D** column, last on all four tabs, after Signal (owner: "add article t
 - **Width:** to keep every tab fitting at 1280px, cell padding went from 7 to 6px, the Signal column's maximum from 19 to 17 characters, and company names now cut off at 14 characters instead of 16.
 - **Checks:** `selloff-test.js` (67) covers `withTone` and the Excel columns. The browser test (137) seeds a tone figure and checks the drawn value, count, link, blue and orange, the sort, and the fit at 1280px. With the `withTone` call removed, its three tone checks fail.
 - The Brand › Ideas card's readings row now ends with "Article tone, 7 days".
+
+## Links open in a new tab (2026-11-04)
+The ticker and the Tone 7D figure open the stock page in a new tab (`target="_blank" rel="noopener"`), so the table and its sort stay where they were (owner: "make sure clicking on the ticker open the stock page in a new tab"). The browser test checks every link on the page and fails with the attribute removed.
