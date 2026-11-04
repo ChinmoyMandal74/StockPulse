@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Selloff watch — Tickr Lab</title>
+  <title>Ideas — Tickr Lab</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#050505" />
   <script src="/theme.js"></script>
@@ -130,9 +130,8 @@
   <main class="page">
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Screens</span>
-      <h1>Selloff watch</h1>
-      <p class="lede">Companies whose shares have fallen, in four views, each with the same readings from the
-        screener. The AI watchlist is AI-linked companies: 25 published elsewhere and every company in our AI
+      <h1>Ideas</h1>
+      <p class="lede">Four views of companies, each with the same readings from the screener. The AI watchlist is AI-linked companies: 25 published elsewhere and every company in our AI
         themes. Two views are screens over the latest results releases: companies that reported strong numbers and
         fell anyway. Bouncing off the lows is the screener's screen of that name: low in the 52-week range but up
         over the past month and fortnight. These are descriptions of what happened, not a reading of what comes
@@ -281,7 +280,7 @@
       if (state.sort === k) state.dir = -state.dir; else { state.sort = k; state.dir = 1; }
       paint();
     });
-    const syncUrl = () => history.replaceState(null, '', '/selloff' + (state.view !== DEFAULT_VIEW ? '?show=' + state.view : ''));
+    const syncUrl = () => history.replaceState(null, '', '/ideas' + (state.view !== DEFAULT_VIEW ? '?show=' + state.view : ''));
     document.querySelectorAll('.sw-tab').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.v; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
     $('days').addEventListener('change', () => { state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
     // Where the heading stops: the bottom of the floating nav, which keeps one height but is measured, not assumed.

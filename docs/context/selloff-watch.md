@@ -93,3 +93,9 @@ A fourth tab (owner: "Remember we have the bouncing off the lows, Can you add th
 - **Columns:** the usual readings, plus 52-week range (0 at the low, 100 at the high), 2 weeks and 1 month. It has no reaction columns and no window control.
 - **Excel:** a "Bouncing off the lows" sheet, and a line on the About sheet giving the screen's rule.
 - **Check:** the browser test compares its companies and order with `Filters.screenRows` over what `/api/stocks` serves: 98 on the test data.
+
+## Renamed Ideas (2026-11-03)
+The owner renamed the page from Selloff watch to **Ideas**.
+- **Address:** the page is `/ideas`. `/selloff` answers 301 to `/ideas`, keeping a `show=` of lowercase letters only. So the published post `ai-watchlist-2026-11-03` still works; its link was also changed to `/ideas?show=watch`, with status and date kept.
+- **What changed:** the bar button (still id `selloffLink`), the page title and heading, and the Excel file name (`tickrlab-ideas-<date>.xlsx`). The activity log now records `page ideas`.
+- **What did not:** internal names (`selloff.js`, `selloff.html`, `/api/selloff`, the `sw-` classes). Stored keys and ids are never renamed.

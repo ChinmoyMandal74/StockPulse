@@ -883,7 +883,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/blog-visitors.html': '/blog-visitors', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/selloff', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/ideas', '/research.html': '/research', '/paper.html': '/paper',
                       '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -2255,13 +2255,19 @@ app.get('/ipos', route(async (req, res) => {
   logAct(req, 'page', 'ipos');
   res.sendFile(path.join(__dirname, 'private', 'ipos.html'));
 }));
-// Selloff watch (2026-11-03, selloff.js). Members, as /ipos is.
-app.get('/selloff', route(async (req, res) => {
+// Ideas (2026-11-03, selloff.js; the page was "Selloff watch" until the owner
+// renamed it the same day). Members, as /ipos is. The old address still works,
+// sent on to the new one with its tab.
+app.get('/ideas', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
   if (await isGuest(req)) return res.redirect('/');
-  logAct(req, 'page', 'selloff');
+  logAct(req, 'page', 'ideas');
   res.sendFile(path.join(__dirname, 'private', 'selloff.html'));
 }));
+app.get('/selloff', (req, res) => {
+  const show = String(req.query.show || '');
+  res.redirect(301, '/ideas' + (/^[a-z]{1,12}$/.test(show) ? '?show=' + show : ''));
+});
 // The news feed (2026-10-24): every AI-read article, by day and importance.
 app.get('/news', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
@@ -16963,7 +16969,7 @@ app.get('/api/selloff.xlsx', requireAuth, route(async (req, res) => {
   const buf = X.workbook(sheets);
   logAct(req, 'export', 'selloff.xlsx');
   res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.set('Content-Disposition', 'attachment; filename="tickrlab-selloff-watch-' + body.today + '.xlsx"');
+  res.set('Content-Disposition', 'attachment; filename="tickrlab-ideas-' + body.today + '.xlsx"');
   res.set('Cache-Control', 'private, no-store');
   res.send(buf);
 }));
