@@ -70,7 +70,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `longrun.js` | **The Long run group**: growth over three and five years from the filings (and, as built, P/E against its own ten-year median, the dividend record, interest coverage, Piotroski, and the compounding record over ten years of annual reports). Arithmetic only; `longrun-test.js` |
 | `drawdowns.js`, `drawdown-load.js` | The stored drawdown figures behind two screener columns: a slice a night on the daily check, and the first fill |
 | `adjusted.js` | Filings-fed Signal overlay for `/adjusted` and `/adjustedbacktest` (admin research) |
-| `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports |
+| `analysis-db.js` | **Local SQLite copy of the archive for research.** `--full` rebuilds, no flag syncs, `--stats` reports. `analysis-add.js --only ... --commit` copies a newly added stock's whole history in (the sync brings it ten days); the full add checklist is in `adding-a-stock.md` |
 | `strategy-runs.js`, `single-data.js`, `lab-grid.js` | Offline builders writing derived JSON into `private/` |
 | `day-moves.js` | Offline builder for the promo studio's Research › Biggest one-day moves in value card: each company's biggest one-day fall and rise in market value over one to ten years, into `private/day-moves.json` (guests blocked). See `day-moves-card.md` |
 | `sp-years.js` | Offline builder for the promo studio's Research › S&P 500 returns by year card: today's members' price returns per year since 2007, equal- and cap-weighted, beside SPY, into `private/sp-years.json` (guests blocked). See `sp-years-card.md` |

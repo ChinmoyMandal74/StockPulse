@@ -24,6 +24,23 @@
 - **The command names no symbol**, so the copy on the page and on `/holdings` after an add cannot go stale. `/holdings` now shows it in place of the bare `backfill-bars` command.
 - `GET /api/onboarding` (admin) reports per pending stock: profile, filings status, first bar, record close, short-reading count, splits. State tables and per-symbol seeks only.
 
+### The whole checklist, local copy included (2026-11-04)
+The owner, after the fire and safety adds: "When we add a new stock how do I make sure everything is refresh including local copy". Everything below names the stocks with `--only A,B` (`--symbols` for the releases loader). Twelve Data steps (1, 2) stay off :15 and :45, 09:32 and the nightly windows; the rest cost no Twelve Data credits.
+
+1. **Add** on `/themes` (or `POST /api/universe/bulk`), each checked first as one US common-stock listing.
+2. **`onboard.js --commit --only ...` the same day**, before the next price refresh: bars to 2006, record close, short interest, splits (about 21 credits a stock).
+3. **Profile and earnings history:** the Refresh button on `/stock/SYM`, one stock at a time; a 429 means another job had the minute, so wait one and press again. Otherwise the nightly takes stocks with no profile first. **No screener row until this is done**, and news tone, `/ideas` and the screener columns follow from that row.
+4. **SEC filings:** `POST /api/sec/refresh?mode=missing` with `Authorization: Bearer <CRON_SECRET>`, repeated until `remaining` is 0 (or the next nightly SEC step). It resolves the CIK that every step below needs.
+5. **SEC history:** `sec-events-load.js`, `sec-holders-load.js`, `sec-segments-load.js`, then `drawdown-load.js` and `options-load.js`, each `--commit --only ...`.
+6. **Earnings releases since 2017:** `release-history-load.js --commit --symbols ...` (cents of AI credit a company; a company with no results 8-K, like Federal Signal, gets none).
+7. **The local copy:** `analysis-add.js --only ... --commit` copies each stock's bars, fundamentals history, SEC facts and releases into `analysis.db`. The ordinary sync brings a new stock only its last ten days, so steps 8 and 9 would find nothing without this.
+8. **Release text archive:** `release-archive-load.js` (local only; it lists what to fetch from the copy, hence after 7).
+9. **`tech_history`:** `build-tech-history.js --commit --only ...` (reads the copy, hence after 7).
+10. **Source rule:** `POST /api/sources/build?symbols=...` with the cron secret, after 4 and 6, or wait for the daily filings pass.
+11. **Theme**, if wanted, on `/themes`. Then check `/onboarding` and open `/stock/SYM`.
+
+Arrives on its own: insider trades (the quarterly loads keep every filer), 13F and N-PORT holders at the next quarterly load, news and tone once the stock has a screener row, split rotation, report dates and the earnings calendar. The research files (`single-data.js`, `strategy-runs.js`, `lab-grid.js`) are rebuilt after a removal; after an add only when the new stock should be in them.
+
 ### Split history is kept current by the nightly (`GET /api/cron/splits`)
 **Until this a new split was picked up only when somebody opened that stock's Evolution card, and the peer chart never fetches.** `splitRotate()` runs LAST in `nightly-ping.js`'s tail (so more than a minute has passed since the final round's credits): up to `SPLIT_MAX_CALLS` (5) calls of `SPLITS_CRON_MAX` (20) symbols, 65s apart.
 
