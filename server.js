@@ -9182,7 +9182,16 @@ app.post('/api/admin/refresh-stock', requireAdmin, route(async (req, res) => {
   // 2. price
   const deadline = Date.now() + PRICE_PHASE_MS;
   const newest = await store.barsMaxDates([symbol]);
-  const light = await pullPricesFor([symbol], () => `&outputsize=${LIGHT_BARS}`, deadline);
+  // A minute already spent by another job (an intraday round still running)
+  // makes the provider answer 429, which pullPricesFor throws. Say so, rather
+  // than the generic 500: nothing was written, and a minute later it works
+  // (2026-11-04, four presses refused at 11:47 behind the 11:45 round).
+  let light;
+  try { light = await pullPricesFor([symbol], () => `&outputsize=${LIGHT_BARS}`, deadline); }
+  catch (err) {
+    if (!/HTTP 429/.test(String(err && err.message))) throw err;
+    return res.status(429).json(Object.assign({ error: 'Twelve Data’s per-minute credit limit was reached (another job was using it). Nothing was saved; try again in a minute.' }, out));
+  }
   if (!light.refusal) {
     const got = light.got;
     const dOf = (b) => String(b.datetime).slice(0, 10);

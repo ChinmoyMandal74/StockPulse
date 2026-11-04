@@ -4741,6 +4741,7 @@
             const r = await fetch('/api/admin/refresh-stock?symbol=' + encodeURIComponent(stock.symbol), { method: 'POST' });
             const j = await r.json().catch(() => ({}));
             if (r.status === 503) { rf.textContent = 'A refresh is running \u2014 try later'; rf.title = j.error || ''; }
+            else if (r.status === 429) { rf.textContent = 'Credit limit this minute \u2014 try in a minute'; rf.title = j.error || ''; }
             else if (!r.ok) { rf.textContent = 'Could not refresh'; rf.title = j.error || ('The server answered ' + r.status); }
             else if (j.ok) { rf.textContent = 'Refreshed \u2014 reloading'; setTimeout(() => location.reload(), 600); return; }
             else {

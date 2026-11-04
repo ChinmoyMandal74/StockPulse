@@ -24,3 +24,7 @@ The owner: "an option for admin to refresh both price and fundamental" for one s
 ## Not run end to end by the build
 
 The route needs an admin session and spends credits against production, so it was not pressed. What was checked: the wiring and guards (a scratchpad suite, 19 checks, including the stale filter with and without forcing), that the server boots, and that a signed-out caller is refused. The first real press is the owner's.
+
+
+## A refused minute says so (2026-11-04)
+Four presses at 11:47, made while the 11:45 intraday round was still spending that minute, all came back "Server error": the price pull threw on Twelve Data's 429 (684 to 927 credits used against 610) and `route()` turned it into a 500. The route now answers **429 with "per-minute credit limit was reached ... try again in a minute"**, and the stock page's button says "Credit limit this minute". Any other provider failure still throws. Nothing is written either way. The same presses spaced 70 s apart all refreshed. Tested on an in-memory server with a stubbed provider (scratchpad `rs429-test.js`, 3 checks); with the catch removed, 2 of them fail.
