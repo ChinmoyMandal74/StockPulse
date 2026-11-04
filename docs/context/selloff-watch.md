@@ -108,3 +108,10 @@ The owner asked for no descriptive text on the page: "Remove all these texts for
 
 ## Tab order (2026-11-03)
 AI watchlist is the first tab (owner), then Tech, Non-tech and Bouncing off the lows. It is also the tab the page opens on.
+
+## Compact header (2026-11-03)
+The owner asked for less space above the tables.
+- **Removed:** the "Screens" label and the Filings button from the floating nav.
+- **Heading:** now 30 to 40px (was 38 to 58px).
+- **Spacing:** smaller margins, and the nav sits 12px from the top.
+- **Result:** the tabs start about 130px from the top at 1440px, which the browser test checks.
