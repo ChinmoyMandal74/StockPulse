@@ -48,7 +48,6 @@
     }
     .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); }
     h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
-    .lede { margin: 16px 0 0; max-width: 80ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
     .masthead { margin: 34px 0 22px; }
 
     .sw-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; flex-wrap: wrap; }
@@ -59,7 +58,6 @@
     .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
     .sw-win select { font: 500 12px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 10px; }
     .sw-xl { font-size: 12px; padding: 7px 14px; }
-    .sw-what { margin: 0 6px 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 110ch; }
     /* Frozen heading row (owner, 2026-11-03), on the page's one scroll ("I don't like 2 scrollbars"). Sticky needs
        every box between the heading and the page to leave overflow alone, so on wide screens, where the table fits,
        neither this card's core nor the wrap clips; the heading sticks just under the floating nav (--sw-stick, measured).
@@ -131,11 +129,6 @@
     <header class="masthead">
       <span class="eyebrow"><span class="pip"></span>Screens</span>
       <h1>Ideas</h1>
-      <p class="lede">Four views of companies, each with the same readings from the screener. The AI watchlist is AI-linked companies: 25 published elsewhere and every company in our AI
-        themes. Two views are screens over the latest results releases: companies that reported strong numbers and
-        fell anyway. Bouncing off the lows is the screener's screen of that name: low in the 52-week range but up
-        over the past month and fortnight. These are descriptions of what happened, not a reading of what comes
-        next: whether any of these patterns tells anything about the following months has not been tested.</p>
     </header>
 
     <div class="sw-bar">
@@ -149,7 +142,6 @@
       <!-- All three tables in one workbook, a sheet each, for the window chosen. -->
       <a class="btn sw-xl" id="xlsx" href="/api/selloff.xlsx" download title="All three tables as an Excel workbook, a sheet each, with every figure a number you can sort and filter. A fourth sheet says what each column means.">Export to Excel</a>
     </div>
-    <p class="sw-what" id="what"></p>
 
     <div class="bezel sw-card"><div class="core" style="padding:0"><div class="sw-wrap" id="list"><div class="sw-empty">Reading the screener&hellip;</div></div></div></div>
 
@@ -219,11 +211,12 @@
     const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
     const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || SCREENS.includes(v)));
 
-    function what() {
+    // Each tab's rule, as its tooltip (owner, 2026-11-03: no text above the tables).
+    function what(view) {
       const d = data.drop, g = data.minGrowth, w = data.days;
-      if (state.view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
-      if (state.view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
-      if (state.view === 'bounce') {
+      if (view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
+      if (view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
+      if (view === 'bounce') {
         const b = data.bounceScreen;
         return b ? 'The screener’s screen “' + b.name + '”: ' + b.description + ' (' + b.rule + '). Lowest in the 52-week range first. The same screen as on the screener, so a change made to it there shows here too.' : 'The screen is not available.';
       }
@@ -251,7 +244,7 @@
       $('xlsx').style.marginLeft = SCREENS.includes(state.view) ? '' : 'auto';
       if (!data) return;
       for (const v of VIEWS) $('n' + v).textContent = data.views[v].filter((r) => !r.missing).length;
-      $('what').textContent = what();
+      document.querySelectorAll('.sw-tab').forEach((b) => { b.title = what(b.dataset.v); });
       const cols = colsFor(state.view);
       let L = data.views[state.view].slice();
       const c = state.sort && cols.find((x) => x.k === state.sort);

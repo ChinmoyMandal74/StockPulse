@@ -99,3 +99,9 @@ The owner renamed the page from Selloff watch to **Ideas**.
 - **Address:** the page is `/ideas`. `/selloff` answers 301 to `/ideas`, keeping a `show=` of lowercase letters only. So the published post `ai-watchlist-2026-11-03` still works; its link was also changed to `/ideas?show=watch`, with status and date kept.
 - **What changed:** the bar button (still id `selloffLink`), the page title and heading, and the Excel file name (`tickrlab-ideas-<date>.xlsx`). The activity log now records `page ideas`.
 - **What did not:** internal names (`selloff.js`, `selloff.html`, `/api/selloff`, the `sw-` classes). Stored keys and ids are never renamed.
+
+## No text above the tables (2026-11-03)
+The owner asked for no descriptive text on the page: "Remove all these texts for all the 4 options".
+- **Removed:** the paragraph under the heading, and the line above each tab's table.
+- **Where the rule went:** each tab's rule is now its tooltip (`what(view)` sets the tab's `title`).
+- **Kept:** the footnote under the table, with the definitions and "Nothing here is a recommendation to trade".
