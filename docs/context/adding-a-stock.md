@@ -64,3 +64,5 @@ Insider trades needed nothing: the quarterly loads keep every filer, so 12 to 40
 What a script cannot do is the Twelve Data profile and earnings history (the one-stock refresh needs an admin session). The nightly takes stocks with no profile first, and **a new stock has no snapshot row until then**.
 
 **`release-history-load.js --symbols` now also reads a named company that is not in the snapshot yet**, provided its SEC filer id is known. It used to take its list only from snapshot rows, so on the add day it found 0 companies.
+
+**The theme `Fire & Safety`** was made the same day at the owner's request: MSA, APG, JCI, ALLE, ADT, NSSC, FSS, BRC, REZI, written through `writePortfolios` on the full stored list, as the Themes page does (28 themes to 29, 273 memberships to 282). Honeywell, Oshkosh and Carrier have fire-safety businesses too but were left out, since fire safety is a small part of each.
