@@ -31,7 +31,8 @@ The owner, on the checklist below: "This should all be one one click of a button
 - **Remote steps through the cron secret**: `/api/admin/refresh-stock` now takes the cron secret as well as an admin (`cronOrAdmin`), so the profile needs no press of the Refresh button; `/api/sec/refresh?mode=missing` is looped until `remaining` is 0; `/api/sources/build?symbols=` last. A 429 or 503 is waited out (70 s, five tries).
 - **Twelve Data**: before the price loaders and each profile it waits while `Schedule.busyAt` names a slot or window; a run that starts inside a nightly window stops (`--force` overrides), and `--auto` exits 0 so the task stays green.
 - **One run at a time**: `onboard.lock` holds the pid (and the task is `IgnoreNew`, three-hour limit). The log is `onboard.log`.
-- **The record**: `onboard_state.steps` says "all 16 steps" or names the steps that failed; finished still means bars stored.
+- **Holders (added the same evening, the owner: "Do we have institutional investor and fund holdings for these fire and safety stocks")**: none for the four new names, since the 13F and N-PORT loaders run by hand once a quarter. They have no `--only`, so `onboard.js` re-runs them for the quarter on file (`inst13f-load.js --commit`, `nport-load.js --commit`: every stock rewritten with the same figures, the new ones added; downloads reused from the temp folder) and then `inst13f-backfill.js --commit --quarters 8` (history tables only, `do nothing` over a quarter on file; it does recompute each earlier quarter's net buyers figure). Done by hand for NSSC, FSS, BRC, REZI on 2026-11-04: 258, 469, 337 and 435 managers, 264, 426, 230 and 337 funds, nine 13F quarters each like the rest.
+- **The record**: `onboard_state.steps` says "all 19 steps" or names the steps that failed; finished still means bars stored.
 - `/onboarding` and the After you add card on `/themes` say so. The laptop has to be on; running `onboard.js --commit` by hand does the same at once.
 - The task has to be registered once on the laptop: `.onboard-task.ps1` (Claude was refused Task Scheduler registration as persistence, so the owner runs it).
 
@@ -50,7 +51,7 @@ The owner, after the fire and safety adds: "When we add a new stock how do I mak
 10. **Source rule:** `POST /api/sources/build?symbols=...` with the cron secret, after 4 and 6, or wait for the daily filings pass.
 11. **Theme**, if wanted, on `/themes`. Then check `/onboarding` and open `/stock/SYM`.
 
-Arrives on its own: insider trades (the quarterly loads keep every filer), 13F and N-PORT holders at the next quarterly load, news and tone once the stock has a screener row, split rotation, report dates and the earnings calendar. The research files (`single-data.js`, `strategy-runs.js`, `lab-grid.js`) are rebuilt after a removal; after an add only when the new stock should be in them.
+Arrives on its own: insider trades (the quarterly loads keep every filer), news and tone once the stock has a screener row, split rotation, report dates and the earnings calendar. The research files (`single-data.js`, `strategy-runs.js`, `lab-grid.js`) are rebuilt after a removal; after an add only when the new stock should be in them.
 
 ### Split history is kept current by the nightly (`GET /api/cron/splits`)
 **Until this a new split was picked up only when somebody opened that stock's Evolution card, and the peer chart never fetches.** `splitRotate()` runs LAST in `nightly-ping.js`'s tail (so more than a minute has passed since the final round's credits): up to `SPLIT_MAX_CALLS` (5) calls of `SPLITS_CRON_MAX` (20) symbols, 65s apart.

@@ -24,6 +24,8 @@
 //               resolves the CIK everything after needs)
 //   SEC history sec-events-load.js, sec-holders-load.js, sec-segments-load.js,
 //               drawdown-load.js, options-load.js
+//   holders     inst13f-load.js, nport-load.js (whole universe, the quarter on
+//               file), inst13f-backfill.js (eight earlier 13F quarters)
 //   releases    release-history-load.js (Claude Haiku, capped at $2)
 //   local copy  analysis-add.js, then release-archive-load.js and
 //               build-tech-history.js, which read the copy
@@ -75,6 +77,13 @@ const STEPS = [
   ['revenue segments', 'local', 'sec-segments-load.js', (list) => ['--commit', '--only', list]],
   ['drawdowns', 'local', 'drawdown-load.js', (list) => ['--commit', '--only', list]],
   ['options', 'local', 'options-load.js', (list) => ['--commit', '--only', list]],
+  // Whole-universe loaders with no --only: they re-read the quarter already on
+  // file (SEC data sets, kept in the temp folder between runs), which adds the
+  // new stocks and rewrites the rest with the same figures; the backfill adds
+  // the eight earlier 13F quarters to the history tables, never over one on file.
+  ['13F holders', 'local', 'inst13f-load.js', () => ['--commit']],
+  ['fund holders', 'local', 'nport-load.js', () => ['--commit']],
+  ['13F history', 'local', 'inst13f-backfill.js', () => ['--commit', '--quarters', '8'], ['--max-old-space-size=6144']],
   ['earnings releases', 'local', 'release-history-load.js', (list) => ['--commit', '--max-usd', '2', '--symbols', list]],
   ['local copy', 'local', 'analysis-add.js', (list) => ['--commit', '--only', list]],
   ['release text', 'local', 'release-archive-load.js', () => ['--limit', '400']],
@@ -162,8 +171,8 @@ const dropLock = () => { try { if (Number(fs.readFileSync(LOCK, 'utf8')) === pro
   const list = symbols.join(',');
   console.log('\n' + stamp() + '  ' + symbols.length + (symbols.length === 1 ? ' stock: ' : ' stocks: ') + list);
   console.log('Twelve Data credits: about ' + symbols.length * 101 + ' (1 for prices, 20 for splits, 80 for the profile, per stock).');
-  for (const [name, kind, script, mk] of STEPS) {
-    console.log('  ' + name.padEnd(18) + (kind === 'remote' ? BASE + ' (' + script + ')' : 'node --use-system-ca ' + script + ' ' + mk(list).join(' ')));
+  for (const [name, kind, script, mk, flags] of STEPS) {
+    console.log('  ' + name.padEnd(18) + (kind === 'remote' ? BASE + ' (' + script + ')' : 'node --use-system-ca ' + (flags ? flags.join(' ') + ' ' : '') + script + ' ' + mk(list).join(' ')));
   }
   if (!COMMIT) { console.log('\nDry run: nothing fetched, nothing written. Add --commit.'); return; }
   if (!SECRET) { console.log('\nNot started: CRON_SECRET is not in .env, and the profile, filings and source rule steps need it.'); process.exitCode = 1; return; }
@@ -177,12 +186,12 @@ const dropLock = () => { try { if (Number(fs.readFileSync(LOCK, 'utf8')) === pro
 
   const ran = [];
   try {
-    for (const [name, kind, script, mk] of STEPS) {
+    for (const [name, kind, script, mk, flags] of STEPS) {
       console.log('\n== ' + name + ' ==  ' + stamp());
       try {
         if (kind === 'remote') { ran.push(name + ' ' + await REMOTE[script](symbols)); continue; }
         if (kind === 'twelve') await waitForCredits();
-        const r = spawnSync(process.execPath, ['--use-system-ca', path.join(__dirname, script), ...mk(list)], { stdio: 'inherit', cwd: __dirname });
+        const r = spawnSync(process.execPath, ['--use-system-ca', ...(flags || []), path.join(__dirname, script), ...mk(list)], { stdio: 'inherit', cwd: __dirname });
         ran.push(name + (r.status === 0 ? '' : ' (exit ' + r.status + ')'));
       } catch (e) {
         console.log('  failed: ' + (e && e.message));

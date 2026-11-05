@@ -184,14 +184,14 @@
         <li><b>Nothing else to press.</b> Within half an hour of the add (the laptop task <i>TickrLab onboard</i>,
           every half hour from 7:05 AM to 10:05 PM), <code>onboard.js</code> loads everything for every stock still
           waiting: the full price history, record close, short interest and splits; the company profile and
-          earnings history; the SEC filings, 8-K events, 13D/13G holders, revenue segments, drawdowns and options;
+          earnings history; the SEC filings, 8-K events, 13D/13G holders, revenue segments, drawdowns and options; the institutional (13F) and fund holders, with two years of 13F quarters;
           the earnings releases since 2017; the local research copy, the release text archive and the Signal
           history; and the source rule. About 101 API credits a stock. It keeps out of the nightly runs and the
           intraday price slots by itself. The laptop has to be on.</li>
         <li><b>To load them straight away</b>, run <code>node --use-system-ca onboard.js --commit</code> in the
           project folder (without <code>--commit</code> it only shows what it would do).</li>
         <li><b>Check <a href="/onboarding">New stocks</a>.</b> It lists every stock added that is not finished
-          yet, piece by piece, and clears once the run has finished it. Insider trades, 13F and fund holders,
+          yet, piece by piece, and clears once the run has finished it. Insider trades,
           news and tone arrive on their own.</li>
       </ol>
       <p class="warn">Two things cannot be filled in for the past and start from the day of the add: the recorded
