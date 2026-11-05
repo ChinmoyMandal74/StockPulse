@@ -26,6 +26,16 @@
 // (Holders13 itself reads only the structured ones).
 const FORMS = new Set(['8-K', '8-K/A', 'SCHEDULE 13D', 'SCHEDULE 13D/A', 'SCHEDULE 13G', 'SCHEDULE 13G/A',
   'SC 13D', 'SC 13D/A', 'SC 13G', 'SC 13G/A']);
+// QUARTERLY AND ANNUAL REPORTS (2026-11-05, the owner on Reddit's profit
+// margin chart still ending at June when its September 10-Q was filed on
+// Oct 30). These are not re-read here: a report's statements are the
+// rotation's 1-5MB read. The step only NOTES which tracked companies filed
+// one, and on which day (state.reports), and the rotation reads those first
+// (server.js secPlan), so a report lands the next morning rather than up to
+// a week later. No extra fetch: the same index, the same rotation reads.
+const REPORT_FORMS = new Set(['10-Q', '10-Q/A', '10-K', '10-K/A', '10-KT', '20-F', '20-F/A', '40-F', '40-F/A']);
+// How long a noted report is kept: long enough to outlast a slow rotation.
+const REPORT_KEEP_DAYS = 21;
 const kindOf = (form) => (/^8-K/.test(form) ? '8-K' : /13D/.test(form) ? '13D' : '13G');
 
 // Dates as YYYY-MM-DD strings, worked at noon so no zone can move a day.
@@ -67,7 +77,8 @@ function missingMeans(date, today) {
 
 // The master index: a header, a line of dashes, then
 // CIK|Company Name|Form Type|Date Filed|Filename. Only the forms above.
-function parseIndex(text) {
+function parseIndex(text, forms) {
+  const want = forms || FORMS;
   const lines = String(text || '').split(/\r?\n/);
   const start = lines.findIndex((l) => /^-{10,}/.test(l));
   const out = [];
@@ -75,10 +86,10 @@ function parseIndex(text) {
     const f = lines[i].split('|');
     if (f.length < 5) continue;
     const form = f[2].trim();
-    if (!FORMS.has(form)) continue;
+    if (!want.has(form)) continue;
     const cik = Number(f[0]);
     if (!(cik > 0)) continue;
-    out.push({ cik, name: f[1].trim(), form, kind: kindOf(form), filed: f[3].trim(), file: f[4].trim() });
+    out.push({ cik, name: f[1].trim(), form, kind: REPORT_FORMS.has(form) ? 'report' : kindOf(form), filed: f[3].trim(), file: f[4].trim() });
   }
   return out;
 }
@@ -96,6 +107,34 @@ function match(lines, ciks) {
     }
   }
   return { symbols, hits };
+}
+// The tracked companies that filed a 10-Q, 10-K or the foreign forms on the
+// index's day, merged into the noted map { SYM: 'YYYY-MM-DD' } (the latest
+// filing day wins), and entries older than REPORT_KEEP_DAYS dropped.
+function noteReports(prev, text, ciks, day, today) {
+  const out = {};
+  const keepFrom = addDays(today, -REPORT_KEEP_DAYS);
+  for (const [s, d] of Object.entries(prev || {})) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d >= keepFrom) out[s] = d;
+  let n = 0;
+  for (const l of parseIndex(text, REPORT_FORMS)) {
+    for (const s of ciks.get(l.cik) || []) {
+      if (!out[s] || out[s] < day) out[s] = day;
+      n++;
+    }
+  }
+  return { reports: out, n };
+}
+// Which symbols the rotation should read first: a noted report filed on a
+// day that ends after the company was last read. A read on the filing day
+// itself counts as before it (the filing may have come later that day), so
+// at worst a company is read once more than needed. Oldest filing first.
+function reportsDue(reports, fetchedAt) {
+  const due = [];
+  for (const [s, d] of Object.entries(reports || {})) {
+    const endOfDay = Date.parse(addDays(d, 1) + 'T05:00:00Z'); // midnight in New York, near enough
+    if (Number(fetchedAt(s) || 0) < endOfDay) due.push([s, d]);
+  }
+  return due.sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1)).map((x) => x[0]);
 }
 // CIK -> symbols, from sec_state's rows ({ SYM: { cik } }), the universe only.
 function cikMap(state, universe) {
@@ -125,8 +164,9 @@ function cikMap(state, universe) {
 async function step(o) {
   const prev = await o.readState();
   const st = prev && prev.through
-    ? { through: prev.through, pending: Array.isArray(prev.pending) ? prev.pending : [], days: Array.isArray(prev.days) ? prev.days : [] }
-    : { through: startThrough(o.today), pending: [], days: [] };
+    ? { through: prev.through, pending: Array.isArray(prev.pending) ? prev.pending : [], days: Array.isArray(prev.days) ? prev.days : [],
+      reports: prev.reports && typeof prev.reports === 'object' ? prev.reports : {} }
+    : { through: startThrough(o.today), pending: [], days: [], reports: {} };
   const read = [], notes = [];
   let blocked = false;
   if (!st.pending.length) {
@@ -146,8 +186,11 @@ async function step(o) {
         const m = match(parseIndex(r.text), ciks);
         const queued = new Set(st.pending.map((p) => p[0]));
         for (const s of m.symbols) if (!queued.has(s)) { st.pending.push([s, cikOf(s)]); queued.add(s); }
+        const rp = noteReports(st.reports, r.text, ciks, d, o.today);
+        st.reports = rp.reports;
         st.through = d;
         const by = {}; for (const h of m.hits) by[h.kind] = (by[h.kind] || 0) + 1;
+        if (rp.n) by.report = rp.n;
         read.push({ date: d, companies: m.symbols.length, filings: by });
       }
     }
@@ -228,5 +271,5 @@ function prevBusinessDay(today) {
   return d;
 }
 
-module.exports = { step, FORMS, todayET, datesToRead, startThrough, indexUrl, missingMeans, parseIndex, match, cikMap, addDays,
+module.exports = { REPORT_FORMS, REPORT_KEEP_DAYS, noteReports, reportsDue, step, FORMS, todayET, datesToRead, startThrough, indexUrl, missingMeans, parseIndex, match, cikMap, addDays,
   currentUrl, parseCurrent, resultsFiled, prevBusinessDay };

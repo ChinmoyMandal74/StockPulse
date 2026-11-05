@@ -14431,6 +14431,21 @@ async function secPlan(mode, startedAt, rotateMs) {
       const sb = state[String(b).toUpperCase()];
       return Number((sa && sa.fetchedAt) || 0) - Number((sb && sb.fetchedAt) || 0);
     });
+    // A JUST-FILED 10-Q OR 10-K FIRST (2026-11-05, the owner on Reddit's
+    // margin chart a quarter behind its filed 10-Q). The morning daily read
+    // notes which tracked companies filed a report (secdaily.js, sec_daily
+    // state `reports`); any of them read before its filing day ended goes to
+    // the front, whatever the seven-day cutoff says. Same reads, new order.
+    let due = [];
+    try {
+      const daily = await store.readSecDaily();
+      const inU = new Set(universe.map((s) => String(s).toUpperCase()));
+      due = SecDaily.reportsDue(daily && daily.reports, (s) => state[s] && state[s].fetchedAt).filter((s) => inU.has(s));
+    } catch (e) { due = []; }
+    if (due.length) {
+      const first = new Set(due);
+      stale = due.concat(stale.filter((s) => !first.has(String(s).toUpperCase())));
+    }
   }
   return { universe, state, stale };
 }

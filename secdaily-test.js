@@ -71,6 +71,24 @@ ok(!m.hits.some((h) => h.symbol === 'VGD'), 'the 13G filer (Vanguard) is not a t
 eq(m.hits.filter((h) => h.symbol === 'NVDA').map((h) => h.kind), ['13G'], 'the 13G about NVIDIA is matched by its subject');
 eq(D.match(lines, new Map()).symbols, [], 'nothing tracked, nothing matched');
 
+// ---- 10-Q and 10-K noted for the rotation (2026-11-05) ----
+// Amazon's 10-Q is not a filing the daily read re-reads (not in FORMS, above),
+// but it is noted, under every share class, on the index's day.
+eq(D.parseIndex(IDX, D.REPORT_FORMS).map((l) => l.cik + ' ' + l.form + ' ' + l.kind), ['1018724 10-Q report'], 'reports parsed on their own');
+let nr = D.noteReports({ AAPL: '2026-10-01', OLDX: '2026-09-20', BAD: 'x' }, IDX, ciks, '2026-10-19', '2026-10-20');
+eq(nr.reports, { AAPL: '2026-10-01', AMZN: '2026-10-19' }, 'Amazon noted; an entry past 21 days and a malformed one dropped');
+ok(nr.n === 1, 'one report counted');
+nr = D.noteReports({ AMZN: '2026-10-20' }, IDX, ciks, '2026-10-19', '2026-10-20');
+eq(nr.reports.AMZN, '2026-10-20', 'a later filing day is kept over an earlier one');
+const twoClass = 'x\n----------\n1652044|Alphabet Inc.|10-K|20261019|f\n';
+eq(D.noteReports({}, twoClass, ciks, '2026-10-19', '2026-10-20').reports, { GOOGL: '2026-10-19', GOOG: '2026-10-19' }, 'both share classes noted');
+// Due: read before the filing day ended (midnight New York, 05:00 UTC next day).
+const fetched = { A: Date.parse('2026-10-29T21:00:00-04:00'), B: Date.parse('2026-10-30T15:00:00-04:00'), C: Date.parse('2026-10-31T09:00:00-04:00') };
+eq(D.reportsDue({ A: '2026-10-30', B: '2026-10-30', C: '2026-10-30', D: '2026-10-28', Z: '2026-10-30' }, (s) => fetched[s]), ['D', 'A', 'B', 'Z'],
+  'read the evening before (A), earlier that day (B) or never (D, Z) is due, oldest filing first; read the next morning (C) is not');
+eq(D.reportsDue({}, () => 0), [], 'nothing noted, nothing due');
+eq(D.reportsDue(null, () => 0), [], 'no state, nothing due');
+
 
 // ---- the whole step, with stand-ins for the network and the database ----
 // REAL_DAY is an excerpt of the SEC's own master index for 2026-10-19 (read
@@ -106,6 +124,16 @@ function rig(opts) {
     eq(r.state().through, '2026-10-19', 'state remembers Monday');
     const b = await D.step(r.deps);
     ok(b.done && !b.read.length && !b.fetched && r.calls.index.length === 1, 'a second call the same day reads nothing again');
+  }
+  // A 10-Q on the day's index is noted in the state for the rotation, not
+  // queued for the daily read; old state without `reports` still works.
+  {
+    const day = REAL_DAY + '\n320193|Apple Inc.|10-Q|20261019|edgar/data/320193/q.txt\n';
+    const r = rig({ state: { through: '2026-10-16', pending: [] }, index: { '2026-10-19': { status: 200, text: day } } });
+    const a = await D.step(r.deps);
+    eq(r.state().reports, { AAPL: '2026-10-19' }, 'Apple 10-Q noted with the index day');
+    ok(!r.calls.one.includes('AAPL'), 'and not re-read by the daily step');
+    eq(a.read[0].filings.report, 1, 'counted in the day read');
   }
   // The queue spans calls when there are more companies than one call takes.
   {
