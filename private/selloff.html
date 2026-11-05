@@ -16,6 +16,8 @@
   <script src="/releaseview.js"></script>
   <!-- RowCard.fmtMktCap: the screener's own market-cap formatting. -->
   <script src="/rowcard.js"></script>
+  <!-- Filters.compileNum / compileText: the screener's own filter grammar, so ">10b", "-20..-5" and "a|!b" mean here what they mean there. -->
+  <script src="/filters.js"></script>
   <style>
     /* The shell is the IPO pipeline's. Everything this page adds is prefixed sw- . */
     body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
@@ -100,6 +102,20 @@
     .sw-grpname { color: var(--muted); font-size: 11.5px; }
     .sw-from { display: block; color: var(--faint); font-size: 10.5px; margin-top: 2px; max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
     .sw-empty { padding: 26px; font-size: 13px; color: var(--muted); }
+    /* The filter row under the headings (owner, 2026-11-05), pinned with them: its top is the heading row's measured height below the nav. */
+    .sw-wrap thead tr.sw-frow th { top: calc(var(--sw-stick, 70px) + var(--sw-h1, 40px)); padding-top: 0; padding-bottom: 7px; cursor: default; border-radius: 0 !important; }
+    .sw-wrap thead tr:first-child th { box-shadow: none; }
+    .sw-frow input, .sw-frow select { width: 100%; min-width: 4.2em; box-sizing: border-box; font: 500 11px var(--mono); color: var(--text);
+      background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 7px; padding: 4px 6px; text-transform: none; letter-spacing: 0; }
+    .sw-frow select { font-family: var(--sans); padding: 3px 4px; }
+    .sw-frow input::placeholder { color: var(--faint); }
+    .sw-frow input:focus, .sw-frow select:focus { outline: none; border-color: var(--accent); }
+    .sw-frow .sw-fon { border-color: var(--accent); }
+    .sw-frow .sw-bad { border-color: var(--amber, var(--orange)); }
+    .sw-fstat { font-size: 12px; color: var(--muted); display: none; align-items: center; gap: 8px; }
+    .sw-fstat b { font-family: var(--mono); font-weight: 500; color: var(--text); }
+    .sw-fstat button { font: 500 12px var(--sans); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair-2); background: none; color: var(--muted); cursor: pointer; }
+    .sw-fstat button:hover { color: var(--text); border-color: var(--accent); }
     .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
     @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
     @media (max-width: 1279px) { .sw-card > .core { overflow: hidden; } .sw-wrap { overflow-x: auto; } .sw-wrap thead th { position: static; } }
@@ -140,6 +156,7 @@
       <button class="sw-tab" data-v="divlow">Dividend growers near their lows<span class="sw-n" id="ndivlow"></span></button>
       <button class="sw-tab" data-v="insider">Insider buying clusters<span class="sw-n" id="ninsider"></span></button>
       <button class="sw-tab" data-v="quiet">Strong three years, quiet this year<span class="sw-n" id="nquiet"></span></button>
+      <span class="sw-fstat" id="fstat"><span>Showing <b id="fshown"></b> of <b id="ftotal"></b></span><button type="button" id="fclear">Clear filters</button></span>
       <label class="sw-win" id="winWrap">Releases from the past
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
@@ -162,7 +179,7 @@
     const SCREENS = ['tech', 'nontech'];
     // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
     const DEFAULT_VIEW = 'watch';
-    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null, sort: null, dir: 1 };
+    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null, sort: null, dir: 1, filters: {} };
     let data = null;
 
     const fmtDay = (s) => (s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—');
@@ -256,6 +273,58 @@
     const NOW_WORD = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
     const colsFor = (v) => COLS.filter((c) => (!c.only || [].concat(c.only).includes(v)) && (!c.screen || SCREENS.includes(v)));
 
+    // COLUMN FILTERS (owner, 2026-11-05). A filter reads what the cell shows, in the unit it shows it, through
+    // the screener's own grammar (filters.js): numbers take >10, <-5, 10..20, =0 and k/m/b (">10b" for market cap);
+    // text matches any part, a|b for either, !word to leave out; word columns are a drop-down of the values present.
+    // A blank cell matches no filter. Filters stay as tabs change, applied wherever their column appears.
+    const GUIDE_WORD = (g) => (!g ? null : g === 'given' ? 'Given' : g.charAt(0).toUpperCase() + g.slice(1));
+    const FSPEC = {
+      symbol: { kind: 'text', fv: (r) => r.symbol + ' ' + (r.name || '') },
+      group: { kind: 'cat', fv: (r) => r.group, order: (v) => GROUPS.indexOf(v) },
+      sector: { kind: 'cat', fv: (r) => r.sector },
+      crNow: { kind: 'cat', fv: (r) => NOW_WORD[r.crNow] || null, order: (v) => Object.values(NOW_WORD).indexOf(v) },
+      filed: { kind: 'text', fv: (r) => (r.filed ? fmtDay(r.filed) : null) },
+      guidance: { kind: 'cat', fv: (r) => GUIDE_WORD(r.guidance) },
+      valueVsIndustry: { kind: 'cat', fv: (r) => r.valueVsIndustry },
+      growthProfile: { kind: 'cat', fv: (r) => r.growthProfile },
+      signal: { kind: 'cat', fv: (r) => r.signal, order: (v) => SIGNALS.indexOf(v) },
+      tone: { kind: 'num', fv: (r) => (r.tone && isNum(r.tone.avg) ? Number(r.tone.avg) : null) },
+    };
+    const fspec = (c) => FSPEC[c.k] || { kind: 'num', fv: (r) => (isNum(r[c.k]) ? Number(r[c.k]) : null) };
+    const FHELP = { num: 'Numbers: >10, <-5, 10..20 for a range, =0. Dollars take k, m, b: >10b. A blank matches nothing.',
+      text: 'Any part of the text; a|b for either; !word to leave it out.' };
+    // The live filters for these columns: [{ col, test }], and the keys whose text was not understood.
+    function compileFilters(cols) {
+      const live = [], bad = new Set();
+      for (const c of cols) {
+        const src = state.filters[c.k];
+        if (!src) continue;
+        const s = fspec(c);
+        const test = s.kind === 'cat' ? ((v) => v === src) : s.kind === 'text' ? Filters.compileText(src) : Filters.compileNum(src);
+        if (test === false) { bad.add(c.k); continue; }
+        if (test) live.push({ c, s, test });
+      }
+      return { live, bad };
+    }
+    function catOptions(c, rows) {
+      const s = fspec(c), seen = new Set();
+      for (const r of rows) { const v = s.fv(r); if (v != null && v !== '') seen.add(v); }
+      const vals = [...seen];
+      return s.order ? vals.sort((a, b) => s.order(a) - s.order(b)) : vals.sort();
+    }
+    function filterRow(cols, rows, bad) {
+      return '<tr class="sw-frow">' + cols.map((c) => {
+        const s = fspec(c), v = state.filters[c.k] || '', cls = (bad.has(c.k) ? 'sw-bad' : v ? 'sw-fon' : '') + (c.cls ? ' ' + c.cls : '');
+        if (s.kind === 'cat') {
+          const opts = catOptions(c, rows);
+          if (v && !opts.includes(v)) opts.push(v);
+          return '<th class="' + (c.cls || '') + '"><select data-f="' + c.k + '" class="' + cls + '" aria-label="Filter ' + we(c.t) + '"><option value="">All</option>'
+            + opts.map((o) => '<option' + (o === v ? ' selected' : '') + '>' + we(o) + '</option>').join('') + '</select></th>';
+        }
+        return '<th class="' + (c.cls || '') + '"><input data-f="' + c.k + '" class="' + cls + '" value="' + we(v) + '" placeholder="' + (s.kind === 'num' ? '>, <, ..' : 'filter') + '" title="' + we(FHELP[s.kind]) + '" aria-label="Filter ' + we(c.t) + '" autocomplete="off" spellcheck="false"></th>';
+      }).join('') + '</tr>';
+    }
+
     // Each tab's rule, as its tooltip (owner, 2026-11-03: no text above the tables).
     function what(view) {
       const d = data.drop, g = data.minGrowth, w = data.days;
@@ -292,27 +361,64 @@
       for (const v of VIEWS) $('n' + v).textContent = data.views[v].filter((r) => !r.missing).length;
       document.querySelectorAll('.sw-tab').forEach((b) => { b.title = what(b.dataset.v); });
       const cols = colsFor(state.view);
-      let L = data.views[state.view].slice();
+      const all = data.views[state.view];
+      if (!all.length) { $('list').innerHTML = '<div class="sw-empty">No company matches in this window.</div>'; fstat(0, 0); return; }
+      const { bad } = compileFilters(cols);
+      $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '><span class="sw-h">' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</span></th>').join('') + '</tr>'
+        + filterRow(cols, all.filter((r) => !r.missing), bad) + '</thead><tbody></tbody></table>';
+      // The filter row pins under the heading row, whatever height its wrapped headings come to.
+      const h1 = document.querySelector('#list thead tr:first-child');
+      if (h1) document.documentElement.style.setProperty('--sw-h1', Math.round(h1.getBoundingClientRect().height) + 'px');
+      paintBody();
+      const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
+      $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
+        + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
+        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
+        + (['quality', 'divlow', 'insider', 'quiet'].includes(state.view) ? we(data.ideaRules[state.view]) + ' ' : '')
+        + 'Click a column heading to sort; type in the box under it to filter (numbers take >10, <-5, 10..20, and >10b for dollars; a blank matches no filter). The Excel export has every row. Nothing here is a recommendation to trade.';
+    }
+    // The rows: filtered, then sorted. Repainted alone as a filter is typed, so the box keeps its focus.
+    function paintBody() {
+      const tb = document.querySelector('#list tbody');
+      if (!tb || !data) return;
+      const cols = colsFor(state.view), all = data.views[state.view];
+      const { live, bad } = compileFilters(cols);
+      document.querySelectorAll('#list [data-f]').forEach((el) => {
+        el.classList.toggle('sw-bad', bad.has(el.dataset.f));
+        el.classList.toggle('sw-fon', !bad.has(el.dataset.f) && !!state.filters[el.dataset.f]);
+      });
+      // A company not on the screener has no readings, so any filter leaves it out.
+      let L = live.length ? all.filter((r) => !r.missing && live.every((f) => f.test(f.s.fv(r)))) : all.slice();
       const c = state.sort && cols.find((x) => x.k === state.sort);
       if (c) {
         const val = c.num ? (r) => (isNum(r[c.k]) ? Number(r[c.k]) : null) : c.sort;
         // A blank sorts last whichever way.
         L.sort((a, b) => { const x = val(a), y = val(b); if (x == null || x === '') return 1; if (y == null || y === '') return -1; return (x < y ? -1 : x > y ? 1 : 0) * state.dir; });
       }
-      if (!L.length) { $('list').innerHTML = '<div class="sw-empty">No company matches in this window.</div>'; return; }
       const grouped = state.view === 'watch' && !c;
-      $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '><span class="sw-h">' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</span></th>').join('') + '</tr></thead><tbody>'
-        + L.map((r, i) => r.missing
+      tb.innerHTML = !L.length
+        ? '<tr><td colspan="' + cols.length + '" class="sw-empty">No company matches these filters.</td></tr>'
+        : L.map((r, i) => r.missing
           ? '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '><td class="sw-co"><b class="sw-num">' + we(r.symbol) + '</b></td><td class="sw-grpname">' + we(r.group) + '</td><td colspan="' + (cols.length - 2) + '" class="sw-faint">Not on the screener</td></tr>'
-          : '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '>' + cols.map((x) => x.cell(r)).join('') + '</tr>').join('')
-        + '</tbody></table>';
-      const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
-      $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
-        + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
-        + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
-        + (['quality', 'divlow', 'insider', 'quiet'].includes(state.view) ? we(data.ideaRules[state.view]) + ' ' : '')
-        + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
+          : '<tr' + (grouped && i && L[i - 1].group !== r.group ? ' class="sw-grp"' : '') + '>' + cols.map((x) => x.cell(r)).join('') + '</tr>').join('');
+      fstat(live.length ? L.length : null, all.filter((r) => !r.missing).length);
     }
+    // "Showing 12 of 81" and Clear, while any filter on this tab is live.
+    function fstat(shown, total) {
+      const on = shown != null;
+      $('fstat').style.display = on ? 'inline-flex' : 'none';
+      if (on) { $('fshown').textContent = shown; $('ftotal').textContent = total; }
+    }
+    const onFilter = (e) => {
+      const el = e.target.closest('[data-f]');
+      if (!el) return;
+      const v = el.value.trim();
+      if (v) state.filters[el.dataset.f] = v; else delete state.filters[el.dataset.f];
+      paintBody();
+    };
+    $('list').addEventListener('input', (e) => { if (e.target.tagName === 'INPUT') onFilter(e); });
+    $('list').addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') onFilter(e); });
+    $('fclear').addEventListener('click', () => { state.filters = {}; paint(); });
     $('list').addEventListener('click', (e) => {
       const th = e.target.closest('th[data-k]');
       if (!th) return;

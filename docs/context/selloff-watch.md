@@ -155,3 +155,16 @@ The owner: "stocks that have generally had good returns over the previous 3 year
 - **Seen on the first list:** flat on the year does not mean quiet all year. Almonty (−64% from its high) and Ubiquiti (−49%) rose and fell back within it. A cap on the distance from the 52-week high would keep only the ones that stayed level; not added, the owner's call.
 - **Untested as a pattern.** The literature finds three-to-five-year winners giving some back over years (long-term reversal) and twelve-month strength persisting; at the one-to-two-month hold nothing here has been measured. A backtest belongs in `docs/research.md` before anyone reads more into it.
 - **Checks:** `selloff-test.js` 85 (every edge, blanks, ETFs, the sheet). With the revenue and Declining tests removed, 3 fail.
+
+## Column filters (2026-11-05)
+
+The owner asked for column filters on `/ideas`. A second heading row holds a box under every column, pinned with the headings (its `top` is the first row's measured height, `--sw-h1`, below the nav). It uses the screener's grammar from `filters.js` (`Filters.compileNum` / `compileText`), so `>10b`, `-20..-5`, `=0`, `a|b` and `!word` mean what they mean on the screener. The word columns (Group, Sector, Quarters now, Guidance, Value vs industry, Growth & profit, Signal) are drop-downs of the values present on the tab.
+
+- A filter reads what the cell shows, in the unit it shows. Guidance reads as its word, Reported as "Nov 3", and Tone 7D as its average. `FSPEC` in the page lists the exceptions; every other column filters its own number.
+- A blank matches no filter. A row marked "Not on the screener" drops out once any filter is live.
+- Filters persist across tabs and apply wherever their column appears. "Showing n of m" and Clear filters appear while any filter on the tab is live.
+- A filter that isn't understood gets an amber border and is ignored.
+- Typing repaints only the rows (`paintBody`), so the box keeps its focus. Sorting repaints the whole table and keeps each box's text.
+- The Excel export ignores the filters and still carries every row.
+
+Verified in headless Chrome over a real `/api/selloff` answer: 18 checks, covering number, dollar, range, text and drop-down filters, focus, the count, sort under a filter, Clear, a tab-only column, and blanks. Proved by reverting: a full repaint on each keystroke fails the focus check.
