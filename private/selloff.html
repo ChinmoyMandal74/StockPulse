@@ -336,7 +336,7 @@
         return b ? 'The screener’s screen “' + b.name + '”: ' + b.description + ' (' + b.rule + '). Lowest in the 52-week range first. The same screen as on the screener, so a change made to it there shows here too.' : 'The screen is not available.';
       }
       const L = data.views.watch, n = L.filter((r) => r.from === 'list').length;
-      return 'AI-linked companies in eight groups, largest first within each: the ' + n + ' published by ' + data.watchSource + ', and every company in your AI themes (AI - Optical Networking, AI - Power Generation, Memory, Neoclouds, Hyperscalers, and Cloud Infra, Hardware & Networking), each company once. '
+      return 'AI-linked companies in eight groups, largest first within each: the ' + n + ' published by ' + data.watchSource + ', and every company in your AI themes, one theme per group (' + (data.aiThemes || []).join(', ') + '), each company once, in the group of its theme. '
         + 'The line under each group says where it came from. It follows the themes as they stand; it is not a screen and does not change as prices move.';
     }
 

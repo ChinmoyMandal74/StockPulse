@@ -47,21 +47,24 @@ const WATCH = {
 // groups below. Read live from the rows' themes: a name added to a theme
 // appears here on the next load. ETFs are left out, as the screens leave them.
 //
-// Where a company goes, first rule that applies:
-//   1. On the 25: the group it was published in.
-//   2. PLACE, by hand: the foundries beside TSMC in Compute, and Intel.
-//   3. Industry Semiconductor Equipment & Materials: Semicap.
-//   4. Its first theme in AI_THEMES order, mapped to a group. Neoclouds comes
-//      before Cloud Infra so CoreWeave reads as a neocloud.
+// THE THEMES ARE THE GROUPS (owner, 2026-11-05: "cleanup themes based on the
+// list ... rename all AI related themes to prefix with AI -"). One AI theme per
+// group, each company in one of them, so a company's group is its AI theme:
+// moving it between themes moves it here. Before, the groups were worked out
+// from six overlapping themes, a hand list and the industry; that placement
+// became the themes' membership on 2026-11-05.
+//   1. Its first AI theme, in AI_THEMES order.
+//   2. Else, on the 25: the group it was published in.
 const AI_THEMES = [
-  ['Memory', 'Memory'],
+  ['AI - Memory', 'Memory'],
   ['AI - Power Generation', 'Power'],
   ['AI - Optical Networking', 'Networking'],
-  ['Neoclouds', 'Neoclouds'],
-  ['Hyperscalers', 'Hyperscalers'],
-  ['Cloud Infra, Hardware & Networking', 'Servers & data centres'],
+  ['AI - Semicap', 'Semicap'],
+  ['AI - Compute', 'Compute'],
+  ['AI - Neoclouds', 'Neoclouds'],
+  ['AI - Hyperscalers', 'Hyperscalers'],
+  ['AI - Servers & Data Centres', 'Servers & data centres'],
 ];
-const PLACE = { GFS: 'Compute', TSEM: 'Compute', UMC: 'Compute', INTC: 'Compute' };
 const GROUP_ORDER = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
 
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -185,15 +188,15 @@ function screen(view, rows, rels, barsBy, days, today) {
 function watch(rows, rels) {
   const by = new Map((rows || []).filter((r) => r && r.symbol).map((r) => [r.symbol, r]));
   const placed = new Map();
-  for (const [group, syms] of WATCH.groups) for (const s of syms) placed.set(s, { group, from: 'list' });
+  const listed = new Set(WATCH.groups.flatMap(([, syms]) => syms));
   for (const [theme, group] of AI_THEMES) {
     for (const row of by.values()) {
       if (placed.has(row.symbol) || row.instrumentType === 'ETF' || row.error) continue;
       if (!(row.portfolios || []).includes(theme)) continue;
-      const g = PLACE[row.symbol] || (row.industry === 'Semiconductor Equipment & Materials' ? 'Semicap' : group);
-      placed.set(row.symbol, { group: g, from: theme });
+      placed.set(row.symbol, { group, from: listed.has(row.symbol) ? 'list' : theme });
     }
   }
+  for (const [group, syms] of WATCH.groups) for (const s of syms) if (!placed.has(s)) placed.set(s, { group, from: 'list' });
   const out = [];
   for (const [s, p] of placed) {
     const row = by.get(s);
@@ -443,4 +446,4 @@ function shiftDay(day, n) {
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { NOW_WORDS, IDEAS, quiet, quality, divlow, insider, ideaRules, TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, withTone, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { NOW_WORDS, IDEAS, quiet, quality, divlow, insider, ideaRules, TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, GROUP_ORDER, workbookSheets, withTone, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };

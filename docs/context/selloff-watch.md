@@ -50,6 +50,16 @@ The third tab was "AI selloff watchlist", the 25 names from Instagram. It is now
 3. Industry Semiconductor Equipment & Materials goes to Semicap (ONTO, AXTI, AEHR).
 4. Otherwise the company's first theme in `AI_THEMES` order, mapped to a group: Memory → Memory, Power Generation → Power, Optical → Networking, Neoclouds, Hyperscalers, Cloud Infra → Servers & data centres. Neoclouds is ordered before Cloud Infra so CoreWeave reads as a neocloud.
 
+### The themes became the groups (2026-11-05)
+Owner: "cleanup themes based on the list that you compiled here, rename all AI related themes to prefix with AI -". The placement above was written into the themes, one AI theme per group and each company in one of them (`retheme.js` in a scratchpad, dry run first, the old map saved beside it):
+- Renamed: Memory → **AI - Memory**, Neoclouds → **AI - Neoclouds**, Hyperscalers → **AI - Hyperscalers**, Cloud Infra, Hardware & Networking → **AI - Servers & Data Centres**. AI - Power Generation and AI - Optical Networking kept their names.
+- New: **AI - Semicap** (ASML AMAT LRCX KLAC TER ONTO AXTI IPGP AEHR) and **AI - Compute** (NVDA TSM AVGO AMD INTC MRVL UMC GFS TSEM).
+- Moved out of a second AI theme: CSCO, ANET, ALAB, GLW to Optical Networking only; NTAP to Memory; CRWV to Neoclouds; INTC to Compute; the foundries, MRVL and the equipment makers out of Optical Networking. VRT and the list's chip names joined their themes. DRAM (an ETF) stays in AI - Memory and is still left off the list. 29 themes → 31, the eight AI themes together after Mag 7.
+
+**Grouping now:** a company's first AI theme in `AI_THEMES` order is its group; a name on the 25 in no AI theme keeps its published group. `PLACE` and the industry rule are gone: the owner moves a company by moving it between themes, and the theme wins over the published group. `from` still says 'list' for the 25. The page's description names the themes from the answer's `aiThemes`.
+
+Theme names are the keys of the stored group figures (`group_months`, `group_days`, `group_years`, `fig:mg:*|theme|<name>`): the new names fill in on the next nightly build, and the old names' `fig:mg` rows stay in `app_meta`, unread.
+
 - **Order:** groups in `GROUP_ORDER`; within a group, the largest market value first, blanks last.
 - **Each row carries:** `from` ('list', or the theme it came in by) and `themes` (every AI theme it is in). The page shows `from` under the group name, with the themes in its tooltip.
 

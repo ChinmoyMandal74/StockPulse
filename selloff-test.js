@@ -83,24 +83,30 @@ ok(w.find((r) => r.symbol === 'NVDA').missing === true, 'a name not on the scree
 // ---- The owner's AI themes joined in, each company once.
 const th = (sym, themes, o) => row(sym, Object.assign({ portfolios: themes }, o));
 const aw = S.watch([
-  th('MU', ['Memory'], { marketCap: 4e11 }),                                                       // on the list: stays in its list group
-  th('SKHY', ['Memory'], { marketCap: 9e11 }),
-  th('VEND', ['AI - Optical Networking'], { industry: 'Semiconductor Equipment & Materials', marketCap: 5e9 }),
-  th('GFS', ['AI - Optical Networking'], { marketCap: 2e10 }),
-  th('ALAB', ['Cloud Infra, Hardware & Networking', 'AI - Optical Networking'], { marketCap: 3e10 }),
-  th('CRWV', ['Cloud Infra, Hardware & Networking', 'Neoclouds'], { marketCap: 5e10 }),
-  th('DELL', ['Cloud Infra, Hardware & Networking'], { marketCap: 1e11 }),
-  th('DRAM', ['Memory', 'ETFs'], { instrumentType: 'ETF', marketCap: 1e9 }),
+  th('MU', ['AI - Memory'], { marketCap: 4e11 }),                                                    // on the list and in a theme
+  th('SKHY', ['AI - Memory'], { marketCap: 9e11 }),
+  th('NVDA', ['Mag 7', 'AI - Compute'], { marketCap: 4e12 }),                                     // on the list, in the Compute theme
+  th('AMD', ['AI - Neoclouds'], { marketCap: 3e11 }),                                              // on the list, moved by the owner's theme
+  th('VEND', ['AI - Semicap'], { industry: 'Semiconductor Equipment & Materials', marketCap: 5e9 }),
+  th('GFS', ['AI - Compute'], { marketCap: 2e10 }),
+  th('KEYS', ['AI - Optical Networking'], { industry: 'Semiconductor Equipment & Materials', marketCap: 3e10 }), // the theme decides, not the industry
+  th('ALAB', ['AI - Servers & Data Centres', 'AI - Optical Networking'], { marketCap: 3e10 }),
+  th('CRWV', ['AI - Servers & Data Centres', 'AI - Neoclouds'], { marketCap: 5e10 }),
+  th('DELL', ['AI - Servers & Data Centres'], { marketCap: 1e11 }),
+  th('DRAM', ['AI - Memory', 'ETFs'], { instrumentType: 'ETF', marketCap: 1e9 }),
   th('QBTS', ['Quantum Computing Pure Play'], { marketCap: 1e10 }),
   th('NOCAP', ['AI - Power Generation'], { marketCap: null }),
   th('BIGPW', ['AI - Power Generation'], { marketCap: 9e10 }),
 ], {});
 const at = (s) => aw.find((r) => r.symbol === s);
-ok(aw.length === 25 + 8, 'the 25 and eight theme names; the ETF and the quantum name left out', aw.length);
+ok(aw.length === 25 + 9, 'the 25 and nine theme names; the ETF and the quantum name left out', aw.length);
 ok(new Set(aw.map((r) => r.symbol)).size === aw.length, 'each company once');
-ok(at('MU').group === 'Memory' && at('MU').from === 'list' && at('MU').themes.join() === 'Memory', 'a list name keeps its group, and its themes are named');
-ok(at('SKHY').group === 'Memory' && at('SKHY').from === 'Memory', 'a theme name joins the matching group');
-ok(at('VEND').group === 'Semicap' && at('GFS').group === 'Compute', 'equipment makers go to Semicap, the foundries to Compute');
+ok(at('MU').group === 'Memory' && at('MU').from === 'list' && at('MU').themes.join() === 'AI - Memory', 'a list name in its theme, and its themes are named');
+ok(at('NVDA').group === 'Compute' && at('NVDA').from === 'list' && at('NVDA').themes.join() === 'AI - Compute', 'a theme that is not an AI theme is not named');
+ok(at('AMD').group === 'Neoclouds' && at('AMD').from === 'list', 'a theme the owner chose decides the group, over the published one');
+ok(at('ASML').group === 'Semicap' && at('ASML').from === 'list' && at('ASML').themes.length === 0, 'a list name in no AI theme keeps its published group');
+ok(at('SKHY').group === 'Memory' && at('SKHY').from === 'AI - Memory', 'a theme name joins the matching group');
+ok(at('VEND').group === 'Semicap' && at('GFS').group === 'Compute' && at('KEYS').group === 'Networking', 'the group is the theme: Semicap, Compute, and an equipment maker the owner put in Networking stays there');
 ok(at('ALAB').group === 'Networking' && at('CRWV').group === 'Neoclouds' && at('DELL').group === 'Servers & data centres', 'two themes: the first in order wins');
 ok(!at('DRAM') && !at('QBTS'), 'no ETF, no theme outside the AI list');
 const mem = aw.filter((r) => r.group === 'Memory').map((r) => r.symbol);
@@ -122,7 +128,7 @@ ok(tsh.rows[0][hcol(tsh, 'Guidance')] === 'Given', 'guidance in words');
 ok(wb[1].rows.length === 0, 'an empty screen is an empty sheet, headings kept');
 const wsh = wb[2];
 const sk = wsh.rows.find((r) => r[0] === 'SKHY');
-ok(sk[hcol(wsh, 'Group')] === 'Memory' && sk[hcol(wsh, 'Source')] === 'Memory' && sk[hcol(wsh, 'AI themes')] === 'Memory', 'watchlist: group, source and themes', sk);
+ok(sk[hcol(wsh, 'Group')] === 'Memory' && sk[hcol(wsh, 'Source')] === 'AI - Memory' && sk[hcol(wsh, 'AI themes')] === 'AI - Memory', 'watchlist: group, source and themes', sk);
 ok(sk[hcol(wsh, 'P/E (trailing)')] === 20 && sk[hcol(wsh, 'Reaction (%)')] === undefined && hcol(wsh, 'Reaction (%)') === -1, 'the watchlist has no reaction columns');
 const gone = wsh.rows.find((r) => r[0] === 'GONE');
 ok(gone[hcol(wsh, 'Company')] === 'Not on the screener' && gone[hcol(wsh, 'Group')] === 'Compute' && gone[hcol(wsh, 'RSI (14-day)')] === null, 'a name not on the screener: said so, figures empty', gone);

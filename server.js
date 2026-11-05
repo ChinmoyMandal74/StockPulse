@@ -16978,7 +16978,7 @@ async function selloffAnswer(days) {
   if (!selloffBars || selloffBars.key !== barKey) selloffBars = { key: barKey, by: want.length ? await store.readBarsWindow(want, since, today) : {} };
   const body = {
     at: snap && snap.updatedAt ? snap.updatedAt : null, releasesAt: (fig && fig.at) || null, today, days, windows: Selloff.WINDOWS,
-    drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source,
+    drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source, aiThemes: Selloff.AI_THEMES.map(([t]) => t),
     toneAt: (tfig && tfig.at) || null, toneBand: (tfig && tfig.band) || NewsTone.BAND,
     ideaRules: Selloff.ideaRules(INSIDER_NET_DAYS), insiderDays: INSIDER_NET_DAYS,
     bounceScreen: bscr ? { name: bscr.name, description: bscr.description || '', rule: selloffRuleText(bdef) } : null,
