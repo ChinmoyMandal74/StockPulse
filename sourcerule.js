@@ -456,6 +456,44 @@ async function build(store, opts = {}) {
 // once in `srcTd` and every later stamp reads them from there, so a row held
 // in a shared cache and stamped twice still knows what Twelve Data said. The
 // fields with no Twelve Data fallback are blanked where we have no figure.
+// THE RELEASE'S QUARTER WHERE THE SEC DATA HAS NOT GOT IT YET (2026-11-05,
+// the owner on Reddit's margin chart ending a quarter before the figure above
+// it: "Our logic is if data is available in earning show it"). For the
+// drill-down history (drillhist.js): the newest quarter on the timeline when
+// it has a release and no SEC quarter, as a quarter row in the SEC data's own
+// keys, the figures worked out exactly as the rule above works them (a cash
+// flow line from a year to date less the release before). Null when the SEC
+// data is level with the releases, when the newest quarter is a year-only
+// release, or when the release is not in US dollars (the SEC history is drawn
+// in dollars). A figure the release does not give is left out, never zero.
+function newestReleaseQuarter(secRows, rels) {
+  const filled = SecFacts.latestFilled(secRows || []);
+  const secQ = filled.filter((r) => r.periodType === 'Q').sort((a, b) => t(a.periodEnd) - t(b.periodEnd));
+  const byEnd = new Map();
+  for (const r of (rels || []).filter((x) => x && x.isResults !== false && x.periodEnd).sort((a, b) => (a.filed < b.filed ? -1 : 1))) {
+    const yearOnly = /year|twelve|annual/i.test(String(r.periodLabel || '')) && !/quarter|three months|q[1-4]/i.test(String(r.periodLabel || ''));
+    byEnd.set(r.periodEnd, yearOnly ? Object.assign({}, r, { yearOnly: true }) : r);
+  }
+  const tl = timeline(secQ, [...byEnd.values()]);
+  const n = tl.length - 1;
+  if (n < 1 || tl[n].sec || !tl[n].rel || tl[n].rel.yearOnly) return null;
+  const rel = tl[n].rel;
+  if (rel.currency && String(rel.currency).toUpperCase() !== 'USD') return null;
+  // The quarter before must be the SEC data's newest, a quarter back, so the
+  // release's quarter joins the filed history without a hole.
+  if (!tl[n - 1].sec || !gapOk(tl[n - 1].end, tl[n].end)) return null;
+  const startAfter = new Date(t(tl[n - 1].end) + DAY).toISOString().slice(0, 10);
+  const out = { periodType: 'Q', periodEnd: String(tl[n].end).slice(0, 10), periodStart: startAfter, filed: rel.filed || null, fromRelease: true };
+  const put = (k, v) => { if (v != null && Number.isFinite(v)) out[k] = v; };
+  put('revenue', relValue(tl, n, 'revenue'));
+  put('grossProfit', relValue(tl, n, 'grossProfit'));
+  put('operatingIncome', relValue(tl, n, 'opIncome'));
+  put('netIncome', relValue(tl, n, 'netIncome'));
+  put('operatingCashFlow', relValue(tl, n, 'ocf'));
+  put('freeCashFlow', relValue(tl, n, 'fcf'));
+  return out;
+}
+
 function apply(row, entry) {
   if (!row || row.error) return;
   if (!row.srcTd) {
@@ -483,4 +521,4 @@ function restore(row) {
   delete row.srcTd; delete row.src; delete row.srcQ; delete row.srcQs;
 }
 
-module.exports = { V, FIELDS, TTM_FIELDS, GROWTH_FIELDS, QE_FIELDS, DERIVED, NO_TD, SIGNAL_SET, SIGNAL_KEPT, forCompany, build, apply, restore, timeline, SEC_SINCE_DAYS, REL_SINCE_DAYS };
+module.exports = { newestReleaseQuarter, V, FIELDS, TTM_FIELDS, GROWTH_FIELDS, QE_FIELDS, DERIVED, NO_TD, SIGNAL_SET, SIGNAL_KEPT, forCompany, build, apply, restore, timeline, SEC_SINCE_DAYS, REL_SINCE_DAYS };

@@ -15687,6 +15687,12 @@ app.get('/api/drill', requireMember, route(async (req, res) => {
   if (!prof) return res.status(404).json({ error: 'Not in the screener.' });
   const data = {};
   if (F.src === 'filings' || F.src === 'eps') data.facts = await store.readSecFacts(symbol);
+  // The newest release's quarter where the SEC data has not got it yet
+  // (2026-11-05, the source rule's order): a seek on one symbol's releases.
+  if (F.src === 'filings') {
+    const rels = await store.readEarningsReleases(symbol, 6).catch(() => []);
+    data.releaseQuarter = SourceRule.newestReleaseQuarter(data.facts, rels);
+  }
   // EPS restated to today's share basis needs the split history (stored only).
   if (F.src === 'eps') data.splits = await store.readSplits(symbol).then((x) => (x ? x.splits : null)).catch(() => null);
   else if (F.src === 'short') data.short = await store.readShortInterest(symbol, 400);

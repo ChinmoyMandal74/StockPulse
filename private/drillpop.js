@@ -90,7 +90,13 @@
         return '<rect x="' + (cx - bw / 2).toFixed(2) + '" y="' + Math.min(yy, y0).toFixed(2) + '" width="' + bw.toFixed(2) + '" height="' + Math.max(1, Math.abs(yy - y0)).toFixed(2) + '" class="dp-bar"/>';
       }).join('');
     } else {
-      shape = '<path class="dp-line" vector-effect="non-scaling-stroke" d="' + pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(2) + ' ' + y(Number(p.v)).toFixed(2)).join(' ') + '"/>';
+      // The newest point from a results release (2026-11-05): its segment is
+      // drawn dashed, so the filed line and the release's quarter read apart.
+      const n = pts.length, relLast = pts[n - 1].rel === true;
+      const solid = relLast ? pts.slice(0, n - 1) : pts;
+      const at = (i) => x(i).toFixed(2) + ' ' + y(Number(pts[i].v)).toFixed(2);
+      shape = (solid.length > 1 ? '<path class="dp-line" vector-effect="non-scaling-stroke" d="' + solid.map((p, i) => (i ? 'L' : 'M') + at(i)).join(' ') + '"/>' : '')
+        + (relLast ? '<path class="dp-line dp-rel" vector-effect="non-scaling-stroke" d="M' + at(n - 2) + ' L' + at(n - 1) + '"/>' : '');
     }
     const zero = lo < 0 && hi > 0 ? '<line class="dp-zero" vector-effect="non-scaling-stroke" x1="0" x2="' + W + '" y1="' + y(0).toFixed(2) + '" y2="' + y(0).toFixed(2) + '"/>' : '';
     return '<div class="dp-chart"><div class="dp-y"><span>' + esc(fmt(hi, kind)) + '</span><span>' + esc(fmt(lo, kind)) + '</span></div>'
@@ -104,7 +110,7 @@
     const last = pts.length ? pts[pts.length - 1] : null;
     let h = '<div class="dp-top"><div><h4>' + esc(name) + ' · ' + esc(j.title || '') + '</h4>'
       + '<div class="dp-sub">' + esc(j.basis || '') + ' · ' + esc(j.source || '') + '</div></div>'
-      + (last ? '<div class="dp-last"><b>' + esc(fmt(last.v, j.kind)) + '</b><span>' + esc(monthOf(last.d)) + '</span></div>' : '') + '</div>';
+      + (last ? '<div class="dp-last"><b>' + esc(fmt(last.v, j.kind)) + '</b><span>' + esc(monthOf(last.d) + (last.rel ? ' · release' : '')) + '</span></div>' : '') + '</div>';
     const rows = j.rows || [];
     if (!pts.length && !rows.length) {
       return h + '<div class="dp-empty">No history on file for this company.' + (j.src === 'short' ? '' : ' A fund, or a company that files abroad or only once a year, has none.') + '</div>' + foot(sym);
@@ -115,7 +121,7 @@
     if (COMPARE[j.field] && last && row && row[j.field] != null && isFinite(Number(row[j.field]))) {
       const a = Number(row[j.field]), b = Number(last.v);
       const far = j.kind === 'pct' ? Math.abs(a - b) > 2 : (Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), 1e-9)) * 100 > APART;
-      if (far) h += '<div class="dp-diff">The cell is the price provider’s figure, ' + esc(fmt(a, j.kind)) + '. The filings’ newest trailing year is ' + esc(fmt(b, j.kind)) + ' (' + esc(monthOf(last.d)) + ').</div>';
+      if (far) h += '<div class="dp-diff">The cell is the price provider’s figure, ' + esc(fmt(a, j.kind)) + '. The ' + (last.rel ? 'newest trailing year here, with the results release’s quarter,' : 'filings’ newest trailing year') + ' is ' + esc(fmt(b, j.kind)) + ' (' + esc(monthOf(last.d)) + ').</div>';
     }
     if (rows.length) {
       const kinds = j.colKinds || [];
@@ -146,6 +152,7 @@
     + '#drillPop .dp-plot{flex:1;min-width:0;}'
     + '#drillPop .dp-plot svg{display:block;width:100%;height:110px;overflow:visible;}'
     + '#drillPop .dp-line{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}'
+    + '#drillPop .dp-line.dp-rel{stroke-dasharray:4 3;}'
     + '#drillPop .dp-bar{fill:var(--accent);opacity:0.75;}'
     + '#drillPop .dp-zero{stroke:var(--hair-2);stroke-width:1;stroke-dasharray:3 3;}'
     + '#drillPop .dp-x{display:flex;justify-content:space-between;margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--faint);}'

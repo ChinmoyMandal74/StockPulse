@@ -97,26 +97,39 @@ const ratio = (a, b) => (a == null || b == null || !(b > 0) ? null : Math.round(
 
 // Money and margins from the filings. The chart is the trailing year at each
 // quarter end, to match the cell; the table gives the quarter beside it.
-function filings(F, rows) {
+// THE RELEASE'S QUARTER FIRST (2026-11-05, the owner: "Our logic is if data
+// is available in earning show it"). `relQ` is SourceRule.newestReleaseQuarter:
+// the quarter a results release reported and the SEC data has not got yet, in
+// the SEC rows' own keys. It goes on the front, so the newest point is the
+// release's quarter plus the three filed quarters before it, as the source
+// rule adds it up for the cell. Marked, and said in the note.
+function filings(F, rows, relQ) {
   const q = quartersOf(rows);
+  const cur0 = (Array.isArray(rows) ? rows : []).find((r) => r && r.currency);
+  let rel = null;
+  if (relQ && !cur0 && (!q.length || relQ.periodEnd > q[0].periodEnd)) { rel = relQ; q.unshift(relQ); }
   const points = [], table = [];
   for (let i = 0; i < q.length; i++) {
     const inQ = F.over ? ratio(num(q[i][F.over]), num(q[i].revenue)) : num(q[i][F.key]);
     const year = F.over ? ratio(rolled(q, i, F.over), rolled(q, i, 'revenue')) : rolled(q, i, F.key);
-    if (year != null) points.push({ d: q[i].periodEnd, v: year });
-    if (table.length < TABLE_ROWS && (inQ != null || year != null)) table.push([monthOf(q[i].periodEnd), inQ, year]);
+    if (year != null) points.push(q[i].fromRelease ? { d: q[i].periodEnd, v: year, rel: true } : { d: q[i].periodEnd, v: year });
+    if (table.length < TABLE_ROWS && (inQ != null || year != null)) table.push([monthOf(q[i].periodEnd) + (q[i].fromRelease ? ' · release' : ''), inQ, year]);
   }
+  // The release gave nothing for this measure: drawn as filed, said as filed.
+  if (rel && !table.some((r) => /release$/.test(r[0]))) rel = null;
   points.reverse();
   // Ten years is the most a panel this size can show as a line.
   if (points.length > 40) points.splice(0, points.length - 40);
   const cur = (Array.isArray(rows) ? rows : []).find((r) => r && r.currency);
   return {
-    source: 'SEC filings', basis: 'Trailing year at each quarter end',
+    source: rel ? 'SEC filings and the results release' : 'SEC filings', basis: 'Trailing year at each quarter end',
     points, cols: ['Quarter to', 'In the quarter', 'Trailing year'], colKinds: ['text', F.kind, F.kind], rows: table,
     note: (F.say ? F.say + ' ' : '')
+      + (rel ? 'The newest quarter, ' + monthOf(rel.periodEnd) + ', is from the company’s results release' + (rel.filed ? ' of ' + dayOf(rel.filed) : '') + ': its quarterly report to the SEC is not on file yet, and replaces it once it is. ' : '')
       + (cur ? 'Filed in ' + cur.currency + ' and converted to US dollars at each period’s rate. ' : '')
       + 'A trailing year needs four consecutive quarters on file.',
     filed: q.length ? q[0].filed || null : null,
+    release: rel ? { periodEnd: rel.periodEnd, filed: rel.filed || null } : null,
   };
 }
 
@@ -236,7 +249,7 @@ function build(field, data) {
   if (!F) return null;
   const d = data || {};
   let out;
-  if (F.src === 'filings') out = filings(F, d.facts);
+  if (F.src === 'filings') out = filings(F, d.facts, d.releaseQuarter);
   else if (F.src === 'eps') out = eps(d.facts, d.splits);
   else if (F.src === 'value') out = value(F, d.quarters, d.series, d.facts, d.carryDays);
   else if (F.src === 'short') out = short(F, d.short);

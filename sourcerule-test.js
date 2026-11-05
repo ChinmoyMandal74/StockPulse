@@ -219,5 +219,40 @@ const row = (o) => Object.assign({ symbol: 'TST', currency: 'USD', sector: 'Tech
   for (const k of S.SIGNAL_KEPT) ok(lyingAll.every((o, i) => JSON.stringify(o[k]) === JSON.stringify(base[i][k])), 'never touched: ' + k);
 }
 
+// THE RELEASE'S QUARTER IN THE DRILL-DOWN HISTORY (2026-11-05, Reddit's margin
+// chart a quarter behind the cell): newestReleaseQuarter, then drillhist.
+{
+  const DH = require('./drillhist.js');
+  const rev = [1e9, 1.1e9, 1.2e9, 1.3e9, 1.4e9];
+  const ni = [1e8, 1.1e8, 1.2e8, 1.3e8, 2.8e8];
+  // Four quarters filed to June 2026 (and one before), the September release newer.
+  const startOf = (e) => { const d = new Date(e + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 3); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+  const s = ENDS.slice(0, 5).map((e, i) => sec(e, { periodStart: startOf(e), revenue: rev[i], netIncome: ni[i], operatingCashFlow: 2e8, capex: 5e7 }));
+  const r = [rel('2026-06-30', { revenue: rev[4], netIncome: ni[4], cfMonths: 6, ocf: 4e8, capex: 1e8 }),
+    rel('2026-09-30', { revenue: 1.5e9, netIncome: 3e8, cfMonths: 9, ocf: 6.5e8, capex: 1.6e8, currency: 'USD' }, '2026-10-29')];
+  const q = S.newestReleaseQuarter(s, r);
+  ok(q && q.fromRelease && q.periodEnd === '2026-09-30' && q.periodStart === '2026-07-01' && q.filed === '2026-10-29', 'release quarter: the September quarter, starting the day after the filed one');
+  eq([q.revenue, q.netIncome, q.operatingCashFlow, q.freeCashFlow], [1.5e9, 3e8, 2.5e8, 1.9e8], 'release quarter: figures, the cash flow a nine-month year to date less the six-month');
+  ok(!('grossProfit' in q), 'release quarter: a figure the release does not give is left out, not zero');
+  ok(S.newestReleaseQuarter(s.concat([sec('2026-09-30', { revenue: 1.5e9 })]), r) === null, 'release quarter: none once the SEC data has the quarter');
+  ok(S.newestReleaseQuarter(s, [rel('2026-09-30', { revenue: 1.5e9, currency: 'EUR' })]) === null, 'release quarter: none for a release not in dollars');
+  ok(S.newestReleaseQuarter(s.slice(0, 3), r) === null, 'release quarter: none when it would leave a hole after the filed quarters');
+  ok(S.newestReleaseQuarter(s, [rel('2026-09-30', { revenue: 6e9, periodLabel: 'Fiscal year 2026' })]) === null, 'release quarter: none from a year-only release');
+  ok(S.newestReleaseQuarter([], r) === null && S.newestReleaseQuarter(s, []) === null, 'release quarter: none without both sources');
+  // The drill-down: the newest point is the release quarter plus three filed ones.
+  const pm = DH.build('profitMargin', { facts: s, releaseQuarter: q });
+  const last = pm.points[pm.points.length - 1];
+  ok(last.d === '2026-09-30' && last.rel === true && last.v === Math.round((3e8 + 2.8e8 + 1.3e8 + 1.2e8) / (1.5e9 + 1.4e9 + 1.3e9 + 1.2e9) * 10000) / 100, 'drill: the newest margin point is the release quarter with three filed', last);
+  ok(!pm.points[pm.points.length - 2].rel, 'drill: the filed points stay unmarked');
+  eq(pm.rows[0].slice(0, 2), ['Sep 2026 · release', 20], 'drill: the table names the release quarter');
+  ok(pm.source === 'SEC filings and the results release' && /results release of 29 Oct 2026/.test(pm.note) && pm.release.periodEnd === '2026-09-30', 'drill: source and note say so');
+  const gm = DH.build('grossMargin', { facts: s, releaseQuarter: q });
+  ok(gm.source === 'SEC filings' && !gm.release && !gm.points.some((p) => p.rel), 'drill: a measure the release lacks is drawn as filed and says so');
+  const plain = DH.build('profitMargin', { facts: s, releaseQuarter: null });
+  ok(plain.source === 'SEC filings' && plain.points[plain.points.length - 1].d === '2026-06-30', 'drill: no release quarter, as before');
+  const old = DH.build('revenueTtm', { facts: s, releaseQuarter: Object.assign({}, q, { periodEnd: '2026-06-30' }) });
+  ok(!old.release && old.points[old.points.length - 1].d === '2026-06-30', 'drill: a release quarter not newer than the filings is ignored');
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
