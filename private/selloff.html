@@ -139,6 +139,7 @@
       <button class="sw-tab" data-v="quality">Quality compounders on a pullback<span class="sw-n" id="nquality"></span></button>
       <button class="sw-tab" data-v="divlow">Dividend growers near their lows<span class="sw-n" id="ndivlow"></span></button>
       <button class="sw-tab" data-v="insider">Insider buying clusters<span class="sw-n" id="ninsider"></span></button>
+      <button class="sw-tab" data-v="quiet">Strong three years, quiet this year<span class="sw-n" id="nquiet"></span></button>
       <label class="sw-win" id="winWrap">Releases from the past
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
@@ -156,7 +157,7 @@
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const qs = new URLSearchParams(location.search);
-    const VIEWS = ['tech', 'nontech', 'watch', 'bounce', 'quality', 'divlow', 'insider'];
+    const VIEWS = ['tech', 'nontech', 'watch', 'bounce', 'quality', 'divlow', 'insider', 'quiet'];
     // The two results screens have a reaction day and a window; the list and the bounce screen do not.
     const SCREENS = ['tech', 'nontech'];
     // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
@@ -189,7 +190,14 @@
         cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.crChecks) ? r.crChecks + ' of 5' : '—') + '</td>', num: true },
       { k: 'fScore', t: 'F-score', only: 'quality', r: true, title: 'Piotroski’s nine checks of profit, balance sheet and efficiency on the latest annual report; how many hold.',
         cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.fScore) ? r.fScore + ' of 9' : '—') + '</td>', num: true },
-      { k: 'crNow', t: 'Quarters now', only: 'quality', title: 'The screener’s Compounding now: whether the latest quarters are still growing, slowing or declining.',
+      // The quiet tab: three years against this year and the past twelve months.
+      { k: 'y3', t: '3 years', only: 'quiet', r: true, title: 'Price change over three years, from the stored price history: the screener’s 3Y.',
+        cell: (r) => '<td class="sw-r">' + move(r.y3) + '</td>', num: true },
+      { k: 'ytd', t: 'This year', only: 'quiet', r: true, title: 'Price change since the last close before 1 January: the screener’s YTD.',
+        cell: (r) => '<td class="sw-r">' + moveD(r.ytd) + '</td>', num: true },
+      { k: 'y1', t: '1 year', only: 'quiet', r: true, title: 'Price change over the past year: the screener’s 1Y.',
+        cell: (r) => '<td class="sw-r">' + move(r.y1) + '</td>', num: true },
+      { k: 'crNow', t: 'Quarters now', only: ['quality', 'quiet'], title: 'The screener’s Compounding now: whether the latest quarters are still growing, slowing or declining.',
         cell: (r) => '<td class="sw-wd">' + we(NOW_WORD[r.crNow] || '—') + '</td>', sort: (r) => r.crNow || '' },
       // The dividend tab: how long the raises have run, how fast, and the yield.
       { k: 'divStreak', t: 'Dividend raised', only: 'divlow', r: true, title: 'Years running the dividend has been raised, and the year the run began.',
@@ -302,7 +310,7 @@
       $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
         + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
         + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
-        + (['quality', 'divlow', 'insider'].includes(state.view) ? we(data.ideaRules[state.view]) + ' ' : '')
+        + (['quality', 'divlow', 'insider', 'quiet'].includes(state.view) ? we(data.ideaRules[state.view]) + ' ' : '')
         + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
     }
     $('list').addEventListener('click', (e) => {

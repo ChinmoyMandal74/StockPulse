@@ -1259,7 +1259,7 @@
         </a>
         <!-- Members: companies whose shares fell, in three views (2026-11-03); in the ... menu until the owner moved it here the same day. Hidden for guests with the research link. -->
         <a class="btn" id="selloffLink" href="/ideas" target="_blank" rel="noopener"
-           title="Ideas — the AI watchlist, strong results that fell, Bouncing off the lows, quality compounders on a pullback, dividend growers near their lows and insider buying clusters, with the screener's readings">
+           title="Ideas — the AI watchlist, strong results that fell, Bouncing off the lows, quality compounders on a pullback, dividend growers near their lows, insider buying clusters, and strong three years, quiet this year, with the screener's readings">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Ideas
         </a>
         <!-- The blog (2026-11-03, owner): public, so it stays for guests too. -->
@@ -1632,7 +1632,7 @@
         <th class="group grp-act" data-group="act" colspan="8">Signal</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="8">Short-term %</th>
-        <th class="group grp-long" data-group="long" colspan="5">Long-term %</th>
+        <th class="group grp-long" data-group="long" colspan="6">Long-term %</th>
         <th class="group grp-fwd" data-group="fwd" colspan="4">Forward returns</th>
         <th class="group grp-trend" data-group="trend" colspan="6">Trend</th>
         <th class="group grp-rel" data-group="rel" colspan="14">Range and level</th>
@@ -1686,6 +1686,7 @@
         <th class="grp-long" data-key="sixMonthPct" title="Price change over the last 126 trading sessions, about six months.">6M</th>
         <th class="grp-long" data-key="ytdPct" title="Return since the start of this calendar year — measured from the last close before 1 January, which is 31 December or the trading day before it. NOT a rolling window: in January it covers days and in December nearly a year, which is exactly what makes it the number every fund and index is quoted on. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock that listed this year, and in the forward-returns view, where &quot;this year&quot; would mean something else.">YTD</th>
         <th class="grp-long" data-key="oneYearPct" title="Price change over the last 252 trading sessions, about a year.">1Y</th>
+        <th class="grp-long" data-key="threeYearPct" title="Three-year price change (owner, 2026-11-05). Taken from the stored bar archive, like 5Y: the last close at least three years ago to the latest price, so it is blank for a stock with less than three years of history here.">3Y</th>
         <th class="grp-long" data-key="fiveYearPct" title="Five-year price change. Taken from the stored bar archive rather than the refresh window, so it is blank for a stock with less than five years of history here.">5Y</th>
         <th class="grp-fwd" data-key="fwd1M" title="Return in the ~1 month AFTER the as-of date">+1M</th>
         <th class="grp-fwd" data-key="fwd3M" title="Return in the ~3 months after the as-of date">+3M</th>
@@ -4020,7 +4021,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="151">${s.error}</td>
+            <td class="na" colspan="152">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4081,6 +4082,7 @@
                 beside it, not a window over the freshly-pulled series. */''}
           ${pctCell(s.ytdPct, 'grp-long', cacheTitle)}
           ${pctCell(s.oneYearPct, 'grp-long', liveTitle)}
+          ${pctCell(s.threeYearPct, 'grp-long', cacheTitle)}
           ${pctCell(s.fiveYearPct, 'grp-long', cacheTitle)}
           ${pctCell(s.fwd1M, 'grp-fwd', fwdTitle)}
           ${pctCell(s.fwd3M, 'grp-fwd', fwdTitle)}
@@ -4213,7 +4215,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 176;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 177;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4397,7 +4399,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="153">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="154">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();

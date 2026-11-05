@@ -146,3 +146,12 @@ The owner: "add 3 more on the ideas page quality compounders on pullback and div
 - **On 2026-11-05:** 40, 32 and 17 companies.
 - **Checks:** `selloff-test.js` 80 (both edges of every threshold, blanks, ETFs, the order, the sheets). With the Declining exclusion or the net-buying test removed, 5 fail. The page drawn in headless Chrome over a payload built from production's snapshot and flows: every row has a cell under every heading, every tab fits its card at 1300, 1440 and 1920, and nothing scrolls sideways at phone width.
 - **The Brand › Ideas card still shows four views.** Seven boxes do not fit its 4:5 layout without a redesign, so it was left for the owner to decide (`ideas-card.md`).
+
+## Strong three years, quiet this year (2026-11-05)
+The owner: "stocks that have generally had good returns over the previous 3 years but have not done much this year", then "Add 3Y as a new column and then add a new ideas tab". Tab 8, `?show=quiet`; "winners" was avoided in the name (no rankings or winners wording anywhere).
+- **Rule** (`IDEAS.quiet`, `quiet()`): the screener's 3Y at +50% or more (about 15% a year), YTD between −5% and +5%, revenue up on the year in the latest quarter (`revenueGrowthYoY` above zero), and not Declining on Compounding now, so a stock rolling over is not read as one resting. Biggest three-year rise first. A blank never passes, so a company with under three years of stored history is not listed.
+- **Columns:** 3 years, This year, 1 year and Quarters now. Fits at 1300, 1440 and 1920 (the table is 1197px in a 1199px card at 1300).
+- **On 2026-11-05**, with 3Y estimated from the local research copy because production's rows did not yet carry it: 44 companies (3Y known for 1,109 of 1,281). Thresholds tried: +50% and ±10% gives 101; +75% and ±5% gives 32; +100% and ±5% gives 23.
+- **Seen on the first list:** flat on the year does not mean quiet all year. Almonty (−64% from its high) and Ubiquiti (−49%) rose and fell back within it. A cap on the distance from the 52-week high would keep only the ones that stayed level; not added, the owner's call.
+- **Untested as a pattern.** The literature finds three-to-five-year winners giving some back over years (long-term reversal) and twelve-month strength persisting; at the one-to-two-month hold nothing here has been measured. A backtest belongs in `docs/research.md` before anyone reads more into it.
+- **Checks:** `selloff-test.js` 85 (every edge, blanks, ETFs, the sheet). With the revenue and Declining tests removed, 3 fail.

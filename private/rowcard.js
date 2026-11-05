@@ -382,6 +382,7 @@
     // stock page, the tiles, the phone and /compare at once.
     ['long',  'YTD',            (s) => V.pct(s.ytdPct)],
     ['long',  '1Y',             (s) => V.pct(s.oneYearPct)],
+    ['long',  '3Y',             (s) => V.pct(s.threeYearPct)],
     ['long',  '5Y',             (s) => V.pct(s.fiveYearPct)],
     // Same anchored read ten years back. Blank where the stored bars are
     // shallower than that, which for some long-listed companies they are.

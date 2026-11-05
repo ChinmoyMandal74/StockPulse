@@ -113,7 +113,7 @@ ok(JSON.stringify(order) === JSON.stringify(S.GROUP_ORDER.filter((g) => g !== 'H
 // ---- The Excel sheets.
 const wb = S.workbookSheets({ at: '2026-11-03T19:17:51Z', days: 45, drop: S.DROP, minGrowth: 10, watchSource: 'x',
   views: { tech: [Object.assign({}, t0, { cap: 2.1e12, sector: 'Technology' })], nontech: [], watch: [Object.assign({}, aw.find((r) => r.symbol === 'SKHY')), { symbol: 'GONE', group: 'Compute', from: 'list', themes: [], missing: true }] } });
-ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,Bouncing off the lows,Quality on a pullback,Dividend growers, lows,Insider buying clusters,About', 'eight sheets: a tab each, and About');
+ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,Bouncing off the lows,Quality on a pullback,Dividend growers, lows,Insider buying clusters,Strong 3 years, quiet now,About', 'nine sheets: a tab each, and About');
 const tsh = wb[0], hcol = (sh, h) => sh.cols.findIndex((c) => c[0] === h);
 ok(tsh.rows.length === 1 && tsh.rows[0].length === tsh.cols.length, 'tech: one row, a cell under every heading');
 ok(tsh.rows[0][hcol(tsh, 'Market cap ($B)')] === 2100 && tsh.rows[0][hcol(tsh, 'Reaction (%)')] === -12 && tsh.rows[0][hcol(tsh, 'RSI (14-day)')] === 31, 'figures are numbers: $B, percent, RSI', tsh.rows[0]);
@@ -128,7 +128,7 @@ const gone = wsh.rows.find((r) => r[0] === 'GONE');
 ok(gone[hcol(wsh, 'Company')] === 'Not on the screener' && gone[hcol(wsh, 'Group')] === 'Compute' && gone[hcol(wsh, 'RSI (14-day)')] === null, 'a name not on the screener: said so, figures empty', gone);
 const blank = S.workbookSheets({ views: { tech: [S.fields({ symbol: 'B', rsi: null, marketCap: '' }, null)] } })[0].rows[0];
 ok(blank.slice(2).filter((x) => x === 0).length === 0, 'a blank figure is empty, never 0', blank);
-ok(/Nov 3, 2026/.test(wb[7].rows[0][1]) && /Eastern$/.test(wb[7].rows[0][1]), 'About: prices as of, in Eastern time', wb[7].rows[0]);
+ok(/Nov 3, 2026/.test(wb[8].rows[0][1]) && /Eastern$/.test(wb[8].rows[0][1]), 'About: prices as of, in Eastern time', wb[8].rows[0]);
 
 // ---- Bouncing off the lows: the rows the screen picked, shaped, in its order.
 const bn = S.bounce([row('LOW1', { range52Pos: 3, twoWeekPct: 1.7, oneMonthPct: 7.3 }), row('LOW2', { range52Pos: 9, twoWeekPct: null, oneMonthPct: 4.6 }), { symbol: 'BAD', error: 'x' }], { LOW1: rel({ filed: '2026-10-28' }) });
@@ -138,7 +138,7 @@ ok(bn[1].w2 === null, 'a missing move stays blank');
 const wbB = S.workbookSheets({ bounceScreen: { description: 'Low in the range.', rule: '52W range ..30' }, views: { bounce: bn } });
 const bsh = wbB[3];
 ok(bsh.rows.length === 2 && bsh.rows[0][bsh.cols.findIndex((c) => /52-week range/.test(c[0]))] === 3 && bsh.rows[1][bsh.cols.findIndex((c) => c[0] === '2 weeks (%)')] === null, 'Excel: the bounce sheet, range and moves as numbers, blanks empty');
-ok(wbB[7].rows.some((r) => r[0] === 'Bouncing off the lows' && r[1].includes('Low in the range. (52W range ..30)')), 'About explains the screen with its rule');
+ok(wbB[8].rows.some((r) => r[0] === 'Bouncing off the lows' && r[1].includes('Low in the range. (52W range ..30)')), 'About explains the screen with its rule');
 
 // Today: the latest session's move, blank when the row has none.
 ok(S.fields({ symbol: 'X', todayPct: -2.345 }, null).today === -2.345 && [null, '', undefined].every((v) => S.fields({ symbol: 'X', todayPct: v }, null).today === null), 'today carried; a missing move is blank, not zero');
@@ -217,8 +217,32 @@ const colOf = (sh, h) => sh.cols.findIndex((c) => c[0] === h);
 ok(qsh.rows.length === 3 && qsh.rows[1][colOf(qsh, 'Compounding record (of 5)')] === 5 && qsh.rows[1][colOf(qsh, 'Compounding now')] === 'Still growing' && qsh.rows[2][colOf(qsh, 'Compounding now')] === null, 'Excel: quality sheet, numbers and words, blank empty');
 ok(dsh.rows[0][colOf(dsh, 'Dividend growth /yr 5Y (%)')] === null && dsh.rows[1][colOf(dsh, 'Dividend raised (years running)')] === 12 && dsh.rows[1][colOf(dsh, 'Dividend yield (%)')] === 2.4, 'Excel: dividend sheet');
 ok(ish.rows[0][colOf(ish, 'Insiders buying')] === 7 && ish.rows[0][colOf(ish, 'Insider net (% of market value)')] === 0.004, 'Excel: insider sheet');
-ok(['Quality compounders on a pullback', 'Dividend growers near their lows', 'Insider buying clusters', 'Compounding record', 'F-score', 'Insider net'].every((h) => wbI[7].rows.some((r) => r[0] === h)), 'About explains the three tabs and their readings');
-ok(wbI[7].rows.find((r) => r[0] === 'Insider buying clusters')[1] === rules.insider, 'About carries the rule the route sent');
+ok(['Quality compounders on a pullback', 'Dividend growers near their lows', 'Insider buying clusters', 'Compounding record', 'F-score', 'Insider net'].every((h) => wbI[8].rows.some((r) => r[0] === h)), 'About explains the three tabs and their readings');
+ok(wbI[8].rows.find((r) => r[0] === 'Insider buying clusters')[1] === rules.insider, 'About carries the rule the route sent');
+
+// ---- Strong three years, quiet this year (2026-11-05).
+const zRows = [
+  lr('Z1', { threeYearPct: 120, ytdPct: 2.1, oneYearPct: 10, revenueGrowthYoY: 8, crNow: 'grow' }),
+  lr('Z2', { threeYearPct: 50, ytdPct: -5, revenueGrowthYoY: 0.1, crNow: null }),       // every edge, no now-reading
+  lr('Z3', { threeYearPct: 75, ytdPct: 5, revenueGrowthYoY: 30, crNow: 'slow' }),
+  lr('ZX1', { threeYearPct: 49.9, ytdPct: 0, revenueGrowthYoY: 5 }),                    // not enough over three years
+  lr('ZX2', { threeYearPct: 200, ytdPct: 5.1, revenueGrowthYoY: 5 }),                   // moved this year
+  lr('ZX3', { threeYearPct: 200, ytdPct: -5.1, revenueGrowthYoY: 5 }),                  // fell this year
+  lr('ZX4', { threeYearPct: 200, ytdPct: 0, revenueGrowthYoY: 0 }),                     // revenue flat
+  lr('ZX5', { threeYearPct: 200, ytdPct: 0, revenueGrowthYoY: null }),                  // revenue unknown
+  lr('ZX6', { threeYearPct: 200, ytdPct: 0, revenueGrowthYoY: 9, crNow: 'decline' }),   // quarters turned down
+  lr('ZX7', { threeYearPct: null, ytdPct: 0, revenueGrowthYoY: 9 }),                    // under three years of history
+  lr('ZX8', { threeYearPct: 200, ytdPct: null, revenueGrowthYoY: 9 }),
+  lr('ZX9', { threeYearPct: 200, ytdPct: 0, revenueGrowthYoY: 9, instrumentType: 'ETF' }),
+];
+const zv = S.quiet(zRows, {});
+ok(zv.map((r) => r.symbol).join() === 'Z1,Z3,Z2', 'quiet: the three that pass, biggest three-year rise first', zv.map((r) => r.symbol));
+ok(zv[0].y3 === 120 && zv[0].ytd === 2.1 && zv[0].y1 === 10 && zv[0].crNow === 'grow', 'quiet: 3Y, YTD, 1Y and the now-reading carried', zv[0]);
+ok(/50% or more over three years/.test(S.ideaRules().quiet) && /-5% and \+5%/.test(S.ideaRules().quiet) && /Declining/.test(S.ideaRules().quiet), 'rule words: quiet', S.ideaRules().quiet);
+const wbZ = S.workbookSheets({ views: { quiet: zv } });
+const zsh = wbZ[7];
+ok(zsh.name === 'Strong 3 years, quiet now' && zsh.rows.length === 3 && zsh.rows[0][colOf(zsh, '3 years (%)')] === 120 && zsh.rows[1][colOf(zsh, '1 year (%)')] === null, 'Excel: quiet sheet, figures as numbers, blank empty');
+ok(wbZ[8].rows.some((r) => r[0] === 'Strong three years, quiet this year') && wbZ[8].rows.some((r) => r[0] === '3 years'), 'About explains the quiet tab and 3 years');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

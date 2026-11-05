@@ -9576,11 +9576,18 @@ async function computeStocks(asOf, opts = {}) {
     let fiveYearAnchor = {};
     let tenYearAnchor = {};
     let ytdAnchor = {};
+    let threeYearAnchor = {};
     if (!asOf) {
       // Skipped in the forward-returns view for the reason 5Y is: "this year"
       // there would mean the as-of date's year, which is a different question
       // from the one the column's header asks.
       const at = new Date();
+      // 3Y (owner, 2026-11-05: "Add 3Y as a new column", for the Ideas tab of
+      // long-run winners that have gone quiet this year). The same anchored
+      // read and the same 30-day grace as 5Y; one more boundary in the one query.
+      const at3 = new Date();
+      at3.setFullYear(at3.getFullYear() - 3);
+      const threeBound = at3.toISOString().slice(0, 10);
       at.setFullYear(at.getFullYear() - 5);
       const fiveBound = at.toISOString().slice(0, 10);
       // 10Y, the same anchored read five years further back (owner,
@@ -9595,7 +9602,10 @@ async function computeStocks(asOf, opts = {}) {
       // card-dating lesson, which this file records three times.
       const ytdBound = `${new Date().getFullYear()}-01-01`;
       try {
-        const [five, ytd, ten] = await store.closesBefore([fiveBound, ytdBound, tenBound], symbols);
+        const [five, ytd, ten, three] = await store.closesBefore([fiveBound, ytdBound, tenBound, threeBound], symbols);
+        for (const [sym, a] of Object.entries(three || {})) {
+          if (Date.parse(threeBound) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) threeYearAnchor[sym] = a;
+        }
         for (const [sym, a] of Object.entries(five || {})) {
           if (Date.parse(fiveBound) - Date.parse(a.d) <= FIVE_YEAR_GRACE_MS) fiveYearAnchor[sym] = a;
         }
@@ -9611,6 +9621,7 @@ async function computeStocks(asOf, opts = {}) {
         fiveYearAnchor = {};
         tenYearAnchor = {};
         ytdAnchor = {};
+        threeYearAnchor = {};
       }
     }
     // Both anchored returns are the same arithmetic against the same floor, so
@@ -9834,6 +9845,7 @@ async function computeStocks(asOf, opts = {}) {
         // months and more than six.
         ytdPct: anchored(ytdAnchor[sym], price),
         oneYearPct: pctChange(values, ONE_YEAR),
+        threeYearPct: anchored(threeYearAnchor[sym], price),
         fiveYearPct: anchored(fiveYearAnchor[sym], price),
         tenYearPct: anchored(tenYearAnchor[sym], price),
         relStrength,
@@ -16959,6 +16971,7 @@ async function selloffAnswer(days) {
       quality: Selloff.quality(rows, rels),
       divlow: Selloff.divlow(rows, rels),
       insider: Selloff.insider(rows, rels),
+      quiet: Selloff.quiet(rows, rels),
     },
   };
   Selloff.withTone(body.views, tfig && tfig.rows);
