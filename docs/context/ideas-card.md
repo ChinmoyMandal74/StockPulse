@@ -30,3 +30,5 @@ The owner: "create promo slide under brand template called Ideas. Keep it a one 
 - **Content:** four views, twelve rules, eleven readings; the rules' figures on the card; no banned words; no links.
 - **Layout:** no box or reading clipped, overlapping or off the card; title, views, readings, line and foot stacked inside the artboard.
 - **Style:** no green or red; smallest text at least 13px; no page errors.
+
+**Out of date since 2026-11-05.** The page gained three tabs (quality compounders on a pullback, dividend growers near their lows, insider buying clusters; `selloff-watch.md`). The card still shows the first four; a seven-view card needs a new layout, waiting on the owner.

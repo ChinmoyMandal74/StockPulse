@@ -130,6 +130,12 @@ function fields(row, rel) {
     // What the Bouncing off the lows screen reads: where the price sits in its
     // 52-week range (0 the low, 100 the high) and the two short moves.
     range52: num(row.range52Pos), w2: num(row.twoWeekPct), m1: num(row.oneMonthPct),
+    // The three long-run and insider tabs (2026-11-05): the screener's own
+    // Long run and Insider net readings, as stampFlows lays them on.
+    crChecks: num(row.crChecks), fScore: num(row.fScore), crNow: row.crNow || null,
+    divStreak: num(row.divStreak), divSince: row.divSince || null, divGrowth5y: num(row.divGrowth5y),
+    divYield: num(row.divYield), payoutRatio: num(row.payoutRatio),
+    insBuyers: num(row.insiderBuyers), insSellers: num(row.insiderSellers), insNet: num(row.insiderNet),
   };
 }
 
@@ -293,13 +299,42 @@ function workbookSheets(body) {
     ['2 weeks (%)', 9, true, (r) => r1(r.w2)],
     ['1 month (%)', 9, true, (r) => r1(r.m1)],
     ...readings];
+  const qualityCols = [...company, ...where, ...release,
+    ['Compounding record (of 5)', 12, true, (r) => r.crChecks],
+    ['F-score (of 9)', 9, true, (r) => r.fScore],
+    ['Compounding now', 12, false, (r) => (r.crNow ? NOW_WORDS[r.crNow] || r.crNow : null)],
+    ['1 month (%)', 9, true, (r) => r1(r.m1)],
+    ...readings];
+  const divCols = [...company, ...where, ...release,
+    ['Dividend raised (years running)', 12, true, (r) => r.divStreak],
+    ['Dividend growth /yr 5Y (%)', 11, true, (r) => r1(r.divGrowth5y)],
+    ['Dividend yield (%)', 10, true, (r) => r2(r.divYield)],
+    ['52-week range (0 low, 100 high)', 12, true, (r) => r1(r.range52)],
+    ...readings];
+  const insCols = [...company, ...where, ...release,
+    ['Insiders buying', 9, true, (r) => r.insBuyers],
+    ['Insiders selling', 9, true, (r) => r.insSellers],
+    ['Insider net (% of market value)', 12, true, (r) => (num(r.insNet) == null ? null : Math.round(num(r.insNet) * 1000) / 1000)],
+    ...readings];
+  const ir = (body && body.ideaRules) || ideaRules();
   const bs = (body && body.bounceScreen) || null;
   if (bs) about.splice(5, 0, ['Bouncing off the lows', 'The screener’s screen of that name: ' + (bs.description || '') + ' (' + (bs.rule || '') + '). Lowest in the range first.']);
+  about.splice(bs ? 6 : 5, 0,
+    ['Quality compounders on a pullback', ir.quality],
+    ['Dividend growers near their lows', ir.divlow],
+    ['Insider buying clusters', ir.insider],
+    ['Compounding record', 'The screener’s Long run reading over up to ten years of annual reports, how many of five checks hold: revenue rose in 80% of years, earnings per share grew 10% a year, the worst operating margin held 70% of the typical year’s, free cash flow was 80% of net income, and the share count grew no more than 0.5% a year. Blank when one cannot be scored (lenders).'],
+    ['Compounding now', 'Whether the latest quarters are still growing, slowing or declining, as the screener reads them.'],
+    ['F-score', 'Piotroski’s nine checks of profit, balance sheet and efficiency on the latest annual report; how many hold.'],
+    ['Insider net', 'Open-market purchases less sales by the company’s insiders in the window (plan sales left out), as a percent of market value.']);
   return [
     sheet('Tech', screenCols, v.tech || []),
     sheet('Non-tech', screenCols, v.nontech || []),
     sheet('AI watchlist', watchCols, v.watch || []),
     sheet('Bouncing off the lows', bounceCols, v.bounce || []),
+    sheet('Quality on a pullback', qualityCols, v.quality || []),
+    sheet('Dividend growers, lows', divCols, v.divlow || []),
+    sheet('Insider buying clusters', insCols, v.insider || []),
     { name: 'About', cols: [['Item', 34, false], ['What it means', 120, false]], rows: about },
   ];
 }
@@ -314,10 +349,70 @@ function bounce(picked, rels) {
   return (picked || []).filter((r) => r && r.symbol && !r.error).map((r) => fields(r, rels && rels[r.symbol]));
 }
 
+// THREE MORE TABS (owner, 2026-11-05: "add 3 more on the ideas page quality
+// compounders on pullback and dividend growers near their lows and insider
+// buying clusters"). Screens over the served rows with the screener's own
+// readings; the thresholds live here, once, and the page and workbook say them.
+//
+//   quality   Compounding record 4 or 5 of its 5 checks over ten years of
+//             annual reports, F-score 6 or more, and the price 10% to 30%
+//             under its 52-week high, leaving out a company whose quarters
+//             read Declining on Compounding now (the owner on Lululemon,
+//             2026-10-26: a ten-year record cannot see a recent turn).
+//             Furthest under the high first.
+//   divlow    Dividend raised 5 or more years running, and the price in the
+//             bottom quarter of its 52-week range. Lowest in the range first.
+//   insider   3 or more insiders bought shares on the open market in the
+//             screener's insider window (90 days), and the buying outweighed
+//             the selling (Insider net above zero, which at the screener's
+//             rounding leaves out token purchases at the very largest
+//             companies). Most buyers first.
+// A blank reading never passes: null is not zero.
+const IDEAS = {
+  quality: { minChecks: 4, minF: 6, fromHigh: [-30, -10] },
+  divlow: { minStreak: 5, maxRange: 25 },
+  insider: { minBuyers: 3 },
+};
+const NOW_WORDS = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
+const usable = (r) => r && r.symbol && !r.error && r.instrumentType !== 'ETF';
+function quality(rows, rels) {
+  const q = IDEAS.quality;
+  return (rows || []).filter((r) => {
+    if (!usable(r)) return false;
+    const c = num(r.crChecks), f = num(r.fScore), h = num(r.pctFromHigh);
+    return c != null && c >= q.minChecks && f != null && f >= q.minF && h != null && h >= q.fromHigh[0] && h <= q.fromHigh[1] && r.crNow !== 'decline';
+  }).map((r) => fields(r, rels && rels[r.symbol])).sort((a, b) => a.fromHigh - b.fromHigh || (a.symbol < b.symbol ? -1 : 1));
+}
+function divlow(rows, rels) {
+  const q = IDEAS.divlow;
+  return (rows || []).filter((r) => {
+    if (!usable(r)) return false;
+    const s = num(r.divStreak), p = num(r.range52Pos);
+    return s != null && s >= q.minStreak && p != null && p <= q.maxRange;
+  }).map((r) => fields(r, rels && rels[r.symbol])).sort((a, b) => a.range52 - b.range52 || (a.symbol < b.symbol ? -1 : 1));
+}
+function insider(rows, rels) {
+  const q = IDEAS.insider;
+  return (rows || []).filter((r) => {
+    if (!usable(r)) return false;
+    const b = num(r.insiderBuyers), n = num(r.insiderNet);
+    return b != null && b >= q.minBuyers && n != null && n > 0;
+  }).map((r) => fields(r, rels && rels[r.symbol])).sort((a, b) => b.insBuyers - a.insBuyers || b.insNet - a.insNet || (a.symbol < b.symbol ? -1 : 1));
+}
+// Each rule in words, for the page's tooltips and the workbook's About sheet.
+function ideaRules(insiderDays) {
+  const q = IDEAS;
+  return {
+    quality: 'Compounding record ' + q.quality.minChecks + ' or more of its 5 checks over ten years of annual reports, F-score ' + q.quality.minF + ' or more of 9, and the price ' + Math.abs(q.quality.fromHigh[1]) + '% to ' + Math.abs(q.quality.fromHigh[0]) + '% under its 52-week high, leaving out companies whose recent quarters read Declining on Compounding now. Furthest under the high first.',
+    divlow: 'Dividend raised ' + q.divlow.minStreak + ' or more years running, and the price in the bottom quarter of its 52-week range (' + q.divlow.maxRange + ' or lower, 0 being the low). Lowest in the range first.',
+    insider: q.insider.minBuyers + ' or more insiders bought shares on the open market in the past ' + (insiderDays || 90) + ' days (Form 4), and the buying outweighed the selling. Most buyers first.',
+  };
+}
+
 function shiftDay(day, n) {
   const t = new Date(day + 'T12:00:00Z');
   t.setUTCDate(t.getUTCDate() + n);
   return t.toISOString().slice(0, 10);
 }
 
-module.exports = { TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, withTone, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };
+module.exports = { NOW_WORDS, IDEAS, quality, divlow, insider, ideaRules, TECH, DROP, MIN_GROWTH, WINDOWS, DEFAULT_DAYS, WATCH, AI_THEMES, PLACE, GROUP_ORDER, workbookSheets, withTone, BOUNCE_ID, bounce, releaseGrowth, guidanceOf, passesRelease, reaction, fields, candidates, screen, watch, shiftDay };

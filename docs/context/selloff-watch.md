@@ -132,3 +132,17 @@ A **Tone 7D** column, last on all four tabs, after Signal (owner: "add article t
 
 ## Links open in a new tab (2026-11-04)
 The ticker and the Tone 7D figure open the stock page in a new tab (`target="_blank" rel="noopener"`), so the table and its sort stay where they were (owner: "make sure clicking on the ticker open the stock page in a new tab"). The browser test checks every link on the page and fails with the attribute removed.
+
+## Three more tabs (2026-11-05)
+The owner: "add 3 more on the ideas page quality compounders on pullback and dividend growers near their lows and insider buying clusters". Tabs 5 to 7, `?show=quality`, `?show=divlow`, `?show=insider`.
+- **Rules** (`IDEAS` in `selloff.js`, said once in words by `ideaRules()`, which the route sends as `ideaRules` for the tab tooltips, the footnote and the About sheet):
+  - **Quality compounders on a pullback:** Compounding record 4 or 5 of its 5 checks, F-score 6 or more, 10% to 30% under the 52-week high, and not Declining on Compounding now (the owner's Lululemon point of 2026-10-26: the ten-year record cannot see a recent turn). Furthest under the high first.
+  - **Dividend growers near their lows:** dividend raised 5 or more years running, 52-week range 25 or lower. Lowest in the range first.
+  - **Insider buying clusters:** 3 or more distinct insiders bought on the open market in the screener's insider window (`INSIDER_NET_DAYS`, 90), and Insider net above zero. Most buyers, then the larger net, first.
+- **Readings** are the screener's own, laid on by `stampFlows` inside `serveStamps` (crChecks, fScore, crNow, divStreak, divSince, divGrowth5y, insiderBuyers, insiderSellers, insiderNet) plus the row's `divYield`. A blank never passes. No new storage and no new reads; nothing feeds the Signal.
+- **Insider net above zero** also drops token buying at the very largest companies: it is rounded to 0.001% of market value, so TSM's 30 executives buying a few thousand dollars each read 0 and are left out, while SPG's eleven directors (0.001%) stay in.
+- **Columns:** quality adds Ten-year record, F-score and Quarters now (the screener's Compounding record and Compounding now; shorter headings so they fit); dividends add Dividend raised (with the year the run began), Dividend /yr 5Y, Yield and 52-week range; insiders add Insiders buying, Insiders selling and Insider net. 1 month was tried on the quality tab and dropped: at 1280px it pushed the table 36px past its card. The workbook keeps it.
+- **Excel:** three sheets before About, and About explains each rule, the Compounding record's five checks, the F-score and Insider net.
+- **On 2026-11-05:** 40, 32 and 17 companies.
+- **Checks:** `selloff-test.js` 80 (both edges of every threshold, blanks, ETFs, the order, the sheets). With the Declining exclusion or the net-buying test removed, 5 fail. The page drawn in headless Chrome over a payload built from production's snapshot and flows: every row has a cell under every heading, every tab fits its card at 1300, 1440 and 1920, and nothing scrolls sideways at phone width.
+- **The Brand › Ideas card still shows four views.** Seven boxes do not fit its 4:5 layout without a redesign, so it was left for the owner to decide (`ideas-card.md`).

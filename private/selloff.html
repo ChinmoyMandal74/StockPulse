@@ -135,6 +135,10 @@
       <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
       <button class="sw-tab" data-v="nontech">Non-tech: growing, profitable, fell after results<span class="sw-n" id="nnontech"></span></button>
       <button class="sw-tab" data-v="bounce">Bouncing off the lows<span class="sw-n" id="nbounce"></span></button>
+      <!-- Three more (owner, 2026-11-05), screens over the screener's own Long run and insider readings. -->
+      <button class="sw-tab" data-v="quality">Quality compounders on a pullback<span class="sw-n" id="nquality"></span></button>
+      <button class="sw-tab" data-v="divlow">Dividend growers near their lows<span class="sw-n" id="ndivlow"></span></button>
+      <button class="sw-tab" data-v="insider">Insider buying clusters<span class="sw-n" id="ninsider"></span></button>
       <label class="sw-win" id="winWrap">Releases from the past
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
@@ -152,7 +156,7 @@
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const qs = new URLSearchParams(location.search);
-    const VIEWS = ['tech', 'nontech', 'watch', 'bounce'];
+    const VIEWS = ['tech', 'nontech', 'watch', 'bounce', 'quality', 'divlow', 'insider'];
     // The two results screens have a reaction day and a window; the list and the bounce screen do not.
     const SCREENS = ['tech', 'nontech'];
     // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
@@ -180,7 +184,28 @@
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
       { k: 'today', t: 'Today', r: true, title: 'The latest session’s price change, as on the screener: the previous close to the latest price.',
         cell: (r) => '<td class="sw-r">' + (isNum(r.today) ? '<span class="sw-num ' + (r.today < 0 ? 'sw-dn' : r.today > 0 ? 'sw-up' : '') + '">' + (r.today > 0 ? '+' : r.today < 0 ? '−' : '') + Math.abs(r.today).toFixed(1) + '%</span>' : '<span class="sw-faint">—</span>') + '</td>', num: true },
-      { k: 'range52', t: '52-week range', only: 'bounce', r: true, title: 'Where the price sits in its 52-week range: 0 at the low, 100 at the high.',
+      // The quality tab's two long-run readings and where the recent quarters stand.
+      { k: 'crChecks', t: 'Ten-year record', only: 'quality', r: true, title: 'The screener’s Compounding record: how many of five checks over up to ten years of annual reports hold: revenue rose in 80% of years, EPS grew 10% a year, the worst operating margin held 70% of typical, free cash flow was 80% of net income, the share count grew 0.5% a year or less.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.crChecks) ? r.crChecks + ' of 5' : '—') + '</td>', num: true },
+      { k: 'fScore', t: 'F-score', only: 'quality', r: true, title: 'Piotroski’s nine checks of profit, balance sheet and efficiency on the latest annual report; how many hold.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.fScore) ? r.fScore + ' of 9' : '—') + '</td>', num: true },
+      { k: 'crNow', t: 'Quarters now', only: 'quality', title: 'The screener’s Compounding now: whether the latest quarters are still growing, slowing or declining.',
+        cell: (r) => '<td class="sw-wd">' + we(NOW_WORD[r.crNow] || '—') + '</td>', sort: (r) => r.crNow || '' },
+      // The dividend tab: how long the raises have run, how fast, and the yield.
+      { k: 'divStreak', t: 'Dividend raised', only: 'divlow', r: true, title: 'Years running the dividend has been raised, and the year the run began.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.divStreak) ? r.divStreak + ' yrs' : '—') + (r.divSince ? '<span class="sw-sub">since ' + we(r.divSince) + '</span>' : '') + '</td>', num: true },
+      { k: 'divGrowth5y', t: 'Dividend /yr 5Y', only: 'divlow', r: true, title: 'The dividend’s compound growth a year over five years.',
+        cell: (r) => '<td class="sw-r sw-num">' + pct(r.divGrowth5y, true) + '</td>', num: true },
+      { k: 'divYield', t: 'Yield', only: 'divlow', r: true, title: 'Forward dividend yield at the latest price, as on the screener.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.divYield) ? Number(r.divYield).toFixed(1) + '%' : '—') + '</td>', num: true },
+      // The insider tab: how many bought, how many sold, and the net as a share of market value.
+      { k: 'insBuyers', t: 'Insiders buying', only: 'insider', r: true, title: 'Insiders who bought shares on the open market in the window (Form 4).',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.insBuyers) ? r.insBuyers : '—') + '</td>', num: true },
+      { k: 'insSellers', t: 'Insiders selling', only: 'insider', r: true, title: 'Insiders who sold on the open market in the window, leaving out sales under a prearranged plan.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.insSellers) ? r.insSellers : '—') + '</td>', num: true },
+      { k: 'insNet', t: 'Insider net', only: 'insider', r: true, title: 'Purchases less sales in the window, as a percent of market value: the screener’s Insider net.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.insNet) ? (r.insNet > 0 ? '+' : r.insNet < 0 ? '−' : '') + (Math.abs(r.insNet) < 0.01 ? Math.abs(r.insNet).toFixed(3) : Math.abs(r.insNet).toFixed(2)) + '%' : '—') + '</td>', num: true },
+      { k: 'range52', t: '52-week range', only: ['bounce', 'divlow'], r: true, title: 'Where the price sits in its 52-week range: 0 at the low, 100 at the high.',
         cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.range52) ? Math.round(r.range52) : '—') + '</td>', num: true },
       { k: 'w2', t: '2 weeks', only: 'bounce', r: true, title: 'The price change over the past two weeks.', cell: (r) => '<td class="sw-r">' + moveD(r.w2) + '</td>', num: true },
       { k: 'm1', t: '1 month', only: 'bounce', r: true, title: 'The price change over the past month.', cell: (r) => '<td class="sw-r">' + moveD(r.m1) + '</td>', num: true },
@@ -220,13 +245,15 @@
     const SIGNALS = ['Very Strong', 'Strong', 'Strong – Elevated Risk', 'Neutral', 'Weak', 'Very Weak'];
     const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
     const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
-    const colsFor = (v) => COLS.filter((c) => (!c.only || c.only === v) && (!c.screen || SCREENS.includes(v)));
+    const NOW_WORD = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
+    const colsFor = (v) => COLS.filter((c) => (!c.only || [].concat(c.only).includes(v)) && (!c.screen || SCREENS.includes(v)));
 
     // Each tab's rule, as its tooltip (owner, 2026-11-03: no text above the tables).
     function what(view) {
       const d = data.drop, g = data.minGrowth, w = data.days;
       if (view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
       if (view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
+      if (data.ideaRules && data.ideaRules[view]) return data.ideaRules[view] + ' Every reading is the screener’s own.';
       if (view === 'bounce') {
         const b = data.bounceScreen;
         return b ? 'The screener’s screen “' + b.name + '”: ' + b.description + ' (' + b.rule + '). Lowest in the 52-week range first. The same screen as on the screener, so a change made to it there shows here too.' : 'The screen is not available.';
@@ -275,6 +302,7 @@
       $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
         + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
         + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
+        + (['quality', 'divlow', 'insider'].includes(state.view) ? we(data.ideaRules[state.view]) + ' ' : '')
         + 'Click a column heading to sort. Nothing here is a recommendation to trade.';
     }
     $('list').addEventListener('click', (e) => {

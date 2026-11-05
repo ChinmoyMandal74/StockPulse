@@ -16947,12 +16947,18 @@ async function selloffAnswer(days) {
     at: snap && snap.updatedAt ? snap.updatedAt : null, releasesAt: (fig && fig.at) || null, today, days, windows: Selloff.WINDOWS,
     drop: Selloff.DROP, minGrowth: Selloff.MIN_GROWTH, watchSource: Selloff.WATCH.source,
     toneAt: (tfig && tfig.at) || null, toneBand: (tfig && tfig.band) || NewsTone.BAND,
+    ideaRules: Selloff.ideaRules(INSIDER_NET_DAYS), insiderDays: INSIDER_NET_DAYS,
     bounceScreen: bscr ? { name: bscr.name, description: bscr.description || '', rule: selloffRuleText(bdef) } : null,
     views: {
       tech: Selloff.screen('tech', rows, rels, selloffBars.by, days, today),
       nontech: Selloff.screen('nontech', rows, rels, selloffBars.by, days, today),
       watch: Selloff.watch(rows, rels),
       bounce: bscr ? Selloff.bounce(Filters.screenRows(bdef, rows), rels) : [],
+      // The three long-run and insider tabs (2026-11-05), off the readings
+      // stampFlows laid on above.
+      quality: Selloff.quality(rows, rels),
+      divlow: Selloff.divlow(rows, rels),
+      insider: Selloff.insider(rows, rels),
     },
   };
   Selloff.withTone(body.views, tfig && tfig.rows);
