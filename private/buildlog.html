@@ -375,12 +375,67 @@
             + 'trading book teaches — are tested over eighteen years. They predict nothing, '
             + 'and the way they fail is the useful part: both shapes behave the same, though '
             + 'they are supposed to mean opposite things.' },
-      { from: '2026-10-03', to: null, title: 'Knowing what is in the index, and refusing bad input',
+      { from: '2026-10-03', to: '2026-10-03', title: 'Knowing what is in the index, and refusing bad input',
         text: 'The index a reader compares everything against is read from the fund’s own '
             + 'published holdings file each night, so the screen can say whether a company is in '
             + 'the S&P 500. And adding a company now costs one request to the data provider '
             + 'first, to ask whether it can price it at all — because two dozen that it '
             + 'cannot had quietly got in and were jamming the nightly update.' },
+      // Chapters twelve to eighteen were written on 6 November 2026.
+      { from: '2026-10-04', to: '2026-10-08', title: 'The filings drawn as pictures',
+        text: 'A company’s filings over the years become a chart of what it earned and what '
+            + 'it was valued at; the stock page lays them out as statements; a P/E is struck at '
+            + 'today’s price rather than the provider’s day. The whole market gets shapes of '
+            + 'its own — where the value sits by sector, how many companies are above their '
+            + 'long average, where short sellers added and covered — and a single company is '
+            + 'set against its peers quarter by quarter. Berkshire, shown as shorted at 966% of '
+            + 'its float, was the reminder that a striking number is usually a wrong one.' },
+      { from: '2026-10-09', to: '2026-10-12', title: 'A new word for the verdict, and who owns what',
+        text: 'The verdict column stops using trading words. “Advice” becomes “Signal”, and its '
+            + 'six readings run from Very Weak to Very Strong: a description of where a stock '
+            + 'stands, not an instruction. Sign-up now asks for agreement to the terms. Then the '
+            + 'official filings are read much further: what each company reported in its 8-Ks, '
+            + 'who holds more than 5% of it, which institutions and which funds own it, where '
+            + 'its revenue comes from, and what its own directors did — with a page for each '
+            + 'institution and each fund.' },
+      { from: '2026-10-13', to: '2026-10-17', title: 'Members’ pages, in daylight',
+        text: 'Every backtest is written up where members can read it, including the ones that '
+            + 'found nothing. The stock page gains At a glance, the company summed up topic by '
+            + 'topic, and members get a pretend $100,000 account to open and close positions '
+            + 'in without money changing hands. Every page can now go light. Behind the scenes, '
+            + 'a probe finds where the official feed stops for a company and reads the report '
+            + 'from its own data file instead, and old headlines move to an archive rather than '
+            + 'being deleted.' },
+      { from: '2026-10-18', to: '2026-10-21', title: 'A model reads the news, and the doors are checked',
+        text: 'An AI model starts reading each article about a company and scoring its tone, '
+            + 'which becomes a column of its own. A security review of the whole app is run and '
+            + 'its findings fixed: separate signing secrets, limits on sign-in attempts, email '
+            + 'verification. The screener gains growth over three and five years from the '
+            + 'filings, a drill-down behind its numbers, volatility and beta, and the filings '
+            + 'a company made the day before.' },
+      { from: '2026-10-22', to: '2026-10-27', title: 'The results, read the day they come out',
+        text: 'Each company’s results press release is read by an AI model the day it is '
+            + 'filed: revenue, earnings, the company’s own adjusted figure under its own name, '
+            + 'and its guidance — and every figure must be found in the release text, or it is '
+            + 'not kept. That feeds a new group of screener columns, the stock page, an email '
+            + 'members can opt into, and a check against the quarterly report when it arrives '
+            + 'weeks later. A corporate home page goes up, and the stock page is made faster '
+            + 'to open.' },
+      { from: '2026-10-28', to: '2026-10-31', title: 'One rule for where a number comes from',
+        text: 'The same figure can come from three places — the company’s release, its filing '
+            + 'with the regulator, or the data provider — and they do not always agree. The '
+            + 'owner settles it: the release while it is newest, the filing once it is in, the '
+            + 'provider otherwise, and the Signal reads that. Companies’ own announced report '
+            + 'days replace estimates. The nightly jobs move off a laptop onto a small server, '
+            + 'and a daily email says whether each one ran. The blog can post itself to '
+            + 'Instagram.' },
+      { from: '2026-11-01', to: null, title: 'Keeping the text, and new ways to look',
+        text: 'The words of each article and each release are kept, but only in a private copy '
+            + 'on the owner’s machine. Companies filing to go public appear on a page of their '
+            + 'own before they trade. Members can close their own account. An Ideas page '
+            + 'gathers views of the screener — strong results met by a sharp fall, the AI '
+            + 'themes, long records on a pullback — each with the rule that put a company '
+            + 'there. Adding a stock becomes one click, with the rest loaded by itself.' },
     ];
 
     var DATA = null;
@@ -504,10 +559,11 @@
       // is whether the writing still accounts for every change.
       var gap = d.total - seen;
       $('blCover').innerHTML = gap === 0
-        ? 'Written on 4 October 2026. The eleven chapters account for all '
+        ? 'Written on 4 October 2026 and brought up to date on 6 November 2026. The '
+          + n(CHAPTERS.length) + ' chapters account for all '
           + n(d.total) + ' changes; the counts above are read from the record each time '
           + 'this page loads.'
-        : '<span style="color:var(--amber)">Written on 4 October 2026, and now out of date: '
+        : '<span style="color:var(--amber)">Last brought up to date on 6 November 2026, and now out of date: '
           + n(gap) + ' of ' + n(d.total) + ' changes fall outside every chapter above. '
           + 'The record below is still complete.</span>';
     }

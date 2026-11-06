@@ -1,5 +1,6 @@
 // fieldsource.js: every column the screener has carries a source, and the
-// source rule's own fields follow sourcerule.js.
+// source rule's own fields follow sourcerule.js. And every column has a
+// definition: its header's hover text, which /fields lists (2026-11-06).
 //   node fieldsource-test.js
 const fs = require('fs');
 const path = require('path');
@@ -19,9 +20,12 @@ for (const m of head.matchAll(/<th ([^>]*)>/g)) {
   const id = (/data-col="([^"]+)"/.exec(a) || /data-fkey="([^"]+)"/.exec(a) || /data-key="([^"]+)"/.exec(a) || [])[1];
   if (!id) continue;
   const g = (/grp-([a-z]+)/.exec(a) || [])[1] || (/\bfrz\b/.test(a) ? 'stock' : null);
-  if (g) cols.push({ id, g });
+  if (g) cols.push({ id, g, def: ((/\btitle="([^"]*)"/.exec(a) || [])[1] || '').trim() });
 }
 ok(cols.length > 150, 'the header row read', cols.length);
+// A column with no hover text has no definition on /fields; a few words is a label, not a definition.
+const undefd = cols.filter((c) => c.def.length < 15).map((c) => c.g + ':' + c.id);
+ok(undefd.length === 0, 'every column has a definition (its header title, 15 characters or more)', undefd);
 const missing = cols.filter((c) => !FieldSource.sourceOf(c.id, c.g)).map((c) => c.g + ':' + c.id);
 ok(missing.length === 0, 'every column has a source', missing);
 
