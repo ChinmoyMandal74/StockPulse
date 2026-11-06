@@ -2155,12 +2155,11 @@
       return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">` +
              `${n}</td>`;
     }
-    // The MIC/exchange mapping and the URL live in rowcard.js, because the
-    // stock page needs the identical link and a second copy of a pile of
-    // venue trivia would only ever be corrected in one of them.
-    const gfUrl = (s) => RowCard.gfUrl(s);
+    // The ticker opens our own stock page, like the name beside it (owner,
+    // 2026-11-06; it was Google Finance). The Google Finance link lives on as
+    // a pill on the stock page (RowCard.gfUrl).
     function tickerLink(s) {
-      return `<a class="tickerlink" href="${gfUrl(s)}" target="_blank" rel="noopener" title="Open ${s.symbol} in Google Finance ↗">${s.symbol}</a>`;
+      return `<a class="tickerlink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" title="Open the ${we(s.symbol)} stock page">${we(s.symbol)}</a>`;
     }
 
     function symbolCell(s, freshest) {
