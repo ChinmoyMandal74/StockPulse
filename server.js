@@ -1202,6 +1202,7 @@ const safeImgSrc = (src) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(src) || /^https
 const IMG_LINE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 function splitIgFence(md) {
   const blog = [], ig = [];
+  let cover = null;
   // `inFence`: inside any other fence (code, gallery, grid), each closed by a
   // bare ```, where an ```instagram line is only text.
   let inIg = false, inFence = false;
@@ -1209,23 +1210,27 @@ function splitIgFence(md) {
     const fence = /^```/.test(raw.trim());
     if (inIg) {
       if (fence) { inIg = false; continue; }
-      for (const m of raw.matchAll(IMG_LINE)) ig.push(m[2]);
+      // A picture whose alt text is "cover" is the carousel's first slide in
+      // place of the drawn title cover (owner, 2026-11-06), not one of the rest.
+      for (const m of raw.matchAll(IMG_LINE)) { if (!cover && /^\s*cover\s*$/i.test(m[1])) cover = m[2]; else ig.push(m[2]); }
       continue;
     }
     if (fence && !inFence && /^```instagram\s*$/i.test(raw.trim())) { inIg = true; continue; }
     if (fence) inFence = !inFence;
     blog.push(raw);
   }
-  return { blog: blog.join('\n'), ig };
+  return { blog: blog.join('\n'), ig, cover };
 }
 // The slides after the cover: the fence's pictures when there are any, else the
 // post's own. Only our uploads: a picture from another site would taint the
 // editor's canvas, so it is counted and left out.
 function igPictures(md) {
-  const { blog, ig } = splitIgFence(md);
+  const { blog, ig, cover } = splitIgFence(md);
   const all = ig.length ? ig : [...blog.matchAll(IMG_LINE)].map((m) => m[2]);
-  const ours = [...new Set(all.filter((u) => /^\/blog\/img\/[a-f0-9]{8,64}$/.test(u)))];
-  return { fromFence: ig.length > 0, pictures: ours, foreign: all.filter((u) => !/^\/blog\/img\//.test(u)).length };
+  const OURS = /^\/blog\/img\/[a-f0-9]{8,64}$/;
+  const ours = [...new Set(all.filter((u) => OURS.test(u)))];
+  return { fromFence: ig.length > 0, pictures: ours, cover: cover && OURS.test(cover) ? cover : null,
+    foreign: all.filter((u) => !/^\/blog\/img\//.test(u)).length + (cover && !OURS.test(cover) ? 1 : 0) };
 }
 
 // A post laid out in ONE column: every picture on the page is "wide" (or there
