@@ -1776,6 +1776,35 @@
           a signal for the sector.</p>
       </div>
       <!-- The sspBox card again, for a theme (2026-10-13). -->
+      <!-- Stock by stock (2026-11-05): one theme as a carousel, a slide at a
+           time. Slide values are fixed (0 the overview, 1 to 9 the companies
+           largest first) so a saved post keeps its slide; the labels are
+           renamed for the theme chosen. -->
+      <div id="tsbBox">
+        <label>Theme</label>
+        <select id="tsbName"></select>
+        <label>Companies</label>
+        <select id="tsbCount">
+          <option value="9" selected>Up to nine, largest first</option>
+          <option value="8">Up to eight</option>
+          <option value="7">Up to seven</option>
+          <option value="6">Up to six</option>
+          <option value="5">Up to five</option>
+          <option value="4">Up to four</option>
+          <option value="3">Up to three</option>
+        </select>
+        <label>Slide</label>
+        <select id="tsbSlide">
+          <option value="0" selected>Overview</option>
+          <option value="1">Company 1</option><option value="2">Company 2</option><option value="3">Company 3</option>
+          <option value="4">Company 4</option><option value="5">Company 5</option><option value="6">Company 6</option>
+          <option value="7">Company 7</option><option value="8">Company 8</option><option value="9">Company 9</option>
+        </select>
+        <p class="hint">A carousel is ten pictures at most, so nine companies
+          with the overview. Under Post to Instagram, "Add every slide" puts
+          the overview and each company in the carousel, in order. The
+          forward P/E is the provider's, moved to the latest close.</p>
+      </div>
       <div id="tspBox">
         <label>Theme</label>
         <select id="tspName"></select>
@@ -2449,6 +2478,7 @@
       <div id="igBox" hidden>
         <p class="ig-who" id="igWho">Instagram</p>
         <button class="btn" id="igAddBtn" title="Keep this card for a carousel: add up to ten, then post them together">Add this card to a carousel</button>
+        <button class="btn" id="igAllBtn" hidden title="The overview and every company, one picture each, in order">Add every slide to the carousel</button>
         <div class="ig-tray" id="igTray"></div>
         <textarea id="igCaption" maxlength="2200" placeholder="Caption — what the card shows, and any hashtags"></textarea>
         <button class="btn" id="igBtn" title="Check this post and ask before sending it">Post to Instagram</button>
@@ -2570,6 +2600,7 @@
       { id: 'thmlines', name: 'Theme lines', note: 'The Lines card a line a theme: share price, volatility or any filed measure, for the themes you tick' },
       { id: 'secressum', name: 'Sector results summary', note: 'One sector’s reporting season: how many have reported, above or below the EPS estimate, growth combined, by industry' },
       { id: 'indressum', name: 'Industry results summary', note: 'One industry’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
+      { id: 'thmsbs', name: 'Stock by stock', note: 'One theme as a carousel: an overview, then a slide a company in big type — the fall from its 52-week high, revenue growth, and P/E and forward P/E at the high and now' },
       { id: 'thmressum', name: 'Theme results summary', note: 'One theme’s reporting season, company by company: reported or not, against the EPS estimate, revenue growth' },
       { id: 'gdsum', name: 'Guidance summary', note: 'The season’s guidance across an index: how many gave it, and how many say they raised, reaffirmed or lowered it, by sector, with who raised and who lowered' },
       { id: 'secgdsum', name: 'Sector guidance summary', note: 'One sector’s guidance this season: how many gave it and what they say they did to it, by industry' },
@@ -2828,6 +2859,7 @@
       ['thmressum', 'Results summary'],
       ['thmgdsum', 'Guidance summary'],
       ['thmtone', 'Article tone'],
+      ['thmsbs', 'Stock by stock (carousel)'],
     ];
     const IND_VIEWS = [
       ['industries', 'Ranking'],
@@ -3736,7 +3768,7 @@
       'secMetric', 'secDir', 'secCount', 'secWeight', 'secScope', 'secCap', 'secScreen', 'secSp500',
       'sspName', 'sspWin', 'sspSp500',
       'trkMetric', 'trkDir', 'trkCount', 'trkWeight', 'trkScope', 'trkCap', 'trkScreen', 'trkSp500',
-      'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500',
+      'tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500', 'tspName', 'tspWin', 'tspSp500', 'tsbName', 'tsbCount', 'tsbSlide',
       'tmgName', 'tmgSp500', 'tmgMetric', 'othName', 'othSp500',
       'linMetric', 'linWin', 'linCount', 'linScope', 'linSector', 'linIndustry', 'linCap', 'linScreen', 'linSp500',
       'fallFrom', 'fallCount', 'fallScope', 'fallSector', 'fallIndustry', 'fallCap', 'fallScreen', 'fallSp500', 'bmkWin', 'racMeasure', 'racYrs', 'racWin', 'racCount', 'racScope', 'racSector', 'racIndustry', 'racCap', 'racScreen', 'racSp500',
@@ -4566,7 +4598,7 @@
     // (offsetHeight ignores the stage's scale); negative when a long title or
     // a third row of legend pushes past the footer. Only the Chart and Race
     // cards size their chart from it (Cards' `ctx.fill`).
-    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines', 'stkchart', 'seclines', 'indlines', 'thmlines']), FILL_KEEP = 32;
+    const FILL_TPLS = new Set(['chart', 'race', 'bands', 'instflow', 'benchmarks', 'fallhigh', 'holderbook', 'holderchg', 'covdata', 'covread', 'lines', 'stkchart', 'seclines', 'indlines', 'thmlines', 'thmsbs']), FILL_KEEP = 32;
     function fillGap(stage) {
       // THE LINES CARD FILLS ITS BODY ALREADY (.pv-in is height 100%, the note
       // pushed down by an auto margin), so the measure below would always find
@@ -4718,7 +4750,7 @@
       $('secBox').style.display = tpl === 'sectors' ? 'block' : 'none';
       $('sspBox').style.display = tpl === 'secspot' ? 'block' : 'none';
       $('tgrBox').style.display = tpl === 'thmgrowth' ? 'block' : 'none';
-      for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm']]) $(box).style.display = tpl === id ? 'block' : 'none';
+      for (const [box, id] of [['trkBox', 'thmrank'], ['tsnBox', 'thmsnap'], ['tspBox', 'thmspot'], ['tmgBox', 'thmmargin'], ['othBox', 'optthm'], ['tsbBox', 'thmsbs']]) $(box).style.display = tpl === id ? 'block' : 'none';
       $('linBox').style.display = tpl === 'lines' ? 'block' : 'none';
       $('sctBox').style.display = tpl === 'scatter' ? 'block' : 'none';
       $('racBox').style.display = tpl === 'race' ? 'block' : 'none';
@@ -4827,6 +4859,8 @@
       syncStockPickers();
       syncIndustries(false);
       if (tpl === 'glance') paintGlanceChips();
+      if (tpl === 'thmsbs') relabelTsbSlides();
+      paintIgAll();
       const stage = $('stage');
       stage.style.height = size.h + 'px';
       // the card's own styles key off the shape it is being drawn into
@@ -5383,6 +5417,29 @@
     $('tsnSp500').addEventListener('change', fillTsnNames);
     $('tmgSp500').addEventListener('change', fillTmgNames);
     $('othSp500').addEventListener('change', fillOthNames);
+    // Stock by stock: the themes from the module, and the Slide picker's
+    // labels renamed for the companies the card will draw (the values stay
+    // 0 to 9). A slide past the theme's last company is hidden.
+    function fillTsbNames() {
+      const keep = $('tsbName').value;
+      const list = Cards.themeList(stocks, 'All');
+      $('tsbName').innerHTML = list.map((g) => `<option value="${esc(g.name)}">${esc(g.name)} · ${g.n}</option>`).join('');
+      if (list.some((g) => g.name === keep)) $('tsbName').value = keep;
+      else if (list.length) $('tsbName').value = list[0].name;
+      relabelTsbSlides();
+    }
+    function relabelTsbSlides() {
+      const who = $('tsbName').value ? Cards.sbsMembers(stocks, controlOpts()) : [];
+      for (const o of $('tsbSlide').options) {
+        const k = Number(o.value);
+        if (k === 0) continue;
+        o.textContent = who[k - 1] ? k + ' · ' + who[k - 1].name : 'Company ' + k;
+        o.hidden = o.disabled = k > who.length;
+      }
+      if (Number($('tsbSlide').value) > who.length) $('tsbSlide').value = '0';
+    }
+    ['tsbName', 'tsbCount'].forEach((id) => $(id).addEventListener('change', relabelTsbSlides));
+    ['tsbName', 'tsbCount', 'tsbSlide'].forEach((id) => $(id).addEventListener('change', () => { if (tpl === 'thmsbs') { render(); paintIgAll(); } }));
     [['thmrank', ['trkMetric', 'trkDir', 'trkCount', 'trkWeight', 'trkScope', 'trkCap', 'trkScreen', 'trkSp500']],
       ['thmsnap', ['tsnName', 'tsnPeriod', 'tsnCount', 'tsnFloor', 'tsnSp500']], ['thmspot', ['tspName', 'tspWin', 'tspSp500']],
       ['thmmargin', ['tmgName', 'tmgSp500', 'tmgMetric']], ['optthm', ['othName', 'othSp500']]].forEach(([t2, ids]) =>
@@ -5962,6 +6019,44 @@
       btn.disabled = false;
     }
 
+    // STOCK BY STOCK, THE WHOLE SET (2026-11-05): every slide of the card,
+    // the overview first, drawn and stored one after another into the tray,
+    // then the slide that was showing put back. The basket is one fetch for
+    // all of them (the same stocks and window), so after the first slide each
+    // draws at once; a slide still reading the archive is waited for.
+    function paintIgAll() {
+      const b = $('igAllBtn');
+      const n = tpl === 'thmsbs' && $('tsbName').value ? Cards.sbsSlides(stocks, controlOpts()) : 0;
+      b.hidden = !n;
+      if (n) b.textContent = `Add all ${n} slides to the carousel`;
+    }
+    async function igAddAll() {
+      const n = tpl === 'thmsbs' && $('tsbName').value ? Cards.sbsSlides(stocks, controlOpts()) : 0;
+      if (!n) { igSay('Pick a theme first.'); return; }
+      if (igTray.length + n > 10) { igSay(`A carousel is ten pictures at most: ${igTray.length} in it already and ${n} slides. Take some out, or fewer companies.`); return; }
+      const btn = $('igAllBtn'), keep = $('tsbSlide').value;
+      btn.disabled = true;
+      igCancel();
+      let added = 0;
+      try {
+        for (let k = 0; k < n; k++) {
+          $('tsbSlide').value = String(k);
+          render();
+          for (let w = 0; w < 100 && !$('stage').querySelector('.sb-in'); w++) await new Promise((r) => setTimeout(r, 200));
+          if (!$('stage').querySelector('.sb-in')) throw new Error('the price history did not arrive.');
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          igSay(`Rendering slide ${k + 1} of ${n}…`);
+          const im = await igShoot();
+          if (!igTray.some((x) => x.id === im.id)) { igTray.push(im); added++; igPaintTray(); }
+        }
+        igSay(`${added} slide${added === 1 ? '' : 's'} added: ${igTray.length} in the carousel. Write the caption, then post.`);
+      } catch (err) { igSay('Could not add every slide: ' + err.message); }
+      $('tsbSlide').value = keep;
+      render();
+      btn.disabled = false;
+    }
+    $('igAllBtn').addEventListener('click', igAddAll);
+
     const igSend = async (body) => {
       const r = await fetch('/api/admin/instagram/post', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -6311,7 +6406,7 @@
         fillSsnNames();
         fillOscNames();
         // The theme cards' pickers, filled with the sector ones.
-        fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames();
+        fillTspNames(); fillTsnNames(); fillTmgNames(); fillOthNames(); fillTsbNames();
         fillToneNames();
         // Industry bars: its sector filter, from the rows.
         if ($('igbSector').options.length <= 1) {

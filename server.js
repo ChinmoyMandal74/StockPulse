@@ -13469,7 +13469,7 @@ app.get('/api/m/post', requireMember, route(async (req, res) => {
     // A card that names its own stocks (the race over five years) says so
     // when built without a basket: one dry build, then the narrowed read.
     let asked = null;
-    if (post.tpl === 'race' || post.tpl === 'chart' || post.tpl === 'benchmarks') try {
+    if (post.tpl === 'race' || post.tpl === 'chart' || post.tpl === 'benchmarks' || post.tpl === 'thmsbs') try {
       Cards.build(post.tpl, { stocks, myLists, screens, size: { id: 'portrait', w: 1080, h: 1350 }, opts: post.opts,
         getBasket: (dd, o) => { if (Array.isArray(o) && o.length) asked = o; return null; } });
     } catch { asked = null; }

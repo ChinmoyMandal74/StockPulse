@@ -1550,6 +1550,8 @@
       if (tpl === 'indlines') return lineBasketDays(opts, 'iln');
       if (tpl === 'thmlines') return lineBasketDays(opts, 'tln');
       if (tpl === 'race' && RACE_MEASURES[(opts || {}).racMeasure]) return 0;
+      // Stock by stock: a year, always, for the chart and to reprice the forward P/E.
+      if (tpl === 'thmsbs') return CHART_WINDOWS.y1[0];
       const key = BASKET_WIN_KEY[tpl];
       if (!key) return 0;
       // The chart may ask for a calendar window; the other two may not, so
@@ -1884,9 +1886,26 @@
       const d0 = dates[0], d1 = dates[dates.length - 1];
       const axis = `<text x="${PL}" y="${H - 10}" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d0)}</text>` +
         `<text x="${W - PR}" y="${H - 10}" text-anchor="end" font-size="18" fill="${pal.axis}" font-family="Geist Mono, monospace">${esc(d1)}</text>`;
+      // THE HIGH, MARKED (2026-11-05, the Stock by stock card): a dot on the
+      // first line at session `peak.i`, its label above, a dashed level out to
+      // the last session and a solid drop from that level to the last close,
+      // so the distance from the high is drawn as well as printed. Optional;
+      // no other card passes it.
+      let peak = '';
+      const pk = opts && opts.peak, P0 = L[0] && L[0].P;
+      if (pk && P0 && P0[pk.i] != null) {
+        let last = -1;
+        for (let i = P0.length - 1; i >= 0 && last < 0; i--) if (P0[i] != null) last = i;
+        const px = x(pk.i), py = y(P0[pk.i]), ex = x(last), ey = y(P0[last]);
+        const anchor = px > W - PR - 180 ? 'end' : px < PL + 180 ? 'start' : 'middle';
+        peak = `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${py.toFixed(1)}" stroke="${pk.color}" stroke-width="2" stroke-dasharray="7 7" opacity="0.8"/>` +
+          `<line x1="${ex.toFixed(1)}" y1="${py.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${pk.color}" stroke-width="3"/>` +
+          `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${pk.color}"/>` +
+          (pk.label ? `<text x="${px.toFixed(1)}" y="${Math.max(18, py - 16).toFixed(1)}" text-anchor="${anchor}" font-size="${pk.fs || 21}" font-weight="700" fill="${pk.color}" font-family="Geist Mono, monospace">${esc(pk.label)}</text>` : '');
+      }
       const mt = opts && opts.mt != null ? opts.mt : 26;
       return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;margin-top:${mt}px" role="img" aria-label="chart">` +
-        area + grid + strokes + tags + axis + '</svg>';
+        area + grid + strokes + peak + tags + axis + '</svg>';
     }
 
     function chartLegend(items) {
@@ -14359,6 +14378,162 @@
       + '</div></div>' + chromeFoot();
   }
 
+  // ---- Stock by stock: a theme as a carousel (2026-11-05) -------------------
+  // The owner, after a post of eight themes on eight slides: "Sometimes it's
+  // hard to read a lot of data on one slide .. one overview and one page per
+  // stock .. show the text bigger", and then asked for it in the studio. One
+  // template drawn a slide at a time: slide 0 is the overview, slide k the
+  // theme's k-th largest company by market value. The studio's "Add every
+  // slide" puts the whole set in the Instagram tray, in order.
+  //
+  // Every company is read the same way: the latest close against its 52-week
+  // high (the screener's own pctFromHigh, off intraday highs), revenue growth
+  // (the latest quarter on a year earlier), and P/E and forward P/E now and
+  // AT THE HIGH. "At the high" is the high's price over TODAY's earnings and
+  // estimates, so the fall alone moves it: the stored ratios do not reach
+  // back to most highs. The card says so.
+  //
+  // THE FORWARD P/E IS REPRICED. The provider's ratio is struck at the price
+  // on the day the profile was pulled, which the rotation leaves up to a week
+  // old; on a day the group falls 15% that overstates it by as much. So it is
+  // the provider's figure times the latest close over the close it was struck
+  // at, both read off the basket. A pull outside the window gives a dash.
+  const SBS_MAX = 9;   // a carousel is ten pictures: the overview and nine
+  const sbsNum = (v) => (v == null || v === '' || !isFinite(Number(v)) ? null : Number(v));   // a null is not a zero
+  function sbsMembers(rows, opts) {
+    const o = opts || {};
+    const groups = themeList(rows, 'All');
+    const theme = groups.some((g) => g.name === o.tsbName) ? o.tsbName : (groups[0] && groups[0].name) || null;
+    const want = Math.max(3, Math.min(SBS_MAX, Number(o.tsbCount) || SBS_MAX));
+    const all = theme ? (rows || []).filter((r) => r && !r.error && !isFundRow(r) && inGroup(r, 'portfolios', theme)) : [];
+    const list = all.slice().sort((a, b) => (sbsNum(b.marketCap) || 0) - (sbsNum(a.marketCap) || 0)).slice(0, want);
+    return { theme, list, of: all.length };
+  }
+  // How many slides the set has, for the studio's "Add every slide".
+  const sbsSlides = (rows, opts) => { const m = sbsMembers(rows, opts); return m.list.length ? m.list.length + 1 : 0; };
+  // The session a profile pull priced its ratios at: the pull's own day if it
+  // came after the 4 p.m. close in New York, else the session before.
+  function sbsPricedDay(ms) {
+    if (!(ms > 0)) return null;
+    try {
+      const p = {};
+      for (const x of new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms))) p[x.type] = x.value;
+      return { day: p.year + '-' + p.month + '-' + p.day, after: Number(p.hour) >= 16 };
+    } catch (e) { return null; }
+  }
+  function sbsFigures(r, d) {
+    const px = sbsNum(r.price), off = sbsNum(r.pctFromHigh);
+    const hi = px != null && off != null && off > -100 ? px / (1 + off / 100) : null;
+    const eps = sbsNum(r.dilutedEpsTtm);
+    const pe = px != null && eps != null && eps > 0 ? px / eps : null;
+    const S = (d && d.series && d.series[r.symbol]) || null;
+    let last = -1, first = -1;
+    if (S) {
+      for (let i = S.length - 1; i >= 0 && last < 0; i--) if (S[i] != null) last = i;
+      first = S.findIndex((v) => v != null);
+    }
+    let fpe = null;
+    const fwd = sbsNum(r.forwardPe), at = sbsPricedDay(sbsNum(r.profileFetchedAt));
+    if (fwd != null && fwd > 0 && at && last >= 0) {
+      let k = -1;
+      for (let i = last; i >= 0; i--) {
+        const dd = String(d.dates[i]).slice(0, 10);
+        if (dd < at.day || (dd === at.day && at.after)) { k = i; break; }
+      }
+      if (k >= 0 && S[k] > 0) fpe = fwd * S[last] / S[k];
+    }
+    const ago = sbsNum(r.daysSince52wHigh);
+    const hiI = last >= 0 && ago != null && last - ago >= first ? last - ago : null;
+    return {
+      px, today: sbsNum(r.todayPct), off, hi, hiI, hiDate: hiI != null ? String(d.dates[hiI]).slice(0, 10) : null,
+      // A short history (a recent listing) has no full year behind its high.
+      since: first > 5 ? String(d.dates[first]).slice(0, 10) : null,
+      rev: sbsNum(r.revenueGrowthYoY), pe, peHi: pe != null && hi != null ? pe * hi / px : null,
+      fpe, fpeHi: fpe != null && hi != null ? fpe * hi / px : null,
+      est: pe != null && fpe != null ? pe / fpe : null, cap: sbsNum(r.marketCap), S,
+    };
+  }
+  const sbsPct = (v, d) => (v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d == null ? 1 : d) + '%');
+  const sbsX = (v) => (v == null ? '—' : (v >= 100 ? Math.round(v) : v.toFixed(1)) + 'x');
+  const sbsUsd = (v) => (v == null ? '—' : '$' + (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2)));
+  const sbsCap = (v) => (v == null ? '—' : '$' + (v >= 1e12 ? (v / 1e12).toFixed(2) + 'T' : v >= 1e9 ? Math.round(v / 1e9) + 'B' : Math.round(v / 1e6) + 'M'));
+  // The year only when it is not the latest session's: a high a year ago is not this week's.
+  const sbsDay = (iso, year) => { const t = new Date(iso + 'T12:00:00'); return isNaN(t) ? iso : t.toLocaleDateString('en-US', year && String(iso).slice(0, 4) !== year ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }); };
+  const sbsMed = (a) => { const s = a.filter((v) => v != null).sort((x, y) => x - y); if (!s.length) return null; const k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+  const sbsPair = (a, b) => (a == null || b == null ? '—' : esc(sbsX(a)) + '<i> → </i>' + esc(sbsX(b)));
+  function tplThmSbs() {
+    const shell = (kick, a, b, msg) => chromeTop() + '<div class="s-body"><div>'
+      + '<span class="s-kick">' + esc(kick) + '</span>'
+      + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
+      + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
+    const M = sbsMembers(stocks, O);
+    if (!M.theme || !M.list.length) return shell('Theme', 'Stock by stock', 'no theme', 'No theme with three companies on this screen.');
+    const d = getBasket(CHART_WINDOWS.y1[0], M.list.map((r) => r.symbol));
+    if (!d || !d.dates || !d.dates.length) return shell(M.theme, 'Reading', 'the archive…');
+    const n = M.list.length;
+    const slide = Math.max(0, Math.min(n, Math.round(Number(O.tsbSlide) || 0)));
+    const orange = pal.ink('#fb923c');
+    const F = M.list.map((r) => sbsFigures(r, d));
+    const atNote = '“At the high”: the 52-week high’s price over today’s earnings and estimates. Forward P/E at the latest close. Revenue growth: the latest quarter on a year earlier.';
+
+    if (slide === 0) {
+      const down = F.filter((f) => f.today != null && f.today < 0).length;
+      const mToday = sbsMed(F.map((f) => f.today)), mOff = sbsMed(F.map((f) => f.off));
+      const avail = ({ portrait: 840, square: 530, story: 1300 })[size.id] || 840;
+      const rh = Math.min(size.id === 'story' ? 160 : size.id === 'square' ? 110 : 140, Math.floor(avail / (n + 0.7)));
+      const fs = Math.max(21, Math.min(34, Math.round(rh * 0.32)));
+      const rows = M.list.map((r, i) => {
+        const f = F[i];
+        return '<tr><td><b class="sb-nm">' + esc(nameOf(r)) + '</b><i>' + esc(r.symbol) + '</i></td>'
+          + '<td class="' + (f.today == null ? '' : f.today < 0 ? 'sp-dn' : 'sp-up') + '">' + esc(sbsPct(f.today)) + '</td>'
+          + '<td style="color:' + orange + '">' + esc(sbsPct(f.off, 0)) + '</td>'
+          + '<td>' + esc(sbsPct(f.rev, 0)) + '</td>'
+          + '<td>' + (f.fpe == null ? '—' : '<span class="sb-ar">' + esc(sbsX(f.fpeHi)) + ' → </span>' + esc(sbsX(f.fpe))) + '</td></tr>';
+      }).join('');
+      const more = M.of > n ? ' The ' + n + ' largest of ' + M.of + ' by market value.' : '';
+      return chromeTop()
+        + '<div class="s-body"><div class="sb-in">'
+        + '<span class="s-kick">' + esc(M.theme) + ' · stock by stock</span>'
+        + '<h2 class="s-title">' + esc(M.theme) + '</h2>'
+        + '<p class="sb-lede">' + esc(down + ' of ' + n + ' lower today. Median ' + sbsPct(mToday) + ' on the day, ' + sbsPct(mOff, 0) + ' from the 52-week high.') + '</p>'
+        + '<table class="sb-tab" style="--sbh:' + rh + 'px;--sbf:' + fs + 'px"><thead><tr><th>Company</th><th>Today</th><th>From<br>high</th><th>Revenue<br>growth</th><th>Fwd P/E<br>high → now</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>'
+        + '<p class="sb-note">' + esc(atNote + more) + '</p>'
+        + '</div></div>' + chromeFoot();
+    }
+
+    const r = M.list[slide - 1], f = F[slide - 1];
+    const nm = nameOf(r);
+    const tCls = nm.length > 60 ? ' t4' : nm.length > 40 ? ' t3' : nm.length > 26 ? ' t2' : '';
+    const H = Math.max(160, (({ portrait: 330, square: 250, story: 760 })[size.id] || 330) + cardFill);
+    const plot = f.S
+      ? lineChart(d.dates, [{ color: pal.ink('#7c9cff'), S: f.S, width: 3.5, fill: true }], {
+        h: H, mt: 0,
+        peak: f.hiI != null && f.hi != null ? { i: f.hiI, color: orange, fs: 22, label: 'High ' + sbsUsd(f.hi) + ' · ' + sbsDay(f.hiDate, String(d.dates[d.dates.length - 1]).slice(0, 4)) } : null,
+      })
+      : '<p class="s-empty">No stored history for ' + esc(r.symbol) + ' over the past year.</p>';
+    const tile = (v, l) => '<div class="sb-t"><b>' + v + '</b><span>' + esc(l) + '</span></div>';
+    const tiles = [
+      tile('<span style="color:' + orange + '">' + esc(sbsPct(f.off, 0)) + '</span>', f.since ? 'from its high since ' + sbsDay(f.since, String(d.dates[d.dates.length - 1]).slice(0, 4)) : 'from its 52-week high'),
+      tile(esc(sbsPct(f.rev, 0)), 'revenue growth, latest quarter on a year earlier'),
+      tile(sbsPair(f.peHi, f.pe), 'P/E, at the high → now'),
+      tile(sbsPair(f.fpeHi, f.fpe), 'forward P/E, at the high → now'),
+      tile(f.est == null ? '—' : esc(f.est.toFixed(1)) + '<i>x</i>', 'estimated earnings ÷ last twelve months'),
+      tile(esc(sbsCap(f.cap)), 'market value'),
+    ].join('');
+    const note = atNote + (f.pe == null ? ' A dash: a loss, or no estimate.' : f.fpe == null ? ' A dash: no estimate.' : '');
+    return chromeTop()
+      + '<div class="s-body"><div class="sb-in">'
+      + '<span class="s-kick">' + esc(M.theme + ' · ' + slide + ' of ' + n) + '</span>'
+      + '<h2 class="s-title' + tCls + '">' + esc(nm) + '<span class="sb-sym">' + esc(r.symbol) + '</span></h2>'
+      + '<div class="sb-px">' + esc(sbsUsd(f.px))
+      + (f.today != null ? '<span class="' + (f.today < 0 ? 'sp-dn' : 'sp-up') + '">' + esc(sbsPct(f.today)) + '</span><i>on the day</i>' : '') + '</div>'
+      + '<div class="sb-chart">' + plot + '</div>'
+      + '<div class="sb-tiles">' + tiles + '</div>'
+      + '<p class="sb-note">' + esc(note) + '</p>'
+      + '</div></div>' + chromeFoot();
+  }
+
   // ---- Research: the biggest one-day moves in market value (2026-10-29) ------
   // The owner: "make a card showing worst market cap loss or gain for one stock
   // in one day .. give the user the ability to choose the time 1 year to 10
@@ -14421,6 +14596,7 @@
   const BUILDERS = {
     daymoves: tplDayMoves,
     stksignal: tplStockSignal,
+    thmsbs: tplThmSbs,
     movers: tplMovers, chart: tplChart, race: tplRace, benchmarks: tplBenchmarks, advboard: tplAdvBoard,
     intro: tplIntro, announce: tplAnnounce, showcase: tplShowcase, golive: () => tplShowcase(true),
     fund: tplFund, sparks: tplSparks, range: tplRange, size: tplSize, avatar: tplAvatar,
@@ -16425,6 +16601,57 @@
     .sz-story .sg-r { padding: 26px 28px; }
     .sz-story .sg-r b { font-size: 38px; }
     .sz-story .sg-rw { font-size: 23px; }
+    /* Stock by stock (2026-11-05): a theme as a carousel, big type, a slide a company. */
+    .sb-in .s-title { font-size: 64px; }
+    .sb-in .s-title.t2 { font-size: 50px; letter-spacing: -0.04em; }
+    .sb-in .s-title.t3 { font-size: 40px; letter-spacing: -0.035em; }
+    .sb-in .s-title.t4 { font-size: 32px; letter-spacing: -0.03em; line-height: 1.12; }
+    .sb-sym { font: 600 0.42em var(--mono); color: var(--faint); letter-spacing: 0; margin-left: 16px; vertical-align: middle; }
+    .sb-lede { margin: 14px 0 0; font-size: 28px; color: var(--muted); line-height: 1.3; }
+    .sb-px { margin-top: 12px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 20px;
+             font: 800 52px var(--mono); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .sb-px span { font-size: 34px; letter-spacing: -0.02em; }
+    .sb-px i { font: 500 22px var(--sans); font-style: normal; color: var(--faint); letter-spacing: 0; }
+    .sb-chart { margin-top: 18px; }
+    .sb-tiles { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .sb-t { min-width: 0; border-radius: 16px; padding: 16px 20px; background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--hair); display: flex; flex-direction: column; gap: 6px; }
+    .sb-t b { font: 800 44px var(--mono); letter-spacing: -0.03em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .sb-t b i { font-style: normal; color: var(--faint); font-size: 0.6em; letter-spacing: 0; }
+    .sb-t > span { font-size: 20px; color: var(--muted); line-height: 1.25; }
+    .sb-note { margin: 16px 0 0; font-size: 16px; color: var(--faint); line-height: 1.4; }
+    .sb-tab { width: 100%; margin-top: 24px; border-collapse: collapse; }
+    .sb-tab th { font: 600 16px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint);
+                 text-align: right; vertical-align: bottom; line-height: 1.3; padding: 0 0 10px 14px; border-bottom: 1px solid var(--hair); }
+    .sb-tab td { font: 700 var(--sbf, 32px) var(--mono); letter-spacing: -0.02em; text-align: right; white-space: nowrap;
+                 padding: 0 0 0 14px; height: var(--sbh, 100px); border-bottom: 1px solid var(--hair); font-variant-numeric: tabular-nums; }
+    .sb-tab th:first-child, .sb-tab td:first-child { text-align: left; padding-left: 0; }
+    .sb-tab td:first-child { font-family: var(--sans); }
+    .sb-nm { display: block; max-width: 330px; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+    .sb-tab td:first-child i { display: block; font: 500 calc(var(--sbf, 32px) * 0.56) var(--mono); font-style: normal;
+                               color: var(--faint); letter-spacing: 0; margin-top: 4px; }
+    .sb-ar { color: var(--faint); font-size: 0.66em; }
+    .s-art.th-light .sb-t { background: rgba(13, 16, 23, 0.035); }
+    .sz-square .sb-in .s-title { font-size: 52px; }
+    .sz-square .sb-lede { font-size: 22px; margin-top: 10px; }
+    .sz-square .sb-px { font-size: 40px; margin-top: 8px; } .sz-square .sb-px span { font-size: 28px; }
+    .sz-square .sb-chart { margin-top: 10px; }
+    .sz-square .sb-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .sz-square .sb-t { padding: 11px 14px; gap: 4px; }
+    .sz-square .sb-t b { font-size: 30px; }
+    .sz-square .sb-t > span { font-size: 15px; }
+    .sz-square .sb-note { font-size: 14px; margin-top: 10px; }
+    .sz-square .sb-tab { margin-top: 14px; }
+    .sz-square .sb-tab th { font-size: 13px; }
+    .sz-story .sb-in .s-title { font-size: 76px; }
+    .sz-story .sb-lede { font-size: 34px; }
+    .sz-story .sb-px { font-size: 62px; } .sz-story .sb-px span { font-size: 40px; }
+    .sz-story .sb-tiles { gap: 18px; margin-top: 26px; }
+    .sz-story .sb-t { padding: 24px 26px; gap: 8px; }
+    .sz-story .sb-t b { font-size: 56px; }
+    .sz-story .sb-t > span { font-size: 25px; }
+    .sz-story .sb-note { font-size: 20px; }
+    .sz-story .sb-tab th { font-size: 20px; }
     /* Research: the biggest one-day moves in market value (2026-10-29). */
     .dm-in { height: 100%; display: flex; flex-direction: column; min-height: 0; }
     .dm-rows { margin-top: 26px; display: flex; flex-direction: column; gap: 12px; }
@@ -17778,6 +18005,9 @@
     daysNeed, groupDaysNeed,
     indexPeCuts: () => IPE_CUTS.map((c) => c.slice()),
     themeList: (rows, cut) => themeList(rows, cut),
+    // Stock by stock: how many slides the chosen theme makes, and who is on them.
+    sbsSlides: (rows, opts) => sbsSlides(rows, opts),
+    sbsMembers: (rows, opts) => sbsMembers(rows, opts).list.map((r) => ({ symbol: r.symbol, name: nameOf(r) })),
     groupMonthMarkets: () => GM_MARKETS.map((m) => m.slice()),
     moveGridLadder: (k) => { const P = MG_PERIODS.find((p) => p[0] === k); return P ? { field: P[2], rungs: mgLadder(P[3], P[4]).map((g) => [g[0], g[1]]) } : null; },
     // ...and which templates want the basket at all, with the window each
