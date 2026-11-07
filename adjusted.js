@@ -502,17 +502,17 @@
         if (implied != null && (stated / implied > SHARES_BAD_RATIO
           || implied / stated > SHARES_BAD_RATIO)) {
           // The filing contradicts itself. Its own EPS is the reading to keep.
-          return { shares: implied, from: r.periodEnd, back: i, basis: 'eps',
+          return { shares: implied, from: r.periodEnd, filed: r.filed || null, back: i, basis: 'eps',
             rejected: stated };
         }
-        return { shares: stated, from: r.periodEnd, back: i, basis: 'stated' };
+        return { shares: stated, from: r.periodEnd, filed: r.filed || null, back: i, basis: 'stated' };
       }
       // Nothing stated, but the filing's own EPS says what it was — XOM and
       // several other majors use a tag `secfacts.js` does not map, and
       // widening that would mean re-fetching 1,167 companies from an address
       // that has already answered 429 once.
       if (implied != null) {
-        return { shares: implied, from: r.periodEnd, back: i, basis: 'eps' };
+        return { shares: implied, from: r.periodEnd, filed: r.filed || null, back: i, basis: 'eps' };
       }
     }
     return null;
@@ -557,6 +557,7 @@
       roe: (niTtm != null && eq != null && eq > 0) ? (niTtm / eq) * 100 : null,
       sharesDiluted: sh ? sh.shares : null,
       sharesFrom: sh ? sh.from : null,
+      sharesFiled: sh ? sh.filed : null, // the filing that stated it: its split basis
       sharesBack: sh ? sh.back : null,   // how many periods back it was found
       sharesBasis: sh ? sh.basis : null, // 'stated' or 'eps' (derived / repaired)
       sharesRejected: sh ? (sh.rejected || null) : null,
@@ -603,10 +604,34 @@
   // past), so the two cannot drift. `price` is whatever close applies —
   // today's on the card, that session's in a backtest — which is the only
   // thing that differs between them.
-  function overlayFrom(sec, short, floatShares, price) {
+  // THE SHARE COUNT ON THE PRICES' SPLIT BASIS (2026-11-07, backlog 58). The
+  // bars are split-adjusted to today; a filed share count is on the basis of
+  // the day it was FILED (a split before filing is restated into it, one after
+  // is not). So every split dated after that filing multiplies it. Without
+  // this, Apple on 2018-07-02 read $46.80 x 5.05B = $236B against a real
+  // ~$945B, and size decides the company type and the trailing P/E. `splits`
+  // is [{ d, f }] for the one symbol; none known means no split.
+  function sharesOnBarBasis(sec, splits) {
+    const f = sec || {};
+    const shares = num(f.sharesDiluted);
+    if (shares == null) return null;
+    const after = f.sharesFiled || f.sharesFrom;
+    if (!after || !Array.isArray(splits)) return shares;
+    let k = 1;
+    for (const s of splits) {
+      const x = num(s && s.f);
+      if (s && String(s.d) > String(after) && x != null && x > 0) k *= x;
+    }
+    return shares * k;
+  }
+
+  // `splits`, when given, puts the share count on the split basis of `price`
+  // (sharesOnBarBasis); both callers pass it, since both price off the
+  // split-adjusted bars or today's close.
+  function overlayFrom(sec, short, floatShares, price, splits) {
     const f = sec || {};
     const p = num(price);
-    const shares = f.sharesDiluted;
+    const shares = splits === undefined ? f.sharesDiluted : sharesOnBarBasis(f, splits);
     // A FILED SHARE COUNT AT THE RELEVANT CLOSE. Not the vendor's cached
     // weekly capitalisation, and not price x shares OUTSTANDING: the filings
     // state a weighted-average diluted count, which is the one they state.
@@ -641,7 +666,7 @@
   //
   // Every technical is copied straight across; every fundamental comes from
   // the overlay above.
-  function engineRow(snap, sec, short) {
+  function engineRow(snap, sec, short, splits) {
     const s = snap || {};
     const price = num(s.price);
     return Object.assign({
@@ -660,7 +685,7 @@
       volTrend: num(s.volTrend),
       historyDays: num(s.historyDays),
       nextEarningsDate: s.nextEarningsDate || null,
-    }, overlayFrom(sec, short, s.floatShares, price));
+    }, overlayFrom(sec, short, s.floatShares, price, splits));
   }
 
   // ---- point in time -------------------------------------------------------
@@ -731,6 +756,6 @@
     trailingPe, impliedShares, newestShares, fundamentalsFrom, fundamentalsAsOf,
     evolutionSeries,
     splitAdjustedShares, todayShares, perShareSeries, epsFactors,
-    shortPctFloat, shortCutoff, overlayFrom, engineRow, verdict,
+    shortPctFloat, shortCutoff, sharesOnBarBasis, overlayFrom, engineRow, verdict,
   };
 }));

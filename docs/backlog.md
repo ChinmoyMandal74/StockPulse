@@ -2755,7 +2755,8 @@ from `Adjusted.fundamentalsAsOf`). Four things are left:
   Strong side's median unchanged. Found by looking, so it may not be shipped on
   entry 25's numbers alone. A Signal change is the owner's call
   (CLAUDE.md, the Signal is sacrosanct).
-- **`/adjustedbacktest` values pre-split companies too low.** The overlay
+- **Done 2026-11-07 (owner: "yes"): `Adjusted.sharesOnBarBasis`, see
+  the-adjusted-backtest.md.** `/adjustedbacktest` valued pre-split companies too low. The overlay
   multiplies the bar's close by the diluted share count as filed, and the bars
   are split-adjusted: Apple on 2018-07-02 is $46.80 x 5.05B shares, about $236B
   against a real ~$945B. Size decides the company type and the trailing P/E,

@@ -16043,10 +16043,13 @@ async function buildAdjusted() {
   const syms = rows.map((r) => r.symbol);
   const since = new Date(Date.now() - ADJ_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
   // Three reads for the whole universe, each a batch of indexed seeks.
-  const [facts, shorts, state] = await Promise.all([
+  // Splits, so a filed share count meets today's close on the same basis
+  // (Adjusted.sharesOnBarBasis). The table is a few rows a symbol.
+  const [facts, shorts, state, splitsBy] = await Promise.all([
     store.readSecFactsSince(syms, since),
     store.readShortLatestFor(syms),
     store.readSecState(),
+    store.readSplitsBetween(since, '9999-12-31'),
   ]);
   const cfg = ruleCfg('Balanced');
 
@@ -16061,7 +16064,7 @@ async function buildAdjusted() {
     if (!st || !st.cik) { noCik++; continue; }
     const sec = Adjusted.fundamentalsFrom(SecFacts, facts.get(r.symbol) || []);
     if (!sec) { noQuarter++; continue; }
-    const row = Adjusted.engineRow(r, sec, shorts.get(r.symbol) || null);
+    const row = Adjusted.engineRow(r, sec, shorts.get(r.symbol) || null, splitsBy.get(r.symbol) || []);
     const v = Adjusted.verdict(Action, row, cfg, true);
     if (v.withheld) withheld++;
     else if (v.action !== r.action) differs++;
@@ -20317,7 +20320,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
   const t0 = Date.now();
   const clock = {};
   const timed = async (k, p) => { const a = Date.now(); const v = await p; clock[k] = Date.now() - a; return v; };
-  const [bars, facts, shorts, state, earnings, snap] = await Promise.all([
+  const [bars, facts, shorts, state, earnings, snap, splitsBy] = await Promise.all([
     timed('bars', store.readBarsWindow(universe, since, until)),
     timed('filings', store.readSecFactsSince(universe, factSince, asked)),
     // A RUN of readings rather than one: the rebalancer needs the newest
@@ -20327,6 +20330,10 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
     timed('secState', store.readSecState()),
     timed('earnings', store.readEarningsDates(asked, end)),
     timed('snapshot', readSnapshot()),
+    // THE BARS ARE SPLIT-ADJUSTED AND A FILED SHARE COUNT IS NOT: every split
+    // after the filing goes into the market cap (Adjusted.sharesOnBarBasis).
+    // Before 2026-11-07 Apple on 2018-07-02 came out at $236B, not ~$945B.
+    timed('splits', store.readSplitsBetween(factSince, '9999-12-31')),
   ]);
   const stocks = (snap && snap.stocks) || [];
   await stampShortNames(stocks).catch(() => {});
@@ -20367,7 +20374,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
     }
     if (!(px > 0)) { noFilings++; continue; }
     const s = byS.get(sym) || {};
-    const ov = Adjusted.overlayFrom(sec, shortAt(sym, startCut), s.floatShares, px);
+    const ov = Adjusted.overlayFrom(sec, shortAt(sym, startCut), s.floatShares, px, splitsBy.get(sym) || []);
     if (!sec.ttmTo) noTtm++;
     if (ov.marketCap == null) noCap++;
     // `asOf` is what btRun reports as the fundamentals date on each pick.
@@ -20467,7 +20474,7 @@ app.get('/api/adjusted-backtest', requireAdmin, route(async (req, res) => {
           const px2 = pr.closes[i];
           if (!(px2 > 0)) return null;
           const ov2 = Adjusted.overlayFrom(sec, shortAt(sym, cut),
-            (byS.get(sym) || {}).floatShares, px2);
+            (byS.get(sym) || {}).floatShares, px2, splitsBy.get(sym) || []);
           ov2.asOf = sec.filed;
           return ov2;
         };

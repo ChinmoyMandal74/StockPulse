@@ -34,6 +34,13 @@ That quarter **was** knowable in 2021: the FY2021 10-K and the Q3 10-Q were both
 - **Rows are copied first.** `deriveQuarters` fills holes in its inputs in place and `fill` mutates, so asking a cached trail about the past would otherwise corrupt it. There is a check that the input is byte-identical afterwards.
 - **`/stock`'s SEC card and `/adjusted` still use the stored derived rows**, which is right for them: they answer "what is true now", where the newest restatement IS the best answer.
 
+### The share count was on the wrong split basis until 2026-11-07
+**The bars are split-adjusted to today; a filed share count is on the basis of the day it was filed.** The overlay multiplied one by the other, so every company that has split since a date was valued too low on it: Apple on 2018-07-02 read $46.80 x 5.05B = **$237B against a real ~$945B**, Nvidia on 2023-01-03 **$36B against ~$360B**. Size decides the company type and the trailing P/E, so those dates were scored on the wrong rules. Found by the point-in-time Signal replay (research entry 21, backlog 58).
+- **`Adjusted.sharesOnBarBasis(sec, splits)`** multiplies the count by every split dated AFTER the filing that stated it (`sharesFiled`, now returned by `fundamentalsFrom`; a split before filing is already restated into the filing, which is why the filing date and not the period end is the cut).
+- **`overlayFrom(..., splits)` and `engineRow(..., splits)` take the symbol's splits**; both routes pass them from one `store.readSplitsBetween(since, '9999-12-31')` read. Without the argument the old behaviour stands, so nothing else changes silently.
+- `/adjusted` (today) gets the same treatment: only a split since the latest filing moves anything there.
+- `adjustedsplit-test.js`: 14 checks, the real Apple, Nvidia and Microsoft filings from `analysis.db` among them. **Proved by reverting**: the old line fails 5, Apple reading $237B and Nvidia $36B.
+
 ### The three other point-in-time rules
 - **`filed`, never `periodEnd`.** MU's quarter ending 2026-05-28 was not public until 2026-06-25; filtering on the period end buys four weeks of look-ahead. **Proved by reverting**: swapping the one comparison fails 2.
 - **FINRA is published about eight business days after it SETTLES**, so a reading settled on the 15th was not knowable on the 16th. `SHORT_LAG_DAYS` is **15 calendar days** — deliberately longer than the ~10-12 the schedule implies, because erring late means the backtest knows LESS than a reader did, which is the safe direction. It is a constant rather than a measurement because the table stores settlement dates and nothing else; pinning it against FINRA's own calendar is still owed.
