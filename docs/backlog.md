@@ -2735,6 +2735,43 @@ identify the company is common practice, but it reverses the standing "no
 company logos" convention in CLAUDE.md, which changes in the same commit if
 this goes ahead.
 
+## 58. The Signal on the newer data: what the replay left open — 2026-11-07
+
+*Area: Research · Status: Open · Note: the owner asked whether the Signal can be improved with the data added since it was built, then "Go ahead with whatever you think is best"; research entries 21 to 25 in docs/research.md, method in docs/context/does-any-of-this-predict-anything.md*
+
+The whole Signal was replayed point in time for the first time (research entry
+21; scratch `sig/replay.js`, `sig/analyse.js`, `sig/PREREG.md` in the session
+scratchpad, 161,983 stock-months 2010-2026 through the real engine, fundamentals
+from `Adjusted.fundamentalsAsOf`). Four things are left:
+
+- **Confirm the young-company breakdown gap (entry 25), then the owner decides.**
+  Early companies are tested for a breakdown on the 1-month move only
+  (`stop_loss.early_vs200` and `early_confirm_1m`); established ones also on
+  the 3-month move (`confirm_3m`). The 1,742 stock-months that price alone read
+  Very Weak and the Early test read Weak had the deepest tails of any group in
+  both eras. Write the candidate down first (the Early test gains
+  `|| m3 < confirm_3m`, in the same rule, no reordering), then measure it on the
+  replay: the pass is a wider Strong-to-Weak tail gap in both eras with the
+  Strong side's median unchanged. Found by looking, so it may not be shipped on
+  entry 25's numbers alone. A Signal change is the owner's call
+  (CLAUDE.md, the Signal is sacrosanct).
+- **`/adjustedbacktest` values pre-split companies too low.** The overlay
+  multiplies the bar's close by the diluted share count as filed, and the bars
+  are split-adjusted: Apple on 2018-07-02 is $46.80 x 5.05B shares, about $236B
+  against a real ~$945B. Size decides the company type and the trailing P/E,
+  so every pre-split date picks the wrong rules for the companies that split
+  since. The fix is the one the replay used: put the shares on the bars' split
+  basis (multiply by the splits after the share count's filing). Admin page
+  only; no Signal or screener surface reads it.
+- **8-K red flags need history.** `sec_events` keeps about 400 days a company,
+  so restatements (4.02), auditor changes (4.01), delisting notices (3.01),
+  impairments (2.06), bankruptcy (1.03) and sudden officer departures (5.02)
+  cannot be tested yet. Either a one-off historical pull of each company's
+  submissions (about 1,250 sequential SEC requests from an address that has had
+  a 429 and a 403) or keep collecting and test in a few years.
+- **Retest dilution (entry 24) with another year of filings**, and short
+  interest as days to cover once FINRA's history is in the local copy.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

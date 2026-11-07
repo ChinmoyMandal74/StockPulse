@@ -451,3 +451,94 @@ Nineteen observations, one per four years. The pattern was picked from many poss
 | The year before a presidential election | +9.7% | 16 of 19 |
 | After a presidential election | +8.6% | 12 of 19 |
 | The year after a presidential election | +3.3% | 10 of 18 |
+
+## 21. The whole Signal replayed on what the filings said at the time — 2026-11-07
+
+*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: SEC quarterly and annual reports as filed, daily prices · Sample: 161,983 stock-months in 1,247 stocks, 2010–2026*
+
+### The idea
+Until now only the price half of the Signal had been tested over the long run: the fundamentals half could not be replayed, because the provider gives today's figures only. The SEC filings carry the day each figure became public, so the fundamentals the Signal reads can be rebuilt as they stood on any past date. The question: does the fundamentals half make the Signal better at what it is good at, sorting the bad outcomes?
+
+### What was done
+On the first trading day of every month from January 2010 to August 2026, every stock was scored by the real Signal twice: once on price alone, and once with growth, margins, cash flow, return on equity and market value as its filings stood that day (only reports filed by then; share counts put on the same split basis as the prices). Each stock's return over the next 21, 42 and 63 trading sessions was set against the average stock's. Decided in advance: the measure is the gap between the worst tenth of outcomes on the Strong side (Very Strong, Strong, Strong – Elevated Risk) and on the Weak side (Weak, Very Weak), price alone against price and filings, before and after 2020, with 95% intervals from resampling months; and the Strong side's typical result must not get worse.
+
+### Outcome
+A weak lead. Adding the filings widened the gap at three months in each period on its own: by 0.8 points before 2020 [+0.3, +1.3] and by 1.7 points from 2020 [+0.5, +3.1]. Over all years together it was +0.4 points [−0.2, +1.0], which does not clear zero, so by the rule set in advance this is not a pass. The Strong side's typical result was unchanged (−1.3 points against the average stock on both). The filings mostly made the Strong side smaller and its bad cases shallower: on price alone 54,000 stock-months were Strong side, with the filings 19,000.
+
+### What follows
+The fundamentals half earns its place on the measure the Signal is judged by, modestly and not in every cut of the data. No change to the Signal. This replay is the base every proposed change is measured on (entries 22 to 25).
+
+### Caveats
+The list of stocks is today's. Forward P/E is replaced by the trailing P/E (no filing states a forward one), short interest is left out (it affects one rule for young companies), the next report date is the next results release's filing day, and figures come from filings only, about four weeks after each results release. The two periods have very different swings, which moves where the worst tenth falls when they are pooled; that is why the all-years figure is smaller than either period's. Intervals from 300 resamples.
+
+### Numbers
+| Three months, against the average stock | Strong side, worst tenth | Weak side, worst tenth | Gap |
+|---|---|---|---|
+| Price alone, 2010–2019 | −13.4 pts | −16.4 | +3.0 |
+| Price and filings, 2010–2019 | −12.4 | −16.2 | +3.8 |
+| Price alone, 2020–2026 | −21.0 | −24.1 | +3.0 |
+| Price and filings, 2020–2026 | −19.4 | −24.1 | +4.7 |
+
+## 22. A cut outlook on the Strong side — 2026-11-07
+
+*Family: Signal · Verdict: No edge · Horizon: 2 to 3 months · Data: results releases read by the AI reader, SEC filings as filed, daily prices · Sample: 283 stock-months in 142 stocks, 2017–2026*
+
+### The idea
+Entry 18 found that companies which cut or withdrew their outlook lagged the average stock by one to two points over the next two months. If so, a stock the Signal reads as Strong side despite a cut in the last 63 days might be better read as Neutral until the cut has played out.
+
+### What was done
+On the replay of entry 21, the Strong-side stock-months from 2017 (when the releases begin) were split by whether a results release in the 63 days before had lowered or withdrawn the outlook. Decided in advance: both the typical result and the worst tenth over 42 sessions must be at least a point worse after a cut, with the typical gap's interval below zero, in both periods.
+
+### Outcome
+No edge. After a cut the typical result was 0.7 points worse [−1.9, +0.6] and the worst tenth 0.4 points worse [−3.4, +2.0]. At 63 sessions the typical result was 1.7 points worse [−3.0, −0.5], but the worst tenth was the same. Only 283 such stock-months exist: the Signal seldom reads a company as Strong side shortly after it cut its outlook.
+
+### What follows
+No change. The Signal's existing rules already keep most companies that cut their outlook off the Strong side, which is why the case is rare.
+
+## 23. Breakdowns with a reason, and breakdowns without one — 2026-11-07
+
+*Family: Signal · Verdict: Wrong way · Horizon: 2 to 3 months · Data: results releases read by the AI reader, SEC filings as filed, daily prices · Sample: 2,653 stock-months with a cut outlook, 40,687 without, 2017–2026*
+
+### The idea
+The Signal's known flaw is that Very Weak stocks often bounce. Perhaps a fall with a stated cause (a cut outlook) keeps going, while a fall without one is the kind that bounces. If so, the Signal could tell the two apart.
+
+### What was done
+On the replay of entry 21, Weak-side stock-months from 2017 were split by whether a results release in the 63 days before had lowered or withdrawn the outlook. Decided in advance: the typical result over 42 sessions should be worse with a reason, the interval below zero, in both periods.
+
+### Outcome
+The wrong way. The typical results were within half a point of each other [−1.1, +0.3], and the worst tenth was shallower with a reason: by 1.9 points at 42 sessions [+0.6, +3.3] and 1.7 at 63 [+0.3, +3.1], in both periods. The weak stocks with no stated reason were the ones with the deeper bad cases.
+
+### What follows
+No change. It fits entry 18: an earnings disappointment is priced when it is announced, so a fall that has its explanation already has its price. A fall nobody has explained is the riskier one.
+
+## 24. Dilution on the Strong side — 2026-11-07
+
+*Family: Signal · Verdict: Weak lead · Horizon: 3 months · Data: SEC filings as filed, daily prices · Sample: 487 stock-months in 159 established companies, 2010–2026*
+
+### The idea
+Companies whose share count grows fast tend to lag over a year. If that shows up in the bad cases within three months, a share count up sharply on a year earlier could count against an established company's fundamentals.
+
+### What was done
+On the replay of entry 21, Strong-side stock-months of established companies were split by diluted shares against a year earlier, as filed by then: up more than 5% against up 2% or less. Decided in advance: both the typical result and the worst tenth over 63 sessions at least a point worse, the typical gap's interval below zero, in both periods.
+
+### Outcome
+Half of it. The worst tenth was 2.2 points deeper with dilution [−4.4, −0.7], in both periods (−3.4 before 2020, −2.2 from 2020). The typical result was 0.8 points worse, but its interval runs through zero [−2.6, +0.8]. By the rule set in advance it does not pass.
+
+### What follows
+A lead on the bad cases, which is what the Signal is judged on, from too few cases (487) to act on. To be retested when another year of filings is in; no change now.
+
+## 25. Young companies that slid for three months — 2026-11-07
+
+*Family: Signal · Verdict: Weak lead · Horizon: 2 to 3 months · Data: SEC filings as filed, daily prices · Sample: 1,742 stock-months, 2010–2026*
+
+### The idea
+Not decided in advance: found while reading entry 21. The Signal tests young (Early) companies for a breakdown differently from established ones, and the difference matters in one place: a young company that has fallen well over three months but steadied in the latest month is not read as a breakdown.
+
+### What was done
+On the replay of entry 21, the stock-months where price alone read Very Weak but the full Signal, through the young-company test, read only Weak were set against the full Signal's Very Weak and its other Weak stock-months.
+
+### Outcome
+These 1,742 stock-months had the deepest bad cases of any group: the worst tenth over 63 sessions was −23.3 points against the average stock before 2020 and −27.5 from 2020, against −18.1 and −26.1 for Very Weak and −14.6 and −21.4 for the other Weak readings. Their typical result was no better (−0.0 and −2.9).
+
+### What follows
+The clearest gap the data has shown in the Signal's current rules. Because it was found by looking rather than decided in advance, it needs one confirming test before any change: a fixed rule written down first, then measured. Any change to the Signal is the owner's decision.
