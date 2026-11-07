@@ -541,4 +541,23 @@ On the replay of entry 21, the stock-months where price alone read Very Weak but
 These 1,742 stock-months had the deepest bad cases of any group: the worst tenth over 63 sessions was −23.3 points against the average stock before 2020 and −27.5 from 2020, against −18.1 and −26.1 for Very Weak and −14.6 and −21.4 for the other Weak readings. Their typical result was no better (−0.0 and −2.9).
 
 ### What follows
-The clearest gap the data has shown in the Signal's current rules. Because it was found by looking rather than decided in advance, it needs one confirming test before any change: a fixed rule written down first, then measured. Any change to the Signal is the owner's decision.
+The clearest gap the data has shown in the Signal's current rules. Because it was found by looking rather than decided in advance, it needed a confirming test with the rule written down first: entry 26.
+
+## 26. Young companies that slid for three months: the confirming test — 2026-11-07
+
+*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: SEC filings as filed, daily prices · Sample: 2,145 stock-months in 2010–2026, on a different day of each month from entry 25*
+
+### The idea
+Entry 25 found the gap by looking. Before any change, one candidate was fixed in writing and measured: a young company also counts as a breakdown when it has fallen sharply over three months, the same three-month test established companies already have. Nothing else in the Signal changes and no rule moves.
+
+### What was done
+The replay of entry 21 was run again on the 11th trading day of every month rather than the 1st, scoring every stock with the Signal as it is and with the candidate. Decided in advance, at 63 sessions and in each period on its own: the stock-months the candidate moves must have a worst tenth at least as deep as today's Very Weak (within a point); at least 3 points deeper than the rest of the tier they came from, the interval below zero; the gap between the Strong and Weak sides no narrower; and the Very Weak tier's typical result no more than 0.3 points better (the known bounce must not grow).
+
+### Outcome
+All four held in both periods. The candidate moved 902 stock-months before 2020 and 1,243 from 2020, every one from Weak to Very Weak. Their worst tenth over 63 sessions was −22.1 and −28.9 points against the average stock, deeper than today's Very Weak (−18.6 and −25.9), and 7.3 and 8.2 points deeper than the Weak stock-months left behind (intervals −10.9 to −4.7 and −11.6 to −5.0). The Very Weak tier's typical result did not move (−0.4 and −2.7 both ways). The third test could not have failed: every move stays on the Weak side, so the Strong-to-Weak gap is unchanged by construction.
+
+### What follows
+The candidate does what the Signal is for: it puts a group with Very Weak's bad cases where Very Weak is, without making the tier's bounce worse. It is a weak lead rather than a finding because the confirming sample shares its history with the one that found it (a different day each month, not an unseen period); no unseen period exists. Whether the Signal changes is the owner's decision.
+
+### Caveats
+The same as entry 21. At the time of writing the candidate would move 19 of 598 young companies on the screener from Weak to Very Weak, one of them up 44% in its latest month and still down 27% over three; the established test already reads such a rebound the same way.
