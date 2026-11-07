@@ -561,3 +561,58 @@ The candidate does what the Signal is for: it puts a group with Very Weak's bad 
 
 ### Caveats
 The same as entry 21. At the time of writing the candidate would move 19 of 598 young companies on the screener from Weak to Very Weak, one of them up 44% in its latest month and still down 27% over three; the established test already reads such a rebound the same way.
+
+## 27. Health, rebuilt for the past: high scores, and high scores after a fall — 2026-11-07
+
+*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC filings as filed, results releases, daily prices · Sample: 117,029 stock-months in 1,087 stocks, 2010–2026*
+
+### The idea
+Health sums up a stock in one number from 0 to 100. Two questions: does a higher Health come before a better month or two, and do stocks with Health of 90 or more that have fallen at least 15% from their 52-week high do better than the average stock afterwards?
+
+### What was done
+Health cannot be rebuilt exactly for the past, so a lookalike was. On the first trading day of every month from January 2010 to August 2026, each stock's Health was worked out by the live rules, unchanged, from what was known that day:
+- **Price:** exact.
+- **Business:** from the company's filings as filed by then.
+- **Results:** the outlook change named in its newest results release, from 2017.
+- **Valuation:** the P/E against its own ten-year history; the trailing P/E (or price to sales) against the same month's industry median.
+- **Signal:** the version for the Very Weak cap, replayed as in entry 21.
+
+Three things could not be rebuilt and were left out, as the live rules leave out any missing check: the last quarter against the analysts' estimate, short interest and article tone. The lookalike therefore rests on 65% of the weight before 2017 and up to 90% after, against 100% today. Each month's result over the next 21 and 42 sessions was compared with the average stock. The tests were written down before any result was read: the gap between Health 80+ and Health under 50, and the 90+ group after a 15% fall, each in both periods.
+
+### Outcome
+**After a fall, no better.** Stocks with Health 90+ and 15% or more below their high did a little worse than the average stock in both periods: typically 0.8 to 1.6 points behind, ahead in 44% to 46% of cases. They did no better than stocks with Health 90+ near their highs; every difference sat within 1 point either side of zero.
+
+**Higher Health did not come before better returns. On the average it came before slightly worse ones.** The Health 80+ minus under-50 gap on the average was −0.65 points over 42 sessions before 2020 and −6.6 from 2020, both intervals below zero. That comes from the low end: a few very large rebounds among low-Health stocks lift their average (+5.7 points from 2020) while their typical result is the worst of any band (−2.2). On the typical result the bands differ by under 1 point.
+
+**What Health does order is the downside.** The worst tenth of results is shallower at every step up the bands, in both periods. Health 80+ against under 50: 3.3 and 5.4 points shallower over 21 sessions, 4.6 and 8.0 over 42, every interval above zero. The tests above were written down in advance; this one was not, though it was measured on the same sample.
+
+### What follows
+Health stays a description. It says how a stock reads today, and over the next one to two months a high reading has meant a narrower range of outcomes rather than a better one. A high Health after a sharp fall has not meant a rebound. Nothing here changes Health or the Signal.
+
+### Caveats
+- **A lookalike, not the live number:** the estimate, short interest and tone checks are missing throughout, and the outlook check before 2017.
+- **Today's industry lists,** applied to past months.
+- **Filings lag:** a company's results reach its filings about a month after its press release.
+- **Survivorship:** today's list of stocks, which flatters the low-Health and fallen groups most.
+- **Thin early years:** in 2010 few stocks had enough filed history for the 60% floor (416 of 8,867 stock-months).
+
+### Numbers
+
+| Health band, 42 sessions | 2010–2019: average · typical · worst tenth | 2020–2026: average · typical · worst tenth |
+|---|---|---|
+| Under 50 | +0.36 · −0.53 · −14.6 | +5.67 · −2.24 · −22.9 |
+| 50–69 | +0.22 · −0.24 · −12.0 | −1.08 · −1.88 · −18.5 |
+| 70–79 | −0.08 · −0.23 · −11.0 | −1.25 · −1.63 · −16.2 |
+| 80–89 | −0.26 · −0.33 · −10.2 | −0.82 · −1.12 · −14.9 |
+| 90 and over | −0.34 · −0.46 · −9.9 | −1.04 · −1.33 · −15.0 |
+
+| Health 90+ and 15% or more below the high | 2010–2019 | 2020–2026 |
+|---|---|---|
+| Stock-months (stocks) | 430 (182) | 1,077 (348) |
+| Average against the average stock, 21 sessions | −0.69 [−1.62, +0.19] | −0.48 [−1.79, +0.86] |
+| Average, 42 sessions | −1.24 [−2.28, −0.22] | −0.55 [−2.22, +0.91] |
+| Typical, 42 sessions | −1.13 | −1.58 |
+| Ahead of the average stock | 46% | 45% |
+| Against Health 90+ near the high, 42 sessions | −0.73 [−1.83, +0.36] | +0.23 [−1.46, +1.98] |
+
+All figures are points against the equal-weight average stock; intervals are 95%, from resampling months.

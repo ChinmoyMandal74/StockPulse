@@ -66,10 +66,15 @@
   - ALB 50: 70 raw, capped by its Very Weak Signal
   - AXON 38
 
-### Not done (backlog 59)
+### Tested: research entry 27 (the same day)
 
-- No stored history: the tone and release figures are overwritten each run, so a history has to be written going forward.
-- No backtest yet. Expect Health to be descriptive, not predictive.
+- **The test:** a lookalike rebuilt month by month from 2010 by the live rules, on filings as filed, prices, and from 2017 the releases' outlook change. The estimate, short interest and tone checks were missing throughout, so it rests on 65% to 90% of the weight. The tests were written down in advance (scratchpad `hl/PREREG.md`). The scripts are `hl/replay.js`, which takes 23 minutes, and `hl/analyse.js`.
+- **Health 90+ after a 15% fall:** it did no better than the average stock, typically 0.8 to 1.6 points behind over one to two months. It also did no better than Health 90+ near its high.
+- **The bands:** higher Health did not come before better returns. On the average, under-50 beat 80+, carried by a few huge rebounds, while the under-50 median was the worst band. What Health orders is the downside: the worst tenth was 3 to 8 points shallower for 80+ than for under 50, in both periods.
+- **Traps:**
+  - The release history stores outlook changes in lower case (`lowered`); Health matches `Lowered`, so the replay has to map them as `ReleaseView` does.
+  - Before 2014 few companies have the 20 quarter-ends the P/E history needs, so valuation rests on the industry comparison alone.
+- **No stored history** (the owner): the inputs are all kept by date, so any day's Health can be rebuilt. Backlog 59 is Done.
 
 ### Tests
 

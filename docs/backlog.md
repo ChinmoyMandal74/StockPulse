@@ -2779,19 +2779,19 @@ from `Adjusted.fundamentalsAsOf`). Four things are left:
 
 ## 59. Health: a history, and a test of it — 2026-11-07
 
-*Area: Research · Status: Open · Note: Health shipped the same day (health.js, docs/context/health.md); these two parts of the first proposal were left for later*
+*Area: Research · Status: Done · Note: Health shipped the same day (health.js, docs/context/health.md); the test is research entry 27, and the owner decided no history is stored*
 
-- **A stored daily history of Health**, so a stock's number can be followed
-  over time. The number is worked out as rows are served and never stored.
-  Most inputs are dated already, but the tone and release figures are
-  overwritten each run, so the history has to be written going forward (the
-  nightly's tail phases, one small table keyed on symbol and day). Needs an
-  entry on `/privacy` and in `SYMBOL_TABLES`.
-- **A backtest of the parts with history**: Business, Valuation, Price and the
-  short interest from the local copy, Results from the release history back to
-  2017. Article tone cannot be replayed (October 2026 onwards). Expect it to be
-  descriptive rather than predictive (docs/context/does-any-of-this-predict-anything.md);
-  write it up in docs/research.md either way.
+- **No stored daily history** (the owner, 2026-11-07: "No need to store
+  history, We can rebuild it, We are storing all the components now"). The
+  inputs are all kept by date: prices, filings, the releases each with their
+  outlook change, the short-interest settlements and each article's tone. The
+  two screener figures Health reads (`toneColumn`, `releaseColumn`) are
+  overwritten, but both are built from those stored rows, so any day's Health
+  can be worked out again.
+- **The test was a lookalike** (research entry 27), since the estimate, short
+  interest and tone checks have no usable history in the local copy. High
+  Health after a 15% fall did no better than the average stock in either
+  period; Health orders the downside (a shallower worst tenth), not the return.
 
 ## What is deliberately NOT on this list
 
