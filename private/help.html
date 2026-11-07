@@ -136,8 +136,8 @@
           <span class="td">The shape of the app, and why it exists at all</span></span></a></li>
         <li><a href="#table"><span class="no">2</span><span><span class="tt">Reading the table</span>
           <span class="td">Over a hundred columns, views, filters and getting around them</span></span></a></li>
-        <li><a href="#quality"><span class="no">3</span><span><span class="tt">The Quality score</span>
-          <span class="td">Company numbers, and what happens without earnings</span></span></a></li>
+        <li><a href="#quality"><span class="no">3</span><span><span class="tt">Quality and Health</span>
+          <span class="td">Company numbers, what happens without earnings, and one number for everything</span></span></a></li>
         <li><a href="#screens"><span class="no">4</span><span><span class="tt">Narrowing it down</span>
           <span class="td">Screens, favourites, and the pickers in the bar</span></span></a></li>
         <li><a href="#stock"><span class="no">5</span><span><span class="tt">One stock in full</span>
@@ -411,7 +411,7 @@
 
     <!-- ---------------------------------------------------------------- -->
     <section class="bezel card" id="quality"><div class="core">
-      <div class="sec-h"><h2>3 · The Quality score</h2></div>
+      <div class="sec-h"><h2>3 · Quality and Health</h2></div>
       <p>Where the return columns read the price, <b>Qual.</b> reads the company behind it. Six factors,
         all <strong>absolute</strong> rather than ranked against the list — a 30% margin is a 30% margin
         whoever else is on your screen. That is worth knowing for three reasons: a number means the same
@@ -447,6 +447,27 @@
       <div class="note"><b>Missing data is dropped, not counted as zero.</b> A factor that cannot be
         computed for a stock is removed and the remaining weights are rescaled to fill the gap. A stock
         is never punished for a number nobody has.</div>
+
+      <h3 id="health">Health</h3>
+      <p><b>Health</b>, beside Qual., is one number from 0 to 100 for how a stock reads on everything
+        the screener holds at once. It sums up five topics, each with a set weight:</p>
+      <table>
+        <thead><tr><th>Topic</th><th>What it looks at</th></tr></thead>
+        <tbody>
+          <tr><td>Business</td><td>Revenue growth, profitability, the balance sheet and the share count</td></tr>
+          <tr><td>Results</td><td>The latest quarter against the estimate, and what the company did to its guidance</td></tr>
+          <tr><td>Valuation</td><td>The P/E against its own ten-year history, and the valuation against its industry</td></tr>
+          <tr><td>Price</td><td>The last month, the last three years as a yearly rate, and the trend</td></tr>
+          <tr><td>Sentiment</td><td>Short interest and the tone of the week's articles</td></tr>
+        </tbody>
+      </table>
+      <p>A stock that reads well on every one of them scores 100. A few readings hold the number down
+        however good the rest is, such as guidance cut or withdrawn. As with Quality, missing data is
+        left out rather than counted as zero, and with too little data there is no number. Funds show a
+        dash.</p>
+      <div class="note"><b>A description, not a rating.</b> Health says where a stock stands today on
+        the figures we hold. It is not a forecast or a recommendation, it has not been shown to predict
+        returns, and the Signal never reads it.</div>
       <a class="top" href="#top">↑ Contents</a>
     </div></section>
 

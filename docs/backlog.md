@@ -2777,6 +2777,22 @@ from `Adjusted.fundamentalsAsOf`). Four things are left:
 - **Retest dilution (entry 24) with another year of filings**, and short
   interest as days to cover once FINRA's history is in the local copy.
 
+## 59. Health: a history, and a test of it — 2026-11-07
+
+*Area: Research · Status: Open · Note: Health shipped the same day (health.js, docs/context/health.md); these two parts of the first proposal were left for later*
+
+- **A stored daily history of Health**, so a stock's number can be followed
+  over time. The number is worked out as rows are served and never stored.
+  Most inputs are dated already, but the tone and release figures are
+  overwritten each run, so the history has to be written going forward (the
+  nightly's tail phases, one small table keyed on symbol and day). Needs an
+  entry on `/privacy` and in `SYMBOL_TABLES`.
+- **A backtest of the parts with history**: Business, Valuation, Price and the
+  short interest from the local copy, Results from the release history back to
+  2017. Article tone cannot be replayed (October 2026 onwards). Expect it to be
+  descriptive rather than predictive (docs/context/does-any-of-this-predict-anything.md);
+  write it up in docs/research.md either way.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's

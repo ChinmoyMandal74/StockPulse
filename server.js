@@ -49,6 +49,7 @@ const store = require('./db');
 // browser would: the mobile page gets the twenty matching rows, formatted,
 // instead of the 1.3MB table. Both are the same modules the pages load.
 const Filters = require('./private/filters.js');
+const Health = require('./health.js');
 const ListingTypes = require('./listingtypes.js');
 // The stock page's At a glance cards: built here, where every company's
 // figures are in memory for the comparisons; drawn by the page.
@@ -7197,6 +7198,34 @@ function finishServe(rows, pf) {
   for (const x of rows) x.portfolios = membershipOf(x.symbol, pf);
 }
 
+// HEALTH (health.js, the owner, 2026-11-07): one number a stock, stamped as
+// `healthScore` on every row served, the same for every tier. It reads Tone
+// 7D and the newest release, which are members-only surfaces, so it reads
+// them HERE through a view of each row (Object.create: the row's own fields
+// through the prototype, the tone and release fields on top) and writes back
+// only the number; a guest never receives the inputs. Last of the stamps: it
+// reads the Signal, the folded filings figures and the peer ratios. The
+// workings are admin-only, at /api/stock-health.
+async function healthInputs() {
+  const [tone, rel] = await Promise.all([toneColumnFig().catch(() => null), releaseColumnFig().catch(() => null)]);
+  return { tone: (tone && tone.rows) || {}, rel: (rel && rel.rows) || {} };
+}
+function healthView(r, inp) {
+  const v = Object.create(r);
+  const t = inp.tone[r.symbol];
+  v.toneAvg = t ? t[0] : null; v.toneN = t ? t[1] : null;
+  try { Object.assign(v, globalThis.ReleaseView.fields(inp.rel[r.symbol] || null)); } catch (e) { /* no release reading */ }
+  return v;
+}
+async function stampHealth(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const inp = await healthInputs().catch(() => ({ tone: {}, rel: {} }));
+  for (const r of rows) {
+    if (!r || !r.symbol) continue;
+    try { r.healthScore = Health.score(healthView(r, inp)); } catch (e) { r.healthScore = null; }
+  }
+}
+
 // THE SIGNAL READS THE SOURCE RULE'S INPUTS (the owner, 2026-10-29): net
 // income, free cash flow and its margin, gross and profit margin, ROE and
 // growth are laid over Twelve Data's (stampSources, from the held figure:
@@ -11870,6 +11899,7 @@ app.get('/api/stock', requireAuth, route(async (req, res) => {
     stampFlows([stock]).catch(() => {}),
   ]);
   const [relRows, flowRows, toneFig, segPayload] = await glanceReads;
+  await stampHealth([stock]);
   // THE NEWEST RESULTS RELEASE for the At a glance card "Earnings and
   // guidance" (2026-10-23, the owner): its figures (ReleaseView.fields, the
   // er- fields the screener reads) on a copy of the row for Glance.build only;
@@ -12111,6 +12141,7 @@ const EXPORT_DATASETS = {
       const [, pf] = await Promise.all([serveStamps(all), readPortfolios()]);
       scoreActionInto(all);
       finishServe(all, pf);
+      await stampHealth(all);
       const rows = scope && scope !== 'All'
         ? all.filter((s) => (s.portfolios || []).includes(scope))
         : all;
@@ -13051,6 +13082,7 @@ async function mobileRows(req) {
   await stampFlows(rows).catch(() => {});
   await sourcedNow().catch(() => null);
   stampCapDerived(rows);
+  await stampHealth(rows);
   return rows;
 }
 
@@ -17087,6 +17119,12 @@ async function releasesDayPayload(asked) {
 // its rows there, as Tone 7D is: never stamped on a snapshot row, never read
 // by the Signal. Members only; kept ten minutes per instance.
 let releaseColHeld = null;
+async function releaseColumnFig() {
+  if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
+    releaseColHeld = { at: Date.now(), fig: await store.readFigure('releaseColumn').catch(() => null) };
+  }
+  return releaseColHeld.fig;
+}
 // ONE COMPANY'S TRACK RECORD (2026-10-23, the Earnings track record card):
 // its releases on file read together (Releases.trackRecord). The phone's
 // saved-post route reads the same rows through the same function.
@@ -17110,10 +17148,7 @@ app.post('/api/sources/build', route(async (req, res) => {
 }));
 app.get('/api/releases/column', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
-    releaseColHeld = { at: Date.now(), fig: await store.readFigure('releaseColumn').catch(() => null) };
-  }
-  const f = releaseColHeld.fig;
+  const f = await releaseColumnFig();
   res.json(f && f.rows ? f : { at: null, rows: {} });
 }));
 // The recon's data: the season asked for (else the newest), its stored rows
@@ -22227,6 +22262,7 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     // Memberships too: portfolios are edited between refreshes (a deleted one
     // must not linger on every row until the next refresh rewrites the snapshot).
     finishServe(snap.stocks, pf);
+    await stampHealth(snap.stocks);
     snap.portfolios = Object.keys(pf);
     if (await isGuest(req)) {
       // The guest preview: the picked handful, and only portfolio names that
@@ -22250,6 +22286,26 @@ app.get('/api/stocks', requireAuth, route(async (req, res) => {
     return res.json(r.payload);
   }
   return res.json({ stocks: [], portfolios: Object.keys(await readPortfolios()), asOf: null, updatedAt: null, fromSnapshot: true, empty: true });
+}));
+
+// HEALTH'S WORKINGS for one stock (health.js): admin only, the owner's call
+// ("only admin should be able to see the calculations like Signal"). Struck
+// over the whole snapshot through the same stamps the screener is served with,
+// in the same order, so the panel's number is the column's number.
+app.get('/api/stock-health', requireAdmin, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const symbol = String(req.query.symbol || '').trim().toUpperCase();
+  if (!/^[A-Z0-9.-]{1,15}$/.test(symbol)) return res.status(400).json({ error: 'Bad symbol.' });
+  const snap = await readSnapshot();
+  const all = ((snap && snap.stocks) || []).filter((s) => s && s.symbol);
+  await sourcedNow().catch(() => null);
+  scoreActionInto(all);
+  const [, pf] = await Promise.all([serveStamps(all), readPortfolios()]);
+  finishServe(all, pf);
+  const row = all.find((s) => String(s.symbol).toUpperCase() === symbol);
+  if (!row) return res.status(404).json({ error: 'Not in the screener.' });
+  const e = Health.explain(healthView(row, await healthInputs()));
+  res.json({ symbol: row.symbol, name: row.shortName || row.name || row.symbol, signal: row.action || null, health: e });
 }));
 
 // The activity log's own three routes, beside the visitor log they mirror.

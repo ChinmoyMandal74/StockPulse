@@ -51,6 +51,7 @@ const COLUMN = {
   nextEarningsDate: 'Earnings calendar (Alpha Vantage, else Nasdaq), else estimated here',
   // Scores
   qualityScore: 'Worked out here from the company figures',
+  healthScore: 'Worked out here from the screener’s own readings, the newest results release and article tone',
   // Short-term
   pricedAt: 'Twelve Data (the time of the last price fetch)',
   price: 'Twelve Data',

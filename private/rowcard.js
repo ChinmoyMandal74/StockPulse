@@ -318,6 +318,9 @@
     ['info',  'Next Earn',      (s) => nextEarn(s)
                                   ? { t: (s.nextEarningsEstimated ? '~' : '') + shortDate(nextEarn(s)), c: '' } : null],
     ['rank',  'Qual.',          (s) => V.rating(s.qualityRating)],
+    // Health (health.js, 2026-11-07): one number from 0 to 100, stamped on the
+    // server; only an admin sees how it was reached. Uncoloured: not a price.
+    ['rank',  'Health',         (s) => (ok(s.healthScore) ? { t: String(s.healthScore), c: '', n: Number(s.healthScore), u: 'score' } : null)],
     ['act',   'Type',           (s) => V.text(s.companyType)],
     ['act',   'Trend',          (s) => V.text(s.actionTrend)],
     ['act',   'Entry',          (s) => V.text(s.actionEntry)],

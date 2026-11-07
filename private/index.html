@@ -1070,6 +1070,28 @@
       background: none; color: var(--muted); cursor: pointer; font-family: var(--sans);
       transition: background 0.4s var(--ease), color 0.4s var(--ease); }
     .ap-tab[data-on="1"] { color: var(--text); border-color: var(--hair-2); background: color-mix(in srgb, var(--wash) 6%, transparent); }
+    /* Health's workings (admin), in the same panel. Accent, muted and orange
+       for a check's 1, half and 0: never green and red, which mean price. */
+    body:not(.no-ladder) td.hlth:not(.na) { cursor: pointer; }
+    #actionPanel .hp-score { color: var(--text); }
+    #actionPanel .hp-pil { margin-top: 10px; }
+    #actionPanel .hp-ph { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+    #actionPanel .hp-pn { color: var(--text); font-weight: 600; }
+    #actionPanel .hp-w { font: 500 10.5px var(--mono); color: var(--faint); }
+    #actionPanel .hp-bar { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--wash) 8%, transparent); overflow: hidden; }
+    #actionPanel .hp-bar i { display: block; height: 100%; background: var(--accent); }
+    #actionPanel .hp-pts { margin-left: auto; font: 600 11px var(--mono); color: var(--muted); }
+    #actionPanel .hp-chk { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 1px 6px; align-items: baseline; margin-top: 5px; }
+    #actionPanel .hp-chk.off { opacity: 0.55; }
+    #actionPanel .hp-m { font: 700 11px var(--mono); text-align: center; }
+    #actionPanel .hp-m.full { color: var(--accent); }
+    #actionPanel .hp-m.half { color: var(--muted); }
+    #actionPanel .hp-m.none { color: var(--orange); }
+    #actionPanel .hp-m.na { color: var(--faint); }
+    #actionPanel .hp-lb { font-size: 11px; color: var(--muted); }
+    #actionPanel .hp-val { font: 10.5px var(--mono); color: var(--text); text-align: right; }
+    #actionPanel .hp-rule { grid-column: 2 / 4; font-size: 9.5px; color: var(--faint); line-height: 1.4; }
+    #actionPanel .hp-cap { font-size: 11px; color: var(--muted); margin-top: 4px; }
     /* THE PERIOD TAG (2026-10-29, docs/context/data-sources.md): the period a
        column measures, on a small line under its name: TTM, Q YoY, Q end, Fwd. */
     thead th .ptag { display: block; margin-top: 2px; font: 500 9.5px var(--mono); letter-spacing: 0.03em; color: var(--faint); text-transform: none; }
@@ -1628,7 +1650,7 @@
         <th rowspan="2" class="left frz frz0" data-key="symbol" title="The ticker the stock trades under on its US exchange. Click it to open the stock’s own page.">Symbol</th>
         <th rowspan="2" class="left frz frz1" data-key="shortName" title="What a person would call it — shortened from the legal name by rule, and editable by the owner. The full legal name is in the tooltip on each row.">Name</th>
         <th class="group grp-info" data-group="info" colspan="12">Info</th>
-        <th class="group grp-rank" data-group="rank" colspan="1">Scores</th>
+        <th class="group grp-rank" data-group="rank" colspan="2">Scores</th>
         <th class="group grp-act" data-group="act" colspan="8">Signal</th>
         <th class="group grp-chart" data-group="chart" colspan="1">Chart</th>
         <th class="group grp-short" data-group="short" colspan="8">Short-term %</th>
@@ -1665,6 +1687,7 @@
         <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. Read for every company on the screener from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed when the earnings calendar lists it, else estimated (~) from the date of the same quarter last year. Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all. Hover a cell for the factor split and the confidence figure.">Qual.</th>
+        <th class="grp-rank ta-c" data-key="healthScore" title="Health, 0 to 100: how the stock reads on five topics at once, its business (growth, profit, balance sheet, share count), its latest results (against the estimate, guidance), its valuation (against its own history and its industry), its price (one month, three years, trend) and sentiment (short interest, article tone). Each topic has a set weight; a topic with no data is left out and the rest rescaled, and with too little data there is no number. A few readings cap it however good the rest is. A description of where the stock stands today, not a rating, a forecast or a recommendation, and never an input to the Signal. Blank for a fund.">Health</th>
         <th class="grp-act left" data-key="companyType" title="Established, Early or ETF — decided from raw fundamentals (size, profitability, cash flow, sane pricing), because an early-stage company must be judged on different rules than an established one. Recomputed daily, so a company migrates the day it earns it.">Type</th>
         <th class="grp-act left" data-key="actionTrend" title="The price-trend reading, one word — the most severe condition that holds, on the same ladder the rules check: Breakdown → Downtrend → Below 200D → Above 200D → Strong uptrend. Trend answers whether you may.">Trend</th>
         <th class="grp-act left" data-key="actionEntry" title="The timing reading: Clean (a base or shallow pullback with RSI 45–65), Clean near the high, Extended (up too far, too fast — do not chase), or None. Entry answers whether now.">Entry</th>
@@ -2154,6 +2177,14 @@
       else if (n <= 4) color = 'var(--red)';
       return `<td class="rating ${extraCls}" data-sym="${sym}" data-kind="${kind}" style="font-weight:700;color:${color}">` +
              `${n}</td>`;
+    }
+    // Health (health.js): the number only, stamped on the server and the same
+    // for everyone. Uncoloured, because green and red mean a price move here.
+    // An admin clicks it for the workings (the tbody dispatcher, below).
+    function healthCell(s) {
+      const n = s.healthScore;
+      if (n == null || !isFinite(n)) return '<td class="na grp-rank ta-c hlth">—</td>';
+      return `<td class="grp-rank ta-c hlth"${isAdmin ? attr('Click for the workings') : ''}>${n}</td>`;
     }
     // The ticker opens our own stock page, like the name beside it (owner,
     // 2026-11-06; it was Google Finance). The Google Finance link lives on as
@@ -4020,7 +4051,7 @@
         if (s.error) {
           return `<tr class="errrow" style="--i:${i}">
             <td class="sym left frz frz0">${tickerLink(s)}</td>
-            <td class="na" colspan="152">${s.error}</td>
+            <td class="na" colspan="153">${s.error}</td>
             ${removeBtn}
           </tr>`;
         }
@@ -4058,6 +4089,7 @@
           ${toneCell(s)}
           ${earningsCell(s, cacheTitle)}
           ${ratingCell(s.qualityRating, s.symbol, 'quality', 'grp-rank ta-c')}
+          ${isFund ? naRun(1, 'grp-rank') : healthCell(s)}
           ${typeCell(s)}
           ${stateCell(s.actionTrend, TREND_DANGER, 'trend')}
           ${entryCell(s)}
@@ -4214,7 +4246,7 @@
     // than assumed.
     const ROW_H = 37;
     const OVERSCAN = 10;        // rows built beyond each edge, so a flick does not flash
-    const PAD_SPAN = 177;        // a spacer spans the widest a body row gets
+    const PAD_SPAN = 178;        // a spacer spans the widest a body row gets
     let winRows = [];           // the full sorted list this is a window onto
     let winFresh = '';
     let winFrom = -1, winTo = -1;
@@ -4275,7 +4307,7 @@
       const art = tileSpark(s.symbol);
       const chips = [];
       if (tileCfg.scores) {
-        for (const [k, n] of [['Qual', s.qualityRating]]) {
+        for (const [k, n] of [['Qual', s.qualityRating], ['Health', s.healthScore]]) {
           if (n != null) chips.push({ k, v: n });
         }
       }
@@ -4398,7 +4430,7 @@
         // and signal in force, which come from saved screens and portfolio
         // names, so a name carrying markup would otherwise run as markup here.
         // The message itself is plain text, so escaping all of it loses nothing.
-        tbody.innerHTML = `<tr><td class="empty" colspan="154">${we(msg)}</td></tr>`;
+        tbody.innerHTML = `<tr><td class="empty" colspan="155">${we(msg)}</td></tr>`;
         if (tilesOn()) { applyTileCols(); $('tiles').innerHTML = `<div class="tl-empty">${we(msg)}</div>`; }
         researchSymbol = null;
         renderResearchMenu();
@@ -7554,6 +7586,51 @@
       apPanel.scrollTop = 0;
       apWire();
     }
+    // The Health panel: the server's breakdown for one stock, drawn pillar by
+    // pillar. Nothing here re-derives a number; it lays out what came back.
+    const HP_MARK = (v) => (v == null ? '<span class="hp-m na">—</span>'
+      : `<span class="hp-m ${v >= 1 ? 'full' : v > 0 ? 'half' : 'none'}">${v >= 1 ? '1' : v > 0 ? '½' : '0'}</span>`);
+    function healthPanelHtml(sym, d) {
+      const h = d && d.health;
+      const head = `<div class="ap-head"><span class="ap-sym">${we(sym)}</span>` +
+        `<span class="ap-verdict hp-score">${h && h.score != null ? 'Health ' + h.score : 'No Health number'}</span>` +
+        '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div>';
+      if (!h) return '<div class="ap-core">' + head + '<div class="ap-note">A fund, or a row with an error: Health is not worked out for it.</div></div>';
+      const pills = h.pillars.map((p) => {
+        const share = p.points == null ? '' : `<span class="hp-bar"><i style="width:${p.points}%"></i></span>`;
+        const checks = p.checks.map((c) => `<div class="hp-chk${c.v == null ? ' off' : ''}">${HP_MARK(c.v)}` +
+          `<span class="hp-lb">${we(c.label)}</span><span class="hp-val">${we(c.value || 'no reading')}</span>` +
+          `<span class="hp-rule">${we(c.rule)}</span></div>`).join('');
+        return `<div class="hp-pil"><div class="hp-ph"><span class="hp-pn">${we(p.label)}</span><span class="hp-w">${p.weight}%</span>` +
+          share + `<span class="hp-pts">${p.points == null ? 'no data' : p.points + ' of 100'}</span></div>${checks}</div>`;
+      }).join('');
+      const caps = h.caps.length
+        ? '<div class="ap-sec">Caps</div>' + h.caps.map((c) => `<div class="hp-cap">${we(c.label)}: at most <b>${c.max}</b></div>`).join('')
+        : '';
+      const sum = h.score == null
+        ? `Only ${h.weighed}% of the weight has data; ${h.minWeight}% is needed for a number.`
+        : `Weighted over the ${h.weighed}% of the weight with data: <b>${h.raw}</b>` +
+          (h.capped ? `, capped to <b>${h.score}</b>.` : '.');
+      return '<div class="ap-core">' + head +
+        `<div class="ap-chips"><span class="ap-chip">Signal <b>${we(d.signal || '—')}</b></span></div>` +
+        pills + caps +
+        `<div class="ap-note">${sum} A check with no data is left out and its pillar shares the weight among the rest. Admin only: everyone else sees the number.</div></div>`;
+    }
+    async function openHealthPanel(sym, anchor, key) {
+      window.track && track('panel', 'health:' + sym);
+      closePickers(); hideTip(); hideRowCard();
+      apOpenFor = key; apAnchor = anchor; apBackSym = null;
+      apPanel.innerHTML = '<div class="ap-core"><div class="ap-head"><span class="ap-sym">' + we(sym) + '</span>' +
+        '<button class="ap-x" data-ap-close aria-label="Close">✕</button></div><div class="ap-note">Working it out…</div></div>';
+      apPlace(anchor); apWire();
+      let d = null, err = null;
+      try { d = await api('GET', '/api/stock-health?symbol=' + encodeURIComponent(sym)); } catch (x) { err = x; }
+      if (apOpenFor !== key) return;     // closed or moved on while it loaded
+      apPanel.innerHTML = err
+        ? '<div class="ap-core"><div class="ap-head"><span class="ap-sym">' + we(sym) + '</span><button class="ap-x" data-ap-close aria-label="Close">✕</button></div><div class="ap-note">Could not load the workings.</div></div>'
+        : healthPanelHtml(sym, d);
+      apPlace(anchor); apPanel.scrollTop = 0; apWire();
+    }
     function openActionModel() {
       apOpenFor = '#model';
       apPanel.innerHTML = apModelHtml();
@@ -7593,6 +7670,19 @@
         else setIndustryFilter(industryFilter === ind ? 'All' : ind);
         window.track && track('picker', (sec != null ? 'sector-cell:' : 'industry-cell:') + (sec != null ? sec : ind));
         render();
+        return;
+      }
+      // HEALTH'S WORKINGS ARE ADMIN-ONLY (2026-11-07, the owner: "like
+      // Signal"). Everyone sees the number; the breakdown is asked of the
+      // server on the click, so a member's browser never holds it.
+      const hc = isAdmin ? e.target.closest('td.hlth') : null;
+      if (hc) {
+        const hsym = hc.closest('tr')?.querySelector('td.sym')?.textContent.trim();
+        if (!hsym) return;
+        e.stopPropagation();
+        const key = hsym + '|health';
+        if (apOpenFor === key) closeActionPanel();
+        else openHealthPanel(hsym, hc, key);
         return;
       }
       // THE LADDER IS ADMIN-ONLY (2026-09-26, the owner's call). The verdict
