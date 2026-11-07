@@ -129,6 +129,17 @@ console.log('\nEARLY rules, top to bottom');
 check('Early breakdown → Sell (shorter leash)',
   run(row(EARLY, { vs200ma: -6, vs50ma: -4, oneMonthPct: -6 })),
   ['Early', 'Very Weak', 'Breakdown (early)']);
+// The 3-month test (2026-11-07, research entries 25-26): slid over three
+// months, steadied over one. Probed on both sides of confirm_3m, and blank.
+check('Early breakdown on the 3-month slide alone → Very Weak',
+  run(row(EARLY, { vs200ma: -6, vs50ma: -4, oneMonthPct: 2, threeMonthPct: -20 })),
+  ['Early', 'Very Weak', 'Breakdown (early)']);
+check('Early 3-month slide short of the threshold → not a breakdown',
+  run(row(EARLY, { vs200ma: -6, vs50ma: -4, oneMonthPct: 2, threeMonthPct: -14 }))[2] !== 'Breakdown (early)', true);
+check('Early 3-month slide with a blank 3M → not a breakdown (blanks meet nothing)',
+  run(row(EARLY, { vs200ma: -6, vs50ma: -4, oneMonthPct: 2, threeMonthPct: null }))[2] !== 'Breakdown (early)', true);
+check('Early 3-month slide less than 5% under the 200D → not a breakdown',
+  run(row(EARLY, { vs200ma: -4, vs50ma: -4, oneMonthPct: 2, threeMonthPct: -20 }))[2] !== 'Breakdown (early)', true);
 check('Weak below 200D → Sell, not Avoid',
   run(row(EARLY, { vs200ma: -2, vs50ma: 1, revenueGrowthYoY: 3 })),
   ['Early', 'Very Weak', 'Weak fundamentals below 200D']);

@@ -2744,10 +2744,11 @@ The whole Signal was replayed point in time for the first time (research entry
 scratchpad, 161,983 stock-months 2010-2026 through the real engine, fundamentals
 from `Adjusted.fundamentalsAsOf`). Four things are left:
 
-- **CONFIRMED 2026-11-07 (research entry 26: all four pre-registered tests, both
-  eras, mid-month sample, `sig/PREREG2.md`, `sig/action-cand.js`); the owner
-  decides whether the Signal changes. Would move 19 of 598 Early rows today,
-  every one Weak to Very Weak.** Confirm the young-company breakdown gap (entry 25), then the owner decides.
+- **DONE 2026-11-07 (owner: "Yes make the change"). Confirmed by research entry 26
+  (all four pre-registered tests, both eras, mid-month sample); shipped in
+  action.js with the ladder's "Still falling" alternative, Help, and four
+  action-test cases. On that day's snapshot 17 rows Weak -> Very Weak and 23
+  Very Weak rows now flagged Breakdown (early); nothing else moved.** Confirm the young-company breakdown gap (entry 25), then the owner decides.
   Early companies are tested for a breakdown on the 1-month move only
   (`stop_loss.early_vs200` and `early_confirm_1m`); established ones also on
   the 3-month move (`confirm_3m`). The 1,742 stock-months that price alone read

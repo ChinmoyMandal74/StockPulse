@@ -114,7 +114,7 @@
       confirm_1m: -8,             // ...and still falling over 1 month
       confirm_3m: -15,            // ...or over 3 months
       early_vs200: -5,            // Early gets a shorter leash
-      early_confirm_1m: -5,
+      early_confirm_1m: -5,       // ...or confirm_3m over 3 months, as established (2026-11-07)
     },
 
     chase: {                      // "Extended — wait for a pullback" caps at Hold
@@ -389,7 +389,11 @@
       uptrend: above200 && gt(v50, cfg.entry.uptrend_vs50),
       downtrend: below200 && lt(v50, 0),
       breakdown: type === 'Early'
-        ? lt(v200, cfg.stop_loss.early_vs200) && lt(m1, cfg.stop_loss.early_confirm_1m)
+        // The 3-month test too (owner, 2026-11-07; research entries 25-26): an
+        // Early company that slid for three months and steadied in the last
+        // one read Weak, and those had deeper bad cases than Very Weak itself.
+        ? lt(v200, cfg.stop_loss.early_vs200)
+          && (lt(m1, cfg.stop_loss.early_confirm_1m) || lt(m3, cfg.stop_loss.confirm_3m))
         : lt(v200, cfg.stop_loss.established_vs200)
           && (lt(m1, cfg.stop_loss.confirm_1m) || lt(m3, cfg.stop_loss.confirm_3m)),
       extended: gt(m1, cfg.chase.max_1m) || gt(v50, cfg.chase.max_vs50) || gt(rsi, cfg.chase.max_rsi),
@@ -717,7 +721,10 @@
         gauge: gauge('v200', d.v200, [-band, DOMAINS.v200[1]]) }),
       breakdown: (type) => (type === 'Early'
         ? [cLT(`vs 200D below ${n2(sl.early_vs200)}%`, 'v200', d.v200, sl.early_vs200),
-          cLT(`1M below ${n2(sl.early_confirm_1m)}%`, 'm1', d.m1, sl.early_confirm_1m)]
+          anyOf('Still falling', [
+            cLT(`1M below ${n2(sl.early_confirm_1m)}%`, 'm1', d.m1, sl.early_confirm_1m),
+            cLT(`3M below ${n2(sl.confirm_3m)}%`, 'm3', d.m3, sl.confirm_3m),
+          ])]
         : [cLT(`vs 200D below ${n2(sl.established_vs200)}%`, 'v200', d.v200, sl.established_vs200),
           anyOf('Still falling', [
             cLT(`1M below ${n2(sl.confirm_1m)}%`, 'm1', d.m1, sl.confirm_1m),
