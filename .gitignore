@@ -51,3 +51,8 @@ release-archive.log
 
 onboard.log
 onboard.lock
+
+# Health rebuilt for the past (health-replay.js): local research history, never committed.
+health-history.db
+health-history.db-wal
+health-history.db-shm

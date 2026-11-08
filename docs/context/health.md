@@ -75,7 +75,26 @@
   - The release history stores outlook changes in lower case (`lowered`); Health matches `Lowered`, so the replay has to map them as `ReleaseView` does.
   - Before 2014 few companies have the 20 quarter-ends the P/E history needs, so valuation rests on the industry comparison alone.
 - **Against the S&P 500 (entry 28, the same day):** equal-weight baskets by Health band against SPY. 80+ was ahead before 2020 (+0.35 points over 42 sessions) and level from 2020 (−0.09), and behind the basket of every stock in both periods. Scripts `hl/analyse-spy.js`, plan `hl/PREREG-SPY.md`.
-- **No stored history** (the owner): the inputs are all kept by date, so any day's Health can be rebuilt. Backlog 59 is Done.
+- **Stored history in production:** none. The inputs are all kept by date, so any day's Health can be rebuilt (the owner). Backlog 59 is Done.
+
+### The kept history, for later tests (2026-11-07)
+
+The owner: "Keep the health history … I might ask for more such tests in future."
+
+- **Where:** `health-history.db`, a local file in the repository folder, gitignored. It is never in Turso and never deployed.
+- **What:**
+  - `health_months`: one row per build, stock and month. It holds the score, the weight with data, whether a cap held, each pillar's points, the next 21 and 42 sessions' returns, and every input as JSON.
+  - `health_bench`: the equal-weight average stock and SPY over the same windows.
+  - `health_builds`: when each build was made, a hash of `health.js`, and a note.
+- **A build never replaces an earlier one.** Each run adds a build id, and studies read the newest. Build 1 is the run behind entries 27 and 28, imported from its scratch file.
+- **Building:**
+  - `node --use-system-ca --no-warnings health-replay.js` makes a new build in about 25 minutes. It reads `analysis.db` (sync it with `--sec` first) and makes one Turso read of the snapshot, for today's sector and industry taxonomy.
+  - Months without 42 sessions ahead are kept with blank returns, so a later build fills them in.
+- **Studying:**
+  - `health-study.js` prints the bands against the average stock (entry 27) and the band baskets against SPY (entry 28), and reproduces both to the decimal.
+  - `--build N` reads an older build.
+  - `--rescore` runs today's `health.js` over the stored inputs, so a changed threshold can be tested without a replay.
+  - For a new test, start from `HealthReplay.load()`: write the plan down first, then add a research entry.
 
 ### Tests
 
