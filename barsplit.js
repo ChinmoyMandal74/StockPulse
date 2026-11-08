@@ -283,4 +283,4 @@ async function persistBars(store, symbols, series, T = null) {
   return { inserted, rewritten, trips, symbols: have.length, splits, conflicts };
 }
 
-module.exports = { windowSplit, storedStep, undoesSplit, repairStored, persistBars, barRow, TOL, MIN_CHANGED, MIN_STEP, STEP_FIT, SPLIT_PROBE_BARS, BAR_OVERLAP };
+module.exports = { windowSplit, storedStep, undoesSplit, wholeRatio, repairStored, persistBars, barRow, TOL, MIN_CHANGED, MIN_STEP, STEP_FIT, SPLIT_PROBE_BARS, BAR_OVERLAP };

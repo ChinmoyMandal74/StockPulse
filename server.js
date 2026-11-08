@@ -20952,17 +20952,24 @@ app.get('/api/cron/splits', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   const dry = req.query.dry === '1';
   const cap = Math.max(1, Math.min(SPLITS_CRON_MAX, Number(req.query.n) || SPLITS_CRON_MAX));
-  const [universe, idx, profiles] = await Promise.all([
+  const [universe, idx, profiles, dcState] = await Promise.all([
     store.readUniverse(), store.readSplitIndex(), store.readProfiles().catch(() => ({})),
+    store.readMetaJson('data_check').catch(() => ({})),
   ]);
   const now = Date.now();
   const RANK = { never: 0, newer: 1, old: 2 };
   const due = [];
+  // A one-day move the size of a whole-number split with none recorded (the
+  // data check's hint): ask the provider about that stock, as for a profile
+  // naming a newer split. ETFs have no profile split date, so this is how
+  // ITA's and MTUM's splits of 2026-10-29 would have been asked about.
+  const hints = (dcState && dcState.splitHints) || {};
   for (const sym of universe) {
     const st = idx[sym] || null;
     const p = profiles[sym] || null;
     const named = p && p.lastSplitDate ? String(p.lastSplitDate).slice(0, 10) : null;
-    const why = splitsDue(st ? st.fetchedAt : null, st ? st.newest : null, named, now);
+    const hinted = hints[sym] && (!st || st.fetchedAt < Date.parse(hints[sym] + 'T00:00:00Z') + SPLITS_SETTLE_DAYS * 86400000);
+    const why = splitsDue(st ? st.fetchedAt : null, st ? st.newest : null, named, now) || (hinted ? 'newer' : null);
     if (why) due.push({ symbol: sym, why, at: st ? st.fetchedAt : 0 });
   }
   due.sort((a, b) => RANK[a.why] - RANK[b.why] || a.at - b.at);
@@ -21532,12 +21539,24 @@ function jobsDigestEmail(d) {
         + x.steps.map((s) => `<tr>${td(mailEsc(s.name), `color:${MC.ink}`)}${tag(s.state === 'ok' ? 'OK' : 'Check', s.state === 'ok' ? MC.mute : JD_AMBER)}${td(`<span${st(`font-size:12.5px;color:${MC.mute}`)}>${mailEsc(s.note.slice(0, 160))}</span>`)}</tr>`).join('')
         + '</table>'
       : `<div${st(`font-size:13px;color:${MC.mute}`)}>${x.pending ? 'Still running its later steps.' : 'Its step results were not saved.'}</div>`)).join('');
+  // The data check (runDataCheck): its new findings are in "To look at"; here,
+  // the count, what is still open from earlier days, and what has cleared.
+  const dc = d.data && !d.data.error ? d.data : null;
+  const dcLine = dc ? (dc.fresh.length || dc.open.length || dc.cleared.length
+    ? [dc.fresh.length ? dc.fresh.length + ' new' : null, dc.open.length ? dc.open.length + ' still open from earlier' : null, dc.cleared.length ? dc.cleared.length + ' cleared' : null].filter(Boolean).join(', ')
+    : 'Nothing suspect in the prices: no unexplained one-day move, no history lost, no unapplied split.') : null;
+  const dcOpen = dc ? dc.open.slice(0, 12).map((f) => f.note) : [];
+  const dcBlock = dc ? `<div${st(`margin:22px 0 4px;font-size:14px;font-weight:700;color:${MC.ink}`)}>Data check</div>`
+    + `<div${st(`font-size:13.5px;color:${MC.body};margin:2px 0 6px`)}>${mailEsc(dcLine)}</div>`
+    + dcOpen.map((x) => `<div${st(`font-size:12.5px;color:${MC.mute};margin:2px 0`)}>Still open: ${mailEsc(x)}</div>`).join('')
+    + dc.cleared.slice(0, 12).map((k) => `<div${st(`font-size:12.5px;color:${MC.mute};margin:2px 0`)}>Cleared: ${mailEsc(k.split('|').slice(1).join(' '))}</div>`).join('') : '';
   const body = look + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse')}>`
-    + `<tr>${th('Job')}${th('')}${th('Today')}</tr>${rows.join('')}</table>` + stepTables
+    + `<tr>${th('Job')}${th('')}${th('Today')}</tr>${rows.join('')}</table>` + dcBlock + stepTables
     + (site ? `<div${st('margin-top:18px')}>${mailButton(site + '/schedule', 'Open the schedule')}</div>` : '');
   const lines = [].concat(k ? ['To look at:'].concat(d.issues.slice(0, 20).map((x) => '  - ' + x), ['']) : [],
     d.jobs.map((j) => `${j.name}: ${j.runs}${j.what ? ' (' + j.what + ')' : ''}${j.status === 'issue' ? '  CHECK' : ''}`),
     [`Laptop tasks: ${lapOk ? 'OK' : 'check'}. ${lapAt}`, `Emails: ${mailLine}`],
+    dc ? ['', 'Data check: ' + dcLine].concat(dcOpen.map((x) => '  Still open: ' + x), dc.cleared.slice(0, 12).map((k) => '  Cleared: ' + k.split('|').slice(1).join(' '))) : [],
     ...stepRuns.map((x) => ['', `${nightly.name} at ${x.slot}, step by step:`].concat(x.steps
       ? x.steps.map((s) => `  ${s.state === 'ok' ? 'OK   ' : 'CHECK'} ${s.name}: ${s.note.slice(0, 160)}`)
       : [x.pending ? '  Still running its later steps.' : '  Its step results were not saved.'])),
@@ -21545,6 +21564,54 @@ function jobsDigestEmail(d) {
   const note = 'Sent to the site’s operator every evening at 8 PM Eastern by the scheduler on Fly.io.';
   return { subject, html: emailShell({ heading: 'Scheduled jobs, ' + when, intro, body, note }), text: textShell({ heading: 'Scheduled jobs, ' + when, intro, lines, note }) };
 }
+// THE DATA CHECK (2026-11-08, datacheck.js): one-day moves no ordinary day
+// makes, history that got shorter, and price factors the app does not apply.
+// Run by the jobs email every evening, which lists what it has not reported
+// before; GET /api/cron/data-check?dry=1 answers it on demand. Reads about
+// 15,000 bar rows (two weeks, date-ranged) and two seeks a stock for the
+// spans. A move the size of a whole-number split with no split recorded
+// (ITA, MTUM on 2026-10-29: ETFs carry no profile split date) leaves a hint
+// that makes the nightly splits step ask the provider for that stock.
+const DataCheck = require('./datacheck.js');
+const DC_MOVE_DAYS = 14, DC_FACTOR_DAYS = 120;
+async function runDataCheck(now) {
+  const ymd = (t) => new Date(t).toISOString().slice(0, 10);
+  const today = JobsDigest.etDay(now);
+  const universe = await store.readUniverse();
+  const [win, span, splits, state] = await Promise.all([
+    store.readBarsWindow(universe, ymd(now - (DC_MOVE_DAYS + 7) * 864e5), ymd(now + 864e5)),
+    store.barsSpan(universe),
+    store.readSplitsBetween(ymd(now - 400 * 864e5), '9999-12-31'),
+    store.readMetaJson('data_check'),
+  ]);
+  const bars = {};
+  for (const [s, list] of Object.entries(win)) bars[s] = list.map((b) => ({ d: String(b.datetime).slice(0, 10), close: Number(b.close) }));
+  const findings = [].concat(
+    DataCheck.moves(bars, splits, ymd(now - DC_MOVE_DAYS * 864e5)),
+    DataCheck.history(span, state.first || {}),
+    DataCheck.factors(splits, ymd(now - DC_FACTOR_DAYS * 864e5)));
+  const d = DataCheck.diff(findings, state.seen, today);
+  // Saved by the caller once its email has gone, so a send that fails reports
+  // the same findings as new tomorrow.
+  const save = async () => {
+    // The first stored date per stock, for tomorrow's history check; a stock
+    // whose read came back empty keeps yesterday's, so one bad read is not a
+    // shrink tomorrow.
+    const first = Object.assign({}, state.first || {});
+    for (const [s, v] of Object.entries(span)) if (v && v.first) first[s] = String(v.first).slice(0, 10);
+    const hints = Object.assign({}, state.splitHints || {});
+    for (const f of findings) if (f.kind === 'split?') hints[f.symbol] = f.d;
+    await store.writeMetaJson('data_check', { at: now, first, seen: d.seen, splitHints: hints });
+  };
+  return { findings: findings.length, fresh: d.fresh, open: d.open, cleared: d.cleared, save };
+}
+// On demand it only answers: marking findings as seen is the email's job.
+app.get('/api/cron/data-check', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  res.set('Cache-Control', 'no-store');
+  const { save, ...r } = await runDataCheck(Date.now());
+  res.json(r);
+}));
 app.post('/api/cron/jobs-digest', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   // body.day 'YYYY-MM-DD': a sample built as of 20:00 Eastern that day, its
@@ -21568,13 +21635,24 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
     store.readReleaseRuns(since).catch(() => []), store.readScheduleReport().catch(() => null), store.readMailLog(since, 500).catch(() => []),
   ]);
   const d = JobsDigest.build({ refresh, news, tone, releases, report, mail }, now);
+  // The data check rides on this email. A failure is a line in it, never a
+  // missed email; a sample day does not run it (it reads today's archive).
+  let dc = null;
+  if (!day) {
+    try { dc = await runDataCheck(now); }
+    catch (err) { dc = { error: String(err && err.message || err).slice(0, 160) }; }
+  }
+  d.data = dc;
+  if (dc && dc.fresh) for (const f of dc.fresh) d.issues.push('Data: ' + f.note);
+  if (dc && dc.error) d.issues.push('Data check did not run: ' + dc.error);
   const e = jobsDigestEmail(d);
-  if (dry) return res.json({ dry: true, subject: e.subject, digest: d, text: e.text });
+  if (dry) { const { save, ...data } = dc || {}; return res.json({ dry: true, subject: e.subject, digest: { ...d, data }, text: e.text }); }
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
   const sent = await sendMail({ kind: 'jobs-digest', to, subject: (day ? '[Sample] ' : '') + e.subject, text: e.text, html: e.html });
   if (sent && !day) { try { await store.writeJobsDigestMark(today); } catch { /* bookkeeping never fails the send */ } }
+  if (sent && dc && dc.save) { try { await dc.save(); } catch (err) { console.warn('data check: state not saved:', err && err.message); } }
   res.json({ sent: !!sent, issues: d.issues.length, runs: d.runs, due: d.due });
 }));
 // The nightly ping's steps (SEC daily, the calendar, the refresh, and every

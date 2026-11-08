@@ -41,6 +41,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 | `public/app.css` | Shared design system — tokens, bezel, buttons, table base |
 | `barmath.js`, `techrow.js` | Indicators from bars alone; the one backtest row builder |
 | `barsplit.js`, `split-repair.js` | **The bar archive's writes and splits** (`persistBars`, 2026-11-08): a split multiplies the stored bars, never replaces them; a split the provider never applied is applied nightly for 45 days, older ones by the script. `barsplit-test.js`; see `bar-archive.md` |
+| `datacheck.js` | **The data check** (2026-11-08): unexplained one-day moves, lost history and unapplied price factors, run in the 20:00 jobs email (new findings once each) and on demand at `/api/cron/data-check`. `datacheck-test.js`; see `scheduled-jobs.md` |
 | `secfacts.js`, `fx.js`, `insider.js`, `shortint.js`, `holdings.js`, `news.js` | Auxiliary data pulls (SEC filings, insiders, FINRA short interest, index membership, headlines) |
 | `nport.js`, `nport-load.js` | Which mutual funds and ETFs hold each stock, from Form N-PORT: the rules and the quarterly loader (local, by hand; streams a 460MB data set) |
 | `segments.js`, `sec-segments-load.js` | Where a company's revenue comes from, by fiscal year and by quarter with history, read from its reports' XBRL instances: the parser (and the worked-out fourth quarter and mix over time), and the history backfill |
