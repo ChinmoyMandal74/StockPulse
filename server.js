@@ -20954,7 +20954,7 @@ app.get('/api/cron/splits', route(async (req, res) => {
   const cap = Math.max(1, Math.min(SPLITS_CRON_MAX, Number(req.query.n) || SPLITS_CRON_MAX));
   const [universe, idx, profiles, dcState] = await Promise.all([
     store.readUniverse(), store.readSplitIndex(), store.readProfiles().catch(() => ({})),
-    store.readMetaJson('data_check').catch(() => ({})),
+    store.readDataCheck().catch(() => ({})),
   ]);
   const now = Date.now();
   const RANK = { never: 0, newer: 1, old: 2 };
@@ -21582,7 +21582,7 @@ async function runDataCheck(now) {
     store.readBarsWindow(universe, ymd(now - (DC_MOVE_DAYS + 7) * 864e5), ymd(now + 864e5)),
     store.barsSpan(universe),
     store.readSplitsBetween(ymd(now - 400 * 864e5), '9999-12-31'),
-    store.readMetaJson('data_check'),
+    store.readDataCheck(),
   ]);
   const bars = {};
   for (const [s, list] of Object.entries(win)) bars[s] = list.map((b) => ({ d: String(b.datetime).slice(0, 10), close: Number(b.close) }));
@@ -21601,7 +21601,7 @@ async function runDataCheck(now) {
     for (const [s, v] of Object.entries(span)) if (v && v.first) first[s] = String(v.first).slice(0, 10);
     const hints = Object.assign({}, state.splitHints || {});
     for (const f of findings) if (f.kind === 'split?') hints[f.symbol] = f.d;
-    await store.writeMetaJson('data_check', { at: now, first, seen: d.seen, splitHints: hints });
+    await store.writeDataCheck({ at: now, first, seen: d.seen, splitHints: hints });
   };
   return { findings: findings.length, fresh: d.fresh, open: d.open, cleared: d.cleared, save };
 }

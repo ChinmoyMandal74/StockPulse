@@ -2933,6 +2933,9 @@ const readPriceAlerts = () => readMetaJson('price_alert');
 const writePriceAlerts = (v) => writeMetaJson('price_alert', v);
 const readTdUnserved = () => readMetaJson('td_unserved');
 const writeTdUnserved = (v) => writeMetaJson('td_unserved', v);
+// The data check's memory (datacheck.js): first stored dates, findings seen, split hints.
+const readDataCheck = () => readMetaJson('data_check');
+const writeDataCheck = (v) => writeMetaJson('data_check', v);
 // The nightly's refresh email, held until its later steps are on file
 // (2026-10-30): { runId, subject, text, html, at }, one at a time. Null clears it.
 async function readHeldNightlyMail() {
@@ -8938,7 +8941,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved, readDataCheck, writeDataCheck,
   listSubscribers,
   deleteSubscriber,
   readSentFor,
