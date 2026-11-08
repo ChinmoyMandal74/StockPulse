@@ -616,3 +616,45 @@ Health stays a description. It says how a stock reads today, and over the next o
 | Against Health 90+ near the high, 42 sessions | −0.73 [−1.83, +0.36] | +0.23 [−1.46, +1.98] |
 
 All figures are points against the equal-weight average stock; intervals are 95%, from resampling months.
+
+## 28. Health against the S&P 500 — 2026-11-07
+
+*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC filings as filed, results releases, daily prices · Sample: 196 monthly readings, 2010–2026, about 166 stocks a month with Health 80+*
+
+### The idea
+Entry 27 compared Health with the average stock. The question here is the plainer one: did stocks with a higher Health beat the S&P 500 over the next one or two months?
+
+### What was done
+The same rebuilt Health as entry 27, month by month from January 2010 to August 2026. Each month the stocks were put in baskets by Health band, each stock weighted equally, and each basket's return over the next 21 and 42 sessions was set against SPY's over the same sessions (both without dividends). The test was written down before any result was read: the Health 80+ basket had to beat SPY in both periods, and beat it by more than the basket of every stock did. The second condition matters because today's list of stocks flatters every basket against the index, and an equal-weight basket leans towards smaller companies; beating SPY only as much as every stock does would not be Health's doing.
+
+### Outcome
+No edge. The Health 80+ basket beat SPY before 2020 (+0.35 points over 42 sessions, interval +0.07 to +0.66) and did not from 2020 (−0.09, interval −0.74 to +0.61, ahead in 48% of months). In both periods every lower band did better against SPY than 80+ did, and the basket of every stock beat 80+ by 0.4 points before 2020 and 1.6 from 2020 over 42 sessions, both intervals below zero. The under-50 basket beat SPY by the most on the average, carried by a few very large rebounds (2020 above all), though its typical month was also ahead.
+
+### What follows
+A high Health has not meant beating the index over one to two months; it has meant doing about what the index did, with a narrower range of outcomes (entry 27). Health stays a description. Nothing here changes Health or the Signal.
+
+### Caveats
+- **The same lookalike as entry 27:** the estimate, short interest and tone checks are missing throughout, and the outlook check before 2017.
+- **Survivorship:** today's list of stocks lifts every basket against SPY, the low-Health basket most.
+- **Prices without dividends,** for SPY and the stocks alike.
+- **Overlap:** monthly readings of a 42-session return overlap; the intervals resample blocks of three months to allow for it.
+
+### Numbers
+
+| Basket against SPY, 42 sessions | 2010–2019: average [95%] · typical month · months ahead | 2020–2026: average [95%] · typical month · months ahead |
+|---|---|---|
+| Health 90+ | +0.40 [−0.04, +0.79] · +0.38 · 58% | −0.42 [−1.07, +0.28] · −0.29 · 44% |
+| Health 80+ (tested) | +0.35 [+0.07, +0.66] · +0.37 · 59% | −0.09 [−0.74, +0.61] · −0.05 · 48% |
+| 70–79 | +0.56 [+0.14, +0.96] · +0.90 · 64% | −0.05 [−0.81, +0.87] · +0.13 · 53% |
+| 50–69 | +0.90 [+0.33, +1.41] · +0.76 · 64% | +0.31 [−0.45, +1.29] · +0.04 · 51% |
+| Under 50 | +1.33 [+0.60, +2.20] · +0.95 · 63% | +7.10 [+0.83, +18.46] · +1.35 · 58% |
+| Every stock | +0.78 [+0.41, +1.15] · +0.68 · 68% | +1.51 [−0.00, +4.10] · +0.46 · 56% |
+| 80+ minus every stock | −0.44 [−0.68, −0.20] | −1.61 [−4.05, −0.17] |
+
+| Basket against SPY, 21 sessions | 2010–2019 | 2020–2026 |
+|---|---|---|
+| Health 80+ | +0.14 [−0.02, +0.30] | −0.09 [−0.47, +0.34] |
+| Every stock | +0.37 [+0.14, +0.57] | +0.83 [−0.07, +2.43] |
+| 80+ minus every stock | −0.23 [−0.39, −0.06] | −0.92 [−2.48, −0.02] |
+
+Points per period against SPY's price return over the same sessions; each month's basket weights its stocks equally. Intervals are 95%, from resampling blocks of three months.
