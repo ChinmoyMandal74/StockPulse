@@ -5834,15 +5834,36 @@ async function upsertBars(rows) {
   return rows.length;
 }
 
-// Used when a split has re-adjusted history, and by the backfill script. The
-// delete and the first inserts share a batch so the symbol is never empty for
-// longer than one round trip.
+// Used by the backfill script (a full-depth fetch), and by the refresh only for
+// a symbol with nothing stored. The delete and the first inserts share a batch
+// so the symbol is never empty for longer than one round trip. NEVER call it
+// with a window shallower than the history held: it keeps only `rows`.
 async function replaceBarsFor(symbol, rows) {
   await init();
   const stmts = [{ sql: 'delete from bars where symbol = ?', args: [symbol] },
                  ...rows.map(barInsert)];
   await writeBarChunks(stmts);
   return rows.length;
+}
+
+// A split applied to what is stored (2026-11-08, barsplit.js): every bar of
+// `symbol` dated before `before` has its prices multiplied by `k` and its
+// volume divided by it, and `rows` (the fetched window, may be empty) are
+// upserted -- ALL IN ONE BATCH. One batch is one transaction, and that is the
+// point: a scaling that landed without its window would be seen as a split
+// again on the next round and scaled a second time. History is multiplied,
+// never deleted. Returns the number of bars rescaled.
+async function rescaleBars(symbol, before, k, rows = []) {
+  await init();
+  if (!(k > 0) || !isFinite(k) || !/^\d{4}-\d{2}-\d{2}$/.test(String(before))) throw new Error('rescaleBars: bad factor or date');
+  const res = await db.batch([
+    { sql: `update bars set open = open * ?, high = high * ?, low = low * ?, close = close * ?,
+                volume = case when volume is null then null else round(volume / ?) end
+              where symbol = ? and d < ?`,
+      args: [k, k, k, k, k, symbol, String(before)] },
+    ...rows.map(barInsert),
+  ], 'write');
+  return Number(res[0].rowsAffected) || 0;
 }
 
 // Newest-first, matching the shape computeStocks() already works in.
@@ -9005,6 +9026,7 @@ module.exports = {
   barsOn,
   upsertBars,
   replaceBarsFor,
+  rescaleBars,
   fundamentalsDaysFor,
   // Exported so a caller can report how many round trips a write actually
   // cost, rather than guessing at the chunking.

@@ -10062,7 +10062,8 @@ async function computeStocks(asOf, opts = {}) {
         if (b.inserted) {
           console.log(`bars: +${b.inserted} rows across ${b.symbols} symbols ` +
                       `in ${b.trips} write round trips` +
-                      (b.rewritten ? `, ${b.rewritten} rewritten in full` : ''));
+                      (b.rewritten ? `, ${b.rewritten} new or split-rescaled` : '') +
+                      (b.conflicts && b.conflicts.length ? `, ${b.conflicts.length} disagreeing (kept)` : ''));
         }
       } catch (err) {
         console.warn('bars: archive write failed (screener unaffected):', err.message);
@@ -10102,21 +10103,9 @@ async function computeStocks(asOf, opts = {}) {
 // Every refresh already fetches ~300 daily bars per symbol and throws them away.
 // Keeping them costs no API credits and turns a rolling window into an archive.
 
-// How many bars back to compare stored against freshly fetched. A split
-// re-adjusts the entire history, so any old date reveals it.
-const SPLIT_PROBE_BARS = 60;
-const SPLIT_TOLERANCE = 0.005;   // 0.5% — past rounding, well short of any split
-// Re-write this many already-stored bars each refresh. It is what upgrades a
-// provisional close, captured while the market was open, to the settled one.
-const BAR_OVERLAP = 5;
-
-const barRow = (symbol, b) => {
-  const num = (v) => { const n = parseFloat(v); return isFinite(n) ? n : null; };
-  const close = num(b.close);
-  if (close == null || !b.datetime) return null;
-  return { symbol, d: String(b.datetime).slice(0, 10),
-           open: num(b.open), high: num(b.high), low: num(b.low), close, volume: num(b.volume) };
-};
+// The archive's writes (persistBars, barRow, the split probe) live in
+// barsplit.js since 2026-11-08, so the split handling can be tested.
+const BarSplit = require('./barsplit.js');
 
 // How many bars a LIVE price pull asks for. The archive already holds the
 // history, so re-fetching 300 sessions a symbol re-downloads ~9.5MB of bars we
@@ -10246,95 +10235,8 @@ const DEEP_BARS = 300;
 // sessions), so the symbol is pulled deep and the archive is not consulted.
 const LIGHT_MIN_ARCHIVE = 300;
 
-// Only ever called for a live pull. An as-of pull fetches a different, truncated
-// range, and persisting from that path would poison the archive.
-// `T` is the round's phase timer, optional. It is threaded in because
-// `persist-bars` measured 104.8s of a 121.3s production round (run 77) and the
-// single step could not say which of the three things in here spent it — two
-// indexed reads, the row building, or the writes. Marks ACCUMULATE by name, so
-// marking inside the loop costs one map write per symbol and gives the write
-// path its own total.
-async function persistBars(symbols, series, T = null) {
-  const mark = T ? (n) => T.mark(n) : () => {};
-  const meta = await store.barsMaxDates(symbols);
-  mark('bars-maxdates');
-
-  const probes = [];
-  const have = [];
-  for (const sym of symbols) {
-    const v = series[sym] && series[sym].values;
-    if (!Array.isArray(v) || !v.length) continue;
-    have.push([sym, v]);
-    const p = v[Math.min(SPLIT_PROBE_BARS, v.length - 1)];
-    if (p && p.datetime) probes.push({ sym, d: String(p.datetime).slice(0, 10), close: parseFloat(p.close) });
-  }
-  const stored = await store.barsOn(probes);
-  mark('bars-probe');
-  const probeBySym = new Map(probes.map((x) => [x.sym, x]));
-
-  // Every write below is a round trip, so count them: on this database a path's
-  // cost is its number of round trips, not its number of rows.
-  let inserted = 0, rewritten = 0, trips = 0;
-  // The steady-state upserts, collected across symbols and written once.
-  const pending = [];
-  for (const [sym, v] of have) {
-    const rows = v.map((b) => barRow(sym, b)).filter(Boolean);
-    if (!rows.length) continue;
-    const m = meta.get(sym);
-
-    // Nothing stored yet, or the fetched window does not reach back to what we
-    // hold (a gap we cannot bridge) — take the whole window as the truth.
-    let full = !m || !m.maxDate;
-    if (!full) {
-      const probe = probeBySym.get(sym);
-      const was = probe ? stored.get(sym + '|' + probe.d) : undefined;
-      // A split re-prices all of history; the archive has to be rebuilt.
-      if (was != null && isFinite(probe.close) && probe.close > 0 &&
-          Math.abs(was - probe.close) / probe.close > SPLIT_TOLERANCE) {
-        full = true;
-      } else if (!rows.some((r) => r.d === m.maxDate)) {
-        full = true;   // no overlap with what we hold
-      }
-    }
-
-    if (full) {
-      // A REWRITE STAYS ITS OWN TRIP, deliberately. It is a delete followed by
-      // the inserts, and folding that into a batch shared with other symbols
-      // would put one symbol's delete beside another's inserts — the way to
-      // corrupt this archive. It is also the rare path: a split, or a symbol
-      // whose window does not meet what we hold.
-      mark('bars-prep');
-      await store.replaceBarsFor(sym, rows);
-      trips++;
-      mark('bars-write');
-      rewritten++;
-      inserted += rows.length;
-      continue;
-    }
-
-    // Steady state: everything newer than what we hold, plus a short overlap so
-    // a provisional close gets corrected.
-    const at = rows.findIndex((r) => r.d === m.maxDate);
-    pending.push(...rows.slice(0, Math.min(rows.length, at + 1 + BAR_OVERLAP)));
-  }
-
-  // ONE BATCH ACROSS EVERY SYMBOL, not one per symbol. This was
-  // `await store.upsertBars(slice)` INSIDE the loop, so a 500-symbol round made
-  // 500 sequential round trips — measured in production (run 77) at ~210ms each
-  // and 104.8s of a 121.3s round, the single biggest step in the refresh. The
-  // rows were never the cost: the same round writes 2,400 rows cold and 48 in
-  // the steady state and took the same 8 trips either way. upsertBars already
-  // chunks at BAR_CHUNK statements, so this is ~6 trips for the whole universe.
-  // Safe to merge because every statement here is an idempotent upsert keyed on
-  // (symbol, d) — unlike the rewrite above, which deletes first.
-  mark('bars-prep');
-  if (pending.length) {
-    inserted += await store.upsertBars(pending);
-    trips += Math.ceil(pending.length / store.BAR_CHUNK);
-    mark('bars-write');
-  }
-  return { inserted, rewritten, trips, symbols: have.length };
-}
+// Only ever called for a live pull (see barsplit.js persistBars).
+const persistBars = (symbols, series, T = null) => BarSplit.persistBars(store, symbols, series, T);
 
 
 // ============================================================================
@@ -21045,6 +20947,7 @@ const SSGA_UA = process.env.SEC_UA
 // SPLITS_CRON_MAX a call (20 credits each, so 400 of the 610), and the answer
 // says how many remain so the driver can come back a minute later.
 const SPLITS_CRON_MAX = 20;
+const SPLIT_STEP_DAYS = 45;
 app.get('/api/cron/splits', route(async (req, res) => {
   if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'No.' });
   const dry = req.query.dry === '1';
@@ -21066,7 +20969,22 @@ app.get('/api/cron/splits', route(async (req, res) => {
   const counts = { never: 0, newer: 0, old: 0 };
   for (const d of due) counts[d.why]++;
   if (dry) return res.json({ ok: true, dry: true, due: due.length, counts, next: due.slice(0, cap).map((d) => d.symbol) });
-  if (!due.length) return res.json({ ok: true, done: true, due: 0, fetched: 0, remaining: 0 });
+  // SPLITS THE PROVIDER NEVER APPLIED (2026-11-08). The archive only learns of
+  // a split when the provider re-prices its history; IESC's two-for-one of
+  // 2026-08-24 was never re-priced at Twelve Data, and a 54% "fall" fed its
+  // readings for ten weeks. Every split listed in the last SPLIT_STEP_DAYS is
+  // checked against the stored closes and, where the cliff is still there,
+  // applied (barsplit.js). Cheap: a few splits a month, a 25-day window each.
+  // It writes bars, so it stands aside for a running refresh, and it never
+  // fails the step.
+  let archiveFixed = [];
+  try {
+    if (!(await readRefreshState())) {
+      archiveFixed = await BarSplit.repairStored(store, { since: new Date(now - SPLIT_STEP_DAYS * 86400000).toISOString().slice(0, 10), commit: true });
+      for (const f of archiveFixed) console.log(`splits: ${f.symbol}'s archive never took its ${f.split} split; ${f.scaled} bars before ${f.at} scaled by ${f.k.toFixed(4)}`);
+    }
+  } catch (e) { console.warn('splits: archive check failed (nothing changed):', e && e.message); }
+  if (!due.length) return res.json({ ok: true, done: true, due: 0, fetched: 0, remaining: 0, archiveFixed });
   if (!API_KEY) return res.json({ ok: true, done: true, skipped: 'no API key', due: due.length, remaining: due.length });
   let busy = null;
   try { busy = await readRefreshState(); } catch { busy = null; }
@@ -21090,7 +21008,7 @@ app.get('/api/cron/splits', route(async (req, res) => {
   const remaining = due.length - batch.length;
   console.log(`splits: ${fetched} fetched, ${failed.length} failed, ${remaining} still due`
     + (changed.length ? ` — new split on ${changed.join(',')}` : ''));
-  res.json({ ok: true, done: remaining === 0, due: due.length, counts, fetched, failed, changed, remaining });
+  res.json({ ok: true, done: remaining === 0, due: due.length, counts, fetched, failed, changed, remaining, archiveFixed });
 }));
 
 // ---- finishing a newly added stock -----------------------------------------
