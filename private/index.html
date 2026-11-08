@@ -1284,6 +1284,11 @@
            title="Ideas — the AI watchlist, strong results that fell, Bouncing off the lows, quality compounders on a pullback, dividend growers near their lows, insider buying clusters, and strong three years, quiet this year, with the screener's readings">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Ideas
         </a>
+        <!-- Members (2026-11-07): the biggest moves by gain, loss, volume and market value. Hidden for guests with Ideas. -->
+        <a class="btn" id="trendingLink" href="/trending" target="_blank" rel="noopener"
+           title="Trending — the biggest rises and falls today, over a week or a month, the heaviest volume each way, and the largest changes in market value, with the screener's readings">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Trending
+        </a>
         <!-- The blog (2026-11-03, owner): public, so it stays for guests too. -->
         <a class="btn" id="blogLink" href="/blog" target="_blank" rel="noopener" title="Blog — posts from Tickr Lab, written from the data">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>Blog
@@ -5982,7 +5987,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'iposLink', 'selloffLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'iposLink', 'selloffLink', 'trendingLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

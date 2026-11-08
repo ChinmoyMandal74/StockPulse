@@ -166,6 +166,15 @@ The owner: "stocks that have generally had good returns over the previous 3 year
 - **Untested as a pattern.** The literature finds three-to-five-year winners giving some back over years (long-term reversal) and twelve-month strength persisting; at the one-to-two-month hold nothing here has been measured. A backtest belongs in `docs/research.md` before anyone reads more into it.
 - **Checks:** `selloff-test.js` 85 (every edge, blanks, ETFs, the sheet). With the revenue and Declining tests removed, 3 fail.
 
+## Trending shares this page (2026-11-07)
+`/trending` is this page in a second mode (`TREND`, from the address); see `trending.md`. Ideas only changed in four ways:
+- `colsFor` also checks a column's `pg`; Reported, Guidance, Revenue growth and Profit margin are `pg: 'ideas'`.
+- The tabs sit in `#tabs`.
+- The window label is `#winLabel`.
+- The server's row preparation moved into `pageRows()`, shared with Trending.
+
+The browser test checks that Ideas still draws its eight tabs, its columns and its window control.
+
 ## Column filters (2026-11-05)
 
 The owner asked for column filters on `/ideas`. A second heading row holds a box under every column, pinned with the headings (its `top` is the first row's measured height, `--sw-h1`, below the nav). It uses the screener's grammar from `filters.js` (`Filters.compileNum` / `compileText`), so `>10b`, `-20..-5`, `=0`, `a|b` and `!word` mean what they mean on the screener. The word columns (Group, Sector, Quarters now, Guidance, Value vs industry, Growth & profit, Signal) are drop-downs of the values present on the tab.

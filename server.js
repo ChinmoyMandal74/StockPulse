@@ -2270,6 +2270,14 @@ app.get('/ideas', route(async (req, res) => {
   logAct(req, 'page', 'ideas');
   res.sendFile(path.join(__dirname, 'private', 'selloff.html'));
 }));
+// Trending (2026-11-07, trending.js): the Ideas page's own table in its
+// trending mode (the page reads its address). Members, as /ideas is.
+app.get('/trending', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'trending');
+  res.sendFile(path.join(__dirname, 'private', 'selloff.html'));
+}));
 app.get('/selloff', (req, res) => {
   const show = String(req.query.show || '');
   res.redirect(301, '/ideas' + (/^[a-z]{1,12}$/.test(show) ? '?show=' + show : ''));
@@ -16979,6 +16987,21 @@ app.get('/api/ipos', requireAuth, route(async (req, res) => {
 const Selloff = require('./selloff.js');
 const BlogVisits = require('./blogvisits.js');
 let selloffBars = null, selloffHeld = null;
+// The rows the member pages of companies read (/ideas, /trending): the stored
+// snapshot with the Signal as the screener serves it, scored on the way out
+// over the source rule's figures exactly as /api/stocks does (so the word and
+// the rule that fired are the screener's own; display only, nothing new feeds
+// it), and the read-path stamps laid on. `pf`, when given, the live themes.
+async function pageRows(snap, pf) {
+  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
+  await sourcedNow().catch(() => null);
+  scoreActionInto(rows);
+  await serveStamps(rows);
+  stampCapDerived(rows);
+  stampPeerValue(rows);
+  if (pf) for (const r of rows) r.portfolios = membershipOf(r.symbol, pf);
+  return rows;
+}
 // The answer for one window, shared by the page's JSON and the Excel download.
 async function selloffAnswer(days) {
   if (!releaseColHeld || Date.now() - releaseColHeld.at > 10 * 60 * 1000) {
@@ -17001,16 +17024,7 @@ async function selloffAnswer(days) {
   const key = [ver, fig && fig.at, days, pfKey, JSON.stringify(bdef), tfig && tfig.at].join('|');
   if (selloffHeld && selloffHeld.key === key) return selloffHeld.body;
   const snap = await readSnapshot();
-  const rows = ((snap && snap.stocks) || []).filter((r) => r && r.symbol && !r.error);
-  // The Signal as the screener serves it: scored on the way out over the
-  // source rule's figures, exactly as /api/stocks does, so the word and the
-  // rule that fired are the screener's own. Display only; nothing new feeds it.
-  await sourcedNow().catch(() => null);
-  scoreActionInto(rows);
-  await serveStamps(rows);
-  stampCapDerived(rows);
-  stampPeerValue(rows);
-  if (pf) for (const r of rows) r.portfolios = membershipOf(r.symbol, pf);
+  const rows = await pageRows(snap, pf);
   const today = SecDaily.todayET();
   const want = [...new Set([...Selloff.candidates('tech', rows, rels, days, today), ...Selloff.candidates('nontech', rows, rels, days, today)])].sort();
   const since = Selloff.shiftDay(today, -(days + 10));
@@ -17068,6 +17082,53 @@ app.get('/api/selloff.xlsx', requireAuth, route(async (req, res) => {
   res.set('Content-Disposition', 'attachment; filename="tickrlab-ideas-' + body.today + '.xlsx"');
   res.set('Cache-Control', 'private, no-store');
   res.send(buf);
+}));
+// TRENDING (2026-11-07, trending.js), for /trending. Members, as /ideas is.
+// The same served rows as Ideas; the answer is held per snapshot stamp, tone
+// figure and period, so it follows the intraday refreshes.
+const Trending = require('./trending.js');
+const trendHeld = new Map();
+async function trendingAnswer(period) {
+  const ver = await store.snapshotUpdatedAt().catch(() => null);
+  const tfig = await toneColumnFig().catch(() => null);
+  const key = [ver, tfig && tfig.at].join('|');
+  const held = trendHeld.get(period);
+  if (held && held.key === key) return held.body;
+  const snap = await readSnapshot();
+  const rows = await pageRows(snap, null);
+  const body = {
+    at: snap && snap.updatedAt ? snap.updatedAt : null, period,
+    periods: Object.entries(Trending.PERIODS).map(([id, p]) => ({ id, label: p.label })),
+    top: Trending.TOP, volMin: Trending.VOL_MIN, toneAt: (tfig && tfig.at) || null, toneBand: (tfig && tfig.band) || NewsTone.BAND,
+    rules: Trending.rules(period), views: Trending.views(rows, period),
+  };
+  Selloff.withTone(body.views, tfig && tfig.rows);
+  trendHeld.set(period, { key, body });
+  return body;
+}
+const trendPeriod = (q) => (Trending.PERIODS[q] ? q : Trending.DEFAULT_PERIOD);
+app.get('/api/trending', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  res.json(await trendingAnswer(trendPeriod(String(req.query.period || ''))));
+}));
+app.get('/api/trending.xlsx', requireAuth, route(async (req, res) => {
+  if (await isGuest(req)) return res.status(403).json({ error: 'This page is for members.' });
+  const body = await trendingAnswer(trendPeriod(String(req.query.period || '')));
+  const X = require('./xlsx.js');
+  const sheets = Trending.workbookSheets(body).map((sh, i) => {
+    const head = sh.cols.map(([h]) => ({ v: h, s: X.S.head }));
+    const rows = sh.rows.map((r) => r.map((v, j) => (typeof v === 'number' && sh.cols[j][2] ? { v, s: X.S.num2 } : v)));
+    const opts = sh.cols.length > 2
+      ? { widths: sh.cols.map(([, w]) => w), freeze: 1, tab: i === 0, autoFilter: 'A1:' + X.colName(sh.cols.length - 1) + (rows.length + 1) }
+      : { widths: sh.cols.map(([, w]) => w) };
+    return { name: X.sheetName(sh.name), xml: X.sheetXml([head, ...rows], opts) };
+  });
+  logAct(req, 'export', 'trending.xlsx');
+  res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.set('Content-Disposition', 'attachment; filename="tickrlab-trending-' + SecDaily.todayET() + '.xlsx"');
+  res.set('Cache-Control', 'private, no-store');
+  res.send(X.workbook(sheets));
 }));
 // One company's earnings releases as read (releases.js), newest first, with
 // the provider's EPS beside each. Signed in; a guest only for the guest stocks.

@@ -55,6 +55,9 @@
     .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
     .sw-win select { font: 500 12px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 10px; }
     .sw-xl { font-size: 12px; padding: 7px 14px; }
+    .sw-side { display: inline-flex; border: 1px solid var(--hair); border-radius: 999px; padding: 2px; gap: 2px; }
+    .sw-side button { font: 500 12px var(--sans); padding: 5px 12px; border-radius: 999px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+    .sw-side button.on { color: var(--text); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--accent); }
     /* Frozen heading row (owner, 2026-11-03), on the page's one scroll ("I don't like 2 scrollbars"). Sticky needs
        every box between the heading and the page to leave overflow alone, so on wide screens, where the table fits,
        neither this card's core nor the wrap clips; the heading sticks just under the floating nav (--sw-stick, measured).
@@ -146,6 +149,8 @@
     </header>
 
     <div class="sw-bar">
+      <!-- At /trending (2026-11-07) the script swaps these for the four trending tabs. -->
+      <span id="tabs" style="display:contents">
       <!-- First, and the tab the page opens on (owner, 2026-11-03). -->
       <button class="sw-tab" data-v="watch">AI watchlist<span class="sw-n" id="nwatch"></span></button>
       <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
@@ -156,8 +161,11 @@
       <button class="sw-tab" data-v="divlow">Dividend growers near their lows<span class="sw-n" id="ndivlow"></span></button>
       <button class="sw-tab" data-v="insider">Insider buying clusters<span class="sw-n" id="ninsider"></span></button>
       <button class="sw-tab" data-v="quiet">Strong three years, quiet this year<span class="sw-n" id="nquiet"></span></button>
+      </span>
+      <!-- Trending's volume and market cap tabs: the rises or the falls. -->
+      <span class="sw-side" id="sideWrap" style="display:none"><button type="button" data-side="up">Price up</button><button type="button" data-side="down">Price down</button></span>
       <span class="sw-fstat" id="fstat"><span>Showing <b id="fshown"></b> of <b id="ftotal"></b></span><button type="button" id="fclear">Clear filters</button></span>
-      <label class="sw-win" id="winWrap">Releases from the past
+      <label class="sw-win" id="winWrap"><span id="winLabel">Releases from the past</span>
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>
       <!-- All three tables in one workbook, a sheet each, for the window chosen. -->
@@ -174,13 +182,34 @@
     const we = (t) => String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const qs = new URLSearchParams(location.search);
-    const VIEWS = ['tech', 'nontech', 'watch', 'bounce', 'quality', 'divlow', 'insider', 'quiet'];
+    // Two pages in one (2026-11-07): Ideas at /ideas, and Trending at /trending (trending.js), which shares
+    // this table, its sorting, filters and frozen heading. The address says which.
+    const TREND = /^\/trending\/?$/.test(location.pathname);
+    const PAGE_PATH = TREND ? '/trending' : '/ideas';
+    const TREND_TABS = [['up', 'Trending up · by gain'], ['down', 'Trending down · by loss'], ['volume', 'By volume'], ['cap', 'By market cap']];
+    if (TREND) {
+      document.title = 'Trending — Tickr Lab';
+      document.querySelector('h1').textContent = 'Trending';
+      $('tabs').innerHTML = TREND_TABS.map(([v, t]) => '<button class="sw-tab" data-v="' + v + '">' + we(t) + '<span class="sw-n" id="n' + v + '"></span></button>').join('');
+      $('winLabel').textContent = 'Period';
+      $('days').setAttribute('aria-label', 'The period the moves are measured over');
+      $('xlsx').href = '/api/trending.xlsx';
+      $('xlsx').title = 'All six lists as an Excel workbook, a sheet each, with every figure a number you can sort and filter. A last sheet says what each column means.';
+    }
+    const VIEWS = TREND ? TREND_TABS.map(([v]) => v) : ['tech', 'nontech', 'watch', 'bounce', 'quality', 'divlow', 'insider', 'quiet'];
     // The two results screens have a reaction day and a window; the list and the bounce screen do not.
     const SCREENS = ['tech', 'nontech'];
+    // The two trending tabs that come in a rising and a falling list.
+    const SIDED = ['volume', 'cap'];
     // The AI watchlist opens first (owner, 2026-11-03); ?show= still picks a tab.
-    const DEFAULT_VIEW = 'watch';
-    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null, sort: null, dir: 1, filters: {} };
+    const DEFAULT_VIEW = TREND ? 'up' : 'watch';
+    const state = { view: VIEWS.includes(qs.get('show')) ? qs.get('show') : DEFAULT_VIEW, days: Number(qs.get('days')) || null,
+      period: qs.get('period') || null, side: qs.get('side') === 'down' ? 'down' : 'up', sort: null, dir: 1, filters: {} };
     let data = null;
+    // The rows a tab shows: on Trending, volume and market cap are two lists each, the rises and the falls.
+    const listOf = (v, side) => (!data ? [] : TREND && SIDED.includes(v)
+      ? data.views[(v === 'volume' ? 'vol' : 'cap') + ((side || state.side) === 'down' ? 'Down' : 'Up')] || []
+      : data.views[v] || []);
 
     const fmtDay = (s) => (s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—');
     const isNum = (v) => v != null && v !== '' && Number.isFinite(Number(v));
@@ -197,11 +226,15 @@
       { k: 'symbol', t: 'Company', cell: (r) => '<td class="sw-co"><a href="/stock/' + encodeURIComponent(r.symbol) + '" target="_blank" rel="noopener">' + we(r.symbol) + '</a><span>' + we(r.name || '') + '</span></td>', sort: (r) => r.symbol },
       // The group, and under it why the company is here: the published list, or the theme it came in by.
       { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '<span class="sw-from" title="' + we(fromTitle(r)) + '">' + we(r.from === 'list' ? 'Published list' : r.from || '') + '</span></td>', sort: (r) => GROUPS.indexOf(r.group) },
-      { k: 'sector', t: 'Sector', only: 'nontech', cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
+      { k: 'sector', t: 'Sector', only: ['nontech', 'up', 'down', 'volume', 'cap'], cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
       { k: 'cap', t: 'Market cap', r: true, title: 'Market value at the latest price, as on the screener.',
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
+      // Trending's market cap tab: how many dollars of market value the period's move added or took away.
+      { k: 'capChg', t: 'Value change', only: 'cap', r: true, title: 'The change in market value over the period: the market value now less the value the move started from.',
+        cell: (r) => '<td class="sw-r">' + (isNum(r.capChg) && window.RowCard ? '<span class="sw-num ' + (r.capChg < 0 ? 'sw-dn' : r.capChg > 0 ? 'sw-up' : '') + '">' + (r.capChg > 0 ? '+' : r.capChg < 0 ? '−' : '') + we(RowCard.fmtMktCap(Math.abs(Number(r.capChg)), r.currency)) + '</span>' : '<span class="sw-faint">—</span>') + '</td>', num: true },
       { k: 'today', t: 'Today', r: true, title: 'The latest session’s price change, as on the screener: the previous close to the latest price.',
         cell: (r) => '<td class="sw-r">' + (isNum(r.today) ? '<span class="sw-num ' + (r.today < 0 ? 'sw-dn' : r.today > 0 ? 'sw-up' : '') + '">' + (r.today > 0 ? '+' : r.today < 0 ? '−' : '') + Math.abs(r.today).toFixed(1) + '%</span>' : '<span class="sw-faint">—</span>') + '</td>', num: true },
+      { k: 'w1', t: '1 week', only: ['up', 'down', 'volume', 'cap'], r: true, title: 'The price change over the past week: the screener’s 1W.', cell: (r) => '<td class="sw-r">' + moveD(r.w1) + '</td>', num: true },
       // The quality tab's two long-run readings and where the recent quarters stand.
       { k: 'crChecks', t: 'Ten-year record', only: 'quality', r: true, title: 'The screener’s Compounding record: how many of five checks over up to ten years of annual reports hold: revenue rose in 80% of years, EPS grew 10% a year, the worst operating margin held 70% of typical, free cash flow was 80% of net income, the share count grew 0.5% a year or less.',
         cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.crChecks) ? r.crChecks + ' of 5' : '—') + '</td>', num: true },
@@ -233,9 +266,13 @@
       { k: 'range52', t: '52-week range', only: ['bounce', 'divlow'], r: true, title: 'Where the price sits in its 52-week range: 0 at the low, 100 at the high.',
         cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.range52) ? Math.round(r.range52) : '—') + '</td>', num: true },
       { k: 'w2', t: '2 weeks', only: 'bounce', r: true, title: 'The price change over the past two weeks.', cell: (r) => '<td class="sw-r">' + moveD(r.w2) + '</td>', num: true },
-      { k: 'm1', t: '1 month', only: 'bounce', r: true, title: 'The price change over the past month.', cell: (r) => '<td class="sw-r">' + moveD(r.m1) + '</td>', num: true },
-      { k: 'filed', t: 'Reported', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
-      { k: 'guidance', t: 'Guidance', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
+      { k: 'm1', t: '1 month', only: ['bounce', 'up', 'down', 'volume', 'cap'], r: true, title: 'The price change over the past month.', cell: (r) => '<td class="sw-r">' + moveD(r.m1) + '</td>', num: true },
+      { k: 'volX', t: 'Rel. volume', pg: 'trend', r: true, title: 'The latest session’s volume against its 20-day average, as on the screener’s Rel. volume (during trading, the volume so far).',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.volX) ? Number(r.volX).toFixed(2) + '×' : '—') + '</td>', num: true },
+      { k: 'dollarVolume', t: '$ volume', only: 'volume', r: true, title: 'Shares traded in the latest session times the price, as on the screener.',
+        cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.dollarVolume) && window.RowCard && RowCard.fmtMktCap(Number(r.dollarVolume), r.currency)) || '—') + '</td>', num: true },
+      { k: 'filed', t: 'Reported', pg: 'ideas', cell: (r) => '<td class="sw-num">' + we(fmtDay(r.filed)) + '</td>', sort: (r) => r.filed || '' },
+      { k: 'guidance', t: 'Guidance', pg: 'ideas', cell: (r) => '<td>' + guide(r.guidance) + '</td>', sort: (r) => r.guidance || '' },
       { k: 'reaction', t: 'Reaction', screen: true, r: true, title: 'The worse of the filing day (previous close to that day’s close) and the day after (that close to the next one). The date under it is the day.',
         cell: (r) => '<td class="sw-r">' + move(r.reaction) + '<span class="sw-sub">' + we(fmtDay(r.reactionOn)) + '</span></td>', num: true },
       { k: 'since', t: 'Since', screen: true, r: true, title: 'The reaction day’s close to the latest price.', cell: (r) => '<td class="sw-r">' + move(r.since) + '</td>', num: true },
@@ -244,8 +281,8 @@
       { k: 'pe', t: 'P/E', r: true, title: 'Trailing twelve months, as the data provider reports it; a dash off a loss.', cell: (r) => '<td class="sw-r sw-num">' + mult(r.pe) + '</td>', num: true },
       { k: 'fpe', t: 'Fwd P/E', r: true, cell: (r) => '<td class="sw-r sw-num">' + mult(r.fpe) + '</td>', num: true },
       { k: 'valueVsIndustry', t: 'Value vs industry', cell: (r) => '<td class="sw-wd">' + we(r.valueVsIndustry || '—') + '</td>', sort: (r) => r.valueVsIndustry || '' },
-      { k: 'revGrowth', t: 'Revenue growth', r: true, title: 'The latest quarter on the same quarter a year earlier.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.revGrowth, true) + '</td>', num: true },
-      { k: 'profitMargin', t: 'Profit margin', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
+      { k: 'revGrowth', t: 'Revenue growth', pg: 'ideas', r: true, title: 'The latest quarter on the same quarter a year earlier.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.revGrowth, true) + '</td>', num: true },
+      { k: 'profitMargin', t: 'Profit margin', pg: 'ideas', r: true, title: 'Net income over revenue, twelve months.', cell: (r) => '<td class="sw-r sw-num">' + pct(r.profitMargin, false) + '</td>', num: true },
       { k: 'growthProfile', t: 'Growth & profit', cell: (r) => '<td class="sw-wd">' + we(r.growthProfile || '—') + '</td>', sort: (r) => r.growthProfile || '' },
       // The Signal, with the rule that fired under it (never the word alone), coloured as the screener colours it.
       { k: 'signal', t: 'Signal', title: 'The screener’s Signal under its Balanced rules, and the rule that fired. A reading of strength, not an instruction to trade.',
@@ -271,7 +308,7 @@
     const GROUPS = ['Memory', 'Power', 'Networking', 'Semicap', 'Compute', 'Neoclouds', 'Hyperscalers', 'Servers & data centres'];
     const fromTitle = (r) => (r.from === 'list' ? 'On the published list of 25' : 'From your theme ' + r.from) + (r.themes && r.themes.length ? '. In: ' + r.themes.join(', ') : '');
     const NOW_WORD = { grow: 'Still growing', slow: 'Slowing', decline: 'Declining' };
-    const colsFor = (v) => COLS.filter((c) => (!c.only || [].concat(c.only).includes(v)) && (!c.screen || SCREENS.includes(v)));
+    const colsFor = (v) => COLS.filter((c) => (!c.pg || c.pg === (TREND ? 'trend' : 'ideas')) && (!c.only || [].concat(c.only).includes(v)) && (!c.screen || SCREENS.includes(v)));
 
     // COLUMN FILTERS (owner, 2026-11-05). A filter reads what the cell shows, in the unit it shows it, through
     // the screener's own grammar (filters.js): numbers take >10, <-5, 10..20, =0 and k/m/b (">10b" for market cap);
@@ -327,6 +364,7 @@
 
     // Each tab's rule, as its tooltip (owner, 2026-11-03: no text above the tables).
     function what(view) {
+      if (TREND) return (data.rules && data.rules[view]) || '';
       const d = data.drop, g = data.minGrowth, w = data.days;
       if (view === 'tech') return 'Technology and Communication Services companies whose newest results release, filed in the past ' + w + ' days, showed revenue up ' + g + '% or more on the year, a net profit and guidance, and whose shares fell ' + Math.abs(d.tech) + '% or more on the reaction day. Worst reaction first.';
       if (view === 'nontech') return 'Companies in every other sector meeting the same release test (filed in the past ' + w + ' days, revenue up ' + g + '% or more, a net profit, guidance), that read Growing, profitable and Below industry or In line on value, and whose shares fell ' + Math.abs(d.nontech) + '% or more on the reaction day. Worst reaction first.';
@@ -342,9 +380,17 @@
 
     async function load() {
       try {
-        const r = await fetch('/api/selloff' + (state.days ? '?days=' + state.days : ''), { cache: 'no-store' });
+        const r = await fetch(TREND ? '/api/trending' + (state.period ? '?period=' + encodeURIComponent(state.period) : '')
+          : '/api/selloff' + (state.days ? '?days=' + state.days : ''), { cache: 'no-store' });
         if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'This page is for members. Sign in with an account to see it.' : 'The server answered ' + r.status + '.');
         data = await r.json();
+        if (TREND) {
+          state.period = data.period;
+          $('xlsx').href = '/api/trending.xlsx?period=' + encodeURIComponent(data.period);
+          $('days').innerHTML = data.periods.map((p) => '<option value="' + we(p.id) + '"' + (p.id === data.period ? ' selected' : '') + '>' + we(p.label) + '</option>').join('');
+          paint();
+          return;
+        }
         state.days = data.days;
         $('xlsx').href = '/api/selloff.xlsx?days=' + data.days;
         $('days').innerHTML = data.windows.map((n) => '<option value="' + n + '"' + (n === data.days ? ' selected' : '') + '>' + n + ' days</option>').join('');
@@ -355,14 +401,18 @@
     }
     function paint() {
       document.querySelectorAll('.sw-tab').forEach((b) => b.classList.toggle('on', b.dataset.v === state.view));
-      $('winWrap').style.display = SCREENS.includes(state.view) ? '' : 'none';
-      $('xlsx').style.marginLeft = SCREENS.includes(state.view) ? '' : 'auto';
+      // Ideas: the window shows on the two results screens. Trending: the period on every tab but volume, which is one session.
+      const win = TREND ? state.view !== 'volume' : SCREENS.includes(state.view);
+      $('winWrap').style.display = win ? '' : 'none';
+      $('xlsx').style.marginLeft = win ? '' : 'auto';
+      $('sideWrap').style.display = TREND && SIDED.includes(state.view) ? 'inline-flex' : 'none';
+      document.querySelectorAll('#sideWrap button').forEach((b) => b.classList.toggle('on', b.dataset.side === state.side));
       if (!data) return;
-      for (const v of VIEWS) $('n' + v).textContent = data.views[v].filter((r) => !r.missing).length;
+      for (const v of VIEWS) $('n' + v).textContent = TREND && SIDED.includes(v) ? listOf(v, 'up').length + ' / ' + listOf(v, 'down').length : listOf(v).filter((r) => !r.missing).length;
       document.querySelectorAll('.sw-tab').forEach((b) => { b.title = what(b.dataset.v); });
       const cols = colsFor(state.view);
-      const all = data.views[state.view];
-      if (!all.length) { $('list').innerHTML = '<div class="sw-empty">No company matches in this window.</div>'; fstat(0, 0); return; }
+      const all = listOf(state.view);
+      if (!all.length) { $('list').innerHTML = '<div class="sw-empty">' + (TREND ? 'No company moved this way in this period.' : 'No company matches in this window.') + '</div>'; fstat(0, 0); return; }
       const { bad } = compileFilters(cols);
       $('list').innerHTML = '<table><thead><tr>' + cols.map((x) => '<th data-k="' + x.k + '" class="' + [x.r ? 'sw-r' : '', x.cls || '', state.sort === x.k ? 'sw-on' : ''].join(' ') + '"' + (x.title ? ' title="' + we(x.title) + '"' : '') + '><span class="sw-h">' + we(x.t) + (state.sort === x.k ? (state.dir > 0 ? ' ↑' : ' ↓') : '') + '</span></th>').join('') + '</tr>'
         + filterRow(cols, all.filter((r) => !r.missing), bad) + '</thead><tbody></tbody></table>';
@@ -371,6 +421,10 @@
       if (h1) document.documentElement.style.setProperty('--sw-h1', Math.round(h1.getBoundingClientRect().height) + 'px');
       paintBody();
       const at = data.at ? new Date(data.at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Eastern' : 'not known';
+      if (TREND) { $('foot').innerHTML = 'Prices as of ' + we(at) + '. ' + we(what(state.view)) + ' '
+        + 'Today is the latest session’s move from the previous close; 1 week and 1 month are the screener’s 1W and 1M; Rel. volume is the latest session’s volume against its 20-day average. Market cap is the market value at the latest price, as on the screener. '
+        + 'P/E is the data provider’s trailing figure, a dash off a loss; Signal is the screener’s reading under its Balanced rules, with the rule that fired. Funds are left out. '
+        + 'Click a column heading to sort; type in the box under it to filter. The Excel export has every list. A description of what prices did, not of what comes next. Nothing here is a recommendation to trade.'; return; }
       $('foot').innerHTML = 'Prices as of ' + we(at) + '. Reported is the results release’s filing day (for a company that files none with the SEC, the data provider’s report date); Guidance is what that release said about its own outlook. '
         + 'Revenue growth, profit margin and the two words follow the screener: the release while it is the newest report, then the SEC filings, else the data provider. '
         + 'P/E is the data provider’s trailing figure, a dash when its own earnings per share are a loss. From 52-week high is the latest price against the highest of the past year; market cap is the market value at the latest price, as on the screener; Today is the latest session’s move from the previous close; Signal is the screener’s reading under its Balanced rules, with the rule that fired. '
@@ -381,7 +435,7 @@
     function paintBody() {
       const tb = document.querySelector('#list tbody');
       if (!tb || !data) return;
-      const cols = colsFor(state.view), all = data.views[state.view];
+      const cols = colsFor(state.view), all = listOf(state.view);
       const { live, bad } = compileFilters(cols);
       document.querySelectorAll('#list [data-f]').forEach((el) => {
         el.classList.toggle('sw-bad', bad.has(el.dataset.f));
@@ -426,9 +480,16 @@
       if (state.sort === k) state.dir = -state.dir; else { state.sort = k; state.dir = 1; }
       paint();
     });
-    const syncUrl = () => history.replaceState(null, '', '/ideas' + (state.view !== DEFAULT_VIEW ? '?show=' + state.view : ''));
+    const syncUrl = () => {
+      const q = new URLSearchParams();
+      if (state.view !== DEFAULT_VIEW) q.set('show', state.view);
+      if (TREND && SIDED.includes(state.view) && state.side === 'down') q.set('side', 'down');
+      if (TREND && state.period && data && state.period !== data.periods[0].id) q.set('period', state.period);
+      history.replaceState(null, '', PAGE_PATH + (q.toString() ? '?' + q : ''));
+    };
+    document.querySelectorAll('#sideWrap button').forEach((b) => b.addEventListener('click', () => { state.side = b.dataset.side; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
     document.querySelectorAll('.sw-tab').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.v; state.sort = null; state.dir = 1; syncUrl(); paint(); }));
-    $('days').addEventListener('change', () => { state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
+    $('days').addEventListener('change', () => { if (TREND) { state.period = $('days').value; syncUrl(); } else state.days = Number($('days').value); $('list').innerHTML = '<div class="sw-empty">Reading the screener&hellip;</div>'; load(); });
     // Where the heading stops: the bottom of the floating nav, which keeps one height but is measured, not assumed.
     const stick = () => { const n = document.querySelector('.island-wrap'); if (n) document.documentElement.style.setProperty('--sw-stick', Math.round(n.getBoundingClientRect().height) + 'px'); };
     addEventListener('resize', stick);
