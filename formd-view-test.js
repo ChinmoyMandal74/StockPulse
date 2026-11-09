@@ -110,6 +110,18 @@ eq(F.history.map((h) => [h.form, h.superseded]), [['D', 1], ['D/A', 0]], 'the is
 eq(api.filing('not-an-accession'), null, 'a malformed accession is refused');
 eq(api.filing('0000000009-26-000009'), null, 'an unknown filing is null');
 
+// ---- industry groups ----
+const allInd = Object.values(Q.GROUPS).flat();
+eq(allInd.length, 35, 'the form lists 35 industries');
+eq(new Set(allInd).size, 35, 'each industry in exactly one group');
+eq([Q.GROUP_OF['Other Technology'], Q.GROUP_OF['Pooled Investment Fund'], Q.GROUP_OF.Commercial], ['Technology', 'Banking & financial services', 'Real estate'], 'groups of three industries');
+eq(Q.filters(sp('group=Technology'), NOW).group, 'Technology', 'a group on the list');
+eq(Q.filters(sp('group=Tech%27%20or%201=1'), NOW).group, '', 'a group not on the list is dropped');
+eq(api.list(sp('group=Technology')).rows.map((r) => r.cik), ['1'], 'filter by group');
+eq(api.list(sp('group=Business%20services')).rows.map((r) => r.cik), ['3'], 'a one-industry group');
+eq(api.list(sp('group=Health%20care')).total.n, 0, 'a group with nothing on file');
+eq(api.options.groups, Q.GROUPS, 'the page is given the groups');
+
 // ---- the profile (E1) ----
 eq(F.profile.as_of, '2026-11-09', 'the newest profile');
 eq([F.profile.ein, F.profile.state_inc, F.profile.tickers, F.profile.tracked], ['123456789', 'DE', ['KAVI.A'], ['KAVI.A']], 'profile fields; a ticker we track is marked, dot and dash alike');

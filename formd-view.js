@@ -61,6 +61,7 @@ function makeApi(db, opts = {}) {
   const distinct = (col, extra = '') => db.prepare(`select ${col} v, count(*) n from formd where ${col} is not null ${extra} group by ${col} order by n desc`).all();
   const options = {
     industries: distinct('industry'),
+    groups: Q.GROUPS,
     fundTypes: distinct('fund_type'),
     states: distinct('state').filter((r) => /^[A-Z0-9]{2}$/.test(r.v)),
     revenues: distinct('revenue_range'),

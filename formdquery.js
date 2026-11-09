@@ -14,6 +14,24 @@
 
 const PAGE = 50;
 
+// Form D's industry list has two levels; the filing names only the lower one.
+// The groups as the form sets them out (Item 4), each industry in exactly one.
+const GROUPS = {
+  'Banking & financial services': ['Commercial Banking', 'Insurance', 'Investing', 'Investment Banking', 'Pooled Investment Fund', 'Other Banking and Financial Services'],
+  'Health care': ['Biotechnology', 'Health Insurance', 'Hospitals and Physicians', 'Pharmaceuticals', 'Other Health Care'],
+  'Technology': ['Computers', 'Telecommunications', 'Other Technology'],
+  'Real estate': ['Commercial', 'Construction', 'REITS and Finance', 'Residential', 'Other Real Estate'],
+  'Energy': ['Coal Mining', 'Electric Utilities', 'Energy Conservation', 'Environmental Services', 'Oil and Gas', 'Other Energy'],
+  'Travel': ['Airlines and Airports', 'Lodging and Conventions', 'Tourism and Travel Services', 'Other Travel'],
+  'Agriculture': ['Agriculture'],
+  'Business services': ['Business Services'],
+  'Manufacturing': ['Manufacturing'],
+  'Restaurants': ['Restaurants'],
+  'Retailing': ['Retailing'],
+  'Other': ['Other'],
+};
+const GROUP_OF = Object.fromEntries(Object.entries(GROUPS).flatMap(([g, list]) => list.map((i) => [i, g])));
+
 // What the SEC's profile of the issuer shows (backlog 61, E1; formd.js
 // filerProfile): fixed conditions, picked by key, never built from the request.
 const HAS = {
@@ -54,6 +72,7 @@ function filters(sp, now = new Date()) {
     to: intIn(get('to'), YEAR_MIN, yearMax),
     kind: ['company', 'fund', 'all'].includes(get('kind')) ? get('kind') : 'company',
     industry: get('industry'),
+    group: Object.prototype.hasOwnProperty.call(GROUPS, get('group')) ? get('group') : '',
     fundType: get('fundType'),
     state: /^[A-Z0-9]{2}$/.test(get('state').toUpperCase()) ? get('state').toUpperCase() : '',
     revenue: get('revenue'),
@@ -82,6 +101,7 @@ function where(f) {
   if (f.to != null) { w.push('filed <= ?'); p.push(f.to + '-12-31'); }
   if (f.kind === 'company') { w.push("coalesce(industry, '') <> ?"); p.push(FUND); }
   if (f.kind === 'fund') { w.push('industry = ?'); p.push(FUND); }
+  if (f.group) { w.push(`industry in (${GROUPS[f.group].map(() => '?').join(', ')})`); p.push(...GROUPS[f.group]); }
   if (f.industry) { w.push('industry = ?'); p.push(f.industry); }
   if (f.fundType) { w.push('fund_type = ?'); p.push(f.fundType); }
   if (f.state) { w.push('state = ?'); p.push(f.state); }
@@ -118,7 +138,7 @@ function totalsSql(f) {
     total: { sql: `select count(*) n, count(distinct cik) issuers, sum(${KEPT}) sold, count(${KEPT}) priced,
       sum(case when ${DOUBT_SQL} then 1 else 0 end) doubt_n, sum(case when ${DOUBT_SQL} then sold end) doubt_sold from formd ${w}`, params },
     years: { sql: `select substr(filed, 1, 4) y, count(*) n, sum(${KEPT}) sold from formd ${w} group by y order by y`, params },
-    industries: { sql: `select industry, count(*) n, sum(${KEPT}) sold from formd ${w} group by industry order by sold desc limit 12`, params },
+    industries: { sql: `select industry, count(*) n, sum(${KEPT}) sold from formd ${w} group by industry order by sold desc`, params },
     median: (priced) => ({ sql: `select ${KEPT} v from formd ${w}${w ? ' and' : ' where'} ${KEPT} is not null order by v limit 1 offset ?`, params: [...params, Math.max(0, Math.floor((priced - 1) / 2))] }),
   };
 }
@@ -138,4 +158,4 @@ function secUrl(cik, accn) {
   return `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${String(accn).replace(/-/g, '')}/`;
 }
 
-module.exports = { PAGE, FUND, SORTS, HAS, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS };
+module.exports = { PAGE, FUND, SORTS, HAS, GROUPS, GROUP_OF, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS };
