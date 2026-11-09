@@ -59,3 +59,6 @@ health-history.db-shm
 formd.db
 formd.db-wal
 formd.db-shm
+acq.db
+acq.db-wal
+acq.db-shm

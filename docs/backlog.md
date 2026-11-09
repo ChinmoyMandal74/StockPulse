@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md); phases 2 to 5 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md); phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2908,6 +2908,11 @@ buy only where it must.
 2. **Acquired companies' financials** (b): list the universe's 2.01 + 9.01
    filings from stored events, then read only those exhibits, slowly,
    with the release reader's checks (every figure found in the text).
+   **Built 2026-11-09**, with one change: `sec_events` keeps only 400 days,
+   so the list comes from the SEC's bulk submissions file instead (one
+   request, 1.57GB, every filer since 2009: 12,338 amendments, 1,139 by our
+   companies). Our companies first; every filer is `--all-filers`, about
+   37,000 requests and $70, not started.
 3. **Form 5500 and USAspending** (e, f): bulk, from other agencies.
 4. **Reg A+ and Form C** (c), if their data sets hold up.
 5. **A "known facts" view of a private company**: money raised, what it
