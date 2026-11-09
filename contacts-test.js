@@ -26,6 +26,7 @@ f.run('A1', '2024-01-10', 'D', '10', 'Acme Robotics, Inc.', 'Austin', 'TX', 'Oth
 f.run('A2', '2024-09-10', 'D/A', '10', 'Acme Robotics, Inc.', 'Austin', 'TX', 'Other Technology', 1, 'A1', 5e6, 4e6, 20, 0, 0);
 f.run('B1', '2025-03-01', 'D', '20', 'Beta Fund LP', 'New York', 'NY', 'Pooled Investment Fund', 0, null, null, 9e6, 30, 1, 0);
 f.run('C1', '2025-05-01', 'D', '30', 'Gamma Bio LLC', 'Boston', 'MA', 'Biotechnology', 0, null, 2e6, 2e6, 5, 0, 0);
+f.run('D1', '2025-06-01', 'D', '40', 'Acme Labs LLC', 'Miami', 'FL', 'Other Technology', 0, null, 1e6, 1e6, 3, 0, 0);
 const p = db.prepare(`insert into fd_persons values ('q', ?, ?, ?, ?, ?, '1 PRIVATE LANE', null, 'HOMETOWN', ?, null, '99999', ?, ?, null, ?)`);
 p.run('A1', '1', 'Jane', 'Q', 'Smith', 'TX', 'Executive Officer', null, 'CEO');
 p.run('A2', '1', 'Jane', 'Q', 'Smith', 'TX', 'Executive Officer', 'Director', 'Chief Executive Officer');
@@ -33,6 +34,8 @@ p.run('B1', '1', 'JANE', null, 'SMITH', 'TX', 'Director', null, null);          
 p.run('C1', '1', 'Jane', null, 'Smith', 'MA', 'Promoter', null, null);          // same name, other state: another person
 p.run('B1', '2', 'N/A', null, 'Beta GP, LLC', 'NY', 'Executive Officer', null, 'General Partner of the Issuer');
 p.run('C1', '2', '-', null, 'N/A', 'MA', 'Director', null, null);               // no name at all: left out
+p.run('A2', '5', 'Jane', null, 'Smith', 'NY', 'Director', null, null);           // another state on the same company: the same Jane
+p.run('D1', '1', 'Jane', null, 'Smith', 'FL', 'Director', null, null);           // another state, a company sharing Acme's telephone: the same Jane
 p.run('B1', '3', 'llc', null, 'Fund GP,', 'NY', 'Executive Officer', null, null);  // a firm across both fields
 p.run('C1', '3', 'Richard', 'llc', 'Thoms', 'MA', 'Executive Officer', null, null); // a person with a company word for a middle name
 p.run('C1', '4', 'Banks', null, 'Fundora', 'MA', 'Director', null, null);         // company words only inside other words: a person
@@ -41,6 +44,7 @@ i.run('A1', '101', 'YES', '10', 'Acme Robotics, Inc.', 'AUSTIN', 'TX', '512-555-
 i.run('A2', '101', 'YES', '10', 'Acme Robotics, Inc.', 'AUSTIN', 'TX', '(512) 555-0199');
 i.run('A2', '102', 'NO', '11', 'Acme Sub LLC', 'AUSTIN', 'TX', '000-000-0000');
 i.run('B1', '101', 'YES', '20', 'Beta Fund LP', 'NEW YORK', 'NY', '212-555-0000');
+i.run('D1', '101', 'YES', '40', 'Acme Labs LLC', 'MIAMI', 'FL', '512.555.0199');
 const r = db.prepare(`insert into fd_recipients values ('q', ?, ?, ?, ?, ?, ?, '9 BROKER WAY', 'NYC', '10001', 'TX, NY', 'false')`);
 r.run('A2', '1', 'Pat Broker', '1234567', 'Big Securities LLC', '777');
 r.run('A2', '2', 'Pat Broker', '1234567', 'Big Securities LLC', '777');      // the same broker twice on one filing
@@ -48,12 +52,15 @@ r.run('B1', '1', 'Pat Broker', '1234567', 'Big Securities LLC', '777');
 r.run('C1', '1', 'Finder Co', 'None', 'None', 'None');
 
 const n = C.build(db);
-eq(n, { people: 6, roles: 7, companies: 3, brokers: 2 }, 'six entries (two Janes, Beta GP, the llc Fund GP firm, Richard Thoms, Banks Fundora), three companies, two brokers');
+eq(n, { people: 6, roles: 8, companies: 4, brokers: 2 }, 'six entries (two Janes, Beta GP, the llc Fund GP firm, Richard Thoms, Banks Fundora), four companies, two brokers');
+const jane = db.prepare("select * from ct_people where k = 'JANE SMITH|TX'").get();
+eq([jane.state, jane.states.split(',').sort().join(','), jane.companies], ['TX', 'FL,NY,TX', 3], 'Jane joined across states: NY by a shared company, FL by a shared telephone; filed under her main state');
+ok(!db.prepare("select 1 from ct_people where k in ('JANE SMITH|NY', 'JANE SMITH|FL')").get(), 'the joined entries are gone');
 eq(db.prepare("select kind, name from ct_people where name like '%Fund GP%'").get(), { kind: 'organization', name: 'llc Fund GP,' }, 'a firm across both name fields is a firm, both parts kept');
 eq(db.prepare("select kind, name from ct_people where name like '%Thoms'").get(), { kind: 'person', name: 'Richard Thoms' }, 'a company word as a middle name is dropped, the person kept');
 eq(db.prepare("select kind from ct_people where name = 'Banks Fundora'").get(), { kind: 'person' }, 'company words inside other words do not make a firm');
 const tx = db.prepare("select * from ct_people where k = 'JANE SMITH|TX'").get();
-eq([tx.name, tx.kind, tx.companies, tx.filings, tx.exec, tx.dir, tx.funds], ['Jane Q Smith', 'person', 2, 3, 2, 2, 1], 'one person within a state, across companies and filings; roles counted');
+eq([tx.name, tx.kind, tx.companies, tx.filings, tx.exec, tx.dir, tx.funds], ['Jane Smith', 'person', 3, 4, 2, 4, 1], 'one person across companies and filings; roles counted (the newest mixed-case spelling)');
 ok(!!db.prepare("select 1 from ct_people where k = 'JANE SMITH|MA'").get(), 'the same name in another state is another person');
 eq(db.prepare("select kind, name from ct_people where k like 'BETA GP%'").get(), { kind: 'organization', name: 'Beta GP, LLC' }, 'a firm in the person fields is an organization');
 const role = db.prepare("select * from ct_roles where k = 'JANE SMITH|TX' and cik = '10'").get();

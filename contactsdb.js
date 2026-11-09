@@ -43,6 +43,63 @@ function usPhone(s) {
 // The headcount of "check" rows: as the viewer, $1B+ sold to 1 or 2 investors is left out of sums.
 const KEPT = 'case when sold >= 1e9 and investors is not null and investors <= 2 then null else sold end';
 
+// The join across states, over ct_raw (k = NAME|STATE): for each person's
+// name, its state groups are joined (union-find) when two share a company or
+// a telephone any of their companies has filed (as usPhone formats it). The
+// joined group takes the key of its member with the most filings; ct_raw.k
+// is rewritten for the others. Firms are left as they are.
+function mergeAcrossStates(db) {
+  const phones = new Map();   // cik -> Set of telephones it has filed
+  for (const r of db.prepare(`select f.cik, i.ISSUERPHONENUMBER p from formd f join fd_issuers i on i.ACCESSIONNUMBER = f.accn
+      where i.IS_PRIMARYISSUER_FLAG = 'YES' and f.cik is not null and nullif(trim(i.ISSUERPHONENUMBER), '') is not null`).iterate()) {
+    const p = usPhone(r.p);
+    if (!p) continue;
+    if (!phones.has(r.cik)) phones.set(r.cik, new Set());
+    phones.get(r.cik).add(p);
+  }
+  // name -> Map(key -> { ciks, phones, filings })
+  const byName = new Map();
+  for (const r of db.prepare("select k, cik, count(distinct accn) n from ct_raw where kind = 'person' group by k, cik").iterate()) {
+    const name = r.k.slice(0, r.k.indexOf('|'));
+    let g = byName.get(name);
+    if (!g) byName.set(name, (g = new Map()));
+    let e = g.get(r.k);
+    if (!e) g.set(r.k, (e = { ciks: new Set(), phones: new Set(), filings: 0 }));
+    e.ciks.add(r.cik);
+    e.filings += r.n;
+    for (const p of phones.get(r.cik) || []) e.phones.add(p);
+  }
+  db.exec('drop table if exists temp.ct_merge; create temp table ct_merge (k0 text primary key, k text not null);');
+  const ins = db.prepare('insert into ct_merge (k0, k) values (?, ?)');
+  let joined = 0, into = 0;
+  for (const g of byName.values()) {
+    if (g.size < 2) continue;
+    const keys = [...g.keys()];
+    const parent = new Map(keys.map((k) => [k, k]));
+    const find = (k) => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+    for (let a = 0; a < keys.length; a++) {
+      for (let b = a + 1; b < keys.length; b++) {
+        const A = g.get(keys[a]), B = g.get(keys[b]);
+        let share = false;
+        for (const c of A.ciks) if (B.ciks.has(c)) { share = true; break; }
+        if (!share) for (const p of A.phones) if (B.phones.has(p)) { share = true; break; }
+        if (share) parent.set(find(keys[a]), find(keys[b]));
+      }
+    }
+    const groups = new Map();
+    for (const k of keys) { const r = find(k); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(k); }
+    for (const members of groups.values()) {
+      if (members.length < 2) continue;
+      const head = members.slice().sort((x, y) => g.get(y).filings - g.get(x).filings || (x < y ? -1 : 1))[0];
+      for (const k of members) if (k !== head) { ins.run(k, head); joined++; }
+      into++;
+    }
+  }
+  db.exec(`update ct_raw set k = (select m.k from ct_merge m where m.k0 = ct_raw.k) where k in (select k0 from ct_merge);
+    drop table temp.ct_merge;`);
+  return { joined, into };
+}
+
 function build(db, log = () => {}) {
   const t0 = Date.now();
   db.exec('begin');
@@ -80,11 +137,18 @@ function build(db, log = () => {}) {
     `);
     log(`people rows gathered (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
+    // ONE PERSON (the owner's rule, 2026-11-09): a name within a state, or
+    // the same name in another state that shares a company or a company
+    // telephone with it. Form D carries no telephone for a person, only the
+    // company's, so a telephone joins two entries; it never splits one.
+    const merged = mergeAcrossStates(db);
+    log(`${merged.joined} name-and-state entries joined into ${merged.into} people (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+
     // One row a person (a name within a state) or a named organization.
     db.exec(`
       drop table if exists ct_people;
       create table ct_people (
-        k text primary key, name text, kind text, state text, first_filed text, last_filed text,
+        k text primary key, name text, kind text, state text, states text, first_filed text, last_filed text,
         filings integer, companies integer, exec integer, dir integer, prom integer, funds integer
       );
       insert into ct_people
@@ -93,7 +157,7 @@ function build(db, log = () => {}) {
           -- the newest (a 1 or 0 for mixed case, the 10-character date, '|').
           substr(max(case when (fn || ln) <> upper(fn || ln) then '1' else '0' end || filed || '|'
             || case kind when 'organization' then ln else fn || case when mn <> '' then ' ' || mn else '' end || ' ' || ln end), 13),
-          max(kind), max(st), min(filed), max(filed), count(distinct accn), count(distinct cik),
+          max(kind), nullif(substr(k, instr(k, '|') + 1), ''), group_concat(distinct st), min(filed), max(filed), count(distinct accn), count(distinct cik),
           sum(exec), sum(dir), sum(prom), count(distinct case when pooled = 1 then cik end)
         from ct_raw group by k;
       create index idx_ct_people_name on ct_people (name collate nocase);

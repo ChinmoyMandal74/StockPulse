@@ -14,9 +14,9 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const TABS = {
   people: {
     table: 'ct_people',
-    cols: 'k, name, kind, state, first_filed, last_filed, filings, companies, exec, dir, prom, funds',
+    cols: 'k, name, kind, state, states, first_filed, last_filed, filings, companies, exec, dir, prom, funds',
     sorts: { companies: 'companies', last: 'last_filed', name: 'name collate nocase', filings: 'filings' },
-    csv: ['name', 'kind', 'state', 'companies', 'funds', 'exec', 'dir', 'prom', 'filings', 'first_filed', 'last_filed'],
+    csv: ['name', 'kind', 'state', 'states', 'companies', 'funds', 'exec', 'dir', 'prom', 'filings', 'first_filed', 'last_filed'],
   },
   companies: {
     table: 'ct_companies',

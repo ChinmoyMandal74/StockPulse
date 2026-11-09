@@ -216,6 +216,20 @@ shows the newest mixed-case spelling; US telephones in one form
 firms** (642,347), 1,438,302 company roles, 365,344 companies (364,764 with
 a telephone), 25,875 brokers and finders.
 
+**One person, the owner's rule (2026-11-09).** Asked "shouldn't the name and
+phone number be considered unique": Form D gives no telephone for a person,
+only the company's, so a name and telephone key would split everyone with
+more than one company (Chase Lochmiller's two Crusoe companies file
+different numbers). Instead the telephone joins: one person is a name
+within a state, joined with the same name in another state when the two
+share a company or a telephone any of their companies has filed
+(`mergeAcrossStates`, union-find per name; the joined person takes the
+state where they have the most filings, and `ct_people.states` lists them
+all). Measured first: 74,084 names in more than one state, 23,029 of them
+sharing a company or telephone across states. The rebuild joined 27,027
+name-and-state entries into 24,139 people: **525,858 people** and 89,462
+firms, 1,413,144 company roles.
+
 ## The filed date before 2020 Q3 (fixed 2026-11-09)
 
 Quarters up to 2020 Q2 stamp the submission with a time
