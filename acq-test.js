@@ -127,6 +127,18 @@ k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', unit: 'units' }
 eq(k.periods[0].revenue, 194702004, 'stated several, "units" stands');
 k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', period_end: 'December 2025' })] }, text);
 eq(k.periods.length, 0, 'a period with no end date is dropped');
+
+// Worked out where not printed (2026-11-09): from two checked figures only.
+const costs = text + '\nCost of revenue (exclusive of depreciation) 61,000,000\nTotal costs and expenses 200,500,000\nGross profit 999';
+k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', cost_of_revenue: '61,000,000', total_costs: '200,500,000' })] }, costs);
+eq([k.periods[0].gross_profit, k.periods[0].operating_income], [133702004, -5797996], 'gross profit and operating income worked out');
+eq(k.periods[0].derived, '["gross_profit","operating_income"]', 'and marked as worked out');
+k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', cost_of_revenue: '61,000,000', gross_profit: '999' })] }, costs);
+eq([k.periods[0].gross_profit, k.periods[0].derived], [999, null], 'a printed gross profit stands, nothing worked out');
+k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', cost_of_revenue: '61,000,001' })] }, costs);
+eq([k.periods[0].gross_profit, k.periods[0].cost_of_revenue], [null, null], 'a cost not in the text: dropped, nothing worked out from it');
+k = Q.check({ ...ans, periods: [period({ revenue: '194,702,004', total_costs: '678,304,885' })] }, costs);
+eq(k.periods[0].operating_income, 678304885 > 3 * 194702004 ? null : -483602881, 'a total cost over three times revenue is taken for a misread line');
 k = Q.check({ ...ans, kind: 'pro forma only' }, text);
 eq([k.read.is_business, k.periods.length], [false, 0], 'pro forma figures are never kept as the business\'s');
 k = Q.check({ ...ans, currency: 'US dollars' }, text);
@@ -260,6 +272,13 @@ function harness(answers, opt = {}) {
   h = harness([]);
   await L.run({ read: true, commit: true, max: 5, gapS: 10, maxUsd: 1 }, h.deps);
   ok(h.calls.length === 0 && h.posts.length === 0, 'a read exhibit is not read again');
+  // --stored --force: every stored text read again, nothing fetched, even
+  // with an exhibit of the same filings never fetched.
+  A.db.prepare("delete from texts where file = 'exhibit992-unauditedconden.htm'").run();
+  h = harness([{ status: 200, body: 'should never be asked for' }]);
+  await L.run({ read: true, commit: true, force: true, stored: true, max: 5, gapS: 10, maxUsd: 1 }, h.deps);
+  eq([h.calls.length, h.posts.length], [0, 1], '--stored: the stored text read again, the other exhibit left, no request');
+  A.writeText('0001-26-000001', 'exhibit992-unauditedconden.htm', text);   // as it was, for the tests below
 
   // The dollar cap: each answer costs $0.0015 here; a cap of $0.001 stops after one.
   A.db.exec('delete from reads; delete from periods');

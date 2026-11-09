@@ -127,7 +127,7 @@ function pickDocs(docs) {
 const S = (d) => ({ type: 'string', description: d });
 const FIG = (what) => S(what + ', exactly as printed for this period (digits, commas, decimal point, parentheses or a minus for a negative), no currency sign. Empty string if not shown.');
 const PERIOD = { type: 'object', additionalProperties: false,
-  required: ['label', 'period_end', 'months', 'audited', 'unit', 'revenue', 'gross_profit', 'operating_income', 'net_income', 'total_assets', 'total_liabilities', 'total_equity', 'cash', 'operating_cash_flow'],
+  required: ['label', 'period_end', 'months', 'audited', 'unit', 'revenue', 'cost_of_revenue', 'gross_profit', 'total_costs', 'operating_income', 'net_income', 'total_assets', 'total_liabilities', 'total_equity', 'cash', 'operating_cash_flow'],
   properties: {
     label: S('The column heading as printed, e.g. "Year ended December 31, 2023" or "Nine months ended September 30, 2024".'),
     period_end: S('The last day of the period (or the balance sheet date) as YYYY-MM-DD.'),
@@ -135,8 +135,14 @@ const PERIOD = { type: 'object', additionalProperties: false,
     audited: { type: 'string', enum: ['audited', 'unaudited', 'not stated'], description: 'Whether this period is covered by the audit report or marked unaudited.' },
     unit: { type: 'string', enum: ['units', 'thousands', 'millions', 'billions'], description: 'The scale the figures are printed in, from the statement heading (e.g. "(in thousands)").' },
     revenue: FIG('Total revenue (or net sales, total revenues)'),
-    gross_profit: FIG('Gross profit'),
-    operating_income: FIG('Operating income or loss (income from operations)'),
+    // Gross profit and operating income are often not printed as lines
+    // (2026-11-09: neither AMI TopCo nor Honeywell PSS prints them). The lines
+    // they come from are asked for as printed; check() works the two out
+    // from them and marks them so (`derived`).
+    cost_of_revenue: FIG('Cost of revenue, cost of sales or cost of goods sold (as one printed line)'),
+    gross_profit: FIG('Gross profit, only if printed as a line'),
+    total_costs: FIG('Total costs and expenses, or total operating expenses: the printed total that, taken from revenue, gives operating income. Empty string if the printed total also includes interest, other income or taxes'),
+    operating_income: FIG('Operating income or loss (income or loss from operations), only if printed as a line'),
     net_income: FIG('Net income or loss'),
     total_assets: FIG('Total assets at the period end'),
     total_liabilities: FIG('Total liabilities at the period end'),
@@ -171,7 +177,7 @@ function request(text, model) {
 }
 
 // ---- checks ----------------------------------------------------------------------------
-const FIELDS = ['revenue', 'gross_profit', 'operating_income', 'net_income', 'total_assets', 'total_liabilities', 'total_equity', 'cash', 'operating_cash_flow'];
+const FIELDS = ['revenue', 'cost_of_revenue', 'gross_profit', 'total_costs', 'operating_income', 'net_income', 'total_assets', 'total_liabilities', 'total_equity', 'cash', 'operating_cash_flow'];
 const SCALE = { units: 1, thousands: 1e3, millions: 1e6, billions: 1e9 };
 // THE SIGN. The text check ignores brackets, so a loss copied as a profit
 // would pass it. A figure given as negative must appear negative somewhere in
@@ -242,6 +248,18 @@ function check(ans, text) {
       row.printed[f] = s;
       any = true;
     }
+    // Worked out where not printed: gross profit is revenue less cost of
+    // revenue, operating income revenue less total costs, each only from two
+    // figures that passed the checks above, and listed in `derived`. A total
+    // cost larger than three times revenue is taken for a misread line.
+    const derived = [];
+    if (row.gross_profit == null && row.revenue != null && row.cost_of_revenue != null && row.cost_of_revenue >= 0) {
+      row.gross_profit = row.revenue - row.cost_of_revenue; derived.push('gross_profit');
+    }
+    if (row.operating_income == null && row.revenue != null && row.total_costs != null && row.total_costs >= 0 && row.total_costs <= 3 * Math.abs(row.revenue)) {
+      row.operating_income = row.revenue - row.total_costs; derived.push('operating_income');
+    }
+    row.derived = derived.length ? JSON.stringify(derived) : null;
     if (!row.period_end) problems.push(`${row.label || 'a period'}: no period end date`);
     if (!any || !row.period_end) continue;
     row.printed = JSON.stringify(row.printed);

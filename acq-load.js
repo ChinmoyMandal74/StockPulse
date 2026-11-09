@@ -63,6 +63,7 @@ function options(argv) {
     read: argv.includes('--read'),
     recheck: argv.includes('--recheck'),
     force: argv.includes('--force'),
+    stored: argv.includes('--stored'),
     all: argv.includes('--all-filers'),
     max: max === 'all' ? Infinity : Math.max(1, Number(max) || 20),
     gapS: Math.max(MIN_GAP_S, Number(arg('--gap')) || 10),
@@ -303,7 +304,12 @@ async function run(opts, deps) {
 
   if (opts.read) {
     const todo = [];
-    for (const f of queue(A, opts, 'read')) for (const d of Q.pickDocs(A.docsOf(f.accn))) if (opts.force || !A.isRead(f.accn, d.file)) todo.push({ f, d });
+    // --stored: only exhibits whose text is already on disk (a re-read after a
+    // change to the reader): no request to the SEC at all.
+    for (const f of queue(A, opts, 'read')) for (const d of Q.pickDocs(A.docsOf(f.accn))) {
+      if (opts.stored && A.textOf(f.accn, d.file) == null) continue;
+      if (opts.force || !A.isRead(f.accn, d.file)) todo.push({ f, d });
+    }
     log(`${todo.length} exhibits to read; this run: up to ${Math.min(opts.max, todo.length)}, at most $${opts.maxUsd}`);
     if (!opts.commit) { log('DRY RUN: nothing fetched or read. Add --commit.'); return { ok: true, todo: todo.length }; }
     if (!deps.post) throw new Error('no ANTHROPIC_API_KEY');
@@ -312,6 +318,7 @@ async function run(opts, deps) {
       try {
         let text = A.textOf(f.accn, d.file);
         if (text == null) {
+          if (opts.stored) continue;   // never reached: --stored keeps only stored texts
           const buf = await get(archiveBase(f.cik, f.accn) + d.file, gapMs, cap, { missingOk: true });
           summary.requests++;
           if (!buf) { A.writeRead(f.accn, d.file, { model: null, kind: 'missing', problems: ['404 from sec.gov'] }, []); continue; }

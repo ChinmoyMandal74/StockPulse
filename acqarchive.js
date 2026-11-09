@@ -28,7 +28,7 @@ const DEFAULT_PATH = path.join(__dirname, 'acq.db');
 
 const PERIOD_COLS = ['accn', 'file', 'seq', 'label', 'period_end', 'months', 'audited', 'currency', 'unit',
   'revenue', 'gross_profit', 'operating_income', 'net_income', 'total_assets', 'total_liabilities', 'total_equity',
-  'cash', 'operating_cash_flow', 'printed'];
+  'cash', 'operating_cash_flow', 'printed', 'cost_of_revenue', 'total_costs', 'derived'];
 
 function open(file) {
   const { DatabaseSync } = require('node:sqlite');
@@ -75,6 +75,10 @@ function open(file) {
   // too old to have the first). A 404 with no 'via' has not tried the page.
   const ixCols = new Set(db.prepare('pragma table_info(indexed)').all().map((c) => c.name));
   if (!ixCols.has('via')) db.exec('alter table indexed add column via text');
+  // The lines gross profit and operating income are worked out from, and
+  // which figures were worked out rather than printed (2026-11-09).
+  const pCols = new Set(db.prepare('pragma table_info(periods)').all().map((c) => c.name));
+  for (const [c, t] of [['cost_of_revenue', 'real'], ['total_costs', 'real'], ['derived', 'text']]) if (!pCols.has(c)) db.exec(`alter table periods add column ${c} ${t}`);
 
   function noteRequest(url, status, bytes, ms) {
     try { db.prepare('insert into requests (at, url, status, bytes, ms) values (?, ?, ?, ?, ?)').run(Date.now(), url, status, bytes, ms); } catch (_) { /* bookkeeping */ }
