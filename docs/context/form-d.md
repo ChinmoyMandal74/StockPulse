@@ -84,6 +84,16 @@ week-old copy is missing.
   said it existed, so the next quarter in the same run would have failed.
   The cache is cleared on rollback (tested).
 
+## The first full load (2026-11-08)
+
+All 75 quarters, 2008 Q1 to 2026 Q3, in 74 minutes at one request a minute:
+**75 requests to sec.gov, every one a 200**, nothing refused, no unreadable
+rows. 778,966 filings; 790,868 issuer rows; 2,987,521 related persons;
+432,158 recipients; 786,564 signatures. `formd.db` is 1.65GB, the ZIPs
+0.19GB. 2008 is nearly empty (442 filings): electronic Form D began in
+2009. Filings a year rise from 20,843 (2009) to a peak of 62,440 (2022);
+pooled funds are about 40% early on and 60% from 2021.
+
 ## Checked against the source
 
 Crusoe Inc.'s filing 0001924674-26-000002 in the archive (offered
