@@ -72,7 +72,16 @@ db.exec(`create table fd_offering (quarter text, ACCESSIONNUMBER text primary ke
   insert into fd_recipients values ('2026Q3', '0000000001-26-000002', '1', 'Acme Securities', '12345', 'Acme Securities', '12345', '1 BROKER PLAZA', 'NEW YORK', '10001', 'CA, NY', 'false');
   insert into fd_signatures values ('2026Q3', '0000000001-26-000002', '1', 'Kavia AI, Inc.', 'Ben J Ortiz', 'CEO', '2026-09-28');`);
 
-const api = V.makeApi(db);
+// The SEC's profiles (E1): Kavia now listed as KAVI.A (tracked as KAVI-A),
+// with a 10-K and a former name; LOWE with only Form D; an older profile of
+// Kavia that the newest replaces.
+const profileRow = { name: 'Kavia AI, Inc.', ein: '123456789', state_inc: 'DE', fiscal_year_end: '1231', tickers: 'KAVI.A', exchanges: 'Nasdaq', biz_city: 'SAN FRANCISCO', biz_state: 'CA',
+  former_names: JSON.stringify([{ name: 'KAVIA LABS INC', from: '2024-01-01', to: '2025-06-30' }]), filings: 5, first_filed: '2024-01-01', last_filed: '2026-09-28',
+  forms: JSON.stringify({ formD: { n: 2, first: '2026-03-01', last: '2026-09-28' }, annual: { n: 1, first: '2026-03-30', last: '2026-03-30' } }) };
+A.writeProfiles([{ ...profileRow, cik: '1', tickers: null, forms: '{}' }], '2026-10-01', 'old.zip');
+A.writeProfiles([{ ...profileRow, cik: '1' }, { cik: '3', name: 'LOWE INTERNATIONAL HOLDING CO', forms: JSON.stringify({ formD: { n: 1 } }), filings: 1 }], '2026-11-09', 'new.zip');
+
+const api = V.makeApi(db, { tracked: new Set(['KAVI-A']) });
 eq(api.options.industries.map((r) => r.v).sort(), ['Business Services', 'Other Technology', 'Pooled Investment Fund'], 'options: the industries on file');
 const L = api.list(sp(''));
 eq(L.rows.map((r) => r.accn), ['0000000001-26-000002', '0000000003-24-000001'], 'companies, latest filing of each offering, newest first');
@@ -100,6 +109,21 @@ eq(F.issuers[0].previousNames, ['KAVIA LABS INC'], 'previous names, "None" left 
 eq(F.history.map((h) => [h.form, h.superseded]), [['D', 1], ['D/A', 0]], 'the issuer\'s every Form D, oldest first');
 eq(api.filing('not-an-accession'), null, 'a malformed accession is refused');
 eq(api.filing('0000000009-26-000009'), null, 'an unknown filing is null');
+
+// ---- the profile (E1) ----
+eq(F.profile.as_of, '2026-11-09', 'the newest profile');
+eq([F.profile.ein, F.profile.state_inc, F.profile.tickers, F.profile.tracked], ['123456789', 'DE', ['KAVI.A'], ['KAVI.A']], 'profile fields; a ticker we track is marked, dot and dash alike');
+eq(F.profile.former_names, [{ name: 'KAVIA LABS INC', from: '2024-01-01', to: '2025-06-30' }], 'former names parsed');
+eq(Object.keys(F.profile.forms).sort(), ['annual', 'formD'], 'forms parsed');
+eq(api.filing('0000000002-26-000001').profile, null, 'no profile on file is null');
+eq(L.rows.find((r) => r.cik === '1').tickers, 'KAVI.A', 'the list carries the newest ticker');
+eq(api.list(sp('has=listed')).rows.map((r) => r.cik), ['1'], 'filter: now listed');
+eq(api.list(sp('has=financials')).rows.map((r) => r.cik), ['1'], 'filter: files financial statements');
+eq(api.list(sp('has=annual')).total.n, 1, 'filter: annual reports');
+eq(api.list(sp('has=crowdfunding')).total.n, 0, 'filter: crowdfunding, none');
+eq(api.list(sp('has=formerName')).rows.map((r) => r.cik), ['1'], 'filter: a former name');
+eq(Q.filters(sp('has=1%20or%201=1'), NOW).has, '', 'a filter not on the list is dropped');
+ok(!/or 1=1/.test(Q.where(Q.filters(sp('has=1 or 1=1'), NOW)).where), 'nothing from the request is built into the condition');
 
 // Read only: the viewer refuses an archive without the column rather than adding it.
 const { DatabaseSync } = require('node:sqlite');

@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only); phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles), E2 to E6 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2915,6 +2915,37 @@ buy only where it must.
    37,000 requests and $70, not started.
 3. **Form 5500 and USAspending** (e, f): bulk, from other agencies.
 4. **Reg A+ and Form C** (c), if their data sets hold up.
+   **Enriching the Form D companies (owner, 2026-11-09, on the viewer: "I
+   don't see much details about the entity itself, can we get that from
+   somewhere"; then "add all this to backlog first and start with 1").**
+   Form D carries name, place, industry group, size of raise, people and
+   brokers; nothing on what the business is or how big. Measured over the
+   185,666 non-fund issuers against the SEC bulk submissions file on disk
+   (2026-11-09, no request):
+   - **E1. The SEC's own profile, from the bulk file on disk** (no
+     request): EIN on 150,914, state of incorporation, fiscal year end on
+     175,444, former names on 11,890, industry code on only 7,861, website
+     on none; and every other form the company has filed. **Now listed**:
+     2,890 have a ticker (a link to our own stock page where we track it).
+     Also file 10-K/10-Q 5,979; S-1/F-1/S-4 6,154; 8-K 6,052; insider forms
+     6,267; 13F 258. **Built 2026-11-09** (formd-load.js --profiles, shown
+     in the viewer's side panel).
+   - **E2. Form 5500 (Department of Labor) by EIN**: retirement-plan
+     participants (a headcount proxy) and plan assets, year by year. Free
+     yearly bulk files, another agency (no SEC risk). Joins on the EIN E1
+     supplies; coverage not yet measured.
+   - **E3. Form C (crowdfunding) data sets**: revenue, net income, assets,
+     cash, debt and employee count for the last two fiscal years. 1,922 of
+     the issuers have filed one. SEC quarterly bulk sets since 2016, about
+     40 files, Form D's care.
+   - **E4. Reg A (1-A, 1-K) data sets**: annual financial statements; 662
+     issuers.
+   - **E5. Companies that file 10-K/10-Q** (5,979): full financials through
+     the existing SEC facts reader, one request a company, slowly.
+   - **E6. PPP loans (SBA)**: jobs reported, NAICS code, loan size,
+     2020-21; small businesses; matched by name and city, so inexact.
+   - Not available free in bulk: a website or business description
+     (Crunchbase, PitchBook, D&B are paid and usually forbid resale).
 5. **A "known facts" view of a private company**: money raised, what it
    sold for if bought, headcount proxy, government work. Only then does
    anything reach Turso or a page, with `/privacy` and `/sources` in the

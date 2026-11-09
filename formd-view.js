@@ -48,7 +48,10 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-function makeApi(db) {
+function makeApi(db, opts = {}) {
+  // The tickers this app tracks, from the local analysis copy, so a company
+  // that now trades links to its stock page. Empty when there is no copy.
+  const tracked = opts.tracked || new Set();
   const all = (q) => db.prepare(q.sql).all(...q.params);
   const one = (q) => db.prepare(q.sql).get(...q.params);
   const cols = (table) => new Set(db.prepare(`pragma table_info("${table}")`).all().map((c) => c.name));
@@ -109,6 +112,16 @@ function makeApi(db) {
         roles: [r.RELATIONSHIP_1, r.RELATIONSHIP_2, r.RELATIONSHIP_3].filter(Boolean), note: r.RELATIONSHIPCLARIFICATION || null }));
     const recipients = db.prepare('select RECIPIENTNAME, RECIPIENTCRDNUMBER, ASSOCIATEDBDNAME, ASSOCIATEDBDCRDNUMBER, STATES_OR_VALUE_LIST, FOREIGNSOLICITATION from fd_recipients where ACCESSIONNUMBER = ? order by cast(RECIPIENT_SEQ_KEY as integer)').all(accn);
     const signatures = db.prepare('select ISSUERNAME, NAMEOFSIGNER, SIGNATURETITLE, SIGNATUREDATE from fd_signatures where ACCESSIONNUMBER = ? order by cast(SIGNATURE_SEQ_KEY as integer)').all(accn);
+    // The SEC's profile (E1): the newest one on file, with the date of the bulk
+    // file it came from. The street and telephone were never kept.
+    const pr = s.cik ? db.prepare('select * from fd_profiles where cik = ? order by as_of desc limit 1').get(s.cik) : null;
+    let profile = null;
+    if (pr) {
+      const parse = (t, d) => { try { return t ? JSON.parse(t) : d; } catch (_) { return d; } };
+      const tickers = pr.tickers ? pr.tickers.split(',') : [];
+      profile = { ...pr, former_names: parse(pr.former_names, []), forms: parse(pr.forms, {}), tickers,
+        tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))) };
+    }
     const history = s.cik ? db.prepare(`select ${Q.LIST_COLS} from formd where cik = ? order by filed, accn`).all(s.cik) : [];
     return {
       summary: { ...s, sec: Q.secUrl(s.cik, s.accn) },
@@ -117,7 +130,7 @@ function makeApi(db) {
         'BUSCOMBCLARIFICATIONOFRESP', 'SALESAMTCLARIFICATIONOFRESP', 'HASNONACCREDITEDINVESTORS', 'NUMBERNONACCREDITEDINVESTORS', 'SALESCOMM_DOLLARAMOUNT',
         'SALESCOMM_ISESTIMATE', 'FINDERSFEE_DOLLARAMOUNT', 'FINDERSFEE_ISESTIMATE', 'FINDERFEECLARIFICATIONOFRESP', 'GROSSPROCEEDSUSED_DOLLARAMOUNT',
         'GROSSPROCEEDSUSED_ISESTIMATE', 'GROSSPROCEEDSUSED_CLAROFRESP']),
-      issuers, persons, recipients, signatures, history,
+      issuers, persons, recipients, signatures, history, profile,
     };
   }
 
@@ -156,9 +169,15 @@ if (require.main === module) {
   if (!fs.existsSync(DB_PATH)) { console.error('No archive at ' + DB_PATH); process.exit(1); }
   const { DatabaseSync } = require('node:sqlite');
   const db = new DatabaseSync(DB_PATH, { readOnly: true });
+  let tracked = new Set();
+  try {
+    const a = new DatabaseSync(path.join(__dirname, 'analysis.db'), { readOnly: true });
+    tracked = new Set(a.prepare('select symbol from names').all().map((r) => String(r.symbol).toUpperCase().replace(/\./g, '-')));
+    a.close();
+  } catch (_) { /* no local analysis copy: no links to stock pages */ }
   db.exec('pragma busy_timeout = 10000');
   const t = Date.now();
-  const api = makeApi(db);
+  const api = makeApi(db, { tracked });
   http.createServer(handler(api)).listen(PORT, HOST, () => {
     console.log(`Form D viewer: http://localhost:${PORT}  (${api.options.filings.toLocaleString('en-US')} filings, ready in ${((Date.now() - t) / 1000).toFixed(1)}s; this machine only, admin password)`);
   });

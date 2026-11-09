@@ -72,6 +72,8 @@
     .fv-table .fv-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
     .fv-table .fv-d { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
     .fv-dash { color: var(--faint); }
+    .fv-tag.fv-tick { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-family: var(--mono); }
+    .fv-tag.fv-fin { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 45%, transparent); }
     .fv-tag.fv-doubt { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
     .fv-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
     .fv-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
@@ -136,6 +138,10 @@
     <label class="fv-f fv-yr"><span>To</span><select id="to"><option value="">—</option></select></label>
     <label class="fv-f"><span>Sold at least</span>
       <select id="minSold"><option value="">Any</option><option value="1000000">$1M</option><option value="10000000">$10M</option><option value="100000000">$100M</option><option value="1000000000">$1B</option></select></label>
+    <label class="fv-f"><span>The SEC also has</span>
+      <select id="has"><option value="">Any</option><option value="listed">Now listed (a ticker)</option><option value="financials">Financial statements (10-K, Form C or Reg A)</option>
+        <option value="annual">Annual reports (10-K)</option><option value="crowdfunding">Crowdfunding (Form C)</option><option value="regA">Regulation A (1-A, 1-K)</option>
+        <option value="registration">Registration to go public (S-1, F-1, S-4)</option><option value="formerName">A former name</option></select></label>
     <label class="fv-check" title="A D/A restates an offering's running totals. Off: each offering counted once, at its latest filing."><input type="checkbox" id="every" /> Every filing, amendments' originals too</label>
     <button type="button" class="btn quiet fv-reset" id="reset">Clear</button>
   </div>
@@ -192,7 +198,7 @@ const offered = (r) => (r.offered_indefinite ? '<span title="No cap stated">Inde
 const DOUBT = '<span class="fv-tag fv-doubt" title="$1B or more sold to one or two investors: as filed, likely an error">check</span>';
 const yes = (v) => v === 'true' || v === 'YES' || v === 'Y';
 
-const IDS = ['q', 'person', 'industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold'];
+const IDS = ['q', 'person', 'industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold', 'has'];
 const state = { kind: 'company', sort: 'filed', dir: 'desc', page: 0, every: false };
 let seq = 0, opts = null;
 
@@ -281,7 +287,7 @@ function paintRows(d) {
   const rows = d.rows || [];
   $('fv-rows').innerHTML = rows.map((r) => '<tr data-accn="' + esc(r.accn) + '">'
     + '<td class="fv-d">' + esc(r.filed || '') + (r.form === 'D/A' ? '<span class="fv-tag">D/A</span>' : '') + (r.superseded ? '<span class="fv-tag" title="A later amendment replaces this filing">replaced</span>' : '') + '</td>'
-    + '<td class="fv-name">' + esc(r.name) + '<span class="fv-sub">' + esc([r.city, r.state].filter(Boolean).join(', ')) + (r.year_inc ? ' · inc. ' + esc(r.year_inc) : '') + '</span></td>'
+    + '<td class="fv-name">' + esc(r.name) + (r.tickers ? '<span class="fv-tag fv-tick" title="Now trades under this ticker">' + esc(r.tickers.split(',')[0]) + '</span>' : '') + '<span class="fv-sub">' + esc([r.city, r.state].filter(Boolean).join(', ')) + (r.year_inc ? ' · inc. ' + esc(r.year_inc) : '') + '</span></td>'
     + '<td>' + esc(r.industry || '') + (r.fund_type ? '<span class="fv-sub">' + esc(r.fund_type) + '</span>' : '') + '</td>'
     + '<td>' + (r.revenue_range && r.revenue_range !== 'Decline to Disclose' ? esc(r.revenue_range) : DASH) + '</td>'
     + '<td class="fv-n">' + offered(r) + '</td><td class="fv-n">' + money(r.sold) + (r.doubt ? DOUBT : '') + '</td><td class="fv-n">' + num(r.investors) + '</td>'
@@ -321,6 +327,7 @@ async function openFiling(accn) {
     + (s.sec ? ' · <a href="' + esc(s.sec) + '" target="_blank" rel="noopener noreferrer">the filing on sec.gov</a>' : '') + '</div>'
     + (s.superseded ? '<div class="fv-note">A later amendment replaces this filing; its figures are an earlier statement of the same offering.</div>' : '')
     + '<div class="fv-kv">' + kv.map(([b, t]) => '<div><b>' + b + '</b><span>' + esc(t) + '</span></div>').join('') + '</div>'
+    + profileHtml(d.profile, s.cik)
     + '<h4>The offering</h4><div class="fv-list">'
     + row('Revenue range', s.revenue_range || '—') + (s.nav_range ? row('Net asset value range', s.nav_range) : '')
     + row('Securities', types.join(', ') || '—') + row('Exemptions claimed', s.exemptions || '—')
@@ -347,6 +354,42 @@ async function openFiling(accn) {
     + '</tbody></table></div>';
   sh.scrollTop = 0;
 }
+// The SEC's profile of the issuer (backlog 61, E1): what it is beyond this
+// Form D. From the SEC's bulk submissions file; dated by the file.
+const FORM_LABELS = [
+  ['annual', 'Annual reports (10-K, 20-F)', true], ['quarterly', 'Quarterly reports (10-Q)', true],
+  ['crowdfunding', 'Crowdfunding (Form C): two years of figures', true], ['regA', 'Regulation A (1-A, 1-K): yearly statements', true],
+  ['registration', 'Registration to sell shares publicly (S-1, F-1, S-4, 424B)', false], ['current', 'Current reports (8-K, 6-K)', false],
+  ['insider', 'Insider filings (Forms 3, 4, 5)', false], ['manager', 'Holdings reports (13F): an investment manager', false], ['formD', 'Form D', false],
+];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function profileHtml(p, cik) {
+  if (!p) return '<h4>Company profile</h4><div class="fv-note">No profile on file for this issuer.</div>';
+  const fye = p.fiscal_year_end && /^\d{4}$/.test(p.fiscal_year_end) ? MONTHS[Number(p.fiscal_year_end.slice(0, 2)) - 1] + ' ' + Number(p.fiscal_year_end.slice(2)) : '';
+  const span = (a, b) => (a && b && a.slice(0, 4) !== b.slice(0, 4) ? a.slice(0, 4) + '–' + b.slice(0, 4) : (b || a || '').slice(0, 4));
+  const tickers = (p.tickers || []).map((t) => (p.tracked.includes(t)
+    ? '<a href="https://www.tickrlab.com/stock/' + encodeURIComponent(t) + '" target="_blank" rel="noopener noreferrer">' + esc(t) + '</a> (on Tickr Lab)'
+    : esc(t))).join(', ');
+  const rows = [];
+  if (tickers) rows.push(['Now trades as', tickers + (p.exchanges ? ' · ' + esc(p.exchanges) : ''), true]);
+  if (p.ein) rows.push(['EIN (federal tax ID)', esc(p.ein.slice(0, 2) + '-' + p.ein.slice(2))]);
+  if (p.state_inc) rows.push(['Incorporated in', esc(p.state_inc)]);
+  if (fye) rows.push(['Fiscal year ends', esc(fye)]);
+  if (p.sic) rows.push(['Industry code', esc(p.sic + (p.sic_desc ? ' · ' + p.sic_desc : ''))]);
+  if (p.biz_city) rows.push(['Business address', esc([p.biz_city, p.biz_state].filter(Boolean).join(', '))]);
+  for (const f of p.former_names) rows.push(['Formerly', esc(f.name) + (f.from || f.to ? ' <span class="fv-dash">(' + esc([f.from, f.to].filter(Boolean).join(' to ')) + ')</span>' : ''), true]);
+  const forms = FORM_LABELS.filter(([k]) => p.forms[k]).map(([k, label, fin]) => {
+    const x = p.forms[k];
+    return '<div><span>' + esc(label) + (fin ? ' <span class="fv-tag fv-fin">financials</span>' : '') + '</span><span>' + Number(x.n).toLocaleString('en-US') + ' · ' + esc(span(x.first, x.last)) + '</span></div>';
+  }).join('');
+  return '<h4>Company profile</h4><div class="fv-list">'
+    + rows.map(([k, v]) => '<div><span>' + esc(k) + '</span><span>' + v + '</span></div>').join('')
+    + '</div>'
+    + '<h4>Everything it has filed with the SEC (' + Number(p.filings).toLocaleString('en-US') + ', ' + esc(span(p.first_filed, p.last_filed)) + ')</h4>'
+    + '<div class="fv-list">' + forms + '</div>'
+    + '<p class="fv-note">From the SEC’s bulk submissions file of ' + esc(p.as_of) + '. '
+    + '<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=' + encodeURIComponent(String(cik).padStart(10, '0')) + '&amp;owner=include&amp;count=40" target="_blank" rel="noopener noreferrer">Its filings on sec.gov</a>.</p>';
+}
 function row(k, v) { return '<div><span>' + esc(k) + '</span><span>' + esc(v) + '</span></div>'; }
 function closeSheet() { const sh = $('fv-sheet'); sh.classList.remove('fv-open'); sh.setAttribute('aria-hidden', 'true'); $('fv-scrim').hidden = true; }
 
@@ -354,7 +397,7 @@ function closeSheet() { const sh = $('fv-sheet'); sh.classList.remove('fv-open')
 let timer = null;
 const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 380); };
 for (const id of ['q', 'person']) $(id).addEventListener('input', soon);
-for (const id of ['industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold']) $(id).addEventListener('change', () => { state.page = 0; load(); });
+for (const id of ['industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold', 'has']) $(id).addEventListener('change', () => { state.page = 0; load(); });
 $('every').addEventListener('change', () => { state.every = $('every').checked; state.page = 0; load(); });
 $('kind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.kind = b.dataset.v; state.page = 0; load(); });
 $('reset').addEventListener('click', () => { for (const id of IDS) $(id).value = ''; Object.assign(state, { kind: 'company', sort: 'filed', dir: 'desc', page: 0, every: false }); $('every').checked = false; load(); });

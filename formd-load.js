@@ -24,6 +24,10 @@
 //   node --use-system-ca formd-load.js --commit --only 2026Q3,2026Q2
 //   node --use-system-ca formd-load.js --search "acme"     # read the archive; no requests
 //   node --use-system-ca formd-load.js --stats
+//   node --use-system-ca formd-load.js --profiles [--commit] [--zip FILE]
+//        the SEC's profile of every issuer (EIN, incorporation, former names,
+//        ticker, other forms filed) from the bulk submissions file ALREADY ON
+//        DISK (acq-load.js --list fetched it); makes no request at all
 'use strict';
 require('dotenv').config();
 const fs = require('fs');
@@ -52,6 +56,8 @@ function options(argv) {
     only: arg('--only') ? String(arg('--only')).toUpperCase().split(',').filter(Boolean) : null,
     search: arg('--search'),
     stats: argv.includes('--stats'),
+    profiles: argv.includes('--profiles'),
+    zip: arg('--zip'),
   };
 }
 
@@ -98,6 +104,7 @@ async function run(opts, deps) {
   const log = deps.log || console.log;
   const A = deps.archive;
   if (opts.stats) { log(JSON.stringify(A.stats())); return { ok: true }; }
+  if (opts.profiles) return profiles(opts, deps);
   if (opts.search) {
     for (const r of A.search(opts.search)) log([r.filed, r.form, r.name, r.city + ', ' + r.state, r.industry, 'sold ' + (r.sold == null ? '—' : '$' + r.sold.toLocaleString('en-US')), r.offered_indefinite ? 'offered indefinite' : 'offered ' + (r.offered == null ? '—' : '$' + r.offered.toLocaleString('en-US')), r.revenue_range || '—'].join(' | '));
     return { ok: true };
@@ -150,6 +157,57 @@ async function run(opts, deps) {
   return { ok: true, loaded: loadedN, left: todo.length - loadedN };
 }
 
+// --profiles: E1. Reads the newest submissions-YYYY-MM-DD.zip in the SEC
+// folder (or --zip), never the network: a missing file is an error, not a
+// download. Each issuer's main JSON and its older pages give one profile row,
+// stamped with the file's date.
+const SUBS_FILE = /^submissions-(\d{4}-\d{2}-\d{2})\.zip$/;
+async function profiles(opts, deps) {
+  const log = deps.log || console.log;
+  const A = deps.archive;
+  const file = opts.zip || deps.newestSubmissions();
+  if (!file || !fs.existsSync(file)) throw new Error('no bulk submissions file on disk (acq-load.js --list --commit fetches it once); nothing fetched here');
+  const m = SUBS_FILE.exec(path.basename(file));
+  if (!m) throw new Error('the file name carries no date (submissions-YYYY-MM-DD.zip): ' + path.basename(file));
+  const asOf = m[1];
+  const want = new Set(A.issuerCiks().map((c) => c.padStart(10, '0')));
+  log(`${path.basename(file)} (${asOf}): looking for ${want.size} Form D issuers`);
+  const byCik = new Map();
+  for (const e of Zip.entriesOfFile(file)) {
+    const k = /^CIK(\d{10})(?:-submissions-\d+)?\.json$/.exec(e.name);
+    if (!k || !want.has(k[1])) continue;
+    if (!byCik.has(k[1])) byCik.set(k[1], []);
+    byCik.get(k[1]).push(e);
+  }
+  const fd = fs.openSync(file, 'r');
+  const readEntry = (e) => {
+    const head = Buffer.alloc(30);
+    fs.readSync(fd, head, 0, 30, e.offset);
+    const start = e.offset + 30 + head.readUInt16LE(26) + head.readUInt16LE(28);
+    const raw = Buffer.alloc(e.csize);
+    fs.readSync(fd, raw, 0, e.csize, start);
+    return JSON.parse((e.method === 8 ? require('zlib').inflateRawSync(raw) : raw).toString('utf8'));
+  };
+  const rows = [];
+  let bad = 0;
+  try {
+    for (const list of byCik.values()) {
+      const main = list.find((e) => !/-submissions-/.test(e.name));
+      if (!main) { bad++; continue; }
+      try {
+        const p = F.filerProfile(readEntry(main), list.filter((e) => e !== main).map(readEntry));
+        if (p) rows.push(p); else bad++;
+      } catch (_) { bad++; }
+    }
+  } finally { fs.closeSync(fd); }
+  const n = (k) => rows.filter((r) => r[k]).length;
+  log(`found ${rows.length} of ${want.size}${bad ? `, ${bad} unreadable` : ''}: EIN ${n('ein')}, ticker ${n('tickers')}, former names ${n('former_names')}, industry code ${n('sic')}`);
+  if (!opts.commit) { log('DRY RUN: add --commit to write them (as of ' + asOf + ').'); return { ok: true, found: rows.length }; }
+  A.writeProfiles(rows, asOf, path.basename(file));
+  log(`written: ${rows.length} profiles as of ${asOf}.`);
+  return { ok: true, written: rows.length };
+}
+
 function fileDeps() {
   fs.mkdirSync(DIR, { recursive: true });
   const cachePath = (url) => path.join(DIR, url.split('/').pop());
@@ -161,6 +219,7 @@ function fileDeps() {
     cached: (url) => { const f = cachePath(url); return fs.existsSync(f) && fs.statSync(f).size > 1000 ? fs.readFileSync(f) : null; },
     readCache: (file, maxAge) => (fs.existsSync(file) && Date.now() - fs.statSync(file).mtimeMs < maxAge ? fs.readFileSync(file, 'utf8') : null),
     writeCache: (file, data) => fs.writeFileSync(file, data),
+    newestSubmissions: () => { const f = fs.readdirSync(DIR).filter((n) => SUBS_FILE.test(n)).sort().pop(); return f ? path.join(DIR, f) : null; },
   };
 }
 
@@ -181,8 +240,8 @@ if (require.main === module) {
   const opts = options(process.argv);
   let unlock = () => {};
   (async () => {
-    const network = opts.commit || !(opts.search || opts.stats);
-    if (network) unlock = lock();
+    const network = !opts.profiles && (opts.commit || !(opts.search || opts.stats));
+    if (network || (opts.profiles && opts.commit)) unlock = lock();
     const archive = require('./formdarchive.js').open();
     try {
       const r = await run(opts, { ...fileDeps(), archive });
@@ -191,4 +250,4 @@ if (require.main === module) {
   })().catch((e) => { console.error(e.message); unlock(); process.exit(1); });
 }
 
-module.exports = { run, options, makeGetter, readZip, DAY_CAP, MIN_GAP_S };
+module.exports = { run, profiles, options, makeGetter, readZip, DAY_CAP, MIN_GAP_S };

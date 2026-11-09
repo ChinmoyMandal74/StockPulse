@@ -146,13 +146,37 @@ function open(file) {
   }
   const requestsSince = (ms) => db.prepare('select count(*) n from requests where at >= ?').get(ms).n;
 
+  // The SEC's profile of each issuer (E1, formd.js filerProfile), one row an
+  // issuer a bulk file: a newer file adds rows beside the old, so a change of
+  // name or a new ticker keeps its history. Written all or nothing per file.
+  db.exec(`create table if not exists fd_profiles (
+      cik text not null, as_of text not null, name text, ein text, state_inc text, fiscal_year_end text, sic text, sic_desc text,
+      entity_type text, category text, tickers text, exchanges text, biz_city text, biz_state text, former_names text,
+      filings integer, first_filed text, last_filed text, forms text, source text, primary key (cik, as_of)
+    );
+    create index if not exists idx_fd_profiles_ein on fd_profiles (ein);`);
+  const PROFILE_COLS = ['cik', 'as_of', 'name', 'ein', 'state_inc', 'fiscal_year_end', 'sic', 'sic_desc', 'entity_type', 'category', 'tickers',
+    'exchanges', 'biz_city', 'biz_state', 'former_names', 'filings', 'first_filed', 'last_filed', 'forms', 'source'];
+  function writeProfiles(rows, asOf, source) {
+    db.exec('begin');
+    try {
+      const ins = db.prepare(`insert or replace into fd_profiles (${PROFILE_COLS.join(', ')}) values (${PROFILE_COLS.map(() => '?').join(', ')})`);
+      for (const r of rows) ins.run(...PROFILE_COLS.map((c) => (c === 'as_of' ? asOf : c === 'source' ? source : r[c] ?? null)));
+      db.exec('commit');
+    } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
+    return rows.length;
+  }
+  const profileDates = () => db.prepare('select as_of, count(*) n from fd_profiles group by as_of order by as_of').all();
+  const issuerCiks = () => db.prepare('select distinct cik from formd where cik is not null').all().map((r) => r.cik);
+
   const search = (q, limit = 50) => db.prepare('select * from formd where name like ? collate nocase order by filed desc limit ?').all('%' + q + '%', limit);
   const stats = () => ({
     quarters: db.prepare('select count(*) n, min(quarter) a, max(quarter) b from loads').get(),
     filings: db.prepare('select count(*) n from formd').get().n,
+    profiles: profileDates(),
   });
 
-  return { db, loaded, loadQuarter, markSuperseded, noteRequest, requestsSince, search, stats, close: () => db.close() };
+  return { db, loaded, loadQuarter, markSuperseded, writeProfiles, profileDates, issuerCiks, noteRequest, requestsSince, search, stats, close: () => db.close() };
 }
 
 module.exports = { open, DEFAULT_PATH };

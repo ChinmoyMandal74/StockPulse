@@ -145,6 +145,35 @@ What it decides:
   set of filters while the viewer runs; a person search scans the three
   million related persons (about 11 seconds).
 
+## The SEC's profile of each issuer (E1, 2026-11-09)
+
+The owner, on the viewer: "I don't see much details about the entity itself,
+can we get that from somewhere", then "add all this to backlog first and
+start with 1" (backlog 61, E1 to E6).
+
+`formd-load.js --profiles [--commit]` reads the SEC's bulk submissions file
+already on disk (`submissions-YYYY-MM-DD.zip` in `%TEMP%	ickrlab-sec`,
+fetched once by `acq-load.js --list`) and **makes no request**: a missing
+file is an error, never a download. `formd.js filerProfile` turns each
+issuer's JSON (and its older pages) into one row of `fd_profiles`, keyed
+by CIK and the file's date, so a newer file adds rows beside the old.
+
+What it gives, of 365,341 issuers found (365,344 in the archive; funds
+included): an **EIN** on 231,399 (the join to Form 5500, E2), state of
+incorporation, fiscal year end, **former names** on 16,967 (the SEC also
+lists the present name when only its spelling changed; left out),
+an industry code on only 7,992, a **ticker** on 2,959 (linked to our stock
+page where we track it), and every other form filed, grouped: annual,
+quarterly, registration, current, crowdfunding, Regulation A, insider,
+13F, Form D, each with a count and first and last date. No website or
+description: the SEC holds none for these companies. The street and
+telephone are not kept; the business city and state are.
+
+The viewer shows it as "Company profile" and "Everything it has filed with
+the SEC" in the side panel, a ticker tag in the list, and a filter, "The SEC
+also has" (now listed, financial statements, 10-K, Form C, Reg A,
+registration, a former name). About 30 seconds to read the file.
+
 ## The filed date before 2020 Q3 (fixed 2026-11-09)
 
 Quarters up to 2020 Q2 stamp the submission with a time
@@ -163,6 +192,7 @@ node --use-system-ca formd-load.js --commit           # up to 4 quarters, newest
 node --use-system-ca formd-load.js --commit --max all --gap 60
 node --use-system-ca formd-load.js --search "crusoe"  # read the archive, no requests
 node --use-system-ca formd-load.js --stats
+node --use-system-ca formd-load.js --profiles --commit   # E1, from the bulk file on disk, no request
 ```
 
 Once the history is in, one run a quarter, by hand, after the SEC posts the

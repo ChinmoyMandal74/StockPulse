@@ -94,6 +94,31 @@ eq(A0.db.prepare('select SALESAMTCLARIFICATIONOFRESP s from fd_offering where AC
 const T2 = { FORMDSUBMISSION: F.parseTsv(tsv(H_SUB + '\tNEWCOL', ['0009999999-09-000001\t021-1\t01-JAN-2009\t\tX\tD\tLIVE\t\t\tz'])), ISSUERS: { header: [], rows: [] }, OFFERING: { header: [], rows: [] } };
 A0.loadQuarter('2009Q1', 'u2', T2, 1);
 eq(A0.db.prepare('select NEWCOL from fd_submissions where ACCESSIONNUMBER = ?').get('0009999999-09-000001').NEWCOL, 'z', 'a new column is added');
+// ---- the SEC's profile of an issuer (E1) ----
+const MAIN = { cik: '0001924674', name: 'Crusoe Inc.', ein: '881194382', stateOfIncorporation: 'DE', fiscalYearEnd: '1231', sic: '', sicDescription: '',
+  tickers: [], exchanges: [], entityType: 'other', phone: '720-795-6484',
+  addresses: { business: { street1: '255 FILLMORE STREET, #400', city: 'DENVER', stateOrCountry: 'CO', zipCode: '80206' } },
+  formerNames: [{ name: 'Crusoe Energy Holdings Inc.', from: '2022-04-22T04:00:00.000Z', to: '2024-02-08T05:00:00.000Z' }],
+  filings: { recent: { form: ['D', 'D/A', '10-K', 'C', '4'], filingDate: ['2026-09-17', '2025-10-23', '2024-03-01', '2023-05-05', '2022-06-01'] } } };
+const prof = F.filerProfile(MAIN, [{ form: ['D', '1-K'], filingDate: ['2019-01-02', '2020-04-30'] }]);
+eq([prof.cik, prof.ein, prof.state_inc, prof.fiscal_year_end, prof.sic, prof.tickers], ['1924674', '881194382', 'DE', '1231', null, null], 'profile: CIK without zeros, EIN, incorporation, year end; blanks are null');
+eq(JSON.parse(prof.former_names), [{ name: 'Crusoe Energy Holdings Inc.', from: '2022-04-22', to: '2024-02-08' }], 'former names with their dates');
+eq([prof.filings, prof.first_filed, prof.last_filed], [7, '2019-01-02', '2026-09-17'], 'older pages counted too');
+eq(JSON.parse(prof.forms), { formD: { n: 3, first: '2019-01-02', last: '2026-09-17' }, annual: { n: 1, first: '2024-03-01', last: '2024-03-01' },
+  crowdfunding: { n: 1, first: '2023-05-05', last: '2023-05-05' }, insider: { n: 1, first: '2022-06-01', last: '2022-06-01' },
+  regA: { n: 1, first: '2020-04-30', last: '2020-04-30' } }, 'forms grouped, with first and last');
+ok(!JSON.stringify(prof).includes('FILLMORE') && !JSON.stringify(prof).includes('80206') && !JSON.stringify(prof).includes('720-795'), 'no street, zip or telephone kept');
+eq([prof.biz_city, prof.biz_state], ['DENVER', 'CO'], 'the business city and state');
+eq(F.filerProfile({ ...MAIN, ein: '000000000' }).ein, null, 'a zero EIN is none');
+eq(F.filerProfile({ ...MAIN, tickers: ['BRK.B', 'BRK.A'] }).tickers, 'BRK.B,BRK.A', 'tickers kept');
+eq(F.filerProfile(null), null, 'no JSON, no profile');
+eq(F.filerProfile({ ...MAIN, name: 'Cardinal Health, Inc.', formerNames: [{ name: 'CARDINAL HEALTH INC', from: '1994-08-19T00:00:00.000Z', to: '2026-11-05T00:00:00.000Z' }] }).former_names, null,
+  'the present name, spelt otherwise, is not a former name');
+const A2 = Archive.open(':memory:');
+eq(A2.writeProfiles([prof], '2026-11-09', 'f.zip'), 1, 'profiles written');
+A2.writeProfiles([{ ...prof, name: 'Crusoe Inc. (renamed)' }], '2026-12-01', 'g.zip');
+eq(A2.db.prepare('select as_of, name from fd_profiles order by as_of').all().map((r) => [r.as_of, r.name]), [['2026-11-09', 'Crusoe Inc.'], ['2026-12-01', 'Crusoe Inc. (renamed)']], 'a newer file adds rows beside the old: history kept');
+
 // Superseded: the original an amendment names, loaded after the amendment
 // (an older quarter in a newest-first run), is marked; the amendment is not.
 const orig = (line) => line.replace('0002133337-26-000002', '0002133337-26-000001').replace('\tD/A\t', '\tD\t');

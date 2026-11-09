@@ -13,6 +13,18 @@
 'use strict';
 
 const PAGE = 50;
+
+// What the SEC's profile of the issuer shows (backlog 61, E1; formd.js
+// filerProfile): fixed conditions, picked by key, never built from the request.
+const HAS = {
+  listed: 'tickers is not null',
+  financials: "(json_extract(forms, '$.annual') is not null or json_extract(forms, '$.crowdfunding') is not null or json_extract(forms, '$.regA') is not null)",
+  annual: "json_extract(forms, '$.annual') is not null",
+  crowdfunding: "json_extract(forms, '$.crowdfunding') is not null",
+  regA: "json_extract(forms, '$.regA') is not null",
+  registration: "json_extract(forms, '$.registration') is not null",
+  formerName: 'former_names is not null',
+};
 const FUND = 'Pooled Investment Fund';
 const YEAR_MIN = 2008;
 
@@ -47,6 +59,7 @@ function filters(sp, now = new Date()) {
     revenue: get('revenue'),
     minSold: minSold != null && minSold > 0 ? minSold : null,
     every: get('every') === '1',
+    has: Object.prototype.hasOwnProperty.call(HAS, get('has')) ? get('has') : '',
     sort,
     dir: get('dir') === 'asc' ? 'asc' : 'desc',
     page: Math.max(0, intIn(get('page'), 0, 100000) || 0),
@@ -75,10 +88,12 @@ function where(f) {
   if (f.revenue === 'disclosed') w.push("revenue_range is not null and revenue_range <> 'Decline to Disclose' and revenue_range <> 'Not Applicable'");
   else if (f.revenue) { w.push('revenue_range = ?'); p.push(f.revenue); }
   if (f.minSold != null) { w.push('sold >= ?'); p.push(f.minSold); }
+  if (f.has) w.push(`cik in (select cik from fd_profiles where as_of = (select max(as_of) from fd_profiles) and ${HAS[f.has]})`);
   return { where: w.length ? 'where ' + w.join(' and ') : '', params: p };
 }
 
-const LIST_COLS = 'accn, filed, form, cik, name, city, state, industry, fund_type, revenue_range, entity_type, year_inc, offered, offered_indefinite, sold, remaining, investors, first_sale, superseded';
+const LIST_COLS = 'accn, filed, form, cik, name, city, state, industry, fund_type, revenue_range, entity_type, year_inc, offered, offered_indefinite, sold, remaining, investors, first_sale, superseded, '
+  + '(select p.tickers from fd_profiles p where p.cik = formd.cik order by p.as_of desc limit 1) tickers';
 
 function listSql(f) {
   const { where: w, params } = where(f);
@@ -123,4 +138,4 @@ function secUrl(cik, accn) {
   return `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${String(accn).replace(/-/g, '')}/`;
 }
 
-module.exports = { PAGE, FUND, SORTS, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS };
+module.exports = { PAGE, FUND, SORTS, HAS, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS };

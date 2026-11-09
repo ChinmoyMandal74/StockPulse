@@ -162,4 +162,81 @@ function verdict(status) {
   return { go: false, why: `sec.gov answered ${status}. Stopped; nothing retried.` };
 }
 
-module.exports = { TABLES, tableOf, unquote, parseTsv, isoDate, amount, indefinite, flag, quarterOf, zipLinks, summarise, verdict };
+// ---- The SEC's own profile of an issuer (backlog 61, E1, 2026-11-09) ----
+// From the SEC's bulk submissions file already on disk (acq-load.js fetched it
+// once): one JSON a filer, `filings.recent` plus older pages. What it adds to
+// Form D: the EIN (the key to the Labor Department's Form 5500, E2), state of
+// incorporation, fiscal year end, former names, a ticker if it now trades,
+// and which other kinds of report it has filed. No website or description:
+// the SEC holds none for these companies.
+const FORM_GROUPS = {
+  annual: /^(10-K|10-K\/A|20-F|40-F)$/,          // full financial statements, yearly
+  quarterly: /^(10-Q|10-Q\/A)$/,
+  registration: /^(S-1|S-1\/A|F-1|F-1\/A|S-4|S-4\/A|424B\d)$/,
+  current: /^(8-K|8-K\/A|6-K)$/,
+  crowdfunding: /^(C|C\/A|C-U|C-AR|C-AR\/A|C-TR)$/, // Form C: two years' figures
+  regA: /^(1-A|1-A\/A|1-K|1-K\/A|1-SA|253G\d)$/,   // Regulation A: yearly statements
+  insider: /^(3|4|5|3\/A|4\/A|5\/A)$/,
+  manager: /^(13F-HR|13F-HR\/A)$/,
+  formD: /^(D|D\/A)$/,
+};
+const noZeros = (s) => (s == null || s === '' ? null : String(Number(s)));
+const blank = (s) => (s == null || String(s).trim() === '' ? null : String(s).trim());
+
+// main: the CIK##########.json object; pages: its -submissions-00N.json
+// objects (each holds the same column arrays as `filings.recent`).
+function filerProfile(main, pages = []) {
+  if (!main || !main.cik) return null;
+  const groups = {};
+  let total = 0, first = null, last = null;
+  const take = (cols) => {
+    if (!cols || !Array.isArray(cols.form)) return;
+    for (let i = 0; i < cols.form.length; i++) {
+      const form = String(cols.form[i] || ''), d = isoDate(cols.filingDate && cols.filingDate[i]);
+      total++;
+      if (d && (!first || d < first)) first = d;
+      if (d && (!last || d > last)) last = d;
+      for (const [g, re] of Object.entries(FORM_GROUPS)) {
+        if (!re.test(form)) continue;
+        const x = groups[g] || (groups[g] = { n: 0, first: null, last: null });
+        x.n++;
+        if (d && (!x.first || d < x.first)) x.first = d;
+        if (d && (!x.last || d > x.last)) x.last = d;
+      }
+    }
+  };
+  take(main.filings && main.filings.recent);
+  for (const p of pages) take(p && (p.filings ? p.filings.recent : p));
+  const ein = blank(main.ein);
+  const biz = (main.addresses && main.addresses.business) || {};
+  return {
+    cik: noZeros(main.cik),
+    name: blank(main.name),
+    ein: ein && /^\d{9}$/.test(ein) && ein !== '000000000' ? ein : null,
+    state_inc: blank(main.stateOfIncorporation),
+    fiscal_year_end: /^\d{4}$/.test(String(main.fiscalYearEnd || '')) ? String(main.fiscalYearEnd) : null,
+    sic: blank(main.sic),
+    sic_desc: blank(main.sicDescription),
+    entity_type: blank(main.entityType),
+    category: blank(main.category),
+    tickers: (main.tickers || []).filter(Boolean).join(',') || null,
+    exchanges: (main.exchanges || []).filter(Boolean).join(',') || null,
+    // The company's business city and state; the street and telephone are not kept.
+    biz_city: blank(biz.city),
+    biz_state: blank(biz.stateOrCountry),
+    // The SEC lists the present name among the former ones when only its
+    // spelling changed ("CARDINAL HEALTH INC" for "Cardinal Health Inc"): left out.
+    former_names: (() => {
+      const key = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const list = (main.formerNames || []).filter((f) => f && f.name && key(f.name) !== key(main.name))
+        .map((f) => ({ name: f.name, from: isoDate(String(f.from || '').slice(0, 10)), to: isoDate(String(f.to || '').slice(0, 10)) }));
+      return list.length ? JSON.stringify(list) : null;
+    })(),
+    filings: total,
+    first_filed: first,
+    last_filed: last,
+    forms: JSON.stringify(groups),
+  };
+}
+
+module.exports = { TABLES, tableOf, unquote, parseTsv, isoDate, amount, indefinite, flag, quarterOf, zipLinks, summarise, verdict, FORM_GROUPS, filerProfile };
