@@ -2914,6 +2914,23 @@ buy only where it must.
    sold for if bought, headcount proxy, government work. Only then does
    anything reach Turso or a page, with `/privacy` and `/sources` in the
    same commit.
+6. **Copy to Turso, last, once the analysis above is done** (owner,
+   2026-11-08: "people data is also important but not their addresses ..
+   turso update on private data should be in the backlog .. to be done at
+   the end of this analysis"). A slice, not the archive:
+   - the summary rows (one a filing; probably operating companies only,
+     leaving out the pooled funds, about a third of the filings);
+   - **the people: names, roles (executive, director, promoter) and the
+     clarification text, per filing. Never their street address or ZIP
+     code** (`fd_persons` STREET1, STREET2, ZIPCODE stay local). Whether
+     city and state go too is open with the owner;
+   - signers' names and titles from `fd_signatures` the same way;
+   - whatever phases 2 to 4 produce that a page shows.
+   Before it: check the Turso plan's row and storage limits and quote the
+   rows to be written; index for lookups by CIK and by name, so a page
+   reads a handful of rows; the new tables join `SYMBOL_TABLES` if keyed
+   by symbol, and `query-plan-test.js`; `/privacy` and `/sources` change
+   in the same commit. The full archive stays on the laptop for research.
 
 **The gap to be honest about.** Most small private companies (Continental
 probably among them) never raise registered money or are bought by a
