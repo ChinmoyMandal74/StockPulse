@@ -2946,6 +2946,9 @@ buy only where it must.
    - **E6. PPP loans (SBA)**: jobs reported, NAICS code, loan size,
      2020-21; small businesses; matched by name and state, so inexact.
      **Built 2026-11-09** (ppp-load.js; docs/context/ppp-loans.md).
+   - **E7. Federal contracts, built 2026-11-09** (contracts-load.js;
+     docs/context/federal-contracts.md), and an outcomes study
+     (formd-outcomes.js).
    - **Every employer** (2026-11-09): the plan sponsors of all employers,
      not only Form D issuers, on the viewer's Employers page.
    - **Phase 5, the fact sheet, built 2026-11-09** in the local viewer

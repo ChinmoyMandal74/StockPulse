@@ -31,6 +31,10 @@
     }
     if (f.raised) add('Money raised (Form D)', money(f.raised.sold) + ' <span style="color:var(--faint)">in ' + f.raised.n + ' offering' + (f.raised.n === 1 ? '' : 's') + ', ' + esc(String(f.raised.first || '').slice(0, 4)) + (f.raised.last && f.raised.last.slice(0, 4) !== String(f.raised.first || '').slice(0, 4) ? '–' + esc(f.raised.last.slice(0, 4)) : '') + '</span>');
     if (f.ppp) add('PPP loans, 2020–21', money(f.ppp.amount) + (f.ppp.jobs ? ' <span style="color:var(--faint)">· ' + num(f.ppp.jobs) + ' jobs reported</span>' : ''));
+    if (f.fed) {
+      const ys = f.fed.years, a = ys[0].fy, b = ys[ys.length - 1].fy;
+      add('Federal contracts', money(f.fed.total) + ' <span style="color:var(--faint)">over fiscal ' + (a === b ? a : a + '–' + b) + (f.fed.agency ? ', mostly ' + esc(f.fed.agency) : '') + '</span>');
+    }
     add('Place', esc(f.place));
     if (f.incorporated) add('Incorporated in', esc(f.incorporated));
     if (f.fiscalYearEnd && /^\d{4}$/.test(f.fiscalYearEnd)) add('Fiscal year ends', MONTHS[Number(f.fiscalYearEnd.slice(0, 2)) - 1] + ' ' + Number(f.fiscalYearEnd.slice(2)));
@@ -41,6 +45,7 @@
       out += '<table class="fs-ppp">' + f.ppp.loans.map((x) => '<tr><td>' + esc(x.approved || '') + (x.draw === 2 ? ' · second draw' : '') + '</td><td>' + esc(x.name) + '<span style="display:block;color:var(--faint);font-size:11px">' + esc([x.city, x.state].filter(Boolean).join(', ')) + '</span></td><td class="n">' + money(x.amount) + '</td><td class="n">' + (x.jobs == null ? DASH : num(x.jobs) + ' jobs') + '</td></tr>').join('') + '</table>'
         + '<p class="fs-note">PPP loans are matched by name and state (the loan files carry no tax ID), so a loan to another business of the same name in the same state can appear here.</p>';
     }
+    if (f.fed) out += '<p class="fs-note">Federal contracts are matched ' + (f.fed.byPhone ? 'by the company’s own telephone or ' : '') + 'by name and state; recipients matched: ' + f.fed.recipients.slice(0, 4).map(esc).join('; ') + (f.fed.recipients.length > 4 ? '…' : '') + '.</p>';
     if (!cells.length) out += '<p class="fs-note">Nothing more is held on this company.</p>';
     return out + '</div>';
   }

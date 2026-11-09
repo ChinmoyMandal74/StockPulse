@@ -194,6 +194,27 @@ function makeApi(db, opts = {}) {
       for (const k of keys) ppp.push(...q.all(k, st));
       ppp = ppp.filter((x, i, a) => a.findIndex((y) => y.loan === x.loan) === i);
     }
+    // Federal contracts (E7): the recipients matched by name and state, or by
+    // the company's own filed telephone (a contract record carries the
+    // recipient's). Summed by fiscal year over every matched recipient.
+    let fed = null;
+    if (hasTable('fed_contracts')) {
+      const keys = [...new Set(allNames.map(NK).filter(Boolean))];
+      const phones = issuer && hasTable('ct_companies') ? db.prepare('select phone from ct_companies where cik = ? and phone is not null').all(issuer).map((r) => r.phone) : [];
+      const conds = [], ps = [];
+      if (st && keys.length) { conds.push(`(name_key in (${keys.map(() => '?').join(', ')}) and state = ?)`); ps.push(...keys, st); }
+      if (phones.length) { conds.push(`phone in (${phones.map(() => '?').join(', ')})`); ps.push(...phones); }
+      if (conds.length) {
+        const rs = db.prepare(`select rkey, fy, name, state, phone, obligations, actions, top_agency, naics from fed_contracts where ${conds.join(' or ')} order by fy`).all(...ps);
+        if (rs.length) {
+          const byYear = new Map();
+          for (const r of rs) { const y = byYear.get(r.fy) || { fy: r.fy, obligations: 0, actions: 0 }; y.obligations += r.obligations; y.actions += r.actions; byYear.set(r.fy, y); }
+          const ag = new Map(); for (const r of rs) if (r.top_agency) ag.set(r.top_agency, (ag.get(r.top_agency) || 0) + Math.abs(r.obligations));
+          fed = { years: [...byYear.values()], total: rs.reduce((a, r) => a + r.obligations, 0), recipients: [...new Set(rs.map((r) => r.name + ' (' + (r.state || '?') + ')'))],
+            agency: [...ag.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])[0] || null, byPhone: phones.length > 0 && rs.some((r) => phones.includes(r.phone)) };
+        }
+      }
+    }
     const last = yrs.length ? yrs[yrs.length - 1] : null;
     const y2019 = yrs.find((y) => y.year === 2019);
     const code = (yrs.slice().reverse().find((y) => y.business_code) || {}).business_code || (ppp.find((x) => x.naics) || {}).naics || null;
@@ -208,6 +229,7 @@ function makeApi(db, opts = {}) {
       raised: raised && raised.n ? raised : null,
       ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
       tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
+      fed,
     };
   }
 

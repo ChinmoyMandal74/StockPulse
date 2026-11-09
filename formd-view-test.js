@@ -216,7 +216,7 @@ eq(per.roles.map((r) => [r.company, r.exec, r.dir, r.title]), [['Kavia AI, Inc.'
 const com = api2.contact('companies', '1');
 eq([com.people.length, com.brokers.length, !!com.facts], [2, 1, true], 'a company: its people, its brokers and the fact sheet');
 const csv = api2.contactsCsv(sp('tab=people'));
-ok(/^name,kind,state,companies/.test(csv.csv) && /"Ben J Ortiz","person","CA"/.test(csv.csv), 'the CSV: the columns of the tab, the rows as filtered');
+ok(/^name,kind,state,states,companies/.test(csv.csv) && /"Ben J Ortiz","person","CA"/.test(csv.csv), 'the CSV: the columns of the tab, the rows as filtered');
 const every = JSON.stringify([CT, per, com, csv, api2.contacts(sp('tab=brokers'))]);
 ok(!/77 ELM|12 PINE|PALO ALTO|OAKLAND|94301|94612|2618 SUTTER|1 BROKER PLAZA/.test(every), 'no address anywhere in the contact list, its panels or its CSV');
 eq(require('./contactquery.js').toCsv([{ a: '=1+1', b: 'say "hi"' }], ['a', 'b']), 'a,b\r\n"\'=1+1","say ""hi"""\r\n', 'CSV: quotes doubled; a formula is defused');

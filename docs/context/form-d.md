@@ -230,6 +230,22 @@ sharing a company or telephone across states. The rebuild joined 27,027
 name-and-state entries into 24,139 people: **525,858 people** and 89,462
 firms, 1,413,144 company roles.
 
+## What happens after a first Form D (2026-11-09)
+
+`formd-outcomes.js` (read only, no request): every operating company by the
+year of its first Form D, and what followed by the newest data: raised
+again (a new offering in a later year), a retirement or health plan under
+its tax ID and its staff over time, a registration to sell shares publicly,
+a ticker now, and any filing from 2023 on. Descriptive; it rates no
+company. First run: 185,666 companies. Of the 96,966 whose first Form D
+came in 2010 to 2019: 24% raised again, 14.3% have a plan (their median
+staff now 40; of those with five or more at first, 37% at least doubled),
+3.3% filed to sell shares publicly, 1.6% trade now, and 12.1% filed
+anything from 2023 on (silence is not closure: most need not file again).
+By group (2010 to 2019): health care has the most registrations (9.6%) and
+listings (4.8%); technology and health care raise again most (42%, 44%);
+real estate least (4%: one-off property vehicles).
+
 ## The filed date before 2020 Q3 (fixed 2026-11-09)
 
 Quarters up to 2020 Q2 stamp the submission with a time
