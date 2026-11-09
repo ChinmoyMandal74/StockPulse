@@ -174,6 +174,16 @@ the SEC" in the side panel, a ticker tag in the list, and a filter, "The SEC
 also has" (now listed, financial statements, 10-K, Form C, Reg A,
 registration, a former name). About 30 seconds to read the file.
 
+## The fact sheet (2026-11-09, backlog 61 phase 5)
+
+"Known facts" at the top of both side panels (Form D and Employers), from
+`facts()` in `formd-view.js`, drawn by `factsheet.js` (one script for
+both pages): names on file, tax ID, incorporation, place, business (from
+the plans, else the PPP loan), staff now and since 2019, money raised (each
+offering once, at its latest filing, the "check" rows left out), PPP loans
+(by name and state, marked as such), and a ticker if it trades. Joined by
+tax ID where there is one, else the Form D CIK, else name and state.
+
 ## The filed date before 2020 Q3 (fixed 2026-11-09)
 
 Quarters up to 2020 Q2 stamp the submission with a time

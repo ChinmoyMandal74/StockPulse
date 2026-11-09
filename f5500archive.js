@@ -35,6 +35,24 @@ function ensureSchema(db) {
       bad integer, eins integer, loaded_at integer not null
     );
     create table if not exists dol_requests (at integer not null, url text not null, status integer, bytes integer, ms integer);
+    -- Every employer with its own plan (2026-11-09; not only the Form D
+    -- issuers): one row an EIN a plan year, its largest plan's headcount and
+    -- the plan filings counted. Built from the yearly files on disk
+    -- (f5500-load.js --employers); a later file only raises a count or adds a year.
+    create table if not exists f5500_employers (
+      ein text not null, year integer not null, name text, dba text, city text, state text, business_code text,
+      staff real, participants real, active real, net_assets real, filings integer not null default 1,
+      primary key (ein, year)
+    );
+    -- The newest year of each employer, with its first year for growth:
+    -- what the viewer lists. Derived from f5500_employers; rebuilt whole.
+    create table if not exists f5500_latest (
+      ein text primary key, year integer, name text, dba text, city text, state text, business_code text, staff real,
+      first_year integer, first_staff real, y2019 real, years integer
+    );
+    create index if not exists idx_f5500_latest_name on f5500_latest (name collate nocase);
+    create index if not exists idx_f5500_latest_staff on f5500_latest (staff);
+    create index if not exists idx_f5500_latest_code on f5500_latest (business_code);
   `);
 }
 
@@ -66,6 +84,49 @@ function open(file) {
   }
   const loaded = () => new Map(db.prepare('select * from f5500_loads').all().map((r) => [r.file, r]));
 
+  // One file's employers (rows keyed ein|year, already reduced to the
+  // largest plan), merged in: a year already on file keeps the larger count
+  // and adds the filings. All or nothing.
+  function mergeEmployers(rows) {
+    db.exec('begin');
+    try {
+      const up = db.prepare(`insert into f5500_employers (ein, year, name, dba, city, state, business_code, staff, participants, active, net_assets, filings)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(ein, year) do update set
+          filings = filings + excluded.filings,
+          name = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.name else name end,
+          dba = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.dba else dba end,
+          city = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.city else city end,
+          state = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.state else state end,
+          business_code = coalesce(case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.business_code end, business_code, excluded.business_code),
+          participants = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.participants else participants end,
+          active = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then excluded.active else active end,
+          net_assets = case when coalesce(excluded.staff, -1) > coalesce(staff, -1) then coalesce(excluded.net_assets, net_assets) else coalesce(net_assets, excluded.net_assets) end,
+          staff = nullif(max(coalesce(staff, -1), coalesce(excluded.staff, -1)), -1)`);
+      for (const r of rows) up.run(r.ein, r.year, r.name ?? null, r.dba ?? null, r.city ?? null, r.state ?? null, r.business_code ?? null, r.staff ?? null, r.participants ?? null, r.active ?? null, r.net_assets ?? null, r.filings || 1);
+      db.exec('commit');
+    } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
+    return rows.length;
+  }
+
+  // The newest year of each employer, rebuilt from f5500_employers (derived,
+  // so replaced whole; the yearly rows it comes from are never touched).
+  function rebuildLatest() {
+    db.exec('begin');
+    try {
+      db.exec('delete from f5500_latest');
+      db.exec(`insert into f5500_latest (ein, year, name, dba, city, state, business_code, staff, first_year, first_staff, y2019, years)
+        select e.ein, e.year, e.name, e.dba, e.city, e.state, e.business_code, e.staff,
+          f.first_year, (select staff from f5500_employers x where x.ein = e.ein and x.year = f.first_year),
+          (select staff from f5500_employers x where x.ein = e.ein and x.year = 2019), f.years
+        from f5500_employers e
+        join (select ein, max(year) last_year, min(year) first_year, count(*) years from f5500_employers group by ein) f
+          on f.ein = e.ein and f.last_year = e.year`);
+      db.exec('commit');
+    } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
+    return db.prepare('select count(*) n from f5500_latest').get().n;
+  }
+
   function noteRequest(url, status, bytes, ms) {
     try { db.prepare('insert into dol_requests (at, url, status, bytes, ms) values (?, ?, ?, ?, ?)').run(Date.now(), url, status, bytes, ms); } catch (_) { /* bookkeeping */ }
   }
@@ -76,7 +137,7 @@ function open(file) {
     plans: db.prepare('select count(*) n, count(distinct ein) eins from f5500_plans').get(),
   });
 
-  return { db, issuerEins, loadFile, loaded, noteRequest, requestsSince, stats, close: () => db.close() };
+  return { db, issuerEins, loadFile, loaded, mergeEmployers, rebuildLatest, noteRequest, requestsSince, stats, close: () => db.close() };
 }
 
 module.exports = { open, ensureSchema, DEFAULT_PATH, COLS };

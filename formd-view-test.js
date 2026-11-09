@@ -140,6 +140,64 @@ eq(FP.businessOthers.map((b) => b.title), ['Software Publishers'], 'another code
 eq(api.filing('0000000003-24-000001').plans, [], 'no EIN, no plans');
 ok(!JSON.stringify(FP.plans).includes('SUTTER'), 'no street in the plans');
 
+// ---- every employer (the Employers page) ----
+const E = require('./employerquery.js');
+db.exec(`insert into f5500_employers (ein, year, name, dba, city, state, business_code, staff, participants, active, net_assets, filings) values
+  ('010750002', 2019, 'CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', null, 'OAK BROOK', 'IL', '238210', 94, 94, 87, 33346509, 1),
+  ('010750002', 2024, 'FOURGEN HOLDINGS INC.', null, 'OAK BROOK', 'IL', '238210', 168, 168, 140, null, 2),
+  ('123456789', 2024, 'KAVIA AI INC', 'KAVIA', 'SAN FRANCISCO', 'CA', '541511', 15, 12, 15, 98000, 1),
+  ('555555555', 2012, 'GONE ELECTRIC INC', null, 'PEORIA', 'IL', '238210', 40, 40, null, 100, 1);
+  insert into f5500_latest (ein, year, name, dba, city, state, business_code, staff, first_year, first_staff, y2019, years) values
+  ('010750002', 2024, 'FOURGEN HOLDINGS INC.', null, 'OAK BROOK', 'IL', '238210', 168, 2019, 94, 94, 2),
+  ('123456789', 2024, 'KAVIA AI INC', 'KAVIA', 'SAN FRANCISCO', 'CA', '541511', 15, 2024, 15, null, 1),
+  ('555555555', 2012, 'GONE ELECTRIC INC', null, 'PEORIA', 'IL', '238210', 40, 2012, 40, null, 1);`);
+const EL = api.employers(sp(''));
+eq(EL.rows.map((r) => r.ein), ['010750002', '555555555', '123456789'], 'every employer, largest first');
+eq([EL.total.n, EL.total.staff], [3, 223], 'counted');
+eq(EL.rows[0].growth.toFixed(3), (168 / 94 - 1).toFixed(3), 'growth since 2019');
+eq(EL.rows.find((r) => r.ein === '123456789').growth, null, 'no 2019 year, no growth');
+eq(EL.rows.find((r) => r.ein === '123456789').formd_cik, '1', 'a Form D issuer is marked, by its EIN');
+eq(api.employers(sp('naics=2382&state=il')).rows.map((r) => r.ein), ['010750002', '555555555'], 'business code start and state, any case');
+eq(api.employers(sp('naics=2382&current=1')).rows.map((r) => r.ein), ['010750002'], 'still filing');
+eq(api.employers(sp('q=continental')).rows.length, 0, 'the newest name is what the list searches');
+eq(api.employers(sp('q=fourgen')).rows.map((r) => r.ein), ['010750002'], 'by name');
+eq(api.employers(sp('q=01-0750002')).rows.map((r) => r.ein), ['010750002'], 'by tax ID with its dash');
+eq(api.employers(sp('q=kavia')).rows.length, 1, 'by trading name too');
+eq(api.employers(sp('formd=1')).rows.map((r) => r.ein), ['123456789'], 'only those that raised money by Form D');
+eq(api.employers(sp('sort=growth')).rows[0].ein, '010750002', 'sort by growth, blanks last');
+eq(E.filters(sp('sort=x;drop')).sort, 'staff', 'a sort not on the list falls back');
+const EM = api.employer('010750002');
+eq(EM.years.map((y) => [y.year, y.name, y.staff]), [[2019, 'CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', 94], [2024, 'FOURGEN HOLDINGS INC.', 168]], 'the employer, year by year, with the name each year');
+eq(EM.names, ['CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', 'FOURGEN HOLDINGS INC.'], 'every name it filed under');
+eq(EM.formd, null, 'no Form D under this tax ID');
+eq(api.employer('123456789').formd.raises.length, 2, 'Form D raises under the same tax ID');
+eq(api.employer('12345'), null, 'a malformed tax ID is refused');
+
+// ---- the fact sheet ----
+db.exec(`insert into ppp_loans (loan, approved, draw, name, name_key, city, state, zip, jobs, naics, amount, forgiven, business_type, nonprofit, file) values
+  ('L1', '2020-04-15', 1, 'KAVIA AI, INC.', 'KAVIA AI', 'San Francisco', 'CA', '94115', 9, '541511', 120000, 121000, 'Corporation', 0, 'f'),
+  ('L2', '2021-02-01', 2, 'Kavia AI Inc', 'KAVIA AI', 'San Francisco', 'CA', '94115', 11, '541511', 150000, null, 'Corporation', 0, 'f'),
+  ('L3', '2020-05-01', 1, 'KAVIA AI LLC', 'KAVIA AI', 'Austin', 'TX', '78701', 2, '722511', 5000, 5000, 'Limited  Liability Company(LLC)', 0, 'f'),
+  ('L4', '2020-05-01', 1, 'GONE ELECTRIC INC', 'GONE ELECTRIC', 'Peoria', 'IL', '61602', 38, '238210', 400000, 400000, 'Corporation', 0, 'f');`);
+const api2 = V.makeApi(db, { tracked: new Set(['KAVI-A']), naics: NAICS_T });
+const FK = api2.filing('0000000001-26-000002').facts;
+eq([FK.ein, FK.cik, FK.incorporated, FK.state], ['123456789', '1', 'DE', 'CA'], 'from Form D: tax ID, CIK, incorporation, state');
+eq(FK.ppp.loans.map((x) => x.loan), ['L1', 'L2'], 'PPP loans by name and state: the Texas namesake left out');
+eq([FK.ppp.jobs, FK.ppp.amount, FK.ppp.forgiven], [11, 270000, 121000], 'PPP: most jobs reported, amounts summed');
+eq([FK.staff.now, FK.staff.year], [15, 2024], 'staff from the plans, by tax ID');
+eq([FK.raised.n, FK.raised.sold], [1, 3050003], 'money raised: each offering once, at its latest filing');
+eq(FK.tracked, ['KAVI.A'], 'a ticker we track');
+const FE = api2.employer('010750002').facts;
+eq([FE.cik, FE.raised, FE.ppp, FE.staff.y2019], [null, null, null, 94], 'from the Employers side: nothing raised, no loan, 2019 staff for growth');
+eq(FE.names, ['CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', 'FOURGEN HOLDINGS INC.'], 'every name on file');
+const FG = api2.employer('555555555').facts;
+eq([FG.ppp && FG.ppp.loans.length, FG.business.code], [1, '238210'], 'an old employer: its PPP loan by name and state');
+const FS = require('./factsheet.js');
+const card = FS.html(FK);
+ok(/Known facts/.test(card) && /PPP loans/.test(card) && /matched by name and state/.test(card), 'the card draws, and says how the loans were matched');
+ok(!/SUTTER/.test(card), 'no street on the card');
+eq(FS.html(null), '', 'no facts, no card');
+
 // ---- industry groups ----
 const allInd = Object.values(Q.GROUPS).flat();
 eq(allInd.length, 35, 'the form lists 35 industries');

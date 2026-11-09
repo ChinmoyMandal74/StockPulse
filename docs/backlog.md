@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), E3 to E6 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), every employer, E6 (PPP loans) and the phase 5 fact sheet in the local viewer, E3 to E5 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2944,7 +2944,12 @@ buy only where it must.
    - **E5. Companies that file 10-K/10-Q** (5,979): full financials through
      the existing SEC facts reader, one request a company, slowly.
    - **E6. PPP loans (SBA)**: jobs reported, NAICS code, loan size,
-     2020-21; small businesses; matched by name and city, so inexact.
+     2020-21; small businesses; matched by name and state, so inexact.
+     **Built 2026-11-09** (ppp-load.js; docs/context/ppp-loans.md).
+   - **Every employer** (2026-11-09): the plan sponsors of all employers,
+     not only Form D issuers, on the viewer's Employers page.
+   - **Phase 5, the fact sheet, built 2026-11-09** in the local viewer
+     (factsheet.js); not yet on the site.
    - Not available free in bulk: a website or business description
      (Crunchbase, PitchBook, D&B are paid and usually forbid resale).
 5. **A "known facts" view of a private company**: money raised, what it

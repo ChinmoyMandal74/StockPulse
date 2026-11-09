@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Q = require('./formdquery.js');
+const E = require('./employerquery.js');
 const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
@@ -29,6 +30,8 @@ const PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const STATIC = {
   '/': [path.join(__dirname, 'formd-view.html'), 'text/html; charset=utf-8'],
+  '/employers': [path.join(__dirname, 'employers-view.html'), 'text/html; charset=utf-8'],
+  '/factsheet.js': [path.join(__dirname, 'factsheet.js'), 'text/javascript; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
   '/favicon.svg': [path.join(__dirname, 'public', 'favicon.svg'), 'image/svg+xml'],
@@ -159,11 +162,83 @@ function makeApi(db, opts = {}) {
         'SALESCOMM_ISESTIMATE', 'FINDERSFEE_DOLLARAMOUNT', 'FINDERSFEE_ISESTIMATE', 'FINDERFEECLARIFICATIONOFRESP', 'GROSSPROCEEDSUSED_DOLLARAMOUNT',
         'GROSSPROCEEDSUSED_ISESTIMATE', 'GROSSPROCEEDSUSED_CLAROFRESP']),
       issuers, persons, recipients, signatures, history, profile, plans, business: businessNow,
+      facts: facts({ ein: pr && pr.ein, cik: s.cik, names: [s.name], state: s.state }),
       businessOthers: codes.slice(1).map(business).filter(Boolean),
     };
   }
 
-  return { options, list, filing };
+  // ---- the fact sheet: everything held on one company, from either side ----
+  // Keyed by the tax ID where there is one (plans, the SEC profile), the Form
+  // D issuer's CIK, and names with a state for the PPP loans (no tax ID there,
+  // so a name match, marked so). Every part is null when nothing is held.
+  const NK = require('./pppload-read.js').nameKey;
+  const hasTable = (t) => !!db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t);
+  const pppReady = hasTable('ppp_loans');
+  function facts({ ein, cik, names = [], state }) {
+    const pr = cik ? db.prepare('select * from fd_profiles where cik = ? order by as_of desc limit 1').get(cik)
+      : ein ? db.prepare('select * from fd_profiles where ein = ? order by as_of desc limit 1').get(ein) : null;
+    const tax = ein || (pr && pr.ein) || null;
+    const issuer = cik || (pr && pr.cik) || null;
+    const yrs = tax ? db.prepare('select year, name, city, state, business_code, staff, net_assets from f5500_employers where ein = ? order by year').all(tax) : [];
+    const allNames = [...new Set([...names, ...(pr ? [pr.name] : []), ...yrs.map((y) => y.name)].filter(Boolean))];
+    const st = state || (yrs.length ? yrs[yrs.length - 1].state : null) || (pr ? pr.biz_state : null);
+    // Money raised: each offering once, at its latest filing.
+    const raised = issuer ? db.prepare(`select count(*) n, sum(case when ${'sold >= 1e9 and investors is not null and investors <= 2'} then null else sold end) sold,
+        min(filed) first, max(filed) last from formd where cik = ? and superseded = 0`).get(issuer) : null;
+    let ppp = [];
+    if (pppReady && st) {
+      const keys = [...new Set(allNames.map(NK).filter(Boolean))];
+      const q = db.prepare('select loan, approved, draw, name, city, state, jobs, naics, amount, forgiven, business_type from ppp_loans where name_key = ? and state = ? order by approved');
+      for (const k of keys) ppp.push(...q.all(k, st));
+      ppp = ppp.filter((x, i, a) => a.findIndex((y) => y.loan === x.loan) === i);
+    }
+    const last = yrs.length ? yrs[yrs.length - 1] : null;
+    const y2019 = yrs.find((y) => y.year === 2019);
+    const code = (yrs.slice().reverse().find((y) => y.business_code) || {}).business_code || (ppp.find((x) => x.naics) || {}).naics || null;
+    const tickers = pr && pr.tickers ? pr.tickers.split(',') : [];
+    return {
+      names: allNames, ein: tax, cik: issuer, state: st,
+      incorporated: pr ? pr.state_inc : null, fiscalYearEnd: pr ? pr.fiscal_year_end : null,
+      place: last ? [last.city, last.state].filter(Boolean).join(', ') : pr ? [pr.biz_city, pr.biz_state].filter(Boolean).join(', ') : null,
+      business: code ? business(code) || { code, title: 'Industry code ' + code, chain: [] } : null,
+      businessFrom: code && yrs.some((y) => y.business_code) ? 'plans' : code ? 'ppp' : null,
+      staff: last && last.staff != null ? { now: last.staff, year: last.year, y2019: y2019 ? y2019.staff : null, first: yrs[0].staff, firstYear: yrs[0].year, years: yrs.length } : null,
+      raised: raised && raised.n ? raised : null,
+      ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
+      tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
+    };
+  }
+
+  // ---- every employer with its own plan (the Employers page) ----
+  const empCount = new Map();
+  function employers(sp) {
+    const f = E.filters(sp);
+    const c = E.countSql(f);
+    const key = JSON.stringify([c.sql, c.params]);
+    if (!empCount.has(key)) { if (empCount.size >= 200) empCount.delete(empCount.keys().next().value); empCount.set(key, one(c)); }
+    const ix = db.prepare('select ein, cik from fd_profiles where ein is not null and as_of = (select max(as_of) from fd_profiles) and ein = ?');
+    const rows = all(E.listSql(f)).map((r) => {
+      const b = r.business_code ? business(r.business_code) : null;
+      const fd = ix.get(r.ein);
+      return { ...r, business_title: b ? b.title : null, formd_cik: fd ? fd.cik : null };
+    });
+    return { filters: f, page: f.page, pageSize: E.PAGE, rows, total: empCount.get(key) };
+  }
+  function employer(ein) {
+    if (!/^\d{9}$/.test(ein)) return null;
+    const years = db.prepare('select year, name, dba, city, state, business_code, staff, participants, active, net_assets, filings from f5500_employers where ein = ? order by year').all(ein);
+    if (!years.length) return null;
+    const last = years[years.length - 1];
+    const codes = [...new Set(years.slice().reverse().map((y) => y.business_code).filter(Boolean))];
+    const names = [...new Set(years.map((y) => y.name).filter(Boolean))];
+    // The same EIN among the Form D issuers: its raises.
+    const pr = db.prepare('select cik, name from fd_profiles where ein = ? order by as_of desc limit 1').get(ein);
+    const raises = pr ? db.prepare(`select ${Q.LIST_COLS} from formd where cik = ? order by filed desc`).all(pr.cik) : [];
+    return { ein, last, years, names, facts: facts({ ein, names, state: last.state }), business: codes.length ? business(codes[0]) : null, businessOthers: codes.slice(1).map(business).filter(Boolean),
+      formd: pr ? { cik: pr.cik, name: pr.name, raises: raises.map((r) => ({ ...r, sec: Q.secUrl(r.cik, r.accn) })) } : null };
+  }
+
+  return { options, list, filing, employers, employer };
 }
 
 function handler(api) {
@@ -181,6 +256,11 @@ function handler(api) {
       }
       if (u.pathname === '/api/options') return send(res, 200, api.options);
       if (u.pathname === '/api/list') return send(res, 200, api.list(u.searchParams));
+      if (u.pathname === '/api/employers') return send(res, 200, api.employers(u.searchParams));
+      if (u.pathname === '/api/employer') {
+        const r = api.employer(String(u.searchParams.get('ein') || '').replace('-', ''));
+        return r ? send(res, 200, r) : send(res, 404, { error: 'no such employer' });
+      }
       if (u.pathname === '/api/filing') {
         const r = api.filing(String(u.searchParams.get('accn') || ''));
         return r ? send(res, 200, r) : send(res, 404, { error: 'no such filing' });

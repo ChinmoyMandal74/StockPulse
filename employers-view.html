@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Employers — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <script src="/factsheet.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed em- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .em-page { max-width: 1320px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 18px; }
+    .em-page > * { min-width: 0; }
+    .em-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .em-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .em-head h1 span { color: var(--muted); font-weight: 400; }
+    .em-head nav { display: flex; gap: 14px; font-size: 13.5px; }
+    .em-head nav a { color: var(--accent); text-decoration: none; }
+    .em-head nav b { color: var(--strong); font-weight: 500; }
+    .em-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .em-filters { padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .em-f { display: grid; gap: 5px; min-width: 0; }
+    .em-f > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .em-f input, .em-f select { height: 34px; border-radius: 10px; border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--text); font: 13.5px var(--sans); padding: 0 10px; min-width: 0; }
+    .em-f input:focus, .em-f select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+    .em-f.em-wide input { width: 280px; }
+    .em-check { display: flex; align-items: center; gap: 7px; height: 34px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .em-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .em-tile { padding: 14px 16px; }
+    .em-tile b { display: block; font: 600 24px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .em-tile span { font-size: 12px; color: var(--faint); }
+    .em-tablebox { overflow-x: auto; }
+    .em-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .em-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; user-select: none; }
+    .em-table th[data-sort] { cursor: pointer; }
+    .em-table th.em-sorted { color: var(--accent); }
+    .em-table td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .em-table tbody tr[data-ein] { cursor: pointer; }
+    .em-table tbody tr[data-ein]:hover td { background: var(--panel); }
+    .em-table .em-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .em-table .em-name { font-weight: 500; color: var(--strong); max-width: 380px; }
+    .em-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .em-up { color: var(--green); } .em-down { color: var(--red); }
+    .em-dash { color: var(--faint); }
+    .em-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent); color: var(--accent-2); margin-left: 6px; vertical-align: 1px; }
+    .em-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
+    .em-empty { padding: 30px; text-align: center; color: var(--muted); }
+    body.em-busy .em-page { opacity: 0.6; }
+    .em-sheet { position: fixed; inset: 0 0 0 auto; width: min(760px, 100vw); z-index: 60; background: var(--surface); border-left: 1px solid var(--hair-2);
+      overflow-y: auto; padding: 20px 24px 40px; transform: translateX(102%); transition: transform 0.32s var(--ease), visibility 0s 0.32s; visibility: hidden; }
+    .em-sheet.em-open { transform: none; visibility: visible; transition: transform 0.32s var(--ease), visibility 0s; }
+    .em-scrim { position: fixed; inset: 0; z-index: 59; background: color-mix(in srgb, var(--shade) 45%, transparent); }
+    .em-sheet h2 { margin: 0; font-size: 21px; font-weight: 600; color: var(--strong); padding-right: 40px; }
+    .em-sheet .em-x { position: absolute; top: 16px; right: 16px; }
+    .em-meta { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+    .em-sheet h4 { margin: 22px 0 8px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .em-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .em-chain { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .em-chain b { color: var(--strong); font-weight: 500; }
+    .em-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 6px; }
+    .em-bars div { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 3px; }
+    .em-bars s { width: 100%; max-width: 30px; background: color-mix(in srgb, var(--accent) 75%, transparent); border-radius: 3px 3px 1px 1px; min-height: 1px; text-decoration: none; }
+    .em-bars i { font: normal 9.5px var(--mono); color: var(--faint); }
+    .em-sheet a { color: var(--accent); }
+    @media (max-width: 860px) { .em-page { padding: 16px 16px 0; } .em-tiles { grid-template-columns: minmax(0, 1fr); } .em-f.em-wide, .em-f.em-wide input { width: 100%; flex: 1 1 100%; } }
+  </style>
+</head>
+<body>
+<div class="em-page">
+  <div class="em-head">
+    <h1>Employers <span>· every company with its own retirement or health plan</span></h1>
+    <nav><a href="/">Form D</a><b>Employers</b></nav>
+  </div>
+  <div class="em-box em-filters">
+    <label class="em-f em-wide"><span>Company or tax ID</span><input id="q" type="search" placeholder="e.g. Continental Electrical, or 01-0750002" autocomplete="off" /></label>
+    <label class="em-f"><span>State</span><input id="state" type="search" maxlength="2" placeholder="IL" style="width:70px;text-transform:uppercase" autocomplete="off" /></label>
+    <label class="em-f" title="An industry code or its start: 2382 is electrical contractors, 5415 computer services"><span>Business code</span><input id="naics" type="search" inputmode="numeric" placeholder="e.g. 238210" style="width:120px" autocomplete="off" /></label>
+    <label class="em-f"><span>Staff at least</span><select id="minStaff"><option value="">Any</option><option value="10">10</option><option value="50">50</option><option value="100">100</option><option value="500">500</option><option value="1000">1,000</option><option value="5000">5,000</option></select></label>
+    <label class="em-check"><input type="checkbox" id="current" /> Still filing (2023 on)</label>
+    <label class="em-check"><input type="checkbox" id="formd" /> Also raised money (Form D)</label>
+  </div>
+  <div class="em-tiles" id="em-tiles"></div>
+  <div class="em-box">
+    <div class="em-tablebox">
+      <table class="em-table">
+        <thead><tr>
+          <th data-sort="name">Employer</th><th>Business</th><th data-sort="state">Place</th>
+          <th data-sort="staff" class="em-n">Staff</th><th data-sort="growth" class="em-n" title="Staff in the newest year against 2019, when 2019 had ten or more">Since 2019</th>
+          <th data-sort="year" class="em-n">Years filed</th>
+        </tr></thead>
+        <tbody id="em-rows"></tbody>
+      </table>
+    </div>
+    <div class="em-pager"><span id="em-count"></span><span><button class="btn" id="prev" type="button">Previous</button> <button class="btn" id="next" type="button">Next</button></span></div>
+  </div>
+  <p class="em-note">Staff is the largest count a company's plans report in a year: people in the plan, which can include former staff and miss those not covered (union crews are usually in their union's own funds). One company's own plans only; union funds and plans several employers share are left out. Local archive, this machine only.</p>
+</div>
+<div class="em-scrim" id="em-scrim" hidden></div>
+<aside class="em-sheet" id="em-sheet" aria-hidden="true"></aside>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="em-dash">—</span>';
+const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n); return a >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : a >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : a >= 1e3 ? '$' + (n / 1e3).toFixed(0) + 'K' : '$' + n; };
+const pct = (v) => (v == null || !isFinite(v) ? DASH : '<span class="' + (v > 0 ? 'em-up' : v < 0 ? 'em-down' : '') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(0) + '%</span>');
+const IDS = ['q', 'state', 'naics', 'minStaff'];
+const state = { sort: 'staff', dir: 'desc', page: 0 };
+let seq = 0;
+
+function params() {
+  const sp = new URLSearchParams();
+  for (const id of IDS) { const v = $(id).value.trim(); if (v) sp.set(id, v); }
+  if ($('current').checked) sp.set('current', '1');
+  if ($('formd').checked) sp.set('formd', '1');
+  if (state.sort !== 'staff') sp.set('sort', state.sort);
+  if (state.dir !== 'desc') sp.set('dir', state.dir);
+  if (state.page) sp.set('page', String(state.page));
+  return sp;
+}
+function readUrl() {
+  const sp = new URLSearchParams(location.search);
+  for (const id of IDS) if (sp.has(id)) $(id).value = sp.get(id);
+  $('current').checked = sp.get('current') === '1'; $('formd').checked = sp.get('formd') === '1';
+  if (sp.get('sort')) state.sort = sp.get('sort');
+  if (sp.get('dir') === 'asc') state.dir = 'asc';
+  state.page = Math.max(0, Number(sp.get('page')) || 0);
+}
+async function load() {
+  const my = ++seq, sp = params();
+  history.replaceState(null, '', '?' + sp.toString());
+  document.body.classList.add('em-busy');
+  for (const th of document.querySelectorAll('th[data-sort]')) {
+    const on = th.dataset.sort === state.sort;
+    th.classList.toggle('em-sorted', on);
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (on ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  }
+  let d;
+  try { const r = await fetch('/api/employers?' + sp); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { if (my === seq) { document.body.classList.remove('em-busy'); $('em-rows').innerHTML = '<tr><td colspan="6" class="em-empty">Could not read the list (' + esc(e.message) + ').</td></tr>'; } return; }
+  if (my !== seq) return;
+  document.body.classList.remove('em-busy');
+  const t = d.total || {};
+  $('em-tiles').innerHTML = [[num(t.n), 'employers'], [num(t.staff), 'staff, newest year each'], [String(d.filters.current ? '2023 on' : '2009 on'), 'years covered']]
+    .map(([b, s]) => '<div class="em-box em-tile"><b>' + b + '</b><span>' + esc(s) + '</span></div>').join('');
+  $('em-rows').innerHTML = d.rows.map((r) => '<tr data-ein="' + esc(r.ein) + '">'
+    + '<td class="em-name">' + esc(r.name) + (r.formd_cik ? '<span class="em-tag" title="Has raised money by Form D">Form D</span>' : '') + (r.dba && r.dba !== r.name ? '<span class="em-sub">' + esc(r.dba) + '</span>' : '') + '</td>'
+    + '<td>' + (r.business_title ? esc(r.business_title) + '<span class="em-sub">' + esc(r.business_code) + '</span>' : (r.business_code ? esc(r.business_code) : DASH)) + '</td>'
+    + '<td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
+    + '<td class="em-n">' + num(r.staff) + '<span class="em-sub">' + esc(r.year) + '</span></td>'
+    + '<td class="em-n">' + pct(r.growth) + '</td>'
+    + '<td class="em-n">' + esc(r.first_year === r.year ? r.year : r.first_year + '–' + r.year) + '<span class="em-sub">' + esc(r.years) + ' yr' + (r.years === 1 ? '' : 's') + '</span></td></tr>').join('')
+    || '<tr><td colspan="6" class="em-empty">No employers match these filters.</td></tr>';
+  const n = Number(t.n) || 0, a = d.page * d.pageSize;
+  $('em-count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + d.rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') : '';
+  $('prev').disabled = d.page === 0; $('next').disabled = a + d.rows.length >= n;
+}
+
+async function openEmployer(ein) {
+  const sh = $('em-sheet');
+  sh.innerHTML = '<div class="em-note">Reading…</div>'; sh.classList.add('em-open'); sh.setAttribute('aria-hidden', 'false'); $('em-scrim').hidden = false;
+  let d;
+  try { const r = await fetch('/api/employer?ein=' + encodeURIComponent(ein)); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { sh.innerHTML = '<button class="btn icon em-x" id="em-x" type="button">✕</button><div class="em-note">Could not read it (' + esc(e.message) + ').</div>'; return; }
+  const L = d.last, ys = d.years;
+  const max = Math.max(1, ...ys.map((y) => Number(y.staff) || 0));
+  const b = d.business;
+  const chain = b ? b.chain.map((c, i) => (i === b.chain.length - 1 ? '<b>' + esc(c.title) + '</b>' : esc(c.title))).join(' › ') + ' <span class="em-dash">(' + esc(b.code) + ')</span>' : '';
+  const others = (d.businessOthers || []).map((x) => esc(x.title) + ' (' + esc(x.code) + ')').join('; ');
+  const formerNames = d.names.filter((n) => n !== L.name);
+  sh.innerHTML = '<button class="btn icon em-x" id="em-x" type="button" aria-label="Close">✕</button>'
+    + '<h2>' + esc(L.name) + '</h2>'
+    + '<div class="em-meta">' + esc([L.dba && L.dba !== L.name ? 'trading as ' + L.dba : '', [L.city, L.state].filter(Boolean).join(', '), 'tax ID ' + d.ein.slice(0, 2) + '-' + d.ein.slice(2)].filter(Boolean).join(' · ')) + '</div>'
+    + FactSheet.html(d.facts)
+    + (b ? '<div class="em-chain">' + chain + '</div>' : '')
+    + (others ? '<p class="em-note">Earlier years gave: ' + others + '</p>' : '')
+    + (formerNames.length ? '<p class="em-note">Also filed as: ' + formerNames.map(esc).join('; ') + '</p>' : '')
+    + '<h4>Staff by year</h4><div class="em-bars">' + ys.map((y) => '<div title="' + esc(y.year + ': ' + (y.staff ?? '—')) + '"><s style="height:' + (((Number(y.staff) || 0) / max) * 100).toFixed(1) + '%"></s><i>' + "'" + String(y.year).slice(2) + '</i></div>').join('') + '</div>'
+    + '<div class="em-tablebox" style="margin-top:12px"><table class="em-table"><thead><tr><th>Year</th><th>Filed as</th><th class="em-n">Staff</th><th class="em-n">Participants</th><th class="em-n">Active</th><th class="em-n">Plan assets</th></tr></thead><tbody>'
+    + ys.slice().reverse().map((y) => '<tr><td class="em-n" style="text-align:left">' + y.year + '</td><td>' + esc(y.name) + '</td><td class="em-n">' + num(y.staff) + '</td><td class="em-n">' + num(y.participants) + '</td><td class="em-n">' + (y.active ? num(y.active) : DASH) + '</td><td class="em-n">' + money(y.net_assets) + '</td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<p class="em-note">Plan assets appear only while the plans are small enough for the short form.</p>'
+    + (d.formd ? '<h4>Money raised (Form D)</h4><div class="em-note">' + d.formd.raises.length + ' filing' + (d.formd.raises.length === 1 ? '' : 's') + ' as ' + esc(d.formd.name) + '. <a href="/?q=' + encodeURIComponent(d.formd.cik) + '&kind=all&every=1" target="_blank" rel="noopener">Open in Form D</a></div>'
+      + '<div class="em-tablebox"><table class="em-table"><thead><tr><th>Filed</th><th>Form</th><th class="em-n">Sold</th><th class="em-n">Investors</th></tr></thead><tbody>'
+      + d.formd.raises.slice(0, 20).map((r) => '<tr><td class="em-n" style="text-align:left">' + esc(r.filed || '') + '</td><td>' + esc(r.form) + '</td><td class="em-n">' + money(r.sold) + '</td><td class="em-n">' + num(r.investors) + '</td></tr>').join('') + '</tbody></table></div>' : '');
+  sh.scrollTop = 0;
+}
+function closeSheet() { const sh = $('em-sheet'); sh.classList.remove('em-open'); sh.setAttribute('aria-hidden', 'true'); $('em-scrim').hidden = true; }
+
+let timer = null;
+const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 380); };
+for (const id of ['q', 'state', 'naics']) $(id).addEventListener('input', soon);
+for (const id of ['minStaff', 'current', 'formd']) $(id).addEventListener('change', () => { state.page = 0; load(); });
+$('prev').addEventListener('click', () => { if (state.page) { state.page--; load(); window.scrollTo({ top: 0 }); } });
+$('next').addEventListener('click', () => { state.page++; load(); window.scrollTo({ top: 0 }); });
+document.querySelector('thead').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  if (state.sort === th.dataset.sort) state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+  else { state.sort = th.dataset.sort; state.dir = th.dataset.sort === 'name' || th.dataset.sort === 'state' ? 'asc' : 'desc'; }
+  state.page = 0; load();
+});
+$('em-rows').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-ein]'); if (tr) openEmployer(tr.dataset.ein); });
+$('em-sheet').addEventListener('click', (e) => { if (e.target.closest('#em-x')) closeSheet(); });
+$('em-scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+readUrl();
+load();
+</script>
+</body>
+</html>

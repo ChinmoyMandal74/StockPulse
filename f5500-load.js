@@ -20,6 +20,7 @@
 //   node --use-system-ca f5500-load.js --commit --max all --gap 90
 //   node --use-system-ca f5500-load.js --commit --years 2024,2023
 //   node --use-system-ca f5500-load.js --rematch --commit       # the files on disk again
+//   node --use-system-ca f5500-load.js --employers --commit      # every employer, from the files on disk; no request
 //   node --use-system-ca f5500-load.js --stats
 'use strict';
 require('dotenv').config();
@@ -49,6 +50,7 @@ function options(argv, now = new Date()) {
     gapS: Math.max(MIN_GAP_S, Number(arg('--gap')) || 60),
     years,
     rematch: argv.includes('--rematch'),
+    employers: argv.includes('--employers'),
     stats: argv.includes('--stats'),
   };
 }
@@ -106,10 +108,61 @@ async function readFile(file, kind, eins) {
   return { rows: kept, read, bad };
 }
 
+// --employers: every employer with its own plan, from the files on disk (no
+// request): per file, each EIN's plans in a plan year reduced to the largest
+// (its headcount proxy, plan assets summed over its plans), then merged.
+// A file merged once is recorded and not merged again.
+async function employers(opts, deps) {
+  const log = deps.log || console.log;
+  const A = deps.archive;
+  A.db.exec('create table if not exists f5500_emp_files (file text primary key, rows integer, at integer not null)');
+  const done = new Set(A.db.prepare('select file from f5500_emp_files').all().map((r) => r.file));
+  const files = opts.years.flatMap((y) => ['sf', 'full'].map((kind) => ({ year: y, kind, name: P.fileName(y, kind) })))
+    .filter((f) => deps.onDisk(f.name) && !done.has(f.name));
+  log(`${files.length} file(s) on disk not yet merged into the employer list${opts.commit ? '' : ' (DRY RUN: add --commit)'}`);
+  if (!opts.commit) return { ok: true, todo: files.length };
+  for (const f of files) {
+    const t0 = deps.now();
+    const csv = Zip.entriesOfFile(deps.pathOf(f.name)).find((e) => /\.csv$/i.test(e.name));
+    let header = null, row = null, pending = '', read = 0, failed = null;
+    const by = new Map();
+    await Zip.streamLines(deps.pathOf(f.name), csv, (line) => {
+      try {
+        const t = pending ? pending + '\n' + line : line;
+        const fl = P.splitCsv(t);
+        if (!fl) { pending = t; return undefined; }
+        pending = '';
+        if (!header) { header = fl; row = P.reader(header, f.kind); return undefined; }
+        if (fl.length !== header.length) return undefined;
+        read++;
+        const r = row(fl);
+        if (!r.ein || !r.plan_year || !P.ownPlan(r)) return undefined;
+        const year = Number(r.plan_year.slice(0, 4));
+        const k = r.ein + '|' + year;
+        const staff = P.headcount(r);
+        const o = by.get(k);
+        if (!o) { by.set(k, { ein: r.ein, year, name: r.sponsor, dba: r.dba, city: r.city, state: r.state, business_code: r.business_code, staff, participants: r.participants, active: r.active, net_assets: r.net_assets, filings: 1 }); return undefined; }
+        o.filings++;
+        if (r.net_assets != null) o.net_assets = (o.net_assets || 0) + r.net_assets;
+        if ((staff ?? -1) > (o.staff ?? -1)) Object.assign(o, { name: r.sponsor, dba: r.dba, city: r.city, state: r.state, business_code: r.business_code || o.business_code, staff, participants: r.participants, active: r.active });
+        return undefined;
+      } catch (e) { failed = e; return false; }
+    });
+    if (failed) { log(`${f.name}: ${failed.message}`); return { ok: false, stopped: failed.message }; }
+    A.mergeEmployers([...by.values()]);
+    A.db.prepare('insert into f5500_emp_files (file, rows, at) values (?, ?, ?)').run(f.name, by.size, deps.now());
+    log(`${f.name}: ${read.toLocaleString('en-US')} filings, ${by.size.toLocaleString('en-US')} employer-years merged, ${((deps.now() - t0) / 1000).toFixed(0)}s`);
+  }
+  const n = A.rebuildLatest();
+  log(`the employer list: ${n.toLocaleString('en-US')} employers, newest year each.`);
+  return { ok: true, employers: n };
+}
+
 async function run(opts, deps) {
   const log = deps.log || console.log;
   const A = deps.archive;
   if (opts.stats) { log(JSON.stringify(A.stats())); return { ok: true }; }
+  if (opts.employers) return employers(opts, deps);
   const eins = A.issuerEins();
   if (!eins.size) throw new Error('no EINs to look for: run  formd-load.js --profiles --commit  first');
   const done = A.loaded();
@@ -200,4 +253,4 @@ if (require.main === module) {
   })().catch((e) => { console.error(e.message); unlock(); process.exit(1); });
 }
 
-module.exports = { run, options, makeGetter, readFile, DAY_CAP, MIN_GAP_S, FIRST_YEAR };
+module.exports = { run, employers, options, makeGetter, readFile, DAY_CAP, MIN_GAP_S, FIRST_YEAR };

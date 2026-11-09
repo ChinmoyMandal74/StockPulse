@@ -23,8 +23,8 @@ eq(P.splitCsv('"open\nfield",x'), ['open\nfield', 'x'], 'joined across a line br
 // ---- one short-form row (the real header's columns, a real-shaped line) ----
 const H = ['ACK_ID', 'SF_PLAN_YEAR_BEGIN_DATE', 'SF_PLAN_NAME', 'SF_PLAN_NUM', 'SF_SPONSOR_NAME', 'SF_SPONSOR_DFE_DBA_NAME', 'SF_SPONS_US_ADDRESS1', 'SF_SPONS_US_CITY',
   'SF_SPONS_US_STATE', 'SF_SPONS_US_ZIP', 'SF_SPONS_EIN', 'SF_SPONS_PHONE_NUM', 'SF_BUSINESS_CODE', 'SF_TOT_PARTCP_BOY_CNT', 'SF_NET_ASSETS_EOY_AMT',
-  'SF_TYPE_PENSION_BNFT_CODE', 'SF_TYPE_WELFARE_BNFT_CODE', 'SF_TOT_ACT_PARTCP_BOY_CNT', 'SF_TOT_ACT_PARTCP_EOY_CNT', 'SF_SIGNED_NAME'];
-const LINE = '"20250103134059NAL0003739905003","2024-01-01","NORTH TEXAS COMPRESSION, INC. 401(K) PROFIT SHARING AND TRUST","001","NORTH TEXAS COMPRESSION, INC.",,"101 TURKEY CREEK TRAIL, SUITE 1","BRIDGEPORT","TX","76426","470871940","9406835025","211120",15,334587,"2E2J2K2F2G3D3H",,15,0,"DWAYNE GARRETT"';
+  'SF_TYPE_PENSION_BNFT_CODE', 'SF_TYPE_WELFARE_BNFT_CODE', 'SF_TOT_ACT_PARTCP_BOY_CNT', 'SF_TOT_ACT_PARTCP_EOY_CNT', 'SF_SIGNED_NAME', 'SF_PLAN_ENTITY_CD'];
+const LINE = '"20250103134059NAL0003739905003","2024-01-01","NORTH TEXAS COMPRESSION, INC. 401(K) PROFIT SHARING AND TRUST","001","NORTH TEXAS COMPRESSION, INC.",,"101 TURKEY CREEK TRAIL, SUITE 1","BRIDGEPORT","TX","76426","470871940","9406835025","211120",15,334587,"2E2J2K2F2G3D3H",,15,0,"DWAYNE GARRETT","1"';
 const row = P.reader(H, 'sf')(P.splitCsv(LINE));
 eq([row.ack_id, row.form, row.ein, row.sponsor, row.plan_year, row.business_code], ['20250103134059NAL0003739905003', '5500-SF', '470871940', 'NORTH TEXAS COMPRESSION, INC.', '2024-01-01', '211120'], 'the row');
 eq([row.participants, row.active, row.active_boy, row.net_assets], [15, 0, 15, 334587], 'counts and assets; a real 0 stays 0');
@@ -146,6 +146,25 @@ const FULLBUF = makeZip({ 'f_5500_2024_latest.csv': 'ACK_ID,SPONS_DFE_EIN,BUSINE
   eq(L.options([], NOW).years[0], 2025, 'newest year first');
   eq(L.options([], NOW).years.slice(-1)[0], 2009, 'back to 2009');
   eq(L.options([], NOW).max, 2, 'two files a run by default');
+
+  // ---- the own-plan rule and the employer list ----
+  ok(P.ownPlan({ form: '5500-SF', entity: '1' }) && !P.ownPlan({ form: '5500-SF', entity: '2' }), 'short form: 1 is the company plan, 2 a shared one');
+  ok(P.ownPlan({ form: '5500', entity: '2' }) && !P.ownPlan({ form: '5500', entity: '1' }), 'full form: 2 is the company plan, 1 a union fund');
+  eq([P.headcount({ participants: 15, active: 0, active_boy: 15 }), P.headcount({ participants: null, active: null, active_boy: null }), P.headcount({ participants: 0 })], [15, null, 0], 'headcount: the largest count; none is null; a real 0 is 0');
+  h = harness({ onDisk: ['F_5500_SF_2024_Latest.zip'] });
+  fs.writeFileSync(path.join(TMP, 'F_5500_SF_2024_Latest.zip'), ZIPBUF);
+  await L.employers(L.options(['--commit', '--years', '2024'], NOW), h.deps);
+  const em = h.B.db.prepare('select ein, year, name, staff, filings, net_assets from f5500_employers order by ein').all();
+  eq(em.map((r) => [r.ein, r.year, r.staff, r.filings]), [['111111111', 2024, 15, 1], ['470871940', 2024, 15, 2]], 'every employer, not only issuers; two filings of one employer in one year counted once, with both filings');
+  eq(em[1].net_assets, 669174, 'plan assets summed over its plans in the year');
+  eq(h.calls.length, 0, 'no request');
+  await L.employers(L.options(['--commit', '--years', '2024'], NOW), h.deps);
+  eq(h.B.db.prepare('select filings from f5500_employers where ein = ?').get('470871940').filings, 2, 'a file merged once is not merged again');
+  eq(h.B.db.prepare('select count(*) n from f5500_latest').get().n, 2, 'the newest-year list');
+  h.B.mergeEmployers([{ ein: '470871940', year: 2025, name: 'NORTH TEXAS COMPRESSION, INC.', staff: 21 }, { ein: '470871940', year: 2024, name: 'OLD NAME', staff: 3, filings: 1 }]);
+  h.B.rebuildLatest();
+  eq(h.B.db.prepare('select year, staff, first_year, first_staff, years from f5500_latest where ein = ?').get('470871940'), { year: 2025, staff: 21, first_year: 2024, first_staff: 15, years: 2 }, 'newest year, and the first for growth');
+  eq(h.B.db.prepare('select name, staff, filings from f5500_employers where ein = ? and year = 2024').get('470871940'), { name: 'NORTH TEXAS COMPRESSION, INC.', staff: 15, filings: 3 }, 'a smaller later count does not replace the larger, or its name');
 
   fs.rmSync(TMP, { recursive: true, force: true });
   console.log(`f5500-test: ${pass} passed, ${fail} failed`);

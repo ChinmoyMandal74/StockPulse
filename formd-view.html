@@ -6,6 +6,7 @@
   <title>Form D — Tickr Lab (local)</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <script src="/theme.js"></script>
+  <script src="/factsheet.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -120,7 +121,7 @@
 <div class="fv-page">
   <div class="fv-head">
     <h1>Form D <span>· private companies and funds raising money</span></h1>
-    <div class="fv-src" id="fv-src">Local archive, this machine only</div>
+    <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><a href="/employers" style="color:var(--accent);text-decoration:none;font-size:13.5px">Employers →</a><div class="fv-src" id="fv-src">Local archive, this machine only</div></div>
   </div>
 
   <div class="fv-box fv-filters" id="fv-filters">
@@ -353,6 +354,7 @@ async function openFiling(accn) {
     + (s.sec ? ' · <a href="' + esc(s.sec) + '" target="_blank" rel="noopener noreferrer">the filing on sec.gov</a>' : '') + '</div>'
     + (s.superseded ? '<div class="fv-note">A later amendment replaces this filing; its figures are an earlier statement of the same offering.</div>' : '')
     + '<div class="fv-kv">' + kv.map(([b, t]) => '<div><b>' + b + '</b><span>' + esc(t) + '</span></div>').join('') + '</div>'
+    + FactSheet.html(d.facts)
     + profileHtml(d.profile, s.cik)
     + plansHtml(d)
     + '<h4>The offering</h4><div class="fv-list">'

@@ -23,13 +23,13 @@ const FORMS = {
     ein: 'SPONS_DFE_EIN', sponsor: 'SPONSOR_DFE_NAME', dba: 'SPONS_DFE_DBA_NAME', plan: 'PLAN_NAME', planNum: 'SPONS_DFE_PN',
     begin: 'FORM_PLAN_YEAR_BEGIN_DATE', code: 'BUSINESS_CODE', city: 'SPONS_DFE_MAIL_US_CITY', state: 'SPONS_DFE_MAIL_US_STATE',
     participants: 'TOT_PARTCP_BOY_CNT', active: 'TOT_ACTIVE_PARTCP_CNT', activeBoy: 'TOT_ACT_PARTCP_BOY_CNT',
-    pension: 'TYPE_PENSION_BNFT_CODE', welfare: 'TYPE_WELFARE_BNFT_CODE',
+    pension: 'TYPE_PENSION_BNFT_CODE', welfare: 'TYPE_WELFARE_BNFT_CODE', entity: 'TYPE_PLAN_ENTITY_CD',
   },
   sf: {
     ein: 'SF_SPONS_EIN', sponsor: 'SF_SPONSOR_NAME', dba: 'SF_SPONSOR_DFE_DBA_NAME', plan: 'SF_PLAN_NAME', planNum: 'SF_PLAN_NUM',
     begin: 'SF_PLAN_YEAR_BEGIN_DATE', code: 'SF_BUSINESS_CODE', city: 'SF_SPONS_US_CITY', state: 'SF_SPONS_US_STATE',
     participants: 'SF_TOT_PARTCP_BOY_CNT', active: 'SF_TOT_ACT_PARTCP_EOY_CNT', activeBoy: 'SF_TOT_ACT_PARTCP_BOY_CNT',
-    netAssets: 'SF_NET_ASSETS_EOY_AMT', pension: 'SF_TYPE_PENSION_BNFT_CODE', welfare: 'SF_TYPE_WELFARE_BNFT_CODE',
+    netAssets: 'SF_NET_ASSETS_EOY_AMT', pension: 'SF_TYPE_PENSION_BNFT_CODE', welfare: 'SF_TYPE_WELFARE_BNFT_CODE', entity: 'SF_PLAN_ENTITY_CD',
   },
 };
 
@@ -87,6 +87,7 @@ function reader(header, kind) {
       net_assets: kind === 'sf' ? num(g('netAssets')) : null,
       pension: text(g('pension')),
       welfare: text(g('welfare')),
+      entity: text(g('entity')),
       city: text(g('city')),
       state: text(g('state')),
     };
@@ -118,6 +119,23 @@ function planKind(pension, welfare) {
   return null;
 }
 
+// A company's own plan, not a union (multi-employer) fund. The code means
+// different things on the two forms (found 2026-11-09 on Continental's plan,
+// coded 1 on the short form and 2 on the full one): on the full form 1 is a
+// multi-employer plan and 2 a single employer; the short form is closed to
+// multi-employer plans and writes 1 for a single employer (2 there is a plan
+// several unrelated employers share).
+function ownPlan(r) {
+  if (!r) return false;
+  return r.form === '5500-SF' ? r.entity === '1' : r.entity === '2';
+}
+
+// The headcount proxy of one filing: the largest count it reports; null when none.
+function headcount(r) {
+  const c = [r.participants, r.active, r.active_boy].filter((x) => x != null);
+  return c.length ? Math.max(...c) : null;
+}
+
 // The yearly files, as the Labor Department names them.
 const BASE = 'https://www.askebsa.dol.gov/FOIA%20Files/';
 const fileUrl = (year, kind) => `${BASE}${year}/Latest/F_5500_${kind === 'sf' ? 'SF_' : ''}${year}_Latest.zip`;
@@ -129,4 +147,4 @@ function verdict(status) {
   return { go: false, why: `askebsa.dol.gov answered ${status || 'nothing'}. Stopped; nothing retried.` };
 }
 
-module.exports = { FORMS, splitCsv, reader, naicsTitle, planKind, fileUrl, fileName, verdict, BASE };
+module.exports = { FORMS, ownPlan, headcount, splitCsv, reader, naicsTitle, planKind, fileUrl, fileName, verdict, BASE };
