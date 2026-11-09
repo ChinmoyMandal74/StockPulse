@@ -56,3 +56,6 @@ onboard.lock
 health-history.db
 health-history.db-wal
 health-history.db-shm
+formd.db
+formd.db-wal
+formd.db-shm

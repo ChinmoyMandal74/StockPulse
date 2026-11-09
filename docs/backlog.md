@@ -2838,6 +2838,99 @@ only, never the Signal; the stored history from the Yahoo feed is kept,
 not replaced (keep all history); `/privacy` and `/sources` change in the
 same commit.
 
+## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
+
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md); phases 2 to 5 open*
+
+The owner, after the Continental buyer brief described a private company
+only through its public peers: "Our app has public company data .. how to
+get private company data", then "Add everything you said to backlog and
+then work on first phase .. make sure I am not banned from reading sec
+data .. be very careful .. be slow .. I don't need anything urgently".
+
+**The plain answer first.** Private companies do not publish accounts, so
+nobody has complete data on them; PitchBook and Dun & Bradstreet are
+mostly estimates assembled from scraps. The realistic route is to collect
+the public scraps, many free and close to what the app already reads, and
+buy only where it must.
+
+**Free, from the SEC (the app already reads it)**
+
+- **a. Form D.** Every private company raising money under Regulation D
+  files one: amount sold and offered, date, industry group, revenue range
+  (often withheld), the issuer's address and the related persons
+  (executives, directors, promoters). The SEC publishes quarterly bulk
+  data sets back to 2008, about 75 files and 200MB in all. **Phase 1.**
+- **b. Acquisition 8-Ks (Item 2.01 with 9.01).** When a public company buys
+  a significant private one it must file the target's audited financial
+  statements, often weeks after the closing 8-K, as an amendment. Real
+  private-company accounts, and what the Continental brief lacked. The
+  8-K items are already stored (docs/context/8k-events.md), so finding
+  them costs no SEC requests; reading the exhibits does.
+- **c. Regulation A+ (Forms 1-A, 1-K) and crowdfunding (Form C).** Smaller
+  private companies raising this way file financial statements, yearly
+  for Reg A+. The SEC publishes data sets for both; check them before
+  building.
+- **d. Private companies with public debt** that file 10-Ks voluntarily or
+  for their bonds; the existing SEC reader handles 10-Ks.
+
+**Free, from other agencies (not the SEC, so no risk to that address)**
+
+- **e. Form 5500** (Department of Labor): every company with a retirement
+  plan; participant counts and plan assets, a fair headcount proxy. Free
+  bulk downloads.
+- **f. USAspending.gov and SAM.gov**: federal contract awards by company,
+  government revenue; strong for contractors.
+- **g. H-1B salary filings, OSHA inspections, NLRB cases, EPA records**:
+  signs of size, hiring and risk.
+- **h. State business registries and UCC filings**: existence, officers,
+  secured lenders. Fifty states, fifty formats.
+- **i. City building permits**: project volume for construction trades.
+  Scattered and messy.
+
+**Paid, cheapest to dearest (check each licence for resale first)**
+
+- **j. Industry benchmarks**: RMA Annual Statement Studies, BizMiner;
+  typical margins and ratios by industry and size, not company by company.
+- **k. Private deal multiples**: DealStats, GF Data.
+- **l. Company estimates**: Crunchbase (funding; paid API), Dun &
+  Bradstreet, ZoomInfo (revenue and headcount estimates).
+- **m. Full private-market platforms**: PitchBook, CB Insights, Preqin,
+  Capital IQ; five figures a seat a year, licences usually forbid resale.
+
+**The plan, in phases**
+
+1. **Form D, history and quarterly** (a). A local loader reads the SEC's
+   data-set page once, downloads the quarterly ZIPs one at a time with a
+   long pause between, keeps each on disk so it is never fetched twice,
+   and writes a LOCAL database (not Turso) on the owner's machine. Then
+   one download a quarter, by hand. No per-filing requests at all.
+2. **Acquired companies' financials** (b): list the universe's 2.01 + 9.01
+   filings from stored events, then read only those exhibits, slowly,
+   with the release reader's checks (every figure found in the text).
+3. **Form 5500 and USAspending** (e, f): bulk, from other agencies.
+4. **Reg A+ and Form C** (c), if their data sets hold up.
+5. **A "known facts" view of a private company**: money raised, what it
+   sold for if bought, headcount proxy, government work. Only then does
+   anything reach Turso or a page, with `/privacy` and `/sources` in the
+   same commit.
+
+**The gap to be honest about.** Most small private companies (Continental
+probably among them) never raise registered money or are bought by a
+filer, so for them the free half gives headcount and contracts at best.
+That is why the paid tools exist; the edge here is the free half joined
+to the public peers the app already covers well.
+
+**SEC care (the address has had a 429 and then a 403)**: declared
+`SEC_UA`; one request at a time; bulk files, never per-filing walks for
+history; a pause of many seconds between downloads; a 429 or 403 stops
+the run, it is never retried; downloads are cached and never fetched
+twice; nothing scheduled, run by hand.
+
+**Personal data.** Form D names people (officers, directors, promoters)
+with their addresses' city and state. Kept locally; showing any of it on
+a page is an owner decision and a `/privacy` line.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
