@@ -221,6 +221,15 @@ const every = JSON.stringify([CT, per, com, csv, api2.contacts(sp('tab=brokers')
 ok(!/77 ELM|12 PINE|PALO ALTO|OAKLAND|94301|94612|2618 SUTTER|1 BROKER PLAZA/.test(every), 'no address anywhere in the contact list, its panels or its CSV');
 eq(require('./contactquery.js').toCsv([{ a: '=1+1', b: 'say "hi"' }], ['a', 'b']), 'a,b\r\n"\'=1+1","say ""hi"""\r\n', 'CSV: quotes doubled; a formula is defused');
 eq(api2.contact('people', 'x'.repeat(400)), null, 'an oversized key is refused');
+// Federal contracts on the fact sheet: by the company's own telephone, but
+// not by a switchboard more than three companies share.
+require('./contracts-read.js').ensureSchema(db);
+db.exec("insert into fed_contracts (rkey, fy, uei, name, name_key, state, phone, obligations, actions, top_agency, naics) values ('UEI K1', 2025, 'K1', 'KAVIA LABS INC', 'KAVIA LABS', 'CA', '650-576-4089', 750000, 3, 'Department of Defense', '541511'), ('UEI K1', 2026, 'K1', 'KAVIA LABS INC', 'KAVIA LABS', 'CA', '650-576-4089', 250000, 1, 'Department of Defense', '541511')");
+const FF = api2.filing('0000000001-26-000002').facts.fed;
+eq([FF.total, FF.years.length, FF.agency, FF.byPhone], [1000000, 2, 'Department of Defense', true], 'contracts matched by the company telephone, summed by fiscal year');
+db.exec("insert into ct_companies (cik, name, phone) values ('91', 'a', '650-576-4089'), ('92', 'b', '650-576-4089'), ('93', 'c', '650-576-4089')");
+eq(api2.filing('0000000001-26-000002').facts.fed, null, 'a telephone four companies share is a switchboard: no match');
+db.exec("delete from ct_companies where cik in ('91', '92', '93')");
 
 // ---- industry groups ----
 const allInd = Object.values(Q.GROUPS).flat();

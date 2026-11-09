@@ -29,6 +29,23 @@ filing gives the issuer's, a contract record the recipient's): the total,
 the fiscal years and the main agency, with the recipients matched named so a
 wrong match can be seen.
 
+**A switchboard does not match.** A telephone more than three companies
+have filed is a shared main line: a real estate trust filing Goldman
+Sachs' or PIMCO's main number matched their contracts until this rule.
+
+## The first load (2026-11-09)
+
+Fiscal 2025, 2026 and the first weeks of 2027 are in: 12.3 million contract
+actions, 219,720 recipient-years, 122,392 recipients. **Fiscal 2024 broke
+off twice mid-transfer** ("terminated", at 700MB the first time), while the
+2025 file of the same size came through; the run stopped each time,
+nothing retried, and fiscal 2016 to 2024 wait for another day. A resumed
+download (an HTTP range request for the rest of the file) would save
+fetching the first part again; not built.
+Continental Electrical / FourGen have no federal prime contracts in those
+years. Form D companies matched by their own telephone (switchboards left
+out): 1,117 (1,632 before the switchboard rule).
+
 ## Running it
 
 ```

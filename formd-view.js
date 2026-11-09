@@ -200,7 +200,12 @@ function makeApi(db, opts = {}) {
     let fed = null;
     if (hasTable('fed_contracts')) {
       const keys = [...new Set(allNames.map(NK).filter(Boolean))];
-      const phones = issuer && hasTable('ct_companies') ? db.prepare('select phone from ct_companies where cik = ? and phone is not null').all(issuer).map((r) => r.phone) : [];
+      // A telephone more than three companies have filed is a switchboard (a
+      // fund manager's main line: a REIT filing Goldman Sachs' matched its
+      // contracts), so it does not match.
+      const phones = issuer && hasTable('ct_companies')
+        ? db.prepare('select phone from ct_companies c where cik = ? and phone is not null and (select count(*) from ct_companies d where d.phone = c.phone) <= 3').all(issuer).map((r) => r.phone)
+        : [];
       const conds = [], ps = [];
       if (st && keys.length) { conds.push(`(name_key in (${keys.map(() => '?').join(', ')}) and state = ?)`); ps.push(...keys, st); }
       if (phones.length) { conds.push(`phone in (${phones.map(() => '?').join(', ')})`); ps.push(...phones); }

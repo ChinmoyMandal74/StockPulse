@@ -203,6 +203,7 @@ function build(db, log = () => {}) {
         people = (select count(*) from ct_roles r where r.cik = ct_companies.cik);
       create index idx_ct_companies_name on ct_companies (name collate nocase);
       create index idx_ct_companies_state on ct_companies (state);
+      create index idx_ct_companies_phone on ct_companies (phone);
     `);
     log(`ct_companies built (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
