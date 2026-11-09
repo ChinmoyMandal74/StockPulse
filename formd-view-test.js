@@ -161,6 +161,8 @@ eq(api.employers(sp('naics=2382&state=il')).rows.map((r) => r.ein), ['010750002'
 eq(api.employers(sp('naics=2382&current=1')).rows.map((r) => r.ein), ['010750002'], 'still filing');
 db.exec("insert into f5500_names (ein, name) select ein, name from f5500_employers union select ein, dba from f5500_employers where dba is not null");
 eq(api.employers(sp('q=continental')).rows.map((r) => r.ein), ['010750002'], 'found by a name it once filed under');
+eq(api.employers(sp('q=continental')).rows[0].matched, { name: 'CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', from: 2019, to: 2019 }, 'and the row says which name matched, and when');
+eq(api.employers(sp('q=fourgen')).rows[0].matched, null, 'a match on the present name says nothing more');
 eq(api.employers(sp('q=fourgen')).rows.map((r) => r.ein), ['010750002'], 'by name');
 eq(api.employers(sp('q=01-0750002')).rows.map((r) => r.ein), ['010750002'], 'by tax ID with its dash');
 eq(api.employers(sp('q=kavia')).rows.length, 1, 'by trading name too');

@@ -45,6 +45,7 @@
     .em-table .em-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
     .em-table .em-name { font-weight: 500; color: var(--strong); max-width: 380px; }
     .em-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .em-table .em-sub.em-was { color: var(--accent); }
     .em-up { color: var(--green); } .em-down { color: var(--red); }
     .em-dash { color: var(--faint); }
     .em-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent); color: var(--accent-2); margin-left: 6px; vertical-align: 1px; }
@@ -155,7 +156,8 @@ async function load() {
   $('em-tiles').innerHTML = [[num(t.n), 'employers'], [num(t.staff), 'staff, newest year each'], [String(d.filters.current ? '2023 on' : '2009 on'), 'years covered']]
     .map(([b, s]) => '<div class="em-box em-tile"><b>' + b + '</b><span>' + esc(s) + '</span></div>').join('');
   $('em-rows').innerHTML = d.rows.map((r) => '<tr data-ein="' + esc(r.ein) + '">'
-    + '<td class="em-name">' + esc(r.name) + (r.formd_cik ? '<span class="em-tag" title="Has raised money by Form D">Form D</span>' : '') + (r.dba && r.dba !== r.name ? '<span class="em-sub">' + esc(r.dba) + '</span>' : '') + '</td>'
+    + '<td class="em-name">' + esc(r.name) + (r.formd_cik ? '<span class="em-tag" title="Has raised money by Form D">Form D</span>' : '') + (r.dba && r.dba !== r.name ? '<span class="em-sub">' + esc(r.dba) + '</span>' : '')
+      + (r.matched ? '<span class="em-sub em-was">filed as ' + esc(r.matched.name) + (r.matched.from ? ' (' + esc(r.matched.from === r.matched.to ? r.matched.from : r.matched.from + '–' + r.matched.to) + ')' : '') + '</span>' : '') + '</td>'
     + '<td>' + (r.business_title ? esc(r.business_title) + '<span class="em-sub">' + esc(r.business_code) + '</span>' : (r.business_code ? esc(r.business_code) : DASH)) + '</td>'
     + '<td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
     + '<td class="em-n">' + num(r.staff) + '<span class="em-sub">' + esc(r.year) + '</span></td>'

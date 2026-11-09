@@ -217,10 +217,18 @@ function makeApi(db, opts = {}) {
     const key = JSON.stringify([c.sql, c.params]);
     if (!empCount.has(key)) { if (empCount.size >= 200) empCount.delete(empCount.keys().next().value); empCount.set(key, one(c)); }
     const ix = db.prepare('select ein, cik from fd_profiles where ein is not null and as_of = (select max(as_of) from fd_profiles) and ein = ?');
+    // A row found by a name it no longer files under says so: the name that
+    // matched, and the years it was used.
+    const was = f.q && !/^\d{2}-?\d{7}$/.test(f.q)
+      ? db.prepare(`select n.name, min(e.year) a, max(e.year) b from f5500_names n left join f5500_employers e on e.ein = n.ein and (e.name = n.name or e.dba = n.name)
+          where n.ein = ? and n.name like ? escape '\\' collate nocase group by n.name order by b desc limit 1`) : null;
+    const like = f.q ? '%' + f.q.replace(/[\\%_]/g, (c) => '\\' + c) + '%' : null;
     const rows = all(E.listSql(f)).map((r) => {
       const b = r.business_code ? business(r.business_code) : null;
       const fd = ix.get(r.ein);
-      return { ...r, business_title: b ? b.title : null, formd_cik: fd ? fd.cik : null };
+      const m = was ? was.get(r.ein, like) : null;
+      const matched = m && m.name !== r.name && m.name !== r.dba ? { name: m.name, from: m.a, to: m.b } : null;
+      return { ...r, business_title: b ? b.title : null, formd_cik: fd ? fd.cik : null, matched };
     });
     return { filters: f, page: f.page, pageSize: E.PAGE, rows, total: empCount.get(key) };
   }
