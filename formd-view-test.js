@@ -81,7 +81,18 @@ const profileRow = { name: 'Kavia AI, Inc.', ein: '123456789', state_inc: 'DE', 
 A.writeProfiles([{ ...profileRow, cik: '1', tickers: null, forms: '{}' }], '2026-10-01', 'old.zip');
 A.writeProfiles([{ ...profileRow, cik: '1' }, { cik: '3', name: 'LOWE INTERNATIONAL HOLDING CO', forms: JSON.stringify({ formD: { n: 1 } }), filings: 1 }], '2026-11-09', 'new.zip');
 
-const api = V.makeApi(db, { tracked: new Set(['KAVI-A']) });
+// Kavia's plans (E2): a 401(k) on the short form for two years (2023 with
+// only a start count; 2024 with active counts), and a welfare plan in 2024.
+// LOWE has no EIN, so no plans can be matched.
+const plan = db.prepare(`insert into f5500_plans (ack_id, form, form_year, ein, sponsor, plan, plan_num, plan_year, business_code, participants, active, active_boy, net_assets, pension, welfare, city, state, file)
+  values (?, ?, ?, '123456789', 'KAVIA AI INC', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SAN FRANCISCO', 'CA', 'f.zip')`);
+plan.run('K23', '5500-SF', 2023, 'KAVIA 401(K) PLAN', '001', '2023-01-01', '541511', 8, null, null, 51000, '2E2J', null);
+plan.run('K24', '5500-SF', 2024, 'KAVIA 401(K) PLAN', '001', '2024-01-01', '541511', 12, 15, 11, 98000, '2E2J', null);
+plan.run('K24W', '5500', 2024, 'KAVIA HEALTH PLAN', '501', '2024-01-01', '511210', 0, 9, null, null, null, '4A4B');
+
+const NAICS_T = { 54: 'Professional, Scientific, and Technical Services', 541: 'Professional, Scientific, and Technical Services', 5415: 'Computer Systems Design and Related Services',
+  541511: 'Custom Computer Programming Services', 51: 'Information', 511210: 'Software Publishers' };
+const api = V.makeApi(db, { tracked: new Set(['KAVI-A']), naics: NAICS_T });
 eq(api.options.industries.map((r) => r.v).sort(), ['Business Services', 'Other Technology', 'Pooled Investment Fund'], 'options: the industries on file');
 const L = api.list(sp(''));
 eq(L.rows.map((r) => r.accn), ['0000000001-26-000002', '0000000003-24-000001'], 'companies, latest filing of each offering, newest first');
@@ -109,6 +120,25 @@ eq(F.issuers[0].previousNames, ['KAVIA LABS INC'], 'previous names, "None" left 
 eq(F.history.map((h) => [h.form, h.superseded]), [['D', 1], ['D/A', 0]], 'the issuer\'s every Form D, oldest first');
 eq(api.filing('not-an-accession'), null, 'a malformed accession is refused');
 eq(api.filing('0000000009-26-000009'), null, 'an unknown filing is null');
+
+// ---- plans (E2) ----
+const kv = L.rows.find((r) => r.cik === '1');
+eq([kv.business_code, kv.business_title, kv.staff, kv.staff_year], ['541511', 'Custom Computer Programming Services', 15, '2024'],
+  'the list: the newest code and title, and the largest headcount among the newest year\'s plans');
+eq([L.rows.find((r) => r.cik === '3').staff, L.rows.find((r) => r.cik === '3').business_code], [null, null], 'no plans: blank, not 0');
+eq(api.list(sp('naics=5415')).rows.map((r) => r.cik), ['1'], 'filter: a business code\'s start');
+eq(api.list(sp('naics=3254')).total.n, 0, 'filter: a code nobody has');
+eq(Q.filters(sp('naics=54x'), NOW).naics, '', 'a code that is not 2 to 6 digits is dropped');
+eq(api.list(sp('minStaff=10')).rows.map((r) => r.cik), ['1'], 'filter: staff at least 10');
+eq(api.list(sp('minStaff=100')).total.n, 0, 'filter: staff at least 100, none');
+eq(api.list(sp('sort=staff')).rows.map((r) => r.cik), ['1', '3'], 'sort by staff, blanks last');
+const FP = api.filing('0000000001-26-000002');
+eq(FP.plans.map((p) => [p.ack_id, p.staff, p.kind]), [['K24', 15, 'retirement savings (defined contribution)'], ['K24W', 9, 'welfare (health, life or disability)'], ['K23', 8, 'retirement savings (defined contribution)']],
+  'the panel: every plan filing, newest first, with its headcount and kind');
+eq(FP.business.chain.map((c) => c.code), ['54', '5415', '541511'], 'the code with its parents, a repeated title once');
+eq(FP.businessOthers.map((b) => b.title), ['Software Publishers'], 'another code a filing gave');
+eq(api.filing('0000000003-24-000001').plans, [], 'no EIN, no plans');
+ok(!JSON.stringify(FP.plans).includes('SUTTER'), 'no street in the plans');
 
 // ---- industry groups ----
 const allInd = Object.values(Q.GROUPS).flat();

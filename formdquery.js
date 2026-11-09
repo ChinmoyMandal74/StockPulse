@@ -47,7 +47,7 @@ const FUND = 'Pooled Investment Fund';
 const YEAR_MIN = 2008;
 
 // Column, and whether an empty value is possible (nulls always sort last).
-const SORTS = { filed: 'filed', sold: 'sold', offered: 'offered', investors: 'investors', name: 'name collate nocase', first_sale: 'first_sale' };
+const SORTS = { staff: 'staff', filed: 'filed', sold: 'sold', offered: 'offered', investors: 'investors', name: 'name collate nocase', first_sale: 'first_sale' };
 
 const clean = (s, max = 120) => (s == null ? '' : String(s).trim().slice(0, max));
 function intIn(s, lo, hi) {
@@ -79,6 +79,9 @@ function filters(sp, now = new Date()) {
     minSold: minSold != null && minSold > 0 ? minSold : null,
     every: get('every') === '1',
     has: Object.prototype.hasOwnProperty.call(HAS, get('has')) ? get('has') : '',
+    // A business code or its start (2 to 6 digits): 5415 finds 541511 and 541512.
+    naics: /^\d{2,6}$/.test(get('naics')) ? get('naics') : '',
+    minStaff: /^\d{1,6}$/.test(get('minStaff')) && Number(get('minStaff')) > 0 ? Number(get('minStaff')) : null,
     sort,
     dir: get('dir') === 'asc' ? 'asc' : 'desc',
     page: Math.max(0, intIn(get('page'), 0, 100000) || 0),
@@ -108,12 +111,25 @@ function where(f) {
   if (f.revenue === 'disclosed') w.push("revenue_range is not null and revenue_range <> 'Decline to Disclose' and revenue_range <> 'Not Applicable'");
   else if (f.revenue) { w.push('revenue_range = ?'); p.push(f.revenue); }
   if (f.minSold != null) { w.push('sold >= ?'); p.push(f.minSold); }
+  if (f.naics) { w.push('cik in (select pr.cik from fd_profiles pr join f5500_plans p5 on p5.ein = pr.ein where p5.business_code like ?)'); p.push(f.naics + '%'); }
+  if (f.minStaff != null) { w.push(`cik in (select pr.cik from fd_profiles pr join f5500_plans p5 on p5.ein = pr.ein where ${HEAD_SQL('p5')} >= ?)`); p.push(f.minStaff); }
   if (f.has) w.push(`cik in (select cik from fd_profiles where as_of = (select max(as_of) from fd_profiles) and ${HAS[f.has]})`);
   return { where: w.length ? 'where ' + w.join(' and ') : '', params: p };
 }
 
+// The headcount proxy of one plan filing (E2): the largest of the counts it
+// reports (participants at the start of the year, active ones at the start
+// and at the end). A plan that reports none is null, never 0.
+const HEAD_SQL = (t) => `nullif(max(coalesce(${t}.active, -1), coalesce(${t}.participants, -1), coalesce(${t}.active_boy, -1)), -1)`;
+const EIN_OF = "(select pr.ein from fd_profiles pr where pr.cik = formd.cik order by pr.as_of desc limit 1)";
+
 const LIST_COLS = 'accn, filed, form, cik, name, city, state, industry, fund_type, revenue_range, entity_type, year_inc, offered, offered_indefinite, sold, remaining, investors, first_sale, superseded, '
-  + '(select p.tickers from fd_profiles p where p.cik = formd.cik order by p.as_of desc limit 1) tickers';
+  + '(select p.tickers from fd_profiles p where p.cik = formd.cik order by p.as_of desc limit 1) tickers, '
+  // From the issuer's newest plan year: its business code, and the largest
+  // headcount among its plans that year (a company can run several).
+  + `(select p5.business_code from f5500_plans p5 where p5.ein = ${EIN_OF} and p5.business_code is not null order by p5.plan_year desc, ${HEAD_SQL('p5')} desc limit 1) business_code, `
+  + `(select max(${HEAD_SQL('p5')}) from f5500_plans p5 where p5.ein = ${EIN_OF} and p5.plan_year = (select max(p6.plan_year) from f5500_plans p6 where p6.ein = p5.ein)) staff, `
+  + `(select substr(max(p5.plan_year), 1, 4) from f5500_plans p5 where p5.ein = ${EIN_OF}) staff_year`;
 
 function listSql(f) {
   const { where: w, params } = where(f);
@@ -158,4 +174,4 @@ function secUrl(cik, accn) {
   return `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${String(accn).replace(/-/g, '')}/`;
 }
 
-module.exports = { PAGE, FUND, SORTS, HAS, GROUPS, GROUP_OF, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS };
+module.exports = { PAGE, FUND, SORTS, HAS, GROUPS, GROUP_OF, DOUBT_SOLD, filters, where, listSql, totalsSql, doubtful, secUrl, LIST_COLS, HEAD_SQL };

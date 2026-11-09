@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Q = require('./formdquery.js');
+const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
 const HOST = '127.0.0.1';
@@ -87,9 +88,26 @@ function makeApi(db, opts = {}) {
     return v;
   }
 
+  // A business code's title and its parents (sector, subsector, industry
+  // group), from the NAICS lists in naics.json (E2).
+  const naics = opts.naics || {};
+  function business(code) {
+    const t = P5.naicsTitle(code, naics);
+    if (!t) return null;
+    const chain = [];
+    for (const n of [2, 3, 4, 5, 6]) {
+      const k = t.code.slice(0, n);
+      if (k.length === n && naics[k] && !chain.some((c) => c.title === naics[k])) chain.push({ code: k, title: naics[k] });
+    }
+    return { code, title: t.title, chain };
+  }
+
   function list(sp) {
     const f = Q.filters(sp);
-    const rows = all(Q.listSql(f)).map((r) => ({ ...r, sec: Q.secUrl(r.cik, r.accn), doubt: Q.doubtful(r) }));
+    const rows = all(Q.listSql(f)).map((r) => {
+      const b = r.business_code ? business(r.business_code) : null;
+      return { ...r, sec: Q.secUrl(r.cik, r.accn), doubt: Q.doubtful(r), business_title: b ? b.title : null };
+    });
     return { filters: f, page: f.page, pageSize: Q.PAGE, rows, ...totals(f) };
   }
 
@@ -124,6 +142,15 @@ function makeApi(db, opts = {}) {
         tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))) };
     }
     const history = s.cik ? db.prepare(`select ${Q.LIST_COLS} from formd where cik = ? order by filed, accn`).all(s.cik) : [];
+    // Its retirement and welfare plans (E2), by the EIN in its profile: each
+    // plan year's filings, newest first, with the headcount proxy.
+    const plans = pr && pr.ein
+      ? db.prepare(`select ack_id, form, form_year, plan, plan_num, plan_year, business_code, participants, active, active_boy, net_assets, pension, welfare, city, state,
+          ${Q.HEAD_SQL('p')} staff from f5500_plans p where ein = ? order by plan_year desc, staff desc, plan_num`).all(pr.ein)
+        .map((p) => ({ ...p, kind: P5.planKind(p.pension, p.welfare) }))
+      : [];
+    const codes = [...new Set(plans.map((p) => p.business_code).filter(Boolean))];
+    const businessNow = codes.length ? business(codes[0]) : null;
     return {
       summary: { ...s, sec: Q.secUrl(s.cik, s.accn) },
       offering: pick(off, ['FEDERALEXEMPTIONS_ITEMS_LIST', 'MORETHANONEYEAR', 'ISEQUITYTYPE', 'ISDEBTTYPE', 'ISOPTIONTOACQUIRETYPE', 'ISSECURITYTOBEACQUIREDTYPE',
@@ -131,7 +158,8 @@ function makeApi(db, opts = {}) {
         'BUSCOMBCLARIFICATIONOFRESP', 'SALESAMTCLARIFICATIONOFRESP', 'HASNONACCREDITEDINVESTORS', 'NUMBERNONACCREDITEDINVESTORS', 'SALESCOMM_DOLLARAMOUNT',
         'SALESCOMM_ISESTIMATE', 'FINDERSFEE_DOLLARAMOUNT', 'FINDERSFEE_ISESTIMATE', 'FINDERFEECLARIFICATIONOFRESP', 'GROSSPROCEEDSUSED_DOLLARAMOUNT',
         'GROSSPROCEEDSUSED_ISESTIMATE', 'GROSSPROCEEDSUSED_CLAROFRESP']),
-      issuers, persons, recipients, signatures, history, profile,
+      issuers, persons, recipients, signatures, history, profile, plans, business: businessNow,
+      businessOthers: codes.slice(1).map(business).filter(Boolean),
     };
   }
 
@@ -178,7 +206,9 @@ if (require.main === module) {
   } catch (_) { /* no local analysis copy: no links to stock pages */ }
   db.exec('pragma busy_timeout = 10000');
   const t = Date.now();
-  const api = makeApi(db, { tracked });
+  let naics = {};
+  try { naics = require('./naics.json').codes; } catch (_) { /* no titles: codes alone */ }
+  const api = makeApi(db, { tracked, naics });
   http.createServer(handler(api)).listen(PORT, HOST, () => {
     console.log(`Form D viewer: http://localhost:${PORT}  (${api.options.filings.toLocaleString('en-US')} filings, ready in ${((Date.now() - t) / 1000).toFixed(1)}s; this machine only, admin password)`);
   });

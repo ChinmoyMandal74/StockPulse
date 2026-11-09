@@ -54,6 +54,9 @@ function open(file) {
     );
   `);
 
+  // The Form 5500 plans (E2) live in the same file: f5500archive.js owns them.
+  require('./f5500archive.js').ensureSchema(db);
+
   // Superseded (2026-11-09, for the viewer): a filing a later amendment names
   // as its previous one. A D/A restates the offering's running totals, so
   // adding up every filing counts the same money again; summing the filings

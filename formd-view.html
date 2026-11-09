@@ -74,6 +74,9 @@
     .fv-dash { color: var(--faint); }
     .fv-tag.fv-tick { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-family: var(--mono); }
     .fv-tag.fv-fin { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 45%, transparent); }
+    .fv-table .fv-sub.fv-biz { color: var(--accent); }
+    .fv-chain { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .fv-chain b { color: var(--strong); font-weight: 500; }
     .fv-tag.fv-doubt { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
     .fv-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
     .fv-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
@@ -139,6 +142,8 @@
     <label class="fv-f fv-yr"><span>To</span><select id="to"><option value="">—</option></select></label>
     <label class="fv-f"><span>Sold at least</span>
       <select id="minSold"><option value="">Any</option><option value="1000000">$1M</option><option value="10000000">$10M</option><option value="100000000">$100M</option><option value="1000000000">$1B</option></select></label>
+    <label class="fv-f" title="The 6-digit business code from its retirement plan filing, or its start: 5415 is computer services, 3254 drug making"><span>Business code</span><input id="naics" type="search" inputmode="numeric" placeholder="e.g. 5415" autocomplete="off" style="width:110px" /></label>
+    <label class="fv-f"><span>Staff at least</span><select id="minStaff"><option value="">Any</option><option value="10">10</option><option value="50">50</option><option value="100">100</option><option value="500">500</option><option value="1000">1,000</option></select></label>
     <label class="fv-f"><span>The SEC also has</span>
       <select id="has"><option value="">Any</option><option value="listed">Now listed (a ticker)</option><option value="financials">Financial statements (10-K, Form C or Reg A)</option>
         <option value="annual">Annual reports (10-K)</option><option value="crowdfunding">Crowdfunding (Form C)</option><option value="regA">Regulation A (1-A, 1-K)</option>
@@ -165,6 +170,7 @@
           <th data-sort="offered" class="fv-n">Offered</th>
           <th data-sort="sold" class="fv-n">Sold</th>
           <th data-sort="investors" class="fv-n">Investors</th>
+          <th data-sort="staff" class="fv-n" title="People in its retirement or welfare plans, its newest plan year: a headcount proxy">Staff</th>
           <th data-sort="first_sale">First sale</th>
         </tr></thead>
         <tbody id="fv-rows"></tbody>
@@ -199,7 +205,7 @@ const offered = (r) => (r.offered_indefinite ? '<span title="No cap stated">Inde
 const DOUBT = '<span class="fv-tag fv-doubt" title="$1B or more sold to one or two investors: as filed, likely an error">check</span>';
 const yes = (v) => v === 'true' || v === 'YES' || v === 'Y';
 
-const IDS = ['q', 'person', 'group', 'industry','fundType', 'state', 'revenue', 'from', 'to', 'minSold', 'has'];
+const IDS = ['q', 'person', 'naics', 'minStaff', 'group', 'industry','fundType', 'state', 'revenue', 'from', 'to', 'minSold', 'has'];
 const state = { kind: 'company', sort: 'filed', dir: 'desc', page: 0, every: false };
 let seq = 0, opts = null;
 
@@ -250,7 +256,7 @@ async function load() {
   } catch (e) {
     if (my !== seq) return;
     document.body.classList.remove('fv-busy');
-    $('fv-rows').innerHTML = '<tr><td colspan="8" class="fv-empty">Could not read the archive (' + esc(e.message) + ').</td></tr>';
+    $('fv-rows').innerHTML = '<tr><td colspan="9" class="fv-empty">Could not read the archive (' + esc(e.message) + ').</td></tr>';
     return;
   }
   if (my !== seq) return;
@@ -306,11 +312,13 @@ function paintRows(d) {
   $('fv-rows').innerHTML = rows.map((r) => '<tr data-accn="' + esc(r.accn) + '">'
     + '<td class="fv-d">' + esc(r.filed || '') + (r.form === 'D/A' ? '<span class="fv-tag">D/A</span>' : '') + (r.superseded ? '<span class="fv-tag" title="A later amendment replaces this filing">replaced</span>' : '') + '</td>'
     + '<td class="fv-name">' + esc(r.name) + (r.tickers ? '<span class="fv-tag fv-tick" title="Now trades under this ticker">' + esc(r.tickers.split(',')[0]) + '</span>' : '') + '<span class="fv-sub">' + esc([r.city, r.state].filter(Boolean).join(', ')) + (r.year_inc ? ' · inc. ' + esc(r.year_inc) : '') + '</span></td>'
-    + '<td>' + esc(r.industry || '') + (r.fund_type ? '<span class="fv-sub">' + esc(r.fund_type) + '</span>' : (groupOf(r.industry) && groupOf(r.industry) !== r.industry && groupOf(r.industry).toLowerCase() !== String(r.industry).toLowerCase() ? '<span class="fv-sub">' + esc(groupOf(r.industry)) + '</span>' : '')) + '</td>'
+    + '<td>' + esc(r.industry || '') + (r.fund_type ? '<span class="fv-sub">' + esc(r.fund_type) + '</span>' : (groupOf(r.industry) && groupOf(r.industry) !== r.industry && groupOf(r.industry).toLowerCase() !== String(r.industry).toLowerCase() ? '<span class="fv-sub">' + esc(groupOf(r.industry)) + '</span>' : ''))
+      + (r.business_title ? '<span class="fv-sub fv-biz" title="' + esc('Business code ' + r.business_code + ', from its retirement plan filing') + '">' + esc(r.business_title) + '</span>' : '') + '</td>'
     + '<td>' + (r.revenue_range && r.revenue_range !== 'Decline to Disclose' ? esc(r.revenue_range) : DASH) + '</td>'
     + '<td class="fv-n">' + offered(r) + '</td><td class="fv-n">' + money(r.sold) + (r.doubt ? DOUBT : '') + '</td><td class="fv-n">' + num(r.investors) + '</td>'
+    + '<td class="fv-n">' + (r.staff == null ? DASH : num(r.staff) + '<span class="fv-sub">' + esc(r.staff_year || '') + '</span>') + '</td>'
     + '<td class="fv-d">' + esc(r.first_sale || '') + '</td></tr>').join('')
-    || '<tr><td colspan="8" class="fv-empty">No filings match these filters.</td></tr>';
+    || '<tr><td colspan="9" class="fv-empty">No filings match these filters.</td></tr>';
   const n = Number((d.total || {}).n) || 0, a = d.page * d.pageSize;
   $('fv-count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') : '';
   $('prev').disabled = d.page === 0;
@@ -346,6 +354,7 @@ async function openFiling(accn) {
     + (s.superseded ? '<div class="fv-note">A later amendment replaces this filing; its figures are an earlier statement of the same offering.</div>' : '')
     + '<div class="fv-kv">' + kv.map(([b, t]) => '<div><b>' + b + '</b><span>' + esc(t) + '</span></div>').join('') + '</div>'
     + profileHtml(d.profile, s.cik)
+    + plansHtml(d)
     + '<h4>The offering</h4><div class="fv-list">'
     + row('Revenue range', s.revenue_range || '—') + (s.nav_range ? row('Net asset value range', s.nav_range) : '')
     + row('Securities', types.join(', ') || '—') + row('Exemptions claimed', s.exemptions || '—')
@@ -408,13 +417,36 @@ function profileHtml(p, cik) {
     + '<p class="fv-note">From the SEC’s bulk submissions file of ' + esc(p.as_of) + '. '
     + '<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=' + encodeURIComponent(String(cik).padStart(10, '0')) + '&amp;owner=include&amp;count=40" target="_blank" rel="noopener noreferrer">Its filings on sec.gov</a>.</p>';
 }
+// Its plans (backlog 61, E2): the business code it gives, and the people in
+// its plans year by year, a headcount proxy. From the Labor Department's
+// Form 5500 data sets, matched on the EIN in its profile.
+function plansHtml(d) {
+  const ps = d.plans || [];
+  if (!ps.length) return '<h4>Business and staff</h4><div class="fv-note">' + (d.profile && d.profile.ein
+    ? 'No retirement or welfare plan filing under its EIN (Form 5500, 2009 on): it may have no plan, or file under another entity.'
+    : 'No EIN on file, so no plan filings can be matched.') + '</div>';
+  const b = d.business;
+  const chain = b ? b.chain.map((c, i) => (i === b.chain.length - 1 ? '<b>' + esc(c.title) + '</b>' : esc(c.title))).join(' › ') + ' <span class="fv-dash">(' + esc(b.code) + ')</span>' : '';
+  const others = (d.businessOthers || []).map((x) => esc(x.title) + ' (' + esc(x.code) + ')').join('; ');
+  const years = [...new Set(ps.map((p) => (p.plan_year || '').slice(0, 4)))];
+  return '<h4>Business and staff</h4>'
+    + (b ? '<div class="fv-chain">' + chain + '</div>' : '')
+    + (others ? '<p class="fv-note">Earlier filings gave: ' + others + '</p>' : '')
+    + '<div class="fv-tablebox"><table class="fv-table"><thead><tr><th>Plan year</th><th>Plan</th><th class="fv-n">Staff</th><th class="fv-n">Plan assets</th></tr></thead><tbody>'
+    + ps.slice(0, 40).map((p) => '<tr><td class="fv-d">' + esc((p.plan_year || '').slice(0, 4)) + '</td><td>' + esc(p.plan || '') + '<span class="fv-sub">' + esc([p.kind, p.form].filter(Boolean).join(' · ')) + '</span></td>'
+      + '<td class="fv-n" title="' + esc('participants at the start ' + (p.participants ?? '—') + ', active at the start ' + (p.active_boy ?? '—') + ', active at the end ' + (p.active ?? '—')) + '">' + num(p.staff) + '</td>'
+      + '<td class="fv-n">' + (p.net_assets == null ? DASH : money(p.net_assets)) + '</td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<p class="fv-note">From its Form 5500 filings, ' + esc(years[years.length - 1]) + ' to ' + esc(years[0]) + '. Staff is the largest count a plan reports (participants at the start of the year, or active at the start or end): people in the plan, which can include former staff and leave out those not eligible. Plan assets are on the short form only.</p>';
+}
 function row(k, v) { return '<div><span>' + esc(k) + '</span><span>' + esc(v) + '</span></div>'; }
 function closeSheet() { const sh = $('fv-sheet'); sh.classList.remove('fv-open'); sh.setAttribute('aria-hidden', 'true'); $('fv-scrim').hidden = true; }
 
 // ---- wiring ----
 let timer = null;
 const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 380); };
-for (const id of ['q', 'person']) $(id).addEventListener('input', soon);
+for (const id of ['q', 'person', 'naics']) $(id).addEventListener('input', soon);
+$('minStaff').addEventListener('change', () => { state.page = 0; load(); });
 for (const id of ['group', 'industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold', 'has']) $(id).addEventListener('change', () => { if (id === 'group') fillIndustries(); state.page = 0; load(); });
 $('every').addEventListener('change', () => { state.every = $('every').checked; state.page = 0; load(); });
 $('kind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.kind = b.dataset.v; state.page = 0; load(); });

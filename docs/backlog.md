@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles), E2 to E6 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), E3 to E6 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2933,7 +2933,8 @@ buy only where it must.
    - **E2. Form 5500 (Department of Labor) by EIN**: retirement-plan
      participants (a headcount proxy) and plan assets, year by year. Free
      yearly bulk files, another agency (no SEC risk). Joins on the EIN E1
-     supplies; coverage not yet measured.
+     supplies. **Built 2026-11-09** (f5500-load.js; the viewer's Staff
+     column, business code filter and side panel; docs/context/form-5500.md).
    - **E3. Form C (crowdfunding) data sets**: revenue, net income, assets,
      cash, debt and employee count for the last two fiscal years. 1,922 of
      the issuers have filed one. SEC quarterly bulk sets since 2016, about
