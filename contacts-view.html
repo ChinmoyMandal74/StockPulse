@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contacts — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <script src="/factsheet.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed ct- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .ct-page { max-width: 1320px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 16px; }
+    .ct-page > * { min-width: 0; }
+    .ct-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .ct-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .ct-head h1 span { color: var(--muted); font-weight: 400; }
+    .ct-head nav { display: flex; gap: 14px; font-size: 13.5px; }
+    .ct-head nav a { color: var(--accent); text-decoration: none; }
+    .ct-head nav b { color: var(--strong); font-weight: 500; }
+    .ct-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .ct-tabs { display: inline-flex; border: 1px solid var(--hair-2); border-radius: 12px; overflow: hidden; }
+    .ct-tabs button { border: 0; background: transparent; color: var(--muted); font: 500 14px var(--sans); padding: 9px 18px; cursor: pointer; }
+    .ct-tabs button + button { border-left: 1px solid var(--hair); }
+    .ct-tabs button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--strong); }
+    .ct-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .ct-filters { padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .ct-f { display: grid; gap: 5px; min-width: 0; }
+    .ct-f > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .ct-f input, .ct-f select { height: 34px; border-radius: 10px; border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--text); font: 13.5px var(--sans); padding: 0 10px; min-width: 0; }
+    .ct-f input:focus, .ct-f select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+    .ct-f.ct-wide input { width: 240px; }
+    .ct-check { display: flex; align-items: center; gap: 7px; height: 34px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .ct-tablebox { overflow-x: auto; }
+    .ct-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ct-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; user-select: none; }
+    .ct-table th[data-sort] { cursor: pointer; }
+    .ct-table th.ct-sorted { color: var(--accent); }
+    .ct-table td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .ct-table tbody tr[data-key] { cursor: pointer; }
+    .ct-table tbody tr[data-key]:hover td { background: var(--panel); }
+    .ct-table .ct-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .ct-name { font-weight: 500; color: var(--strong); }
+    .ct-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .ct-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); margin-right: 4px; }
+    .ct-dash { color: var(--faint); }
+    .ct-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
+    .ct-empty { padding: 30px; text-align: center; color: var(--muted); }
+    body.ct-busy .ct-page { opacity: 0.6; }
+    .ct-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .ct-sheet { position: fixed; inset: 0 0 0 auto; width: min(780px, 100vw); z-index: 60; background: var(--surface); border-left: 1px solid var(--hair-2);
+      overflow-y: auto; padding: 20px 24px 40px; transform: translateX(102%); visibility: hidden; transition: transform 0.32s var(--ease), visibility 0s 0.32s; }
+    .ct-sheet.ct-open { transform: none; visibility: visible; transition: transform 0.32s var(--ease), visibility 0s; }
+    .ct-scrim { position: fixed; inset: 0; z-index: 59; background: color-mix(in srgb, var(--shade) 45%, transparent); }
+    .ct-sheet h2 { margin: 0; font-size: 21px; font-weight: 600; color: var(--strong); padding-right: 40px; }
+    .ct-sheet .ct-x { position: absolute; top: 16px; right: 16px; }
+    .ct-meta { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+    .ct-sheet h4 { margin: 22px 0 8px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .ct-sheet a, .ct-link { color: var(--accent); cursor: pointer; text-decoration: none; }
+    @media (max-width: 860px) { .ct-page { padding: 16px 16px 0; } .ct-f.ct-wide, .ct-f.ct-wide input { width: 100%; flex: 1 1 100%; } }
+  </style>
+</head>
+<body>
+<div class="ct-page">
+  <div class="ct-head">
+    <h1>Contacts <span>· the people, companies and brokers named in Form D</span></h1>
+    <nav><a href="/">Form D</a><a href="/employers">Employers</a><b>Contacts</b></nav>
+  </div>
+  <div class="ct-bar">
+    <div class="ct-tabs" id="tabs">
+      <button type="button" data-tab="people" aria-pressed="true">People</button>
+      <button type="button" data-tab="companies" aria-pressed="false">Companies</button>
+      <button type="button" data-tab="brokers" aria-pressed="false">Brokers</button>
+    </div>
+    <a class="btn" id="csv" href="#">Download CSV</a>
+  </div>
+  <div class="ct-box ct-filters" id="filters"></div>
+  <div class="ct-box">
+    <div class="ct-tablebox"><table class="ct-table"><thead id="thead"></thead><tbody id="rows"></tbody></table></div>
+    <div class="ct-pager"><span id="count"></span><span><button class="btn" id="prev" type="button">Previous</button> <button class="btn" id="next" type="button">Next</button></span></div>
+  </div>
+  <p class="ct-note" id="note"></p>
+</div>
+<div class="ct-scrim" id="scrim" hidden></div>
+<aside class="ct-sheet" id="sheet" aria-hidden="true"></aside>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="ct-dash">—</span>';
+const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n); return a >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : a >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : a >= 1e3 ? '$' + (n / 1e3).toFixed(0) + 'K' : '$' + n; };
+const yr = (d) => (d ? String(d).slice(0, 4) : '');
+const span = (a, b) => (yr(a) && yr(b) && yr(a) !== yr(b) ? yr(a) + '–' + yr(b) : yr(b || a));
+const roles = (r) => [r.exec > 0 ? 'Executive' : '', r.dir > 0 ? 'Director' : '', r.prom > 0 ? 'Promoter' : ''].filter(Boolean).map((x) => '<span class="ct-tag">' + x + '</span>').join('');
+const GROUPS = ['Banking & financial services', 'Health care', 'Technology', 'Real estate', 'Energy', 'Travel', 'Agriculture', 'Business services', 'Manufacturing', 'Restaurants', 'Retailing', 'Other'];
+const YEARS = (() => { const out = []; for (let y = new Date().getFullYear(); y >= 2009; y--) out.push(y); return out; })();
+const opt = (v, t, cur) => '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(t) + '</option>';
+
+// Each tab: its filters, its columns, its default sort.
+const TABS = {
+  people: {
+    note: 'People are grouped by name within a state: the same name in another state is another entry, and two people of one name in one state appear as one. No address is kept for anyone.',
+    filters: (f) => [
+      ['q', 'Name', 'search', 'e.g. Chase Lochmiller', 'ct-wide'], ['company', 'Company', 'search', 'company name', 'ct-wide'], ['state', 'State', 'search', 'TX', '', 2],
+      ['role', 'Role', 'select', [['', 'Any'], ['exec', 'Executive officer'], ['dir', 'Director'], ['prom', 'Promoter']]],
+      ['kind', 'Kind', 'select', [['person', 'People'], ['organization', 'Firms named as persons'], ['all', 'Both']]],
+      ['group', 'Industry group', 'select', [['', 'Any'], ...GROUPS.map((g) => [g, g])]],
+      ['minCompanies', 'Companies at least', 'select', [['', 'Any'], ['2', '2'], ['3', '3'], ['5', '5'], ['10', '10'], ['25', '25']]],
+      ['since', 'Active since', 'select', [['', 'Any'], ...YEARS.map((y) => [y, y])]],
+    ],
+    cols: [['name', 'Name'], [null, 'Roles'], ['', 'State'], ['companies', 'Companies', 'n'], ['filings', 'Filings', 'n'], ['last', 'Last seen', 'n']],
+    row: (r) => '<td class="ct-name">' + esc(r.name) + (r.kind === 'organization' ? '<span class="ct-sub">firm</span>' : '') + '</td><td>' + roles(r) + '</td><td>' + esc(r.state || '') + '</td>'
+      + '<td class="ct-n">' + num(r.companies) + (r.funds ? '<span class="ct-sub">' + r.funds + ' fund' + (r.funds === 1 ? '' : 's') + '</span>' : '') + '</td><td class="ct-n">' + num(r.filings) + '</td><td class="ct-n">' + esc(span(r.first_filed, r.last_filed)) + '</td>',
+  },
+  companies: {
+    note: 'Each company with its newest name, city and state, and the telephone its newest filing gives (for a small company this is often a founder\'s own). No street address. Money raised counts each offering once, at its latest filing.',
+    filters: (f) => [
+      ['q', 'Company', 'search', 'e.g. Crusoe', 'ct-wide'], ['state', 'State', 'search', 'CA', '', 2],
+      ['kind', 'Kind', 'select', [['company', 'Companies'], ['fund', 'Funds'], ['all', 'Both']]],
+      ['group', 'Industry group', 'select', [['', 'Any'], ...GROUPS.map((g) => [g, g])]],
+      ['minRaised', 'Raised at least', 'select', [['', 'Any'], ['1000000', '$1M'], ['10000000', '$10M'], ['100000000', '$100M'], ['1000000000', '$1B']]],
+      ['since', 'Active since', 'select', [['', 'Any'], ...YEARS.map((y) => [y, y])]],
+      ['phone', 'With a telephone', 'check'],
+    ],
+    cols: [['name', 'Company'], [null, 'Telephone'], ['', 'Place'], [null, 'Industry'], ['raised', 'Raised', 'n'], ['people', 'People', 'n'], ['last', 'Last filed', 'n']],
+    row: (r) => '<td class="ct-name">' + esc(r.name) + '</td><td class="ct-n" style="text-align:left">' + (r.phone ? esc(r.phone) : DASH) + '</td><td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
+      + '<td>' + esc(r.industry || '') + (r.fund_type ? '<span class="ct-sub">' + esc(r.fund_type) + '</span>' : '') + '</td><td class="ct-n">' + money(r.raised) + '</td><td class="ct-n">' + num(r.people) + '</td><td class="ct-n">' + esc(span(r.first_filed, r.last_filed)) + '</td>',
+  },
+  brokers: {
+    note: 'Brokers and finders paid to sell an offering, by their regulatory (CRD) number where they have one. Deals are counted once each; money raised at each offering\'s latest filing.',
+    filters: (f) => [
+      ['q', 'Broker, firm or CRD', 'search', 'e.g. Reg A Securities', 'ct-wide'],
+      ['minRaised', 'Raised at least', 'select', [['', 'Any'], ['10000000', '$10M'], ['100000000', '$100M'], ['1000000000', '$1B']]],
+      ['since', 'Active since', 'select', [['', 'Any'], ...YEARS.map((y) => [y, y])]],
+    ],
+    cols: [['name', 'Broker'], [null, 'Firm'], ['deals', 'Deals', 'n'], [null, 'Companies', 'n'], ['raised', 'Raised', 'n'], ['last', 'Active', 'n']],
+    row: (r) => '<td class="ct-name">' + esc(r.name) + (r.crd ? '<span class="ct-sub">CRD ' + esc(r.crd) + '</span>' : '') + '</td><td>' + esc(r.firm || '') + (r.firm_crd ? '<span class="ct-sub">CRD ' + esc(r.firm_crd) + '</span>' : '') + '</td>'
+      + '<td class="ct-n">' + num(r.deals) + '</td><td class="ct-n">' + num(r.companies) + '</td><td class="ct-n">' + money(r.raised) + '</td><td class="ct-n">' + esc(span(r.first_filed, r.last_filed)) + '</td>',
+  },
+};
+const DEFAULT_SORT = { people: 'companies', companies: 'raised', brokers: 'deals' };
+const state = { tab: 'people', sort: 'companies', dir: 'desc', page: 0, f: {} };
+let seq = 0;
+
+function drawFilters() {
+  const f = state.f;
+  $('filters').innerHTML = TABS[state.tab].filters(f).map(([id, label, type, a, cls, max]) => {
+    if (type === 'select') return '<label class="ct-f"><span>' + esc(label) + '</span><select data-f="' + id + '">' + a.map(([v, t]) => opt(v, t, f[id] ?? (id === 'kind' ? a[0][0] : ''))).join('') + '</select></label>';
+    if (type === 'check') return '<label class="ct-check"><input type="checkbox" data-f="' + id + '"' + (f[id] === '1' ? ' checked' : '') + ' /> ' + esc(label) + '</label>';
+    return '<label class="ct-f ' + (cls || '') + '"><span>' + esc(label) + '</span><input data-f="' + id + '" type="search" placeholder="' + esc(a) + '" value="' + esc(f[id] || '') + '"' + (max ? ' maxlength="' + max + '" style="width:70px;text-transform:uppercase"' : '') + ' autocomplete="off" /></label>';
+  }).join('');
+  $('note').textContent = TABS[state.tab].note + ' Local archive, this machine only.';
+  for (const b of $('tabs').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.tab === state.tab));
+}
+function params() {
+  const sp = new URLSearchParams();
+  sp.set('tab', state.tab);
+  for (const [k, v] of Object.entries(state.f)) if (v) sp.set(k, v);
+  if (state.sort !== DEFAULT_SORT[state.tab]) sp.set('sort', state.sort);
+  if (state.dir !== 'desc') sp.set('dir', state.dir);
+  if (state.page) sp.set('page', String(state.page));
+  return sp;
+}
+function readUrl() {
+  const sp = new URLSearchParams(location.search);
+  if (TABS[sp.get('tab')]) state.tab = sp.get('tab');
+  state.sort = sp.get('sort') || DEFAULT_SORT[state.tab];
+  state.dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
+  state.page = Math.max(0, Number(sp.get('page')) || 0);
+  for (const [k, v] of sp) if (!['tab', 'sort', 'dir', 'page'].includes(k)) state.f[k] = v;
+}
+async function load() {
+  const my = ++seq, sp = params();
+  history.replaceState(null, '', '?' + sp);
+  const csv = new URLSearchParams(sp); csv.delete('page');
+  $('csv').href = '/api/contacts.csv?' + csv;
+  const T = TABS[state.tab];
+  $('thead').innerHTML = '<tr>' + T.cols.map(([k, t, n]) => '<th' + (k ? ' data-sort="' + k + '"' : '') + (n ? ' class="ct-n"' : '') + (k === state.sort ? ' style="color:var(--accent)"' : '') + '>' + esc(t) + (k === state.sort ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr>';
+  document.body.classList.add('ct-busy');
+  let d;
+  try { const r = await fetch('/api/contacts?' + sp); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { if (my === seq) { document.body.classList.remove('ct-busy'); $('rows').innerHTML = '<tr><td colspan="7" class="ct-empty">Could not read the list (' + esc(e.message) + ').</td></tr>'; } return; }
+  if (my !== seq) return;
+  document.body.classList.remove('ct-busy');
+  if (d.missing) { $('rows').innerHTML = '<tr><td colspan="7" class="ct-empty">The contact list is not built yet: node contactsdb.js --build</td></tr>'; return; }
+  const key = state.tab === 'companies' ? 'cik' : 'k';
+  $('rows').innerHTML = d.rows.map((r) => '<tr data-key="' + esc(r[key]) + '">' + T.row(r) + '</tr>').join('') || '<tr><td colspan="7" class="ct-empty">Nothing matches these filters.</td></tr>';
+  const n = Number(d.total.n) || 0, a = d.page * d.pageSize;
+  $('count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + d.rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') + (n > 50000 ? ' (the CSV takes the first 50,000)' : '') : '';
+  $('prev').disabled = d.page === 0; $('next').disabled = a + d.rows.length >= n;
+}
+
+async function open(tab, key) {
+  const sh = $('sheet');
+  sh.innerHTML = '<div class="ct-note">Reading…</div>'; sh.classList.add('ct-open'); sh.setAttribute('aria-hidden', 'false'); $('scrim').hidden = false;
+  let d;
+  try { const r = await fetch('/api/contact?tab=' + tab + '&key=' + encodeURIComponent(key)); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { sh.innerHTML = '<button class="btn icon ct-x" id="x" type="button">✕</button><div class="ct-note">Could not read it (' + esc(e.message) + ').</div>'; return; }
+  let h = '<button class="btn icon ct-x" id="x" type="button" aria-label="Close">✕</button>';
+  if (tab === 'people') {
+    const p = d.person;
+    h += '<h2>' + esc(p.name) + '</h2><div class="ct-meta">' + esc([p.kind === 'organization' ? 'a firm named as a related person' : '', p.state, p.companies + ' compan' + (p.companies === 1 ? 'y' : 'ies'), 'filings ' + span(p.first_filed, p.last_filed)].filter(Boolean).join(' · ')) + '</div>'
+      + '<h4>Companies and roles (' + d.roles.length + ')</h4><div class="ct-tablebox"><table class="ct-table"><thead><tr><th>Company</th><th>Roles</th><th>Telephone</th><th class="ct-n">Raised</th><th class="ct-n">Years</th></tr></thead><tbody>'
+      + d.roles.map((r) => '<tr data-co="' + esc(r.cik) + '"><td><span class="ct-link">' + esc(r.company) + '</span><span class="ct-sub">' + esc([r.city, r.state].filter(Boolean).join(', ')) + (r.industry ? ' · ' + esc(r.industry) : '') + '</span>' + (r.title ? '<span class="ct-sub">' + esc(r.title) + '</span>' : '') + '</td>'
+        + '<td>' + roles(r) + '</td><td class="ct-n" style="text-align:left">' + (r.phone ? esc(r.phone) : DASH) + '</td><td class="ct-n">' + money(r.raised) + '</td><td class="ct-n">' + esc(span(r.first_filed, r.last_filed)) + '</td></tr>').join('') + '</tbody></table></div>'
+      + '<p class="ct-note">Grouped by name within ' + esc(p.state || 'one state') + ': if this is a common name, the list can join two people.</p>';
+  } else if (tab === 'companies') {
+    const c = d.company;
+    h += '<h2>' + esc(c.name) + '</h2><div class="ct-meta">' + esc([[c.city, c.state].filter(Boolean).join(', '), c.phone ? 'telephone ' + c.phone : '', c.industry].filter(Boolean).join(' · ')) + ' · <a href="/?q=' + encodeURIComponent(c.cik) + '&kind=all&every=1" target="_blank" rel="noopener">its Form D filings</a></div>'
+      + (window.FactSheet ? FactSheet.html(d.facts) : '')
+      + '<h4>People named (' + d.people.length + ')</h4><div class="ct-tablebox"><table class="ct-table"><thead><tr><th>Name</th><th>Roles</th><th class="ct-n">Other companies</th><th class="ct-n">Years</th></tr></thead><tbody>'
+      + d.people.map((p) => '<tr data-person="' + esc(p.k) + '"><td><span class="ct-link">' + esc(p.name) + '</span>' + (p.title ? '<span class="ct-sub">' + esc(p.title) + '</span>' : '') + '</td><td>' + roles(p) + '</td><td class="ct-n">' + num(p.companies - 1) + '</td><td class="ct-n">' + esc(span(p.first_filed, p.last_filed)) + '</td></tr>').join('') + '</tbody></table></div>'
+      + (d.brokers.length ? '<h4>Paid to sell its offerings</h4><div class="ct-tablebox"><table class="ct-table"><tbody>' + d.brokers.map((b) => '<tr><td>' + esc(b.name) + (b.crd ? '<span class="ct-sub">CRD ' + esc(b.crd) + '</span>' : '') + '</td><td>' + esc(b.firm || '') + '</td><td class="ct-n">' + b.deals + ' deal' + (b.deals === 1 ? '' : 's') + '</td></tr>').join('') + '</tbody></table></div>' : '');
+  } else {
+    const b = d.broker;
+    h += '<h2>' + esc(b.name) + '</h2><div class="ct-meta">' + esc([b.crd ? 'CRD ' + b.crd : 'no CRD number', b.firm ? b.firm + (b.firm_crd ? ' (CRD ' + b.firm_crd + ')' : '') : '', b.deals + ' deals', 'active ' + span(b.first_filed, b.last_filed)].filter(Boolean).join(' · ')) + '</div>'
+      + '<h4>Deals (' + d.deals.length + ')</h4><div class="ct-tablebox"><table class="ct-table"><thead><tr><th>Filed</th><th>Company</th><th class="ct-n">Sold</th><th>States sold in</th></tr></thead><tbody>'
+      + d.deals.map((x) => '<tr data-co="' + esc(x.cik) + '"><td class="ct-n" style="text-align:left">' + esc(x.filed || '') + '</td><td><span class="ct-link">' + esc(x.company) + '</span><span class="ct-sub">' + esc([x.state, x.industry].filter(Boolean).join(' · ')) + '</span></td><td class="ct-n">' + money(x.sold) + '</td><td style="max-width:220px;white-space:normal">' + esc(x.states || '') + '</td></tr>').join('') + '</tbody></table></div>';
+  }
+  sh.innerHTML = h; sh.scrollTop = 0;
+}
+function close() { const sh = $('sheet'); sh.classList.remove('ct-open'); sh.setAttribute('aria-hidden', 'true'); $('scrim').hidden = true; }
+
+let timer = null;
+$('filters').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-f]'); if (!el) return;
+  state.f[el.dataset.f] = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value.trim();
+  clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, el.tagName === 'SELECT' || el.type === 'checkbox' ? 0 : 380);
+});
+$('tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-tab]'); if (!b || b.dataset.tab === state.tab) return;
+  state.tab = b.dataset.tab; state.sort = DEFAULT_SORT[state.tab]; state.dir = 'desc'; state.page = 0; state.f = {};
+  drawFilters(); load();
+});
+$('thead').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  if (state.sort === th.dataset.sort) state.dir = state.dir === 'desc' ? 'asc' : 'desc'; else { state.sort = th.dataset.sort; state.dir = th.dataset.sort === 'name' ? 'asc' : 'desc'; }
+  state.page = 0; load();
+});
+$('rows').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (tr) open(state.tab, tr.dataset.key); });
+$('sheet').addEventListener('click', (e) => {
+  if (e.target.closest('#x')) return close();
+  const co = e.target.closest('tr[data-co]'); if (co) return open('companies', co.dataset.co);
+  const pe = e.target.closest('tr[data-person]'); if (pe) return open('people', pe.dataset.person);
+});
+$('scrim').addEventListener('click', close);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+$('prev').addEventListener('click', () => { if (state.page) { state.page--; load(); window.scrollTo({ top: 0 }); } });
+$('next').addEventListener('click', () => { state.page++; load(); window.scrollTo({ top: 0 }); });
+readUrl(); drawFilters(); load();
+</script>
+</body>
+</html>

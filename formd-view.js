@@ -21,6 +21,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Q = require('./formdquery.js');
 const E = require('./employerquery.js');
+const CQ = require('./contactquery.js');
 const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
@@ -32,6 +33,7 @@ const STATIC = {
   '/': [path.join(__dirname, 'formd-view.html'), 'text/html; charset=utf-8'],
   '/employers': [path.join(__dirname, 'employers-view.html'), 'text/html; charset=utf-8'],
   '/factsheet.js': [path.join(__dirname, 'factsheet.js'), 'text/javascript; charset=utf-8'],
+  '/contacts': [path.join(__dirname, 'contacts-view.html'), 'text/html; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
   '/favicon.svg': [path.join(__dirname, 'public', 'favicon.svg'), 'image/svg+xml'],
@@ -246,7 +248,52 @@ function makeApi(db, opts = {}) {
       formd: pr ? { cik: pr.cik, name: pr.name, raises: raises.map((r) => ({ ...r, sec: Q.secUrl(r.cik, r.accn) })) } : null };
   }
 
-  return { options, list, filing, employers, employer };
+  // ---- the contact list (contactsdb.js builds it) ----
+  const ctReady = () => hasTable('ct_people');
+  const ctCount = new Map();
+  function contacts(sp) {
+    if (!ctReady()) return { missing: true, rows: [], total: { n: 0 } };
+    const f = CQ.filters(sp);
+    const c = CQ.countSql(f), key = JSON.stringify([c.sql, c.params]);
+    if (!ctCount.has(key)) { if (ctCount.size >= 300) ctCount.delete(ctCount.keys().next().value); ctCount.set(key, one(c)); }
+    return { filters: f, page: f.page, pageSize: CQ.PAGE, rows: all(CQ.listSql(f)), total: ctCount.get(key) };
+  }
+  function contactsCsv(sp) {
+    if (!ctReady()) return null;
+    const f = CQ.filters(sp);
+    return { tab: f.tab, csv: CQ.toCsv(all(CQ.listSql(f, { csv: true })), CQ.TABS[f.tab].csv) };
+  }
+  function contact(tab, key) {
+    if (!ctReady() || !key || key.length > 300) return null;
+    if (tab === 'people') {
+      const p = db.prepare('select * from ct_people where k = ?').get(key);
+      if (!p) return null;
+      const roles = db.prepare(`select r.*, c.name company, c.city, c.state, c.phone, c.industry, c.fund_type, c.pooled, c.raised, c.last_filed company_last
+        from ct_roles r join ct_companies c on c.cik = r.cik where r.k = ? order by r.last_filed desc limit 500`).all(key);
+      return { tab, person: p, roles };
+    }
+    if (tab === 'companies') {
+      const c = db.prepare('select * from ct_companies where cik = ?').get(key);
+      if (!c) return null;
+      const people = db.prepare(`select r.*, p.name, p.kind, p.state person_state, p.companies from ct_roles r join ct_people p on p.k = r.k
+        where r.cik = ? order by r.last_filed desc, p.name limit 500`).all(key);
+      const brokers = db.prepare(`select r.RECIPIENTNAME name, nullif(r.RECIPIENTCRDNUMBER, 'None') crd, nullif(r.ASSOCIATEDBDNAME, 'None') firm, count(distinct r.ACCESSIONNUMBER) deals, max(f.filed) last
+        from fd_recipients r join formd f on f.accn = r.ACCESSIONNUMBER where f.cik = ? group by r.RECIPIENTNAME, r.RECIPIENTCRDNUMBER order by last desc limit 100`).all(key);
+      return { tab, company: c, people, brokers, facts: facts({ cik: key, names: [c.name], state: c.state }) };
+    }
+    if (tab === 'brokers') {
+      const b = db.prepare('select * from ct_brokers where k = ?').get(key);
+      if (!b) return null;
+      const byCrd = key.startsWith('CRD ');
+      const deals = db.prepare(`select f.accn, f.filed, f.cik, f.name company, f.state, f.industry, f.sold, f.superseded, r.STATES_OR_VALUE_LIST states
+        from fd_recipients r join formd f on f.accn = r.ACCESSIONNUMBER
+        where ${byCrd ? 'trim(r.RECIPIENTCRDNUMBER) = ?' : 'upper(trim(r.RECIPIENTNAME)) = ?'} group by f.accn order by f.filed desc limit 500`).all(key.replace(/^(CRD|NAME) /, ''));
+      return { tab, broker: b, deals };
+    }
+    return null;
+  }
+
+  return { options, list, filing, employers, employer, contacts, contactsCsv, contact };
 }
 
 function handler(api) {
@@ -265,6 +312,17 @@ function handler(api) {
       if (u.pathname === '/api/options') return send(res, 200, api.options);
       if (u.pathname === '/api/list') return send(res, 200, api.list(u.searchParams));
       if (u.pathname === '/api/employers') return send(res, 200, api.employers(u.searchParams));
+      if (u.pathname === '/api/contacts') return send(res, 200, api.contacts(u.searchParams));
+      if (u.pathname === '/api/contacts.csv') {
+        const r = api.contactsCsv(u.searchParams);
+        if (!r) return send(res, 404, { error: 'the contact list is not built' });
+        res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="contacts-${r.tab}-${new Date().toISOString().slice(0, 10)}.csv"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        return res.end(String.fromCharCode(0xFEFF) + r.csv);   // a byte-order mark, so a spreadsheet reads the names as UTF-8
+      }
+      if (u.pathname === '/api/contact') {
+        const r = api.contact(String(u.searchParams.get('tab') || ''), String(u.searchParams.get('key') || ''));
+        return r ? send(res, 200, r) : send(res, 404, { error: 'not found' });
+      }
       if (u.pathname === '/api/employer') {
         const r = api.employer(String(u.searchParams.get('ein') || '').replace('-', ''));
         return r ? send(res, 200, r) : send(res, 404, { error: 'no such employer' });

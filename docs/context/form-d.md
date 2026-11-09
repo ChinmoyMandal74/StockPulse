@@ -184,6 +184,38 @@ offering once, at its latest filing, the "check" rows left out), PPP loans
 (by name and state, marked as such), and a ticker if it trades. Joined by
 tax ID where there is one, else the Form D CIK, else name and state.
 
+## Contacts (2026-11-09)
+
+The owner: "We have the buyer names in Form D. Can you a separate list, this
+can be a CRM type of data, like a contact database". Form D names no
+investors; it names each company's executives, directors and promoters, and
+the brokers paid to sell. The owner's choices: companies with telephone,
+city and state, **no street address**; people with no address at all; and
+the same name is one person only within one state.
+
+`contactsdb.js --build` derives four tables in `formd.db` from the raw Form D
+tables (rebuilt whole, about four minutes; the raw tables are never
+touched): `ct_people` (a name within a state, or a firm), `ct_roles` (a
+person at a company: roles over every filing, newest title, years),
+`ct_companies` (newest name and place, the primary issuer's newest
+telephone, money raised each offering once, people named) and `ct_brokers`
+(by regulatory CRD number, else name; each deal once). The viewer's
+**Contacts** page (`/contacts`, `contacts-view.html`, `contactquery.js`) has
+a tab each, filters, a side panel that moves between a person and their
+companies, and **Download CSV** of whatever is filtered (up to 50,000 rows;
+a byte-order mark so a spreadsheet reads names as UTF-8; a leading = + - @
+quoted so a spreadsheet never runs it).
+
+The clean-up the first build needed: firms written across the person
+fields ("llc" / "Fund GP,") and company words as middle names; a name with
+a company word as a whole word (LLC, Inc, LP, Fund, Partners, Capital,
+Holdings, Trust and so on) is a firm; junk middle names (placeholders,
+punctuation, a repeat of a name, a roman numeral) are dropped; each person
+shows the newest mixed-case spelling; US telephones in one form
+(312-555-0100), placeholders blank. First build: **552,885 people and 89,462
+firms** (642,347), 1,438,302 company roles, 365,344 companies (364,764 with
+a telephone), 25,875 brokers and finders.
+
 ## The filed date before 2020 Q3 (fixed 2026-11-09)
 
 Quarters up to 2020 Q2 stamp the submission with a time

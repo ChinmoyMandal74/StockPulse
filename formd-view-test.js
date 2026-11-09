@@ -201,6 +201,27 @@ ok(/Known facts/.test(card) && /PPP loans/.test(card) && /matched by name and st
 ok(!/SUTTER/.test(card), 'no street on the card');
 eq(FS.html(null), '', 'no facts, no card');
 
+// ---- the contact list (contactsdb.js), through the viewer ----
+eq(api2.contacts(sp('')).missing, true, 'not built: the page is told so');
+require('./contactsdb.js').build(db);
+const CT = api2.contacts(sp(''));
+eq(CT.rows.map((r) => r.name), ['Ada Quill', 'Ben J Ortiz'], 'people: by companies, ties by name');
+eq(api2.contacts(sp('tab=people&role=dir&state=CA')).total.n, 2, 'people: role and state');
+eq(api2.contacts(sp('tab=people&role=exec')).rows.map((r) => r.name), ['Ben J Ortiz'], 'people: executive officers only');
+eq(api2.contacts(sp('tab=companies')).rows.map((r) => r.name), ['Kavia AI, Inc.', 'LOWE INTERNATIONAL HOLDING CO'], 'companies, funds left out by default');
+eq(api2.contacts(sp('tab=companies&kind=fund')).rows.map((r) => r.name), ['ASPF III, L.P.'], 'funds alone');
+eq(api2.contacts(sp('tab=brokers')).rows.map((r) => [r.name, r.crd, r.deals]), [['Acme Securities', '12345', 1]], 'brokers by CRD');
+const per = api2.contact('people', CT.rows.find((r) => r.name === 'Ben J Ortiz').k);
+eq(per.roles.map((r) => [r.company, r.exec, r.dir, r.title]), [['Kavia AI, Inc.', 1, 1, 'CEO']], 'a person: companies, roles and title');
+const com = api2.contact('companies', '1');
+eq([com.people.length, com.brokers.length, !!com.facts], [2, 1, true], 'a company: its people, its brokers and the fact sheet');
+const csv = api2.contactsCsv(sp('tab=people'));
+ok(/^name,kind,state,companies/.test(csv.csv) && /"Ben J Ortiz","person","CA"/.test(csv.csv), 'the CSV: the columns of the tab, the rows as filtered');
+const every = JSON.stringify([CT, per, com, csv, api2.contacts(sp('tab=brokers'))]);
+ok(!/77 ELM|12 PINE|PALO ALTO|OAKLAND|94301|94612|2618 SUTTER|1 BROKER PLAZA/.test(every), 'no address anywhere in the contact list, its panels or its CSV');
+eq(require('./contactquery.js').toCsv([{ a: '=1+1', b: 'say "hi"' }], ['a', 'b']), 'a,b\r\n"\'=1+1","say ""hi"""\r\n', 'CSV: quotes doubled; a formula is defused');
+eq(api2.contact('people', 'x'.repeat(400)), null, 'an oversized key is refused');
+
 // ---- industry groups ----
 const allInd = Object.values(Q.GROUPS).flat();
 eq(allInd.length, 35, 'the form lists 35 industries');
