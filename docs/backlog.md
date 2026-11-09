@@ -2793,6 +2793,51 @@ from `Adjusted.fundamentalsAsOf`). Four things are left:
   Health after a 15% fall did no better than the average stock in either
   period; Health orders the downside (a shallower worst tenth), not the return.
 
+## 60. A licensed news source, before anything built on article tone is sold — 2026-11-08
+
+*Area: Data · Status: Open · Note: nothing to build while the site is free; settle it before any paid access, data set or licence that carries tone*
+
+The owner asked whether Yahoo sells a news API. **It does not.** Yahoo
+retired its official finance API years ago and its developer catalogue
+lists nothing for Yahoo Finance today. yfinance and the "Yahoo Finance"
+APIs on RapidAPI are unofficial wrappers, neither endorsed by Yahoo nor
+safe from its page changes.
+
+**Why it matters here.** Article tone (`news-tone-load.js`,
+docs/context/news-tone.md) reads each stock's Yahoo Finance RSS feed and
+the publisher pages it links to. That suits a free site. Two things stand
+in the way of earning from it:
+
+- **Yahoo's API terms forbid using its feeds to earn income without its
+  written permission**, by the account of a competitor (Massive) checked
+  2026-11-08; read the current terms before relying on that.
+- **Yahoo does not own most of the feed.** The articles are Reuters, AP,
+  Motley Fool, Zacks, Benzinga and others. A deal with Yahoo would not
+  cover them, and whether a model's scores and two-sentence summaries of
+  their articles may be sold is a question for a lawyer, not settled here.
+
+**Licensed sources to compare, when it comes to it**
+
+- **Benzinga**, direct, or resold inside Massive's (formerly Polygon)
+  business plans, which say they license the data for commercial use.
+- **Finnhub, Tiingo, Marketaux, Eulerpool**: news APIs with commercial
+  plans. `news.js` already has a Finnhub path (`normFinnhub`,
+  `finnhubUrl`) beside the default Google News RSS.
+- **Dow Jones (Factiva) and LSEG (Reuters)**: the full licensed sources,
+  at institutional prices.
+
+One anecdotal report (Reddit, 2026-01) put commercial plans at about
+$1,000 to $2,000 a month; check the vendors' own pricing pages.
+
+**The question to put to each vendor**: does the licence allow storing
+article text, and selling or showing to paying users scores and summaries
+derived from it? Showing headlines is a different, narrower right.
+
+**What must hold if a source is switched**: the tone figures stay display
+only, never the Signal; the stored history from the Yahoo feed is kept,
+not replaced (keep all history); `/privacy` and `/sources` change in the
+same commit.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
