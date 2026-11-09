@@ -19,6 +19,7 @@
 //   A.loadQuarter(quarter, url, tables, bytes)       // tables: { OFFERING: {header, rows}, ... }
 //   A.noteRequest(url, status, bytes, ms)
 //   A.search('acme')                                 // summary rows by issuer name
+//   formd.superseded                                 // 1 when a later amendment replaces the filing
 'use strict';
 const path = require('path');
 const F = require('./formd.js');
@@ -52,6 +53,21 @@ function open(file) {
       at integer not null, url text not null, status integer, bytes integer, ms integer
     );
   `);
+
+  // Superseded (2026-11-09, for the viewer): a filing a later amendment names
+  // as its previous one. A D/A restates the offering's running totals, so
+  // adding up every filing counts the same money again; summing the filings
+  // not superseded counts each offering once, at its latest figures. Set after
+  // each quarter loads, and once here for an archive built before the column.
+  const sumCols = new Set(db.prepare('pragma table_info(formd)').all().map((c) => c.name));
+  if (!sumCols.has('superseded')) {
+    db.exec('alter table formd add column superseded integer not null default 0');
+    db.exec('create index if not exists idx_formd_prev on formd (previous_accn)');
+    markSuperseded();
+  }
+  function markSuperseded() {
+    return Number(db.prepare('update formd set superseded = 1 where superseded = 0 and accn in (select previous_accn from formd where previous_accn is not null)').run().changes);
+  }
 
   // A raw table under the file's own column names; a column an older (or
   // newer) quarter adds is added, never dropped.
@@ -112,6 +128,7 @@ function open(file) {
         ins.run(...SUMMARY_COLS.map((c) => s[c]));
         counts.filings++;
       }
+      markSuperseded();
       db.prepare('insert into loads (quarter, url, bytes, filings, rows, bad, loaded_at) values (?, ?, ?, ?, ?, ?, ?)')
         .run(quarter, url, bytes || null, counts.filings, counts.rows, counts.bad, Date.now());
       db.exec('commit');
@@ -135,7 +152,7 @@ function open(file) {
     filings: db.prepare('select count(*) n from formd').get().n,
   });
 
-  return { db, loaded, loadQuarter, noteRequest, requestsSince, search, stats, close: () => db.close() };
+  return { db, loaded, loadQuarter, markSuperseded, noteRequest, requestsSince, search, stats, close: () => db.close() };
 }
 
 module.exports = { open, DEFAULT_PATH };

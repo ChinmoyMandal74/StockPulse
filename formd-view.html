@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Form D — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed fv- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .fv-page { max-width: 1320px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 18px; }
+    .fv-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .fv-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .fv-head h1 span { color: var(--muted); font-weight: 400; }
+    .fv-head .fv-src { color: var(--faint); font-size: 12.5px; }
+    .fv-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+
+    .fv-filters { padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .fv-f { display: grid; gap: 5px; min-width: 0; }
+    .fv-f > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .fv-f input, .fv-f select { height: 34px; border-radius: 10px; border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--text);
+      font: 13.5px var(--sans); padding: 0 10px; min-width: 0; }
+    .fv-f input:focus, .fv-f select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+    .fv-f.fv-wide input { width: 240px; }
+    .fv-f.fv-yr select { width: 86px; }
+    .fv-seg { display: inline-flex; border: 1px solid var(--hair-2); border-radius: 10px; overflow: hidden; height: 34px; }
+    .fv-seg button { border: 0; background: transparent; color: var(--muted); font: 500 13px var(--sans); padding: 0 12px; cursor: pointer; }
+    .fv-seg button + button { border-left: 1px solid var(--hair); }
+    .fv-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--strong); }
+    .fv-check { display: flex; align-items: center; gap: 7px; height: 34px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .fv-reset { height: 34px; }
+
+    .fv-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .fv-tile { padding: 14px 16px; }
+    .fv-tile b { display: block; font: 600 24px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .fv-tile span { font-size: 12px; color: var(--faint); }
+
+    .fv-charts { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 12px; }
+    .fv-chart { padding: 14px 16px 12px; min-width: 0; }
+    .fv-chart h3 { margin: 0 0 10px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .fv-chart { display: flex; flex-direction: column; }
+    .fv-years { display: flex; align-items: flex-end; gap: 4px; height: 150px; flex: 1 1 150px; min-height: 150px; }
+    .fv-yr-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; cursor: pointer; }
+    .fv-yr-bar { width: 100%; max-width: 34px; border-radius: 4px 4px 1px 1px; background: color-mix(in srgb, var(--accent) 70%, transparent); min-height: 1px; }
+    .fv-yr-col:hover .fv-yr-bar, .fv-yr-col.fv-on .fv-yr-bar { background: var(--accent); }
+    .fv-yr-col i { font: normal 10.5px var(--mono); color: var(--faint); }
+    .fv-yr-col em { font: normal 10px var(--mono); color: var(--muted); white-space: nowrap; }
+    .fv-inds { display: grid; gap: 6px; }
+    .fv-ind { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 8px; align-items: center; font-size: 12.5px; cursor: pointer; }
+    .fv-ind > div { position: relative; padding: 3px 8px; border-radius: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text); }
+    .fv-ind > div s { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent-2) 22%, transparent); text-decoration: none; z-index: 0; }
+    .fv-ind > div span { position: relative; z-index: 1; }
+    .fv-ind > b { font: 500 12px var(--mono); color: var(--muted); text-align: right; }
+
+    .fv-tablebox { overflow-x: auto; }
+    .fv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .fv-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint);
+      padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; user-select: none; }
+    .fv-table th[data-sort] { cursor: pointer; }
+    .fv-table th[data-sort]:hover { color: var(--text); }
+    .fv-table th.fv-sorted { color: var(--accent); }
+    .fv-table td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .fv-table tbody tr { cursor: pointer; }
+    .fv-table tbody tr:hover td { background: var(--panel); }
+    .fv-table .fv-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .fv-table .fv-name { font-weight: 500; color: var(--strong); max-width: 340px; }
+    .fv-table .fv-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .fv-table .fv-d { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
+    .fv-dash { color: var(--faint); }
+    .fv-tag.fv-doubt { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+    .fv-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--hair-2); color: var(--muted); margin-left: 6px; vertical-align: 1px; }
+    .fv-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
+    .fv-busy { opacity: 0.55; transition: opacity 0.2s var(--ease); }
+    .fv-empty { padding: 30px; text-align: center; color: var(--muted); }
+
+    .fv-sheet { position: fixed; inset: 0 0 0 auto; width: min(760px, 100vw); z-index: var(--z-sheet, 60); background: var(--surface);
+      border-left: 1px solid var(--hair-2); box-shadow: -30px 0 80px -30px color-mix(in srgb, var(--shade) 90%, transparent);
+      overflow-y: auto; padding: 20px 24px 40px; transform: translateX(102%); transition: transform 0.32s var(--ease); }
+    .fv-sheet.fv-open { transform: none; visibility: visible; transition: transform 0.32s var(--ease), visibility 0s; }
+    /* Closed, it is parked off the right edge: hidden, so it neither widens the page nor takes focus. */
+    .fv-sheet:not(.fv-open) { visibility: hidden; transition: transform 0.32s var(--ease), visibility 0s 0.32s; }
+    .fv-page > * { min-width: 0; }
+    .fv-scrim { position: fixed; inset: 0; z-index: calc(var(--z-sheet, 60) - 1); background: color-mix(in srgb, var(--shade) 45%, transparent); }
+    .fv-sheet h2 { margin: 0; font-size: 21px; font-weight: 600; color: var(--strong); letter-spacing: -0.01em; padding-right: 40px; }
+    .fv-sheet .fv-x { position: absolute; top: 16px; right: 16px; }
+    .fv-sheet .fv-meta { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+    .fv-sheet h4 { margin: 22px 0 8px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .fv-kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .fv-kv div { background: var(--surface-2); border: 1px solid var(--hair); border-radius: 10px; padding: 9px 11px; min-width: 0; }
+    .fv-kv b { display: block; font: 600 16px var(--mono); color: var(--strong); overflow-wrap: anywhere; }
+    .fv-kv span { font-size: 11.5px; color: var(--faint); }
+    .fv-list { display: grid; gap: 4px; font-size: 13px; }
+    .fv-list > div { display: flex; gap: 10px; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--hair); }
+    .fv-list > div > span:last-child { color: var(--muted); text-align: right; }
+    .fv-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .fv-hist .fv-on td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .fv-sheet a { color: var(--accent); }
+
+    @media (max-width: 860px) {
+      .fv-page { padding: 16px 16px 0; }
+      .fv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fv-charts { grid-template-columns: minmax(0, 1fr); }
+      .fv-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fv-f.fv-wide input { width: 100%; }
+      .fv-f.fv-wide { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="fv-page">
+  <div class="fv-head">
+    <h1>Form D <span>· private companies and funds raising money</span></h1>
+    <div class="fv-src" id="fv-src">Local archive, this machine only</div>
+  </div>
+
+  <div class="fv-box fv-filters" id="fv-filters">
+    <label class="fv-f fv-wide"><span>Company, CIK or accession</span><input id="q" type="search" placeholder="e.g. Crusoe" autocomplete="off" /></label>
+    <label class="fv-f fv-wide"><span>Person named on the filing</span><input id="person" type="search" placeholder="first and/or last name" autocomplete="off" /></label>
+    <div class="fv-f"><span>Show</span>
+      <div class="fv-seg" id="kind">
+        <button type="button" data-v="company" aria-pressed="true">Companies</button>
+        <button type="button" data-v="fund" aria-pressed="false">Funds</button>
+        <button type="button" data-v="all" aria-pressed="false">Both</button>
+      </div>
+    </div>
+    <label class="fv-f"><span>Industry</span><select id="industry"><option value="">Any</option></select></label>
+    <label class="fv-f" id="fundTypeBox" hidden><span>Fund type</span><select id="fundType"><option value="">Any</option></select></label>
+    <label class="fv-f"><span>State</span><select id="state"><option value="">Any</option></select></label>
+    <label class="fv-f"><span>Revenue</span><select id="revenue"><option value="">Any</option><option value="disclosed">Disclosed only</option></select></label>
+    <label class="fv-f fv-yr"><span>From</span><select id="from"><option value="">—</option></select></label>
+    <label class="fv-f fv-yr"><span>To</span><select id="to"><option value="">—</option></select></label>
+    <label class="fv-f"><span>Sold at least</span>
+      <select id="minSold"><option value="">Any</option><option value="1000000">$1M</option><option value="10000000">$10M</option><option value="100000000">$100M</option><option value="1000000000">$1B</option></select></label>
+    <label class="fv-check" title="A D/A restates an offering's running totals. Off: each offering counted once, at its latest filing."><input type="checkbox" id="every" /> Every filing, amendments' originals too</label>
+    <button type="button" class="btn quiet fv-reset" id="reset">Clear</button>
+  </div>
+
+  <div class="fv-tiles" id="fv-tiles"></div>
+
+  <div class="fv-charts">
+    <div class="fv-box fv-chart"><h3 id="fv-yrs-h">Amount sold by year filed</h3><div class="fv-years" id="fv-years"></div></div>
+    <div class="fv-box fv-chart"><h3>Largest industries by amount sold</h3><div class="fv-inds" id="fv-inds"></div></div>
+  </div>
+
+  <div class="fv-box">
+    <div class="fv-tablebox">
+      <table class="fv-table">
+        <thead><tr>
+          <th data-sort="filed">Filed</th>
+          <th data-sort="name">Issuer</th>
+          <th>Industry</th>
+          <th>Revenue</th>
+          <th data-sort="offered" class="fv-n">Offered</th>
+          <th data-sort="sold" class="fv-n">Sold</th>
+          <th data-sort="investors" class="fv-n">Investors</th>
+          <th data-sort="first_sale">First sale</th>
+        </tr></thead>
+        <tbody id="fv-rows"></tbody>
+      </table>
+    </div>
+    <div class="fv-pager"><span id="fv-count"></span><span><button class="btn" id="prev" type="button">Previous</button> <button class="btn" id="next" type="button">Next</button></span></div>
+  </div>
+</div>
+
+<div class="fv-scrim" id="fv-scrim" hidden></div>
+<aside class="fv-sheet" id="fv-sheet" aria-hidden="true"></aside>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="fv-dash">—</span>';
+// Null is not zero: a missing amount is a dash; 0 is $0.
+function money(v) {
+  if (v == null || v === '' || !isFinite(Number(v))) return DASH;
+  const n = Number(v);
+  // The unit from the figure as it will be rounded, so $999.99B reads $1.00T, not $1000.0B.
+  const m = Math.abs(n);
+  const units = [[1e12, 'T', 2], [1e9, 'B', m >= 1e10 ? 1 : 2], [1e6, 'M', m >= 1e8 ? 0 : 1], [1e3, 'K', 0]];
+  for (const [u, sym, dp] of units) if (Number((m / u).toFixed(dp)) >= 1) return '$' + (n / u).toFixed(dp) + sym;
+  return '$' + n.toLocaleString('en-US');
+}
+const full = (v) => (v == null || v === '' || !isFinite(Number(v)) ? DASH : '$' + Number(v).toLocaleString('en-US'));
+const num = (v) => (v == null || v === '' || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const offered = (r) => (r.offered_indefinite ? '<span title="No cap stated">Indefinite</span>' : money(r.offered));
+// Amber, "notice this": a billion or more sold to one or two investors, as filed.
+const DOUBT = '<span class="fv-tag fv-doubt" title="$1B or more sold to one or two investors: as filed, likely an error">check</span>';
+const yes = (v) => v === 'true' || v === 'YES' || v === 'Y';
+
+const IDS = ['q', 'person', 'industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold'];
+const state = { kind: 'company', sort: 'filed', dir: 'desc', page: 0, every: false };
+let seq = 0, opts = null;
+
+function readUrl() {
+  const sp = new URLSearchParams(location.search);
+  for (const id of IDS) if (sp.has(id)) $(id).value = sp.get(id);
+  if (['company', 'fund', 'all'].includes(sp.get('kind'))) state.kind = sp.get('kind');
+  if (sp.get('sort')) state.sort = sp.get('sort');
+  if (sp.get('dir') === 'asc') state.dir = 'asc';
+  state.every = sp.get('every') === '1'; $('every').checked = state.every;
+  state.page = Math.max(0, Number(sp.get('page')) || 0);
+}
+function params() {
+  const sp = new URLSearchParams();
+  for (const id of IDS) { const v = $(id).value.trim(); if (v) sp.set(id, v); }
+  sp.set('kind', state.kind);
+  if (state.sort !== 'filed') sp.set('sort', state.sort);
+  if (state.dir !== 'desc') sp.set('dir', state.dir);
+  if (state.every) sp.set('every', '1');
+  if (state.page) sp.set('page', String(state.page));
+  return sp;
+}
+
+function paintKind() {
+  for (const b of $('kind').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === state.kind));
+  $('fundTypeBox').hidden = state.kind === 'company';
+  if (state.kind === 'company') $('fundType').value = '';
+}
+function paintSort() {
+  for (const th of document.querySelectorAll('th[data-sort]')) {
+    const on = th.dataset.sort === state.sort;
+    th.classList.toggle('fv-sorted', on);
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (on ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  }
+}
+
+async function load() {
+  const my = ++seq;
+  const sp = params();
+  history.replaceState(null, '', '?' + sp.toString());
+  document.body.classList.add('fv-busy');
+  paintKind(); paintSort();
+  let d;
+  try {
+    const r = await fetch('/api/list?' + sp.toString());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) {
+    if (my !== seq) return;
+    document.body.classList.remove('fv-busy');
+    $('fv-rows').innerHTML = '<tr><td colspan="8" class="fv-empty">Could not read the archive (' + esc(e.message) + ').</td></tr>';
+    return;
+  }
+  if (my !== seq) return;
+  document.body.classList.remove('fv-busy');
+  paintTotals(d); paintYears(d); paintInds(d); paintRows(d);
+}
+
+function paintTotals(d) {
+  const t = d.total || {};
+  const label = state.every ? 'filings' : 'offerings (latest filing each)';
+  $('fv-tiles').innerHTML = [
+    [num(t.n), label], [num(t.issuers), 'issuers'],
+    [money(t.sold), 'sold' + (Number(t.doubt_n) ? ', less ' + Number(t.doubt_n).toLocaleString('en-US') + ' marked check (' + money(t.doubt_sold).replace(/<[^>]+>/g, '') + ')' : '')],
+    [money(t.median), 'median sold'],
+  ].map(([b, s]) => '<div class="fv-box fv-tile"><b>' + b + '</b><span>' + esc(s) + '</span></div>').join('');
+}
+function paintYears(d) {
+  const ys = (d.years || []).filter((y) => y.y);
+  const max = Math.max(1, ...ys.map((y) => Number(y.sold) || 0));
+  const from = $('from').value, to = $('to').value;
+  $('fv-years').innerHTML = ys.map((y) => {
+    const h = Math.max(0.5, ((Number(y.sold) || 0) / max) * 100);
+    const on = from && to && from === to && from === y.y;
+    return '<div class="fv-yr-col' + (on ? ' fv-on' : '') + '" data-y="' + esc(y.y) + '" title="' + esc(y.y + ': ' + Number(y.n).toLocaleString('en-US') + ' filings, ' + full(y.sold).replace(/<[^>]+>/g, '')) + '">'
+      + '<em>' + (Number(y.sold) === max ? money(y.sold) : '&nbsp;') + '</em><div class="fv-yr-bar" style="height:' + h.toFixed(1) + '%"></div><i>' + esc("'" + y.y.slice(2)) + '</i></div>';
+  }).join('') || '<div class="fv-empty">Nothing matches.</div>';
+}
+function paintInds(d) {
+  const xs = (d.industries || []).filter((x) => x.industry && Number(x.sold) > 0);
+  const max = Math.max(1, ...xs.map((x) => Number(x.sold)));
+  $('fv-inds').innerHTML = xs.slice(0, 10).map((x) => '<div class="fv-ind" data-ind="' + esc(x.industry) + '" title="' + esc(Number(x.n).toLocaleString('en-US') + ' filings') + '">'
+    + '<div><s style="width:' + ((Number(x.sold) / max) * 100).toFixed(1) + '%"></s><span>' + esc(x.industry) + '</span></div><b>' + money(x.sold) + '</b></div>').join('') || '<div class="fv-note">Nothing matches.</div>';
+}
+function paintRows(d) {
+  const rows = d.rows || [];
+  $('fv-rows').innerHTML = rows.map((r) => '<tr data-accn="' + esc(r.accn) + '">'
+    + '<td class="fv-d">' + esc(r.filed || '') + (r.form === 'D/A' ? '<span class="fv-tag">D/A</span>' : '') + (r.superseded ? '<span class="fv-tag" title="A later amendment replaces this filing">replaced</span>' : '') + '</td>'
+    + '<td class="fv-name">' + esc(r.name) + '<span class="fv-sub">' + esc([r.city, r.state].filter(Boolean).join(', ')) + (r.year_inc ? ' · inc. ' + esc(r.year_inc) : '') + '</span></td>'
+    + '<td>' + esc(r.industry || '') + (r.fund_type ? '<span class="fv-sub">' + esc(r.fund_type) + '</span>' : '') + '</td>'
+    + '<td>' + (r.revenue_range && r.revenue_range !== 'Decline to Disclose' ? esc(r.revenue_range) : DASH) + '</td>'
+    + '<td class="fv-n">' + offered(r) + '</td><td class="fv-n">' + money(r.sold) + (r.doubt ? DOUBT : '') + '</td><td class="fv-n">' + num(r.investors) + '</td>'
+    + '<td class="fv-d">' + esc(r.first_sale || '') + '</td></tr>').join('')
+    || '<tr><td colspan="8" class="fv-empty">No filings match these filters.</td></tr>';
+  const n = Number((d.total || {}).n) || 0, a = d.page * d.pageSize;
+  $('fv-count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') : '';
+  $('prev').disabled = d.page === 0;
+  $('next').disabled = a + rows.length >= n;
+}
+
+// ---- one filing ----
+async function openFiling(accn) {
+  const sh = $('fv-sheet');
+  sh.innerHTML = '<div class="fv-note">Reading…</div>';
+  sh.classList.add('fv-open'); sh.setAttribute('aria-hidden', 'false'); $('fv-scrim').hidden = false;
+  let d;
+  try { const r = await fetch('/api/filing?accn=' + encodeURIComponent(accn)); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { sh.innerHTML = '<button class="btn icon fv-x" id="fv-x" type="button" aria-label="Close">✕</button><div class="fv-note">Could not read the filing (' + esc(e.message) + ').</div>'; return; }
+  const s = d.summary, o = d.offering || {};
+  const types = [['ISEQUITYTYPE', 'Equity'], ['ISDEBTTYPE', 'Debt'], ['ISOPTIONTOACQUIRETYPE', 'Options or warrants'], ['ISSECURITYTOBEACQUIREDTYPE', 'Securities on exercise'],
+    ['ISPOOLEDINVESTMENTFUNDTYPE', 'Pooled fund interests'], ['ISTENANTINCOMMONTYPE', 'Tenant-in-common'], ['ISMINERALPROPERTYTYPE', 'Mineral property'], ['ISOTHERTYPE', 'Other']]
+    .filter(([k]) => yes(o[k])).map(([, v]) => v);
+  if (o.DESCRIPTIONOFOTHERTYPE) types.push(o.DESCRIPTIONOFOTHERTYPE);
+  const kv = [
+    [offered(s), 'offered'], [full(s.sold), 'sold'], [s.offered_indefinite ? DASH : full(s.remaining), 'remaining'],
+    [num(s.investors), 'investors'], [full(s.min_investment), 'minimum investment'], [esc(s.first_sale || '') || (s.yet_to_occur ? 'Yet to occur' : DASH), 'first sale'],
+  ];
+  const costs = [
+    ['Sales commissions', o.SALESCOMM_DOLLARAMOUNT, o.SALESCOMM_ISESTIMATE], ['Finders’ fees', o.FINDERSFEE_DOLLARAMOUNT, o.FINDERSFEE_ISESTIMATE],
+    ['Proceeds paid to executives, directors or promoters', o.GROSSPROCEEDSUSED_DOLLARAMOUNT, o.GROSSPROCEEDSUSED_ISESTIMATE],
+  ];
+  const hist = d.history || [];
+  sh.innerHTML = '<button class="btn icon fv-x" id="fv-x" type="button" aria-label="Close">✕</button>'
+    + '<h2>' + esc(s.name) + '</h2>'
+    + '<div class="fv-meta">' + esc([s.form, 'filed ' + (s.filed || '?'), s.industry, s.fund_type, [s.city, s.state].filter(Boolean).join(', '), s.entity_type, s.year_inc ? 'incorporated ' + s.year_inc : ''].filter(Boolean).join(' · '))
+    + (s.sec ? ' · <a href="' + esc(s.sec) + '" target="_blank" rel="noopener noreferrer">the filing on sec.gov</a>' : '') + '</div>'
+    + (s.superseded ? '<div class="fv-note">A later amendment replaces this filing; its figures are an earlier statement of the same offering.</div>' : '')
+    + '<div class="fv-kv">' + kv.map(([b, t]) => '<div><b>' + b + '</b><span>' + esc(t) + '</span></div>').join('') + '</div>'
+    + '<h4>The offering</h4><div class="fv-list">'
+    + row('Revenue range', s.revenue_range || '—') + (s.nav_range ? row('Net asset value range', s.nav_range) : '')
+    + row('Securities', types.join(', ') || '—') + row('Exemptions claimed', s.exemptions || '—')
+    + row('Lasts more than a year', o.MORETHANONEYEAR == null ? '—' : yes(o.MORETHANONEYEAR) ? 'Yes' : 'No')
+    + row('Part of a business combination', yes(o.ISBUSINESSCOMBINATIONTRANS) ? 'Yes' : 'No')
+    + row('Non-accredited investors', yes(o.HASNONACCREDITEDINVESTORS) ? (o.NUMBERNONACCREDITEDINVESTORS || 'Yes') : 'None')
+    + costs.map(([k, v, est]) => row(k, (v == null || v === '' ? '—' : full(v).replace(/<[^>]+>/g, '')) + (yes(est) ? ' (estimate)' : ''))).join('')
+    + '</div>'
+    + [o.SALESAMTCLARIFICATIONOFRESP, o.BUSCOMBCLARIFICATIONOFRESP, o.FINDERFEECLARIFICATIONOFRESP, o.GROSSPROCEEDSUSED_CLAROFRESP].filter(Boolean).map((t) => '<p class="fv-note">' + esc(t) + '</p>').join('')
+    + (d.issuers.length ? '<h4>' + (d.issuers.length > 1 ? 'Issuers (' + d.issuers.length + ')' : 'Issuer') + '</h4><div class="fv-list">'
+      + d.issuers.map((i) => row(i.ENTITYNAME + (i.primary && d.issuers.length > 1 ? ' (primary)' : ''),
+        [i.ENTITYTYPE === 'Other' ? i.ENTITYTYPEOTHERDESC : i.ENTITYTYPE, i.JURISDICTIONOFINC ? 'of ' + i.JURISDICTIONOFINC : '', i.CITY, i.YEAROFINC_VALUE_ENTERED ? 'inc. ' + i.YEAROFINC_VALUE_ENTERED : '', 'CIK ' + Number(i.CIK)].filter(Boolean).join(' · ')
+        + (i.previousNames.length ? ' · formerly ' + i.previousNames.join('; ') : ''))).join('') + '</div>' : '')
+    + '<h4>People named (' + d.persons.length + ')</h4>'
+    + (d.persons.length ? '<div class="fv-list">' + d.persons.map((p) => row(p.name || '(no name)', p.roles.join(', ') + (p.note ? ' · ' + p.note : ''))).join('') + '</div>' : '<div class="fv-note">None listed.</div>')
+    + '<p class="fv-note">Names and roles only: the filing’s addresses are kept out of this page.</p>'
+    + (d.recipients.length ? '<h4>Paid to sell (' + d.recipients.length + ')</h4><div class="fv-list">'
+      + d.recipients.map((r) => row(r.RECIPIENTNAME || '(none)', [r.ASSOCIATEDBDNAME && r.ASSOCIATEDBDNAME !== r.RECIPIENTNAME ? r.ASSOCIATEDBDNAME : '', r.RECIPIENTCRDNUMBER && r.RECIPIENTCRDNUMBER !== 'None' ? 'CRD ' + r.RECIPIENTCRDNUMBER : '', r.STATES_OR_VALUE_LIST ? 'states: ' + r.STATES_OR_VALUE_LIST : ''].filter(Boolean).join(' · '))).join('') + '</div>' : '')
+    + (d.signatures.length ? '<h4>Signed by</h4><div class="fv-list">' + d.signatures.map((g) => row(g.NAMEOFSIGNER || '', [g.SIGNATURETITLE, g.SIGNATUREDATE].filter(Boolean).join(' · '))).join('') + '</div>' : '')
+    + '<h4>Every Form D by this issuer (' + hist.length + ')</h4>'
+    + '<div class="fv-tablebox"><table class="fv-table fv-hist"><thead><tr><th>Filed</th><th>Form</th><th class="fv-n">Offered</th><th class="fv-n">Sold</th><th class="fv-n">Investors</th><th>First sale</th></tr></thead><tbody>'
+    + hist.map((h) => '<tr data-accn="' + esc(h.accn) + '" class="' + (h.accn === s.accn ? 'fv-on' : '') + '"><td class="fv-d">' + esc(h.filed || '') + '</td><td>' + esc(h.form) + (h.superseded ? '<span class="fv-tag">replaced</span>' : '') + '</td>'
+      + '<td class="fv-n">' + offered(h) + '</td><td class="fv-n">' + money(h.sold) + '</td><td class="fv-n">' + num(h.investors) + '</td><td class="fv-d">' + esc(h.first_sale || '') + '</td></tr>').join('')
+    + '</tbody></table></div>';
+  sh.scrollTop = 0;
+}
+function row(k, v) { return '<div><span>' + esc(k) + '</span><span>' + esc(v) + '</span></div>'; }
+function closeSheet() { const sh = $('fv-sheet'); sh.classList.remove('fv-open'); sh.setAttribute('aria-hidden', 'true'); $('fv-scrim').hidden = true; }
+
+// ---- wiring ----
+let timer = null;
+const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 380); };
+for (const id of ['q', 'person']) $(id).addEventListener('input', soon);
+for (const id of ['industry', 'fundType', 'state', 'revenue', 'from', 'to', 'minSold']) $(id).addEventListener('change', () => { state.page = 0; load(); });
+$('every').addEventListener('change', () => { state.every = $('every').checked; state.page = 0; load(); });
+$('kind').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.kind = b.dataset.v; state.page = 0; load(); });
+$('reset').addEventListener('click', () => { for (const id of IDS) $(id).value = ''; Object.assign(state, { kind: 'company', sort: 'filed', dir: 'desc', page: 0, every: false }); $('every').checked = false; load(); });
+$('prev').addEventListener('click', () => { if (state.page) { state.page--; load(); window.scrollTo({ top: 0 }); } });
+$('next').addEventListener('click', () => { state.page++; load(); window.scrollTo({ top: 0 }); });
+document.querySelector('thead').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  if (state.sort === th.dataset.sort) state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+  else { state.sort = th.dataset.sort; state.dir = th.dataset.sort === 'name' ? 'asc' : 'desc'; }
+  state.page = 0; load();
+});
+$('fv-rows').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-accn]'); if (tr) openFiling(tr.dataset.accn); });
+$('fv-sheet').addEventListener('click', (e) => {
+  if (e.target.closest('#fv-x')) return closeSheet();
+  const tr = e.target.closest('tr[data-accn]'); if (tr && !tr.classList.contains('fv-on')) openFiling(tr.dataset.accn);
+});
+$('fv-scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+$('fv-years').addEventListener('mouseover', (e) => {
+  const c = e.target.closest('[data-y]');
+  $('fv-yrs-h').textContent = c ? c.title : 'Amount sold by year filed';
+});
+$('fv-years').addEventListener('mouseleave', () => { $('fv-yrs-h').textContent = 'Amount sold by year filed'; });
+$('fv-years').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-y]'); if (!c) return;
+  const same = $('from').value === c.dataset.y && $('to').value === c.dataset.y;
+  $('from').value = same ? '' : c.dataset.y; $('to').value = same ? '' : c.dataset.y; state.page = 0; load();
+});
+$('fv-inds').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-ind]'); if (!c) return;
+  $('industry').value = $('industry').value === c.dataset.ind ? '' : c.dataset.ind; state.page = 0; load();
+});
+
+(async function start() {
+  try {
+    const r = await fetch('/api/options'); opts = await r.json();
+    const fill = (id, xs, label) => { $(id).insertAdjacentHTML('beforeend', xs.map((x) => '<option value="' + esc(x.v) + '">' + esc(label ? label(x) : x.v) + '</option>').join('')); };
+    fill('industry', opts.industries.slice().sort((a, b) => a.v.localeCompare(b.v)));
+    fill('fundType', opts.fundTypes);
+    fill('state', opts.states.slice().sort((a, b) => a.v.localeCompare(b.v)));
+    fill('revenue', opts.revenues.filter((x) => x.v !== 'Decline to Disclose'));
+    const years = []; for (let y = Number(opts.years.b); y >= Number(opts.years.a); y--) years.push({ v: String(y) });
+    fill('from', years); fill('to', years);
+    const q = opts.quarters;
+    $('fv-src').textContent = 'Local archive, this machine only · ' + Number(opts.filings).toLocaleString('en-US') + ' filings, ' + q.a + ' to ' + q.b + ' · SEC Form D data sets';
+  } catch (e) { $('fv-src').textContent = 'Could not read the archive.'; }
+  readUrl();
+  load();
+})();
+</script>
+</body>
+</html>

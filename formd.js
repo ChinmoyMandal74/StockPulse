@@ -69,11 +69,14 @@ function parseTsv(text) {
 }
 
 // '30-SEP-2026' -> '2026-09-30'; '2026-09-30' passes; anything else -> null.
+// Quarters to 2020 Q2 stamp the submission with a time ('2019-12-31
+// 17:25:33'); the date part is kept. Missed until 2026-11-09, which left
+// every filing before 2020 Q3 without its filed date.
 function isoDate(s) {
   if (s == null) return null;
   const t = String(s).trim();
-  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  if (m) return t;
+  let m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/.exec(t);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(t);
   if (m && MONTHS[m[2].toUpperCase()]) return `${m[3]}-${MONTHS[m[2].toUpperCase()]}-${m[1].padStart(2, '0')}`;
   return null;

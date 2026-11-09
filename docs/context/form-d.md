@@ -106,6 +106,55 @@ matches the filing on sec.gov exactly.
 SEC records, but kept on this machine only. Showing any of it on a page is
 an owner decision and a `/privacy` line in the same commit.
 
+## The viewer (2026-11-09)
+
+The owner: "create a front end to show the private company data .. form D
+.. give it access only to admin", and chose the laptop over the site (the
+archive is not in Turso before phase 6, so tickrlab.com cannot read it).
+
+```
+node --use-system-ca formd-view.js        # then http://localhost:4100
+```
+
+| File | What |
+|---|---|
+| `formd-view.js` | The server: `node:http` on **127.0.0.1 only** (`FORMD_VIEW_PORT`, 4100), Basic auth against `ADMIN_PASSWORD` (any user name; it will not start without one), `formd.db` opened **read only**, no request to anywhere. Serves the page, `app.css`, `theme.js`, the icon, and three JSON routes (`/api/options`, `/api/list`, `/api/filing`) |
+| `formdquery.js` | The filters as SQL, pure: every value bound, the sort column from a fixed list |
+| `formd-view.html` | The page: search by company, CIK, accession or a person named on the filing; companies, funds or both; industry, fund type, state, revenue range, years, amount sold; totals, amount sold by year and by industry, the list, and one filing in a side panel with its offering, issuers, people, brokers, signers and every Form D by the same issuer, linked to sec.gov |
+| `formd-view-test.js` | 71 checks, an archive in memory; the address, password and sort-list guards each proven by reverting them |
+
+What it decides:
+
+- **People by name and role only.** The persons, recipients and issuers
+  tables hold streets, zip codes and telephone numbers; none is selected
+  for the page (the owner, 2026-11-09: "people data is also important but
+  not their addresses"). A company's city and state are shown.
+- **Each offering counted once.** A D/A restates the offering's running
+  totals, so summing every filing counts the same money again. The
+  archive marks a filing a later amendment names as its previous one
+  (`formd.superseded`, set after each quarter loads; 274,736 of 778,966);
+  the viewer leaves those out unless "Every filing" is ticked.
+- **Filing errors are kept and marked, not summed.** $1 billion or more
+  sold to one or two investors is marked "check" (amber) and left out of
+  the amounts, which say how many were left out: 57 among the companies,
+  $1.27T between them, led by LOWE INTERNATIONAL HOLDING CO's
+  $999,999,750,000 from one investor (2024). The investor counts hold the
+  same kind of error (a sum of 100 billion), so the page shows the median
+  amount sold instead.
+- The totals take 2 to 4 seconds over the whole archive and are kept per
+  set of filters while the viewer runs; a person search scans the three
+  million related persons (about 11 seconds).
+
+## The filed date before 2020 Q3 (fixed 2026-11-09)
+
+Quarters up to 2020 Q2 stamp the submission with a time
+(`2019-12-31 17:25:33`), which `isoDate` did not read, so 419,367 filings
+(every one before 2020 Q3) had no filed date. Found building the viewer;
+`isoDate` now keeps the date part (tested both ways), and the stored rows
+were filled from `fd_submissions` on this machine, no request: 419,367
+filled, none unreadable. The counts a year above were taken from the
+quarters and stand.
+
 ## Running it
 
 ```

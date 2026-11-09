@@ -44,6 +44,8 @@ eq(F.isoDate('29-SEP-2026'), '2026-09-29', 'DD-MON-YYYY');
 eq(F.isoDate('2026-06-22'), '2026-06-22', 'ISO passes');
 eq(F.isoDate('5-jan-2010'), '2010-01-05', 'one-digit day, lower case month');
 eq(F.isoDate('Indefinite'), null, 'junk date is null');
+eq(F.isoDate('2019-12-31 17:25:33'), '2019-12-31', 'date and time (quarters to 2020 Q2): the date');
+eq(F.isoDate('2019-12-31 25'), null, 'a date with junk after it is null');
 eq(F.amount('Indefinite'), null, 'Indefinite is not a number');
 ok(F.indefinite('Indefinite') && !F.indefinite('0') && !F.indefinite(null), 'indefinite tells Indefinite from 0 and blank');
 eq(F.amount('0'), 0, 'zero sold is zero, not blank');
@@ -92,6 +94,13 @@ eq(A0.db.prepare('select SALESAMTCLARIFICATIONOFRESP s from fd_offering where AC
 const T2 = { FORMDSUBMISSION: F.parseTsv(tsv(H_SUB + '\tNEWCOL', ['0009999999-09-000001\t021-1\t01-JAN-2009\t\tX\tD\tLIVE\t\t\tz'])), ISSUERS: { header: [], rows: [] }, OFFERING: { header: [], rows: [] } };
 A0.loadQuarter('2009Q1', 'u2', T2, 1);
 eq(A0.db.prepare('select NEWCOL from fd_submissions where ACCESSIONNUMBER = ?').get('0009999999-09-000001').NEWCOL, 'z', 'a new column is added');
+// Superseded: the original an amendment names, loaded after the amendment
+// (an older quarter in a newest-first run), is marked; the amendment is not.
+const orig = (line) => line.replace('0002133337-26-000002', '0002133337-26-000001').replace('\tD/A\t', '\tD\t');
+const T3 = { FORMDSUBMISSION: F.parseTsv(tsv(H_SUB, [orig(SUB[1])])), ISSUERS: F.parseTsv(tsv(H_ISS, [orig(ISS[2])])), OFFERING: F.parseTsv(tsv(H_OFF, [orig(OFF[1])])) };
+A0.loadQuarter('2026Q2', 'u3', T3, 1);
+const sup = (a) => A0.db.prepare('select superseded s from formd where accn = ?').get(a).s;
+eq([sup('0002133337-26-000001'), sup('0002133337-26-000002'), sup('0002134925-26-000002')], [1, 0, 0], 'the filing an amendment replaces is superseded, nothing else');
 // All or nothing: a failure part-way leaves no rows and no loads entry.
 const broken = { FORMDSUBMISSION: T.FORMDSUBMISSION, ISSUERS: { header: H_ISS.split('\t'), rows: [{ get ACCESSIONNUMBER() { throw new Error('boom'); } }] }, OFFERING: T.OFFERING };
 const A1 = Archive.open(':memory:');
