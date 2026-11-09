@@ -78,6 +78,29 @@ function parseIndex(headers) {
   return out;
 }
 
+// The filing's plain index page (<accn>-index.htm), for filings too old to
+// have the -index-headers page (2014 and earlier answer 404 for it): its
+// "Document Format Files" table, a row a document: Seq, Description,
+// Document (a link to the file), Type, Size. The same shape as parseIndex.
+function parseIndexPage(html) {
+  const t = String(html || '');
+  const out = [];
+  const cell = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  for (const table of t.matchAll(/<table[^>]*class="tableFile"[^>]*>([\s\S]*?)<\/table>/gi)) {
+    if (/Data Files/i.test(table[0].slice(0, 200))) continue;   // XBRL data files, not documents
+    for (const row of table[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const tds = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
+      if (tds.length < 4) continue;
+      const href = /href="([^"]+)"/i.exec(tds[2]);
+      const file = href ? decodeURIComponent(href[1].split('/').pop().split('?')[0]) : cell(tds[2]).split(' ')[0];
+      if (!file) continue;
+      const seq = Number(cell(tds[0]));
+      out.push({ seq: Number.isFinite(seq) && cell(tds[0]) !== '' ? seq : null, type: cell(tds[3]) || null, file, description: cell(tds[1]) || null });
+    }
+  }
+  return out;
+}
+
 // Which exhibits may hold the business's statements, best first: EX-99 of any
 // number, as HTML or text (a PDF or an image is not read); one described as
 // financial statements or audited first, a press release or pro forma
@@ -229,4 +252,4 @@ function check(ans, text) {
   return { read, periods, problems };
 }
 
-module.exports = { WINDOW_DAYS, MAX_CHARS, MAX_DOCS, MODEL, FIELDS, SCHEMA, SYSTEM, has, filingsOf, candidates, parseIndex, pickDocs, request, signOk, check };
+module.exports = { WINDOW_DAYS, MAX_CHARS, MAX_DOCS, MODEL, FIELDS, SCHEMA, SYSTEM, has, filingsOf, candidates, parseIndex, parseIndexPage, pickDocs, request, signOk, check };

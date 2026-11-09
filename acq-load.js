@@ -181,7 +181,11 @@ async function buildList(zipFile, opts, deps) {
 // statements usually are) before closings, newest first.
 function queue(A, opts, what) {
   const roles = opts.closings ? "('amendment','closing')" : "('amendment')";
-  const where = what === 'index' ? 'not exists (select 1 from indexed i where i.accn = f.accn)' : 'exists (select 1 from indexed i where i.accn = f.accn)';
+  // To index: never tried, or the -index-headers page was missing and the
+  // plain page has not been tried yet.
+  const where = what === 'index'
+    ? "not exists (select 1 from indexed i where i.accn = f.accn and not (i.status = 404 and i.via is null))"
+    : 'exists (select 1 from indexed i where i.accn = f.accn)';
   const only = opts.only ? ` and fl.symbol in (${opts.only.map(() => '?').join(',')})` : '';
   return A.db.prepare(`select f.*, fl.symbol, fl.name filer, fl.in_universe from filings f join filers fl on fl.cik = f.cik
     where f.role in ${roles} and ${where} and (fl.in_universe = 1 or ?) ${only}
@@ -252,10 +256,22 @@ async function run(opts, deps) {
     if (!opts.commit) { log('DRY RUN: nothing fetched. Add --commit.'); return { ok: true, todo: todo.length }; }
     for (const f of todo.slice(0, opts.max)) {
       try {
-        const buf = await get(archiveBase(f.cik, f.accn) + f.accn + '-index-headers.html', gapMs, cap, { missingOk: true });
-        summary.requests++;
-        const docs = buf ? Q.parseIndex(buf.toString('utf8')) : [];
-        A.writeIndex(f.accn, buf ? 200 : 404, docs);
+        // The -index-headers page first; a filing too old to have it (404,
+        // or already known missing) is read from its plain -index.htm.
+        const prior = A.db.prepare('select status, via from indexed where accn = ?').get(f.accn);
+        let buf = null, via = null, docs = [];
+        if (!(prior && prior.status === 404)) {
+          buf = await get(archiveBase(f.cik, f.accn) + f.accn + '-index-headers.html', gapMs, cap, { missingOk: true });
+          summary.requests++;
+          if (buf) { via = 'headers'; docs = Q.parseIndex(buf.toString('utf8')); }
+        }
+        if (!buf) {
+          buf = await get(archiveBase(f.cik, f.accn) + f.accn + '-index.htm', gapMs, cap, { missingOk: true });
+          summary.requests++;
+          via = 'page';
+          if (buf) docs = Q.parseIndexPage(buf.toString('utf8'));
+        }
+        A.writeIndex(f.accn, buf ? 200 : 404, docs, via);
         summary.indexed++;
         const pick = Q.pickDocs(docs);
         log(`${f.filed} ${f.symbol || f.filer} ${f.form} ${f.accn}: ${docs.length} documents; to read: ${pick.map((d) => d.type + ' ' + d.file + (d.description ? ' "' + d.description.slice(0, 50) + '"' : '')).join(', ') || 'none'}`);

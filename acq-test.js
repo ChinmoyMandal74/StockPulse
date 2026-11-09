@@ -211,6 +211,40 @@ function harness(answers, opt = {}) {
   await L.run({ index: true, commit: true, max: 5, gapS: 10 }, h.deps);
   eq(h.calls.length, 0, 'an indexed filing is never fetched again');
 
+  // An old filing: no -index-headers page (404), so the plain -index.htm.
+  const PAGE = '<table class="tableFile" summary="Document Format Files"><tr><th scope="col">Seq</th><th scope="col">Description</th><th scope="col">Document</th><th scope="col">Type</th><th scope="col">Size</th></tr>'
+    + '<tr><td scope="row">1</td><td scope="row">FORM 8-K/A</td><td scope="row"><a href="/Archives/edgar/data/9/000000000910000001/d8ka.htm">d8ka.htm</a></td><td scope="row">8-K/A</td><td scope="row">20000</td></tr>'
+    + '<tr class="blueRow"><td scope="row">2</td><td scope="row">AUDITED FINANCIAL STATEMENTS OF ACME ELECTRIC</td><td scope="row"><a href="/Archives/edgar/data/9/000000000910000001/dex991.htm">dex991.htm</a></td><td scope="row">EX-99.1</td><td scope="row">90000</td></tr>'
+    + '<tr><td scope="row">3</td><td scope="row">PRO FORMA FINANCIAL INFORMATION</td><td scope="row"><a href="/Archives/edgar/data/9/000000000910000001/dex992.htm">dex992.htm</a></td><td scope="row">EX-99.2</td><td scope="row">30000</td></tr>'
+    + '<tr><td scope="row">&nbsp;</td><td scope="row">Complete submission text file</td><td scope="row"><a href="/Archives/edgar/data/9/000000000910000001/0000000009-10-000001.txt">0000000009-10-000001.txt</a></td><td scope="row">&nbsp;</td><td scope="row">200000</td></tr></table>'
+    + '<table class="tableFile" summary="Data Files"><tr><td scope="row">4</td><td scope="row">XBRL</td><td scope="row"><a href="/x/y.xml">y.xml</a></td><td scope="row">EX-101.INS</td><td scope="row">1</td></tr></table>';
+  const pd = Q.parseIndexPage(PAGE);
+  eq(pd.map((d) => [d.seq, d.type, d.file]), [[1, '8-K/A', 'd8ka.htm'], [2, 'EX-99.1', 'dex991.htm'], [3, 'EX-99.2', 'dex992.htm'], [null, null, '0000000009-10-000001.txt']],
+    'the plain index page: every document row, the data-files table left out');
+  eq(pd[1].description, 'AUDITED FINANCIAL STATEMENTS OF ACME ELECTRIC', 'descriptions kept');
+  eq(Q.pickDocs(pd).map((d) => d.file), ['dex991.htm'], 'the audited statements picked, pro forma not');
+  const A3 = Archive.open(':memory:');
+  A3.writeList([{ cik: '9', name: 'OLD CO', in_universe: true, symbol: 'OLD' }], [
+    { accn: '0000000009-10-000001', cik: '9', form: '8-K/A', filed: '2010-08-03', items: '9.01', role: 'amendment' },
+    { accn: '0000000009-10-000002', cik: '9', form: '8-K/A', filed: '2010-01-22', items: '9.01', role: 'amendment' }], 'f.zip');
+  A3.writeIndex('0000000009-10-000002', 404, []);   // tried before this change: the headers page was missing
+  eq(L.queue(A3, { all: false }, 'index').map((r) => r.accn), ['0000000009-10-000001', '0000000009-10-000002'], 'a filing whose headers page was missing is queued again for its plain page');
+  h = harness([{ status: 404 }, { status: 200, body: PAGE }, { status: 200, body: PAGE }], { archive: A3 });
+  await L.run({ index: true, commit: true, max: 5, gapS: 10 }, h.deps);
+  eq(h.calls.map((u) => u.split('/').pop()), ['0000000009-10-000001-index-headers.html', '0000000009-10-000001-index.htm', '0000000009-10-000002-index.htm'],
+    'headers page, then the plain page on its 404; the known-missing one goes straight to the plain page');
+  eq(A3.db.prepare('select accn, status, docs, via from indexed order by accn').all().map((r) => [r.status, r.docs, r.via]), [[200, 4, 'page'], [200, 4, 'page']], 'both indexed from the plain page');
+  h = harness([], { archive: A3 });
+  await L.run({ index: true, commit: true, max: 5, gapS: 10 }, h.deps);
+  eq(h.calls.length, 0, 'and never fetched again');
+  h = harness([{ status: 404 }], { archive: Archive.open(':memory:') });
+  const A4 = h.deps.archive;
+  A4.writeList([{ cik: '9', name: 'OLD CO', in_universe: true, symbol: 'OLD' }], [{ accn: '0000000009-10-000003', cik: '9', form: '8-K/A', filed: '2010-01-01', items: '9.01', role: 'amendment' }], 'f.zip');
+  A4.writeIndex('0000000009-10-000003', 404, []);
+  await L.run({ index: true, commit: true, max: 5, gapS: 10 }, h.deps);
+  eq(A4.db.prepare('select status, via from indexed').get(), { status: 404, via: 'page' }, 'both pages missing: recorded, with the page tried');
+  eq(L.queue(A4, { all: false }, 'index').length, 0, 'and not queued again');
+
   // --read: the two statements exhibits; the first text is already stored.
   A.writeText('0001-26-000001', 'exhibit991-auditedcombined.htm', text);
   h = harness([{ status: 200, body: '<html><p>' + text.replace(/\n/g, '</p><p>') + '</p></html>' }]);

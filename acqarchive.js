@@ -70,6 +70,11 @@ function open(file) {
   // Columns added after the first build.
   const readCols = new Set(db.prepare('pragma table_info(reads)').all().map((c) => c.name));
   if (!readCols.has('answer')) db.exec('alter table reads add column answer text');
+  // Which page a filing's document list came from (2026-11-09): 'headers'
+  // (the -index-headers page), 'page' (the plain -index.htm, for filings
+  // too old to have the first). A 404 with no 'via' has not tried the page.
+  const ixCols = new Set(db.prepare('pragma table_info(indexed)').all().map((c) => c.name));
+  if (!ixCols.has('via')) db.exec('alter table indexed add column via text');
 
   function noteRequest(url, status, bytes, ms) {
     try { db.prepare('insert into requests (at, url, status, bytes, ms) values (?, ?, ?, ?, ?)').run(Date.now(), url, status, bytes, ms); } catch (_) { /* bookkeeping */ }
@@ -89,12 +94,12 @@ function open(file) {
     } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
   }
 
-  function writeIndex(accn, status, docs) {
+  function writeIndex(accn, status, docs, via) {
     db.exec('begin');
     try {
       const ins = db.prepare('insert or replace into docs (accn, seq, type, file, description) values (?, ?, ?, ?, ?)');
       for (const d of docs || []) ins.run(accn, d.seq == null ? null : d.seq, d.type || null, d.file, d.description || null);
-      db.prepare('insert or replace into indexed (accn, at, status, docs) values (?, ?, ?, ?)').run(accn, Date.now(), status, (docs || []).length);
+      db.prepare('insert or replace into indexed (accn, at, status, docs, via) values (?, ?, ?, ?, ?)').run(accn, Date.now(), status, (docs || []).length, via || null);
       db.exec('commit');
     } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
   }
