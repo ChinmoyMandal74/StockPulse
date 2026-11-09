@@ -34,6 +34,20 @@ name was withheld ("Exemption 6"); and any loan to a person (sole
 proprietorship, self-employed individual, independent contractor, single
 member LLC), whose "business name" is a person's name.
 
+## The first load (2026-11-09)
+
+13 requests to data.sba.gov, every one a 200; 11,468,210 loans read;
+**6,253,814 kept**, loans to named businesses. About 5.2 million were loans
+to people and are left out; names withheld were a handful (the "Exemption
+6" rows). The first run as a script failed at once (the read step asked
+the loader for its file list before the loader had defined it, a case the
+tests, which call the read step directly, did not reach); the list now comes
+in `deps.files`.
+
+FourGen Holdings (Continental Electrical Construction) took a $10.0M loan on
+2020-04-09 reporting 496 jobs: against 103 people in its retirement plan
+that year, the crews the plan does not cover.
+
 ## Where it shows
 
 The fact sheet (`factsheet.js`, drawn in both side panels of the local

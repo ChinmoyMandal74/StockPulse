@@ -34,7 +34,8 @@ function where(f) {
   const w = [], p = [];
   if (f.q) {
     if (/^\d{2}-?\d{7}$/.test(f.q)) { w.push('ein = ?'); p.push(f.q.replace('-', '')); }
-    else { w.push("(name like ? escape '\\' collate nocase or dba like ? escape '\\' collate nocase)"); const v = '%' + f.q.replace(/[\\%_]/g, (c) => '\\' + c) + '%'; p.push(v, v); }
+    // Any name it has filed under, not only the newest (f5500_names).
+    else { w.push("ein in (select ein from f5500_names where name like ? escape '\\' collate nocase)"); p.push('%' + f.q.replace(/[\\%_]/g, (c) => '\\' + c) + '%'); }
   }
   if (f.state) { w.push('state = ?'); p.push(f.state); }
   if (f.naics) { w.push('business_code like ?'); p.push(f.naics + '%'); }

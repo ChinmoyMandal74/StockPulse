@@ -53,6 +53,10 @@ function ensureSchema(db) {
     create index if not exists idx_f5500_latest_name on f5500_latest (name collate nocase);
     create index if not exists idx_f5500_latest_staff on f5500_latest (staff);
     create index if not exists idx_f5500_latest_code on f5500_latest (business_code);
+    -- Every name each employer has filed under (and traded as), so a search
+    -- finds a company by an old name: Continental Electrical Construction is
+    -- FourGen Holdings from 2019. Derived; rebuilt with f5500_latest.
+    create table if not exists f5500_names (ein text not null, name text not null, primary key (ein, name));
   `);
 }
 
@@ -122,6 +126,10 @@ function open(file) {
         from f5500_employers e
         join (select ein, max(year) last_year, min(year) first_year, count(*) years from f5500_employers group by ein) f
           on f.ein = e.ein and f.last_year = e.year`);
+      db.exec('delete from f5500_names');
+      db.exec(`insert or ignore into f5500_names (ein, name)
+        select ein, name from f5500_employers where name is not null
+        union select ein, dba from f5500_employers where dba is not null`);
       db.exec('commit');
     } catch (e) { try { db.exec('rollback'); } catch (_) { /* already */ } throw e; }
     return db.prepare('select count(*) n from f5500_latest').get().n;

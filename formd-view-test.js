@@ -159,7 +159,8 @@ eq(EL.rows.find((r) => r.ein === '123456789').growth, null, 'no 2019 year, no gr
 eq(EL.rows.find((r) => r.ein === '123456789').formd_cik, '1', 'a Form D issuer is marked, by its EIN');
 eq(api.employers(sp('naics=2382&state=il')).rows.map((r) => r.ein), ['010750002', '555555555'], 'business code start and state, any case');
 eq(api.employers(sp('naics=2382&current=1')).rows.map((r) => r.ein), ['010750002'], 'still filing');
-eq(api.employers(sp('q=continental')).rows.length, 0, 'the newest name is what the list searches');
+db.exec("insert into f5500_names (ein, name) select ein, name from f5500_employers union select ein, dba from f5500_employers where dba is not null");
+eq(api.employers(sp('q=continental')).rows.map((r) => r.ein), ['010750002'], 'found by a name it once filed under');
 eq(api.employers(sp('q=fourgen')).rows.map((r) => r.ein), ['010750002'], 'by name');
 eq(api.employers(sp('q=01-0750002')).rows.map((r) => r.ein), ['010750002'], 'by tax ID with its dash');
 eq(api.employers(sp('q=kavia')).rows.length, 1, 'by trading name too');

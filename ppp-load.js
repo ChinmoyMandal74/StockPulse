@@ -120,7 +120,7 @@ if (require.main === module) {
   let unlock = () => {};
   (async () => {
     if (opts.commit) unlock = lock();
-    const deps = fileDeps();
+    const deps = { ...fileDeps(), files: FILES };
     let r = { ok: true };
     if (opts.download || !opts.load) r = await download(opts, deps);
     if (opts.load) r = await require('./pppload-read.js').load(opts, deps);

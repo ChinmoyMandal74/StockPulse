@@ -110,7 +110,11 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 const DASH = '<span class="em-dash">—</span>';
 const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
 const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n); return a >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : a >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : a >= 1e3 ? '$' + (n / 1e3).toFixed(0) + 'K' : '$' + n; };
-const pct = (v) => (v == null || !isFinite(v) ? DASH : '<span class="' + (v > 0 ? 'em-up' : v < 0 ? 'em-down' : '') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(0) + '%</span>');
+const pct = (v) => {
+  if (v == null || !isFinite(v)) return DASH;
+  const r = Math.round(v * 100);   // signed by the rounded figure: a change that rounds to 0 is "0%", not "−0%"
+  return '<span class="' + (r > 0 ? 'em-up' : r < 0 ? 'em-down' : '') + '">' + (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r) + '%</span>';
+};
 const IDS = ['q', 'state', 'naics', 'minStaff'];
 const state = { sort: 'staff', dir: 'desc', page: 0 };
 let seq = 0;

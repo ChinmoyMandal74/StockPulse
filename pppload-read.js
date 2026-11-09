@@ -81,7 +81,9 @@ async function load(opts, deps) {
   const db = new DatabaseSync(process.env.FORMD_DB || require('path').join(__dirname, 'formd.db'));
   db.exec('pragma busy_timeout = 10000; pragma journal_mode = wal;');
   ensureSchema(db);
-  const { FILES } = require('./ppp-load.js');
+  // The file list comes in deps: ppp-load.js, run as the main script, has
+  // not finished defining its exports when it calls this.
+  const FILES = deps.files || require('./ppp-load.js').FILES;
   const done = new Set(db.prepare('select file from ppp_files').all().map((r) => r.file));
   const todo = FILES.filter((f) => deps.onDisk(f) && !done.has(f));
   log(`${todo.length} file(s) on disk to read${opts.commit ? '' : ' (DRY RUN: add --commit)'}`);
