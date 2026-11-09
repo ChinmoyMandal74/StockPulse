@@ -120,4 +120,30 @@ function sourceOf(id, group) {
   return GROUP[group] || null;
 }
 
-module.exports = { sourceOf, S };
+// The same source in words a non-admin reader sees (owner, 2026-11-09: no
+// data vendor or regulator is named on anything a member sees). The admin
+// keeps the names above; everyone else reads these neutral forms.
+const NEUTRAL = [
+  [/News headlines \(Google News, Yahoo Finance\)/g, 'News headlines'],
+  [/Yahoo Finance articles/g, 'News articles'],
+  [/Earnings calendar \(Alpha Vantage, else Nasdaq\)/g, 'Announced report dates'],
+  [/FINRA short interest reports/g, 'Short interest reports'],
+  [/Options Clearing Corporation/g, 'Options open interest'],
+  [/Daily prices \(Twelve Data\)/g, 'Daily prices'],
+  [/Twelve Data’s dates against the SEC’s/g, 'the data feed’s dates against the filed reports’'],
+  [/^Twelve Data company profile/g, 'The data feed’s company profile'],
+  [/^Twelve Data reference list/g, 'The data feed’s reference list'],
+  [/^Twelve Data forward P\/E/g, 'The data feed’s forward P/E'],
+  [/^Twelve Data holdings/g, 'The data feed’s holdings'],
+  [/^Twelve Data/g, 'The data feed'],
+  [/Twelve Data’s/g, 'the data feed’s'],
+  [/Twelve Data/g, 'the data feed'],
+  [/the SEC 10-Q/g, 'the 10-Q'],
+  [/^SEC filings/g, 'Filings'],
+  [/SEC filings/g, 'filings'],
+  [/^SEC (Form|Schedule)/g, '$1'],
+];
+const neutral = (text) => (text == null ? text : NEUTRAL.reduce((t, [re, to]) => t.replace(re, to), String(text)));
+const publicSourceOf = (id, group) => neutral(sourceOf(id, group));
+
+module.exports = { sourceOf, publicSourceOf, neutral, S };

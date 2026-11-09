@@ -57,7 +57,7 @@
       animation: pulse 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
     }
     /* AMBER IS NOT DECORATION HERE. It already means "notice this, it is old"
-       in the Price pulled column, the Turso usage bar and the studio's own
+       in the Price pulled column, the database usage bar and the studio's own
        freshness line, so spending it on every reading would leave nothing to
        say a reading is stale — and a badge that is always lit stops being read
        within a day. Green while the numbers are current, amber once they are
@@ -298,7 +298,7 @@
     #readonlyNote, #fwdViewBar, #refreshBar, #fltBar, #announceBar { margin-top: 8px; }
     /* THE LEVEL IS THE COLOUR, and the colours already mean these things here:
        accent is a fact, amber is "notice this, something is off" (the Price
-       pulled column, the Turso bar, the stale status pill), red is the loud
+       pulled column, the database bar, the stale status pill), red is the loud
        cell. A message the owner sends because something is WRONG should not
        look like the read-only note beside it. */
     #announceBar > .core { border: 1px solid transparent; }
@@ -1411,7 +1411,7 @@
                 <!-- Members: every 13D/13G and 8-K, a day at a time (2026-10-20). -->
                 <a class="pick" href="/filings" id="filingsLink">
                   <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>
-                  <span class="nm">SEC filings</span>
+                  <span class="nm">Filings</span>
                 </a>
                 <!-- Members: companies filing to go public (2026-11-02). -->
                 <a class="pick" href="/ipos" id="iposLink">
@@ -1670,7 +1670,7 @@
         <th class="group grp-profit" data-group="profit" colspan="8" title="Margins and returns over the last twelve months (TTM), except where a header says otherwise.">Profitability · TTM</th>
         <th class="group grp-growth" data-group="growth" colspan="2" title="The latest quarter against the same quarter a year earlier (Q YoY).">Growth · Q YoY</th>
         <th class="group grp-finpos" data-group="finpos" colspan="7" title="The balance sheet at the latest quarter end (Q end).">Balance sheet · Q end</th>
-        <th class="group grp-cflow" data-group="cflow" colspan="2" title="Cash flow over the last twelve months (TTM). Twelve Data’s free cash flow is levered free cash flow; see /sources.">Cash flow · TTM</th>
+        <th class="group grp-cflow" data-group="cflow" colspan="2" title="Cash flow over the last twelve months (TTM). The data feed’s free cash flow is levered free cash flow.">Cash flow · TTM</th>
         <th class="group grp-divs" data-group="divs" colspan="4">Dividends and returns</th>
         <th class="group grp-report" data-group="report" colspan="4">Reporting</th>
         <th class="group grp-lrun" data-group="lrun" colspan="16">Long run</th>
@@ -1680,16 +1680,16 @@
       </tr>
       <tr>
         <th class="left grp-info" data-fkey="portfolios" title="The themes this stock belongs to: hand-kept lists such as Chips or Software. A stock can sit in more than one. Pick a theme from the Theme menu above the table to see only its members.">Themes</th>
-        <th class="left grp-info" data-key="sector" title="The broad business the company is in, from the same profile data as Industry: Twelve Data’s own taxonomy, not GICS.">Sector</th>
-        <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — Twelve Data's own taxonomy, not GICS.">Industry</th>
+        <th class="left grp-info" data-key="sector" title="The broad business the company is in, from the same profile data as Industry: the data feed’s own taxonomy, not GICS.">Sector</th>
+        <th class="left grp-info" data-key="industry" title="The finer classification from the same profile data — the data feed's own taxonomy, not GICS.">Industry</th>
         <th class="left grp-info" data-key="exchange" title="Where the stock actually trades. Stored on the profile rather than read from the price call, so it survives a round that prices from the archive.">Exchange</th>
         <th class="left grp-info" data-key="instrumentType" title="What the instrument IS, from the provider's own free reference list: Common Stock, Preferred Stock, American Depositary Receipt, Limited Partnership, REIT or ETF. It exists because a NAME cannot be trusted for this — BNS is stored as 'Bank Nova Scotia Halifax Pfd 3' and is Scotiabank's common stock, while a subordinated note can read as ordinary equity. Filter on it to find anything that is not common stock. It states the fact only: nothing in the Signal engine reads it.">Instrument</th>
-        <th class="left grp-info" data-key="filer" title="How the company files its accounts with the SEC. &quot;Foreign&quot; means a foreign company filing under international standards (IFRS), which only a foreign issuer may do; the code beside it is the currency it reports in. A company reporting in another currency is shown in dollars on its stock page, at the exchange rate for each period. &quot;US GAAP&quot; is how nearly every company here files, and says how it reports rather than where it is from: a foreign company may choose US GAAP too. Every stock here is US-listed either way. Blank for a fund, which files no statements.">Filer</th>
-        <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. Each comes from the index fund's own daily holdings file (SPY and QQQ), the closest published source there is, and the cell names the date. An em-dash means a holdings file has not been imported yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here: it stays on the admin holdings page. Nothing in the Signal engine reads this.">Index</th>
+        <th class="left grp-info" data-key="filer" title="How the company files its accounts. &quot;Foreign&quot; means a foreign company filing under international standards (IFRS), which only a foreign issuer may do; the code beside it is the currency it reports in. A company reporting in another currency is shown in dollars on its stock page, at the exchange rate for each period. &quot;US GAAP&quot; is how nearly every company here files, and says how it reports rather than where it is from: a foreign company may choose US GAAP too. Every stock here is US-listed either way. Blank for a fund, which files no statements.">Filer</th>
+        <th class="left grp-info" data-key="spMember" title="Which index the stock is in: the S&amp;P 500, the Nasdaq 100, both or neither. The cell names the date of the membership it reads. An em-dash means the membership has not been loaded yet, which is NOT the same as being in neither. The index WEIGHT is deliberately not here. Nothing in the Signal engine reads this.">Index</th>
         <th class="grp-info" data-key="marketCap" title="Market value: the share price times the shares outstanding, in US dollars. The one money figure on the screener that is always in dollars.">Market<br>Cap</th>
         <th class="left grp-info" data-key="capBand" title="The size band, from the market cap beside it: Mega $200B+, Large $50-200B, Mid-Large $10-50B, Mid $2-10B, Small $300M-2B, Micro under $300M. The $50B line inside Large is this site's own cut, not a standard — without it 69% of the screen sat in one bucket. Thresholds are fixed, never derived from the current universe. Blank for ETFs, which report AUM rather than capitalisation.">Size</th>
         <th class="grp-info" data-key="newsAge" title="How long ago the latest stored headline was published, and how many this stock has from the last week. Click a cell to read them. A dot means we have not checked this stock yet — headlines are fetched a few stocks at a time.">News</th>
-        <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. Read for every company on the screener from each stock's Yahoo Finance feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
+        <th class="grp-info" data-key="toneAvg" title="Article tone over the last seven days: the average of an AI model's reading of how each article about the company leans, from −1 to +1, with the number of articles read beside it. Blue is +0.25 or more, orange −0.25 or less. Read for every company on the screener from each stock's news feed, every six hours; only articles mainly about the company count. A description of what was written, not a forecast, and never an input to the Signal. Click a cell for the articles. Members only.">Tone<br>7D</th>
         <th class="grp-info" data-key="nextEarningsDate" title="Next earnings date — confirmed when the earnings calendar lists it, else estimated (~) from the date of the same quarter last year. Hover for last date + surprise.">Next<br>Earn</th>
         <th class="grp-rank ta-c" data-key="qualityScore" title="Quality 1–10: company data (earnings &amp; revenue growth, PEG, P/E, margin, ROE). For a loss-making company the three earnings-based factors — earnings growth, PEG and forward P/E — are excluded rather than scored, because none of them means anything without earnings; the rest are re-weighted to fill the gap. If under 40% of the factor weight has usable data, no quality score is given at all. Hover a cell for the factor split and the confidence figure.">Qual.</th>
         <th class="grp-rank ta-c" data-key="healthScore" title="Health, 0 to 100: how the stock reads on five topics at once, its business (growth, profit, balance sheet, share count), its latest results (against the estimate, guidance), its valuation (against its own history and its industry), its price (one month, three years, trend) and sentiment (short interest, article tone). Each topic has a set weight; a topic with no data is left out and the rest rescaled, and with too little data there is no number. A few readings cap it however good the rest is. A description of where the stock stands today, not a rating, a forecast or a recommendation, and never an input to the Signal. Blank for a fund.">Health</th>
@@ -1751,9 +1751,9 @@
         <th class="grp-react" data-key="chipSelloff" title="What this stock typically did on the days the SEMICONDUCTOR complex fell hardest: the median of its own moves on the worst 5% of sessions for an equal-weight basket of the semiconductor industries over the past year, measured after the market&#39;s own move is taken out, so these are the complex&#39;s bad days and not the market&#39;s. Positive means it ROSE while chips were falling. The semis are the closest thing in this data to the AI trade and are NOT the same thing — there is no AI field here, so this is named for what it measures. A median rather than a mean, because one company event inside a 13-day sample would otherwise make a stock look like a perfect hedge. A description of the past year, not a forecast: ranked on every year but one it carries over to the year held back at a Spearman of about 0.53, which is real and is a long way from reliable. Blank in the forward-returns view and for a stock without a year of history.">Chip<br>selloff</th>
         <th class="grp-react" data-key="marketSelloff" title="What this stock typically did on the days the S&amp;P 500 fell hardest: the median of its own moves on the worst 5% of sessions for the index fund over the past year, about thirteen days. The index fund's own row shows what the market itself did on them, which is the scale to read every other row against. A description of the past year, not a forecast: year to year it carries over at a Spearman of 0.42 to 0.78 across six tests. It is mostly the stock's sensitivity to the market said in plain terms, so it moves with Market rally beside it. Blank in the forward-returns view and for a stock without a year of history.">Market<br>selloff</th>
         <th class="grp-react" data-key="marketRally" title="What this stock typically did on the days the S&amp;P 500 rose most: the median of its own moves on the best 5% of sessions for the index fund over the past year. It carries over year to year at 0.24 to 0.65, a little more weakly than Market selloff. READ EACH ON ITS OWN, NOT THE GAP BETWEEN THEM: a stock that caught the rallies and dodged the selloffs this year is no more likely to do so next year (that difference carries over at about 0.1, and at nothing in the latest year), so it is not a trait and nothing here ranks on it.">Market<br>rally</th>
-        <th class="grp-react" data-key="shortBuild" title="The change in shares sold short between the two most recent FINRA reports, which are published twice a month, about a fortnight apart; each cell names the two dates. Positive means the short position grew. Blank where a split falls between the two reports, since FINRA does not restate for one, and for a stock not on the latest report. It is the direction of the position, not its size: Short % Float in Ownership is the size.">Short<br>build</th>
+        <th class="grp-react" data-key="shortBuild" title="The change in shares sold short between the two most recent short interest reports, which are published twice a month, about a fortnight apart; each cell names the two dates. Positive means the short position grew. Blank where a split falls between the two reports, since the reports are not restated for one, and for a stock not on the latest report. It is the direction of the position, not its size: Short % Float in Ownership is the size.">Short<br>build</th>
         <th class="grp-react" data-key="insiderNet" title="What the company's own insiders did on the open market over the past 90 days: purchases less sales, as a percentage of the company's market value, from their Form 4 filings. Sales under a pre-arranged trading plan are left out, because they were scheduled months earlier. NEGATIVE IS THE ORDINARY CASE: most insider selling is pay being turned into cash, and about two companies in three are net sellers, so a small negative says little. Each cell names how many insiders bought and sold. Blank where no insider traded, and where a filed dollar value is too large against the company to be real.">Insider<br>net</th>
-        <th class="left grp-react" data-key="lastEvent" title="The newest 8-K the company filed in the last sixty days: what it was about, and how many days ago. An 8-K is the report a company files within four business days of something material: results released, an officer or director arriving or leaving, a material agreement, new debt. The words name the kind of event from the item numbers on the filing and do not say whether it was good news. The rare kinds are in bold: a restatement warning, an auditor change, an impairment, a listing notice, a change of control, a cybersecurity incident, a bankruptcy. Type in the filter row to find a kind, for example officer. Blank when nothing was filed in the window. From the SEC, updated as each company's filings are re-read.">Last<br>8-K</th>
+        <th class="left grp-react" data-key="lastEvent" title="The newest 8-K the company filed in the last sixty days: what it was about, and how many days ago. An 8-K is the report a company files within four business days of something material: results released, an officer or director arriving or leaving, a material agreement, new debt. The words name the kind of event from the item numbers on the filing and do not say whether it was good news. The rare kinds are in bold: a restatement warning, an auditor change, an impairment, a listing notice, a change of control, a cybersecurity incident, a bankruptcy. Type in the filter row to find a kind, for example officer. Blank when nothing was filed in the window. Updated as each company's filings are re-read.">Last<br>8-K</th>
         <th class="grp-size" data-key="revenueTtm" title="Revenue, trailing twelve months (sum of the last 4 reported quarters), in the company's own reporting currency — do not compare across currencies">Revenue<span class="ptag">TTM</span></th>
         <th class="grp-size" data-key="grossProfitTtm" title="Gross profit, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Gross<br>Profit<span class="ptag">TTM</span></th>
         <th class="grp-size" data-key="netIncomeTtm" title="Net income to common, trailing twelve months — Trailing twelve months, in the company's own reporting currency — do not compare across currencies">Net<br>Income<span class="ptag">TTM</span></th>
@@ -1774,10 +1774,10 @@
         <th class="grp-value" data-key="earningsYield" title="Earnings yield: trailing earnings per share over the price, in percent, which is the P/E turned over. Unlike the P/E it reads for a loss-maker, as a negative figure, so loss-making companies sort where they belong rather than vanishing. A description, not a return.">Earn<br>Yield<span class="ptag">TTM</span></th>
         <th class="left grp-profit" data-key="growthProfile" title="Growth and profit in one word. Growing: revenue up 10% or more on a year earlier; Shrinking: down 5% or more; Steady: between. Revenue growth is the latest quarters in the company’s filings (up to four) against the same quarters a year earlier, or else the latest quarter’s. Profitable: a net margin over twelve months of 10% or more and free cash flow not negative; Loss-making: a net loss; Thin margin: between, or a profit on paper while burning cash. A bank or insurer is read on its net margin alone, a REIT on its free cash flow margin. Pre-revenue: under $50M of revenue a year. A description, not a rating.">Growth &amp;<br>profit</th>
         <th class="grp-profit" data-key="grossMargin" title="Gross profit ÷ revenue, both trailing twelve months — derived from the two columns to the left so the numbers reconcile">Gross<br>Margin<span class="ptag">TTM</span></th>
-        <th class="grp-profit" data-key="operatingMargin" title="Operating margin over twelve months, from the results release and the filings — the cleanest read on the business itself: after the cost of running it, before financing and tax. Where neither gives four quarters it is Twelve Data’s, which is mostly the latest quarter’s; the cell says which.">Op<br>Margin<span class="ptag">TTM</span></th>
+        <th class="grp-profit" data-key="operatingMargin" title="Operating margin over twelve months, from the results release and the filings — the cleanest read on the business itself: after the cost of running it, before financing and tax. Where neither gives four quarters it is the data feed’s, which is mostly the latest quarter’s; the cell says which.">Op<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="profitMargin" title="Net profit margin (TTM), derived as Net Income ÷ Revenue from the two columns in the Size group — not taken from the data feed, which reports it incorrectly for loss-making companies with small revenue. Dividing those two columns gives exactly this number.">Profit<br>Margin<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="fcfMargin" title="Free cash flow ÷ revenue, both trailing twelve months — derived from the columns to the left">FCF<br>Margin<span class="ptag">TTM</span></th>
-        <th class="grp-profit" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own SEC filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg<span class="ptag">TTM YoY</span></th>
+        <th class="grp-profit" data-key="netMarginChg" title="Net margin over the latest four quarters, less net margin over the four before them, in percentage points, from the company's own filings. +2.0 means it kept two more cents of each dollar of revenue than a year earlier. Needs eight consecutive quarters on file with the newest recent, so a bank whose filings carry no revenue line is blank, as is a company whose margin is past 100% either way (almost no revenue). Rebuilt daily. A fund has none. What was reported, not a forecast.">Margin<br>chg<span class="ptag">TTM YoY</span></th>
         <th class="grp-profit" data-key="roe" title="Return on equity (TTM)">ROE<span class="ptag">TTM</span></th>
         <th class="grp-profit" data-key="roa" title="Return on assets (TTM). Unlike ROE it is not flattered by borrowing.">ROA<span class="ptag">TTM</span></th>
         <th class="grp-growth" data-key="revenueGrowthYoY" title="Revenue growth: the most recent quarter versus the same quarter a year ago. It describes that one quarter, not the Revenue TTM column.">Rev<br>Growth<span class="ptag">Q YoY</span></th>
@@ -1786,28 +1786,28 @@
         <th class="grp-finpos" data-key="totalDebt" title="Total debt, most recent quarter, in the company's own reporting currency.">Debt<span class="ptag">Q end</span></th>
         <th class="grp-finpos" data-key="netCash" title="Total cash minus total debt, most recent quarter. Positive = net cash, negative = net debt">Net<br>Cash<span class="ptag">Q end</span></th>
         <th class="grp-finpos" data-key="netCashPerShare" title="Net cash (cash less total debt, the Net Cash column) for each share outstanding, in dollars. Negative is net debt per share. Dollar reporters only: a depositary receipt&#39;s share count is in another unit.">Net Cash<br>/ Share<span class="ptag">Q end</span></th>
-        <th class="grp-finpos" data-key="workingCapital" title="Working capital: current assets less current liabilities on the newest balance sheet the company has filed with the SEC, in dollars (a company filing in another currency is converted at the rate on that date). Negative means more falls due within a year than the company holds in short-term assets. Blank where the filings state neither line (a bank or an insurer files no current assets), or the newest is over fifteen months old. Rebuilt daily.">Working<br>Capital<span class="ptag">Q end</span></th>
+        <th class="grp-finpos" data-key="workingCapital" title="Working capital: current assets less current liabilities on the newest balance sheet the company has filed, in dollars (a company filing in another currency is converted at the rate on that date). Negative means more falls due within a year than the company holds in short-term assets. Blank where the filings state neither line (a bank or an insurer files no current assets), or the newest is over fifteen months old. Rebuilt daily.">Working<br>Capital<span class="ptag">Q end</span></th>
         <th class="grp-finpos" data-key="debtToEquity" title="Total debt as a percentage of shareholders' equity, most recent quarter — how leveraged the balance sheet is.">Debt/<br>Equity<span class="ptag">Q end</span></th>
         <th class="grp-finpos" data-key="currentRatio" title="Current assets ÷ current liabilities, most recent quarter. Below 1 means short-term bills exceed short-term assets.">Curr<br>Ratio<span class="ptag">Q end</span></th>
         <th class="grp-cflow" data-key="operatingCashFlowTtm" title="Cash generated by operations, trailing twelve months — free cash flow before capital spending.">Op<br>Cash<span class="ptag">TTM</span></th>
-        <th class="grp-cflow" data-key="fcfTtm" title="Free cash flow, trailing twelve months: operating cash flow less capex, from the results release and the filings (not Twelve Data’s levered figure; blank where neither gives the lines, banks and insurers mostly) — in the company's own reporting currency — do not compare across currencies">FCF<span class="ptag">TTM</span></th>
+        <th class="grp-cflow" data-key="fcfTtm" title="Free cash flow, trailing twelve months: operating cash flow less capex, from the results release and the filings (not the data feed’s levered figure; blank where neither gives the lines, banks and insurers mostly) — in the company's own reporting currency — do not compare across currencies">FCF<span class="ptag">TTM</span></th>
         <th class="grp-divs" data-key="divYield" title="Forward annual dividend yield. Every return column on this page is price-only, so a yield here is income the table does not otherwise show.">Div<br>Yield<span class="ptag">Fwd</span></th>
         <th class="grp-divs" data-key="payoutRatio" title="Dividend as a percentage of earnings. Above 100% the dividend is being paid out of something other than profit.">Payout<span class="ptag">TTM</span></th>
-        <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own SEC filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield<span class="ptag">TTM</span></th>
+        <th class="grp-divs" data-key="buybackYield" title="Cash the company spent buying back its own shares over its latest twelve months on file, as a percentage of today's market value. From the cash-flow statements in its own filings. Before shares handed out as pay, so it is not the fall in the share count. Blank where the company files no buyback line, which is not the same as zero.">Buyback<br>yield<span class="ptag">TTM</span></th>
         <th class="grp-divs" data-key="shareholderYield" title="Dividend yield plus buyback yield: the cash returned to shareholders over the latest year as a share of today&#39;s market value. Blank where the company files no buyback line, which is not the same as zero. Before shares handed out as pay, so a company that issues many shares can return cash and still dilute: see Shares chg 1Y.">Holder<br>Yield<span class="ptag">Fwd + TTM</span></th>
-        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE ROW&rsquo;S COMPANY FIGURES RUN TO &mdash; revenue, the margins, net income, cash flow and growth are a trailing twelve months ending on this date, and the balance sheet is at it. Since the source rule of 2026-10-29 they come from the company&rsquo;s results release while it is the newest report, its SEC filings once they are filed, and Twelve Data otherwise, so this is usually the company&rsquo;s own period end; the hover names the source, and Twelve Data&rsquo;s period when it differs. Market value, forward P/E and short interest stay Twelve Data&rsquo;s. Last results out beside it is a different fact: when Twelve Data recorded the ANNOUNCEMENT, which lands about a month after the period. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
-        <th class="grp-report" data-key="lastEarningsDate" title="When Twelve Data last recorded results &mdash; the announcement, NOT the period it covers: a report lands 23-29 days after the quarter it reports on. It is Twelve Data&rsquo;s record, so it can lag the company: Announced (SEC) beside it is the company&rsquo;s own filing. The figures on this row no longer wait for it (Figures to says how far they run). Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything Twelve Data has not seen report in a quarter. Amber past 100 days, or when the company has filed with the SEC since.">Last results out</th>
-        <th class="grp-report" data-col="secResults" title="When the company told the SEC it had results &mdash; the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. The company&rsquo;s own answer to &quot;has this company reported&quot;, beside Twelve Data&rsquo;s in Last results out: on 2026-10-01 Micron had announced on Sep 30 and Twelve Data still said Jun 24. Amber when it is ahead of Last results out, which means Twelve Data has missed a report (the figures on the row may still include it, from the release: Figures to says). Blank until the SEC dates are loaded; a fund files no 2.02.">Announced<br>(SEC)</th>
-        <th class="left grp-report" data-key="staleIssues" title="What on this row is behind, in words: figures that predate the last results, by Twelve Data&rsquo;s date or the SEC&rsquo;s (that quarter&rsquo;s figures are not in yet); a results filing at the SEC that Twelve Data has not recorded (the hover says whether the figures already include it); no results for more than 100 days; a next report date that has passed with no newer results; company data more than 10 days old; a price more than 5 days old. Blank when nothing is. Filters as text (&quot;predate&quot;, &quot;missed&quot;); sorts by how many issues. A fund reads NA.">Out of<br>date</th>
-        <th class="grp-lrun" data-key="revGrowth3y" title="Revenue growth a year, compounded, over three years: the latest four quarters against the same four quarters three years earlier, from the company's own SEC filings. +20.0 means revenue grew 20% a year, about 73% in all. A company that files in another currency is measured on its annual reports in that currency, so a currency's move is not counted as growth. Blank where three years are not on file, where the newest quarter is not recent, and for a bank, whose filings carry no revenue line. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>3Y</th>
-        <th class="grp-lrun" data-key="revGrowth5y" title="Revenue growth a year, compounded, over five years: the latest four quarters against the same four quarters five years earlier, from the company's own SEC filings. A company that files in another currency is measured on its annual reports in that currency. Blank where five years are not on file, where the newest quarter is not recent, and for a bank. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>5Y</th>
-        <th class="grp-lrun" data-key="niGrowth3y" title="Net income growth a year, compounded, over three years: the latest four quarters' net income against the same four quarters three years earlier, from the company's own SEC filings. Blank where either end is a loss, since from a loss there is no rate, and where three years are not on file. A rate past 1,000% a year is a base too small to measure from and is left blank too. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>3Y</th>
-        <th class="grp-lrun" data-key="niGrowth5y" title="Net income growth a year, compounded, over five years: the latest four quarters' net income against the same four quarters five years earlier, from the company's own SEC filings. Blank where either end is a loss and where five years are not on file. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>5Y</th>
-        <th class="grp-lrun" data-key="peVsMed" title="Today's price/earnings against the median of its own price/earnings at each of the last 41 quarter ends, about ten years: +30.0 means it is priced 30% above its typical multiple of the decade, -20.0 means 20% below. Both are market value over the trailing year's net income from the company's own SEC filings, the same arithmetic as the Lines card, so the now figure can differ from the Trail P/E column, which is the price provider's. A quarter with a loss has no multiple and is left out of the median; the median needs twenty quarters with one. Blank where the company loses money now. A description of where it sits against its own past, not a call on whether that is cheap: a business can change in ten years. Rebuilt about weekly.">P/E vs<br>10Y med</th>
-        <th class="grp-lrun" data-key="divStreak" title="Consecutive fiscal years, up to the latest annual report, in which the dividend declared per share was higher than the year before, from the company's own SEC filings, in today's shares (a year reported before a split is divided by it). 0 means it paid a dividend and did not raise it last year. The filings start about 2009, so a long record is capped at the years on file; hover a figure for the year it starts. Blank where the company pays no dividend or its split history is not held. Rebuilt about weekly.">Div<br>raises</th>
+        <th class="grp-report" data-key="mostRecentQuarter" title="THE PERIOD THE ROW&rsquo;S COMPANY FIGURES RUN TO &mdash; revenue, the margins, net income, cash flow and growth are a trailing twelve months ending on this date, and the balance sheet is at it. Since the source rule of 2026-10-29 they come from the company&rsquo;s results release while it is the newest report, its filings once they are filed, and the data feed otherwise, so this is usually the company&rsquo;s own period end; the hover names the source, and the data feed&rsquo;s period when it differs. Market value, forward P/E and short interest stay the data feed&rsquo;s. Last results out beside it is a different fact: when the data feed recorded the ANNOUNCEMENT, which lands about a month after the period. Filters on DAYS SINCE the period end. A fund files no statements, so it reads NA. Out of date names it when these figures predate the last results.">Figures to</th>
+        <th class="grp-report" data-key="lastEarningsDate" title="When the data feed last recorded results &mdash; the announcement, NOT the period it covers: a report lands 23-29 days after the quarter it reports on. It is the data feed&rsquo;s record, so it can lag the company: Announced (filing) beside it is the company&rsquo;s own filing. The figures on this row no longer wait for it (Figures to says how far they run). Filters on DAYS SINCE, like Next Earn filters on days until: &gt;90 finds anything the data feed has not seen report in a quarter. Amber past 100 days, or when the company has filed its results since.">Last results out</th>
+        <th class="grp-report" data-col="secResults" title="When the company filed word that it had results &mdash; the newest 8-K carrying Item 2.02, &quot;Results of Operations and Financial Condition&quot;, which is the earnings release. The company&rsquo;s own answer to &quot;has this company reported&quot;, beside the data feed&rsquo;s in Last results out: on 2026-10-01 Micron had announced on Sep 30 and the data feed still said Jun 24. Amber when it is ahead of Last results out, which means the data feed has missed a report (the figures on the row may still include it, from the release: Figures to says). Blank until the filing dates are loaded; a fund files no 2.02.">Announced<br>(filing)</th>
+        <th class="left grp-report" data-key="staleIssues" title="What on this row is behind, in words: figures that predate the last results, by the data feed&rsquo;s date or the filings&rsquo; (that quarter&rsquo;s figures are not in yet); a results filing that the data feed has not recorded (the hover says whether the figures already include it); no results for more than 100 days; a next report date that has passed with no newer results; company data more than 10 days old; a price more than 5 days old. Blank when nothing is. Filters as text (&quot;predate&quot;, &quot;missed&quot;); sorts by how many issues. A fund reads NA.">Out of<br>date</th>
+        <th class="grp-lrun" data-key="revGrowth3y" title="Revenue growth a year, compounded, over three years: the latest four quarters against the same four quarters three years earlier, from the company's own filings. +20.0 means revenue grew 20% a year, about 73% in all. A company that files in another currency is measured on its annual reports in that currency, so a currency's move is not counted as growth. Blank where three years are not on file, where the newest quarter is not recent, and for a bank, whose filings carry no revenue line. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>3Y</th>
+        <th class="grp-lrun" data-key="revGrowth5y" title="Revenue growth a year, compounded, over five years: the latest four quarters against the same four quarters five years earlier, from the company's own filings. A company that files in another currency is measured on its annual reports in that currency. Blank where five years are not on file, where the newest quarter is not recent, and for a bank. Rebuilt daily. What was reported, not a forecast.">Rev /yr<br>5Y</th>
+        <th class="grp-lrun" data-key="niGrowth3y" title="Net income growth a year, compounded, over three years: the latest four quarters' net income against the same four quarters three years earlier, from the company's own filings. Blank where either end is a loss, since from a loss there is no rate, and where three years are not on file. A rate past 1,000% a year is a base too small to measure from and is left blank too. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>3Y</th>
+        <th class="grp-lrun" data-key="niGrowth5y" title="Net income growth a year, compounded, over five years: the latest four quarters' net income against the same four quarters five years earlier, from the company's own filings. Blank where either end is a loss and where five years are not on file. Rebuilt daily. What was reported, not a forecast.">NI /yr<br>5Y</th>
+        <th class="grp-lrun" data-key="peVsMed" title="Today's price/earnings against the median of its own price/earnings at each of the last 41 quarter ends, about ten years: +30.0 means it is priced 30% above its typical multiple of the decade, -20.0 means 20% below. Both are market value over the trailing year's net income from the company's own filings, the same arithmetic as the Lines card, so the now figure can differ from the Trail P/E column, which is the price provider's. A quarter with a loss has no multiple and is left out of the median; the median needs twenty quarters with one. Blank where the company loses money now. A description of where it sits against its own past, not a call on whether that is cheap: a business can change in ten years. Rebuilt about weekly.">P/E vs<br>10Y med</th>
+        <th class="grp-lrun" data-key="divStreak" title="Consecutive fiscal years, up to the latest annual report, in which the dividend declared per share was higher than the year before, from the company's own filings, in today's shares (a year reported before a split is divided by it). 0 means it paid a dividend and did not raise it last year. The filings start about 2009, so a long record is capped at the years on file; hover a figure for the year it starts. Blank where the company pays no dividend or its split history is not held. Rebuilt about weekly.">Div<br>raises</th>
         <th class="grp-lrun" data-key="divGrowth5y" title="The dividend declared per share, growth a year over five years, compounded, from the annual reports in today's shares and in the company's own currency. Blank where five years of dividends are not on file. Rebuilt about weekly.">Div /yr<br>5Y</th>
-        <th class="grp-lrun" data-key="intCover" title="Interest coverage: operating income over interest expense, the latest four quarters (or the latest annual report for a company filing in another currency), from the company's own SEC filings. 8.0× means the year's operating profit would pay the year's interest eight times over; below 1× it would not. Negative is an operating loss. Blank for a lender (banks, brokers, card and mortgage lenders), whose interest expense is the cost of its product, and where no interest expense is filed. Rebuilt about weekly.">Int<br>cover</th>
-        <th class="grp-lrun" data-key="fScore" title="The Piotroski F-score: how many of nine yes-or-no tests the latest annual report passes against the one before, from the company's own SEC filings. Profitability: net income above zero, operating cash flow above zero, return on assets up, cash flow above net income. Balance sheet: long-term debt to assets down, current ratio up, no new shares (in today's shares, so a split is not counted). Efficiency: gross margin up, asset turnover up. A count of tests passed, not a rating; hover a figure for which. Blank unless all nine can be scored, and for a lender. Rebuilt about weekly.">F-<br>score</th>
+        <th class="grp-lrun" data-key="intCover" title="Interest coverage: operating income over interest expense, the latest four quarters (or the latest annual report for a company filing in another currency), from the company's own filings. 8.0× means the year's operating profit would pay the year's interest eight times over; below 1× it would not. Negative is an operating loss. Blank for a lender (banks, brokers, card and mortgage lenders), whose interest expense is the cost of its product, and where no interest expense is filed. Rebuilt about weekly.">Int<br>cover</th>
+        <th class="grp-lrun" data-key="fScore" title="The Piotroski F-score: how many of nine yes-or-no tests the latest annual report passes against the one before, from the company's own filings. Profitability: net income above zero, operating cash flow above zero, return on assets up, cash flow above net income. Balance sheet: long-term debt to assets down, current ratio up, no new shares (in today's shares, so a split is not counted). Efficiency: gross margin up, asset turnover up. A count of tests passed, not a rating; hover a figure for which. Blank unless all nine can be scored, and for a lender. Rebuilt about weekly.">F-<br>score</th>
         <th class="grp-lrun" data-key="crChecks" title="How many of five checks the last ten years of annual reports pass: revenue rose in at least 80% of years; earnings per share grew at least 10% a year; the worst year kept at least 70% of the typical operating margin; free cash flow was at least 80% of net income; the share count grew no more than 0.5% a year. A count of checks passed, not a rating; hover a figure for which. Blank unless all five can be scored (a lender has no operating margin or free cash flow that means the same thing). From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Comp.<br>record</th>
         <th class="left grp-lrun" data-key="crNow" title="Is it still compounding: the latest quarters in the company's filings (up to four) against the same quarters a year earlier. Still growing: revenue and earnings per share both up, and the operating margin down no more than 2 points. Declining: earnings per share down more than 5% (or into a loss), or revenue and EPS both down. Slowing: anything between. Read beside Comp. record, which describes the ten years of annual reports and cannot see a turn that began after the newest one. A bank, with no revenue line, is read on EPS alone; a company filing in another currency is not read. A description, not a forecast. Rebuilt about weekly.">Now</th>
         <th class="grp-lrun" data-key="crRevUp" title="In how many of the years revenue rose against the year before, in the company's own currency (e.g. 9 of 10). Sorts by the share of years. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Rev up<br>years</th>
@@ -1816,7 +1816,7 @@
         <th class="grp-lrun" data-key="crFcfConv" title="Free cash flow over net income, both summed over the years: around 1.0 means the profits arrived as cash. Blank for a lender, or where net income summed is not positive. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">FCF /<br>NI</th>
         <th class="grp-lrun" data-key="crShares" title="The diluted share count's change a year, in today's shares: below zero is buybacks shrinking it, above zero is dilution. From the company's own annual reports, the newest unbroken run of up to eleven (ten years), at least seven. A description of the past, not a forecast or a rating. Rebuilt about weekly.">Shares<br>/yr</th>
         <th class="grp-own" data-key="sharesOutstanding" title="Shares outstanding. Watching it fall is a buyback; watching it rise is dilution — and this is the only column that shows either, since market cap mixes the count with the price.">Shares<br>Out</th>
-        <th class="grp-own" data-key="sharesChg" title="The change in the diluted share count against the fiscal year before, from the company&#39;s own SEC filings. Rising means dilution (shares issued, including to staff); falling means buybacks larger than issuance. Blank where the filings do not state it.">Shares<br>Chg 1Y</th>
+        <th class="grp-own" data-key="sharesChg" title="The change in the diluted share count against the fiscal year before, from the company&#39;s own filings. Rising means dilution (shares issued, including to staff); falling means buybacks larger than issuance. Blank where the filings do not state it.">Shares<br>Chg 1Y</th>
         <th class="grp-own" data-key="floatShares" title="Shares available to trade — outstanding minus closely-held stock.">Float</th>
         <th class="grp-own" data-key="shortRatio" title="Days to cover: shares short ÷ average daily volume. How long the shorts would take to buy back.">Short days<br>to cover</th>
         <th class="grp-own" data-key="shortPctFloat" title="Short interest as % of float — high = crowded short / squeeze potential. It sits here rather than in Fundamentals because it is a fact about the share register, not about the business, and the Float it is divided by is two columns to the left.">Short<br>% Fl</th>
@@ -1825,11 +1825,11 @@
         <th class="grp-own" data-key="institutionPct" title="Percentage of shares held by institutions — funds, pensions and the like.">Instit.</th>
         <th class="grp-own" data-key="insDays" title="Insiders days to cover: the shares insiders hold (founders and management, the Insiders column) over the average shares traded a day over the last 20 sessions. How many days of normal trading their stake equals, the way Short days to cover measures the shorts. A size, not a forecast.">Insiders days<br>to cover</th>
         <th class="grp-own" data-key="instDays" title="Instit. days to cover: the shares institutions hold (funds, pensions and the like, the Instit. column) over the average shares traded a day over the last 20 sessions. How many days of normal trading their holding equals, the way Short days to cover measures the shorts. A size, not a forecast.">Instit. days<br>to cover</th>
-        <th class="grp-own" data-key="instManagers" title="How many institutional managers reported holding the stock on Form 13F at the last quarter end the SEC has published. Every manager with more than $100 million in US-listed securities files one within 45 days of the quarter end, so this is a snapshot that is months old, not today's. Long positions in shares only: options are left out. Hover a figure for the quarter. Blank for a fund, and for a stock whose security code could not be matched. Updated once a quarter.">13F<br>holders</th>
+        <th class="grp-own" data-key="instManagers" title="How many institutional managers reported holding the stock on Form 13F at the last quarter end published. Every manager with more than $100 million in US-listed securities files one within 45 days of the quarter end, so this is a snapshot that is months old, not today's. Long positions in shares only: options are left out. Hover a figure for the quarter. Blank for a fund, and for a stock whose security code could not be matched. Updated once a quarter.">13F<br>holders</th>
         <th class="grp-own" data-key="instChange" title="The change in the shares held by all 13F filers between them, last published quarter end against the one before, in percent. Up means institutions as a group held more shares than a quarter earlier. It includes managers who newly crossed the $100 million filing line, so a small rise is not always buying. A snapshot that is months old. Blank where either quarter is missing. Updated once a quarter.">13F<br>chg</th>
-        <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. From the SEC, updated as each company's filings are re-read.">5%<br>filing</th>
-        <th class="grp-own" data-key="optPcr" title="Put options open on the stock for every call option open, from the Options Clearing Corporation&#39;s count as of the last trading day&#39;s close. 1.0 is as many puts as calls. It counts contracts outstanding and says nothing about direction: a put can be a bet on a fall, insurance on shares someone owns, or one leg of a neutral trade. Blank where the stock has no listed options or fewer than a thousand contracts open.">Put/Call<br>OI</th>
-        <th class="left grp-aier" data-key="erFiled" title="The day the company filed its newest results release with the SEC, and how long ago. Click a date to open the release itself. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Reported</th>
+        <th class="left grp-own" data-key="lastHolder" title="The newest Schedule 13D or 13G filed about the company in the last sixty days: the form, who filed it, the stake they report, and how many days ago. Anyone who comes to hold more than 5% of a company's shares must file one. A 13D is the form for a holder who may seek to influence the company and is shown in bold because it is the rarer of the two; a 13G is the short form for a passive holder such as an index fund. An amendment reports a change, and &quot;no holding&quot; means the stake is no longer reportable. Type 13D in the filter row to find them. Blank when nothing was filed in the window. Which form a holder chose is a fact; it does not say what follows for the share. Updated as each company's filings are re-read.">5%<br>filing</th>
+        <th class="grp-own" data-key="optPcr" title="Put options open on the stock for every call option open, as of the last trading day&#39;s close. 1.0 is as many puts as calls. It counts contracts outstanding and says nothing about direction: a put can be a bet on a fall, insurance on shares someone owns, or one leg of a neutral trade. Blank where the stock has no listed options or fewer than a thousand contracts open.">Put/Call<br>OI</th>
+        <th class="left grp-aier" data-key="erFiled" title="The day the company filed its newest results release, and how long ago. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Reported</th>
         <th class="grp-aier" data-key="erPeriodEnd" title="The last day of the quarter the release reports, as the company states it. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Quarter<br>end</th>
         <th class="grp-aier" data-key="erRevenue" title="Total revenue for the quarter, as printed, in the company’s reporting currency. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Revenue</th>
         <th class="grp-aier" data-key="erRevYoY" title="Revenue against the same quarter a year earlier, from the two figures the release prints. From each company’s newest results press release (the 8-K’s Exhibit 99.1), read by an AI model that copies the figures as printed; every figure is checked against the release’s text. Blank until the company has a release on file from the last 130 days. Read each weekday morning. Members only; never an input to the Signal.">Rev<br>YoY</th>
@@ -2192,7 +2192,7 @@
       return `<td class="grp-rank ta-c hlth"${isAdmin ? attr('Click for the workings') : ''}>${n}</td>`;
     }
     // The ticker opens our own stock page, like the name beside it (owner,
-    // 2026-11-06; it was Google Finance). The Google Finance link lives on as
+    // 2026-11-06; it was an outside quote page). That link lives on as
     // a pill on the stock page (RowCard.gfUrl).
     function tickerLink(s) {
       return `<a class="tickerlink" href="/stock/${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener" title="Open the ${we(s.symbol)} stock page">${we(s.symbol)}</a>`;
@@ -2270,10 +2270,10 @@
     // THE VENDOR'S FEED GOES STALE, and our own stored filings can prove it.
     // Reported against VNO (2026-10-01): this column said 4 May while the
     // company's 10-Q for the quarter to 30 June was filed 3 August, which the
-    // SEC EDGAR card on that stock's own page was already showing. Measured
+    // filings card on that stock's own page was already showing. Measured
     // across the universe the same morning: 15 of 1,188 symbols are a quarter
     // or more behind, and a control group of 25 recent reporters agreed with
-    // EDGAR exactly, so this marks a real gap rather than everything.
+    // the filings exactly, so this marks a real gap rather than everything.
     //
     // THE CELL STILL SHOWS THE VENDOR'S DATE. `lastEarningsDate` is what the
     // column, the filter and `daysSinceEarnings` all mean, and swapping in a
@@ -2287,7 +2287,7 @@
       const f = s.secLastFiled;
       if (!f || !s.lastEarningsDate) return 0;
       // They match EXACTLY when in sync -- 22 of 25 control symbols did, and
-      // VNO's own 4 May is EDGAR's filed date for the quarter before. So a
+      // VNO's own 4 May is the filed date for the quarter before. So a
       // gap of weeks means a whole report the feed never recorded, and the
       // threshold only has to clear ordinary disagreement.
       const d = Math.round((new Date(f + 'T12:00:00') - new Date(s.lastEarningsDate + 'T12:00:00')) / 86400000);
@@ -2312,8 +2312,8 @@
     // cell states the fact and the column beside it does the warning, which
     // is the rule the Instrument column already follows.
     // SINCE THE SOURCE RULE (2026-10-29) the figures on most rows come from
-    // the results release or the SEC filings and run to their own quarter
-    // (RowCard.figuresTo), so this cell shows that; Twelve Data's period is
+    // the results release or the filings and run to their own quarter
+    // (RowCard.figuresTo), so this cell shows that; the data feed's period is
     // in the hover when it differs.
     function periodCell(s) {
       const fig = RowCard.figuresTo(s);
@@ -2333,14 +2333,14 @@
       const fy = s.fiscalYearEnd && !/-12-/.test(s.fiscalYearEnd)
         ? ` Its fiscal year ends ${fmtShortDate(s.fiscalYearEnd)}, so this is not a calendar quarter.` : '';
       const from = {
-        release: 'The newest quarter is from the company’s results release (its 10-Q is not filed yet), the three before it from its SEC filings.',
+        release: 'The newest quarter is from the company’s results release (its 10-Q is not filed yet), the three before it from its filings.',
         filings: 'From the company’s 10-Q and 10-K filings.',
-        td: 'From Twelve Data, which rounds a 52/53-week fiscal calendar to month end, so it can differ from the filing by a few days.',
+        td: 'From the data feed, which rounds a 52/53-week fiscal calendar to month end, so it can differ from the filing by a few days.',
       }[fig.from];
       const tdNote = fig.from !== 'td' && fig.td && String(fig.td).slice(0, 10) !== iso
-        ? ` Twelve Data’s own figures run to ${String(fig.td).slice(0, 10)}.` : '';
+        ? ` The data feed’s own figures run to ${String(fig.td).slice(0, 10)}.` : '';
       const title = `Trailing twelve months to ${iso}, ${days} days ago: the period revenue, the margins, net income, cash flow, growth and the balance sheet on this row run to. ${from}${tdNote}`
-        + ' Market value, forward P/E and short interest are Twelve Data’s.'
+        + ' Market value, forward P/E and short interest are the data feed’s.'
         + fy;
       return `<td class="grp-report"${attr(title)}>${label}</td>`;
     }
@@ -2365,20 +2365,20 @@
       // everywhere else here. `.warn` is colour-only, so this stays a cell.
       const behind = secBehind(s);
       const stale = days > 100 || behind > 0;
-      // Twelve Data's record of the announcement. Since the source rule the
+      // the data feed's record of the announcement. Since the source rule the
       // row's figures need not wait for it (Figures to says how far they run).
-      const title = `Twelve Data’s last results date: ${iso}, ${days} days ago`
+      const title = `The data feed’s last results date: ${iso}, ${days} days ago`
         + (days > 100 ? ', more than a quarter' : '')
         + '. This is the ANNOUNCEMENT, not the period it covers: a report lands 23-29 days after the quarter it reports on.'
         // The specific, provable half: not "this looks old" but "the company
-        // has filed since and Twelve Data has not caught up".
-        + (behind ? `\n\nTWELVE DATA IS BEHIND: this company filed a statement with the SEC on ${s.secLastFiled}`
-            + ` — ${behind} days after the date shown here — which Twelve Data has not recorded.`
+        // has filed since and the data feed has not caught up".
+        + (behind ? `\n\nTHE DATA FEED IS BEHIND: this company filed a results statement on ${s.secLastFiled}`
+            + ` — ${behind} days after the date shown here — which the data feed has not recorded.`
             + ' Figures to says whether the figures on this row already include it, from the results release or the filings.' : '');
       return `<td class="grp-report${stale ? ' warn' : ''}" data-rep="${we(s.symbol)}"${attr(title)}>${label}</td>`;
     }
 
-    // ---- Announced (SEC): the Item 2.02 8-K date -----------------------------
+    // ---- Announced (filing): the Item 2.02 8-K date -----------------------------
     //
     // The company's OWN statement that it has results, against the vendor's
     // record of the same event in the cell to the left. Where they disagree,
@@ -2399,7 +2399,7 @@
     // exactly the drift rowcard.js exists to prevent.
     // Out of date (2026-10-24): the issues RowCard.staleIssues finds, named
     // and uncoloured -- the Reported cell already ambers; this says why.
-    // `data-stl` lets paintReportedCells redo it once the SEC dates land.
+    // `data-stl` lets paintReportedCells redo it once the filing dates land.
     function staleCell(s) {
       const l = RowCard.staleIssues(s) || [];
       if (!l.length) return `<td class="left na grp-report" data-stl="${we(s.symbol)}" title="Nothing on this row is behind.">—</td>`;
@@ -2417,7 +2417,7 @@
     function paintReportedCells() {
       const by = {};
       for (const s of stocks) by[s.symbol] = s;
-      // Both cells the SEC dates feed, each from its own builder. One pass
+      // Both cells the filing dates feed, each from its own builder. One pass
       // over the two attributes rather than two queries over the table.
       const jobs = [['data-rep', reportedCell], ['data-ann', resultsCell], ['data-stl', staleCell]];
       for (const [attrName, build] of jobs) {
@@ -2488,7 +2488,7 @@
     // so it is the one that is not faint; 'US GAAP' is nearly every row.
     function filerCell(s) {
       if (!s.filer) {
-        return `<td class="name left grp-info nocard na" title="No financial statements on file with the SEC \u2014 a fund files none.">\u2014</td>`;
+        return `<td class="name left grp-info nocard na" title="No financial statements on file \u2014 a fund files none.">\u2014</td>`;
       }
       const foreign = /^Foreign/.test(s.filer);
       return `<td class="name left grp-info nocard${foreign ? '' : ' na'}">${we(s.filer)}</td>`;
@@ -2504,7 +2504,7 @@
     // which is the licensing line: membership is a fact about the stock, the
     // weight is the issuer's dataset.
     //
-    // A NULL IS NOT A NO. With no holdings file imported, "No" on every row
+    // A NULL IS NOT A NO. With no membership loaded, "No" on every row
     // would be this screener claiming nothing is in the S&P 500. The em-dash
     // says unknown and the tooltip says why.
     //
@@ -2520,11 +2520,11 @@
       const sp = s.spMember, nd = s.ndxMember;
       const when = (a) => (a ? ` as of ${we(a)}` : '');
       const say = [
-        sp === true ? `In the S&amp;P 500${when(s.spAsOf)}.` : sp === false ? `Not in the S&amp;P 500${when(s.spAsOf)}.` : 'S&amp;P 500: no holdings file imported yet.',
-        nd === true ? `In the Nasdaq 100${when(s.ndxAsOf)}.` : nd === false ? `Not in the Nasdaq 100${when(s.ndxAsOf)}.` : 'Nasdaq 100: no holdings file imported yet.',
-      ].join(' ') + ' From each index fund’s own holdings file.';
+        sp === true ? `In the S&amp;P 500${when(s.spAsOf)}.` : sp === false ? `Not in the S&amp;P 500${when(s.spAsOf)}.` : 'S&amp;P 500: membership not loaded yet.',
+        nd === true ? `In the Nasdaq 100${when(s.ndxAsOf)}.` : nd === false ? `Not in the Nasdaq 100${when(s.ndxAsOf)}.` : 'Nasdaq 100: membership not loaded yet.',
+      ].join(' ');
       if (sp == null && nd == null) {
-        return `<td class="name left grp-info nocard na" title="No index holdings file has been imported yet — this is not the same as No.">—</td>`;
+        return `<td class="name left grp-info nocard na" title="Index membership has not been loaded yet — this is not the same as No.">—</td>`;
       }
       const txt = sp === true && nd === true ? 'S&amp;P · NDX' : sp === true ? 'S&amp;P' : nd === true ? 'NDX'
         : (sp === false && nd === false) ? 'No' : '—';
@@ -3911,19 +3911,18 @@
         '</div>';
       // A ROW OF UNKNOWN MEMBERSHIP IS IN NEITHER CUT, so the two counts do
       // not add up to the tab and the menu says why rather than leaving the
-      // arithmetic looking broken. Unknown means no holdings file has been
-      // imported for it yet -- which is a gap in our own data, never a fact
+      // arithmetic looking broken. Unknown means no membership list has been
+      // loaded for it yet -- which is a gap in our own data, never a fact
       // about the company, and is why it is not offered as a third cut.
       const note = unknown
         ? `${unknown} ${unknown === 1 ? 'row has' : 'rows have'} not been checked against both ` +
-          `index files, so ${unknown === 1 ? 'it is' : 'they are'} left out of any cut that needs the missing one. ` +
+          `index lists, so ${unknown === 1 ? 'it is' : 'they are'} left out of any cut that needs the missing one. ` +
           'That is not the same as being outside it.'
         : '';
       $('spMenu').innerHTML = '<div class="picker-inner">' +
         row('All', 'All stocks', inScope.length) +
         Filters.INDEX_CUTS.slice(1).map(([v, lab]) => row(v, lab, count(v))).join('') +
-        '<div class="pick-sep"></div><div class="pick-hint">Membership comes from each index ' +
-        'fund&rsquo;s own daily holdings file (SPY and QQQ).' + (note ? ' ' + we(note) : '') + '</div>' +
+        '<div class="pick-sep"></div><div class="pick-hint">Index membership is checked daily.' + (note ? ' ' + we(note) : '') + '</div>' +
         '</div>';
       $('spMenu').querySelectorAll('[data-sp]').forEach((b) => {
         b.addEventListener('click', () => {
@@ -4074,10 +4073,10 @@
               : 'Not fetched yet — backfills over the next refreshes');
         const fwdTitle = 'Forward return after the as-of date (what happened next)';
         // The owner's source rule (sourcerule.js): where the cell's figure came
-        // from, and what Twelve Data said, for the fields the rule sets.
+        // from, and what the data feed said, for the fields the rule sets.
         // Every company-figure hover opens with where the figure came from.
         const srcT = (k) => (asOfDate ? cacheTitle : 'Source: ' + RowCard.srcLabel(s, k) + '. ' + (RowCard.srcNote(s, k) || cacheTitle));
-        const tdT = asOfDate ? cacheTitle : 'Source: Twelve Data. ' + cacheTitle;
+        const tdT = asOfDate ? cacheTitle : 'Source: the data feed. ' + cacheTitle;
         // Read ONCE per row, not per cell: 36 of them ask.
         const isFund = RowCard.isFund(s);
         return `<tr style="--i:${i}">
@@ -4085,7 +4084,7 @@
           ${shortNameCell(s)}
           <td class="left grp-info">${badges(s.portfolios)}${myBadges(s.symbol)}</td>
           ${classCell('secval', s.sector, 'sector', '', tdT)}
-          ${classCell('indval', s.industry, 'industry', ' industry', asOfDate ? (s.industry || cacheTitle) : 'Source: Twelve Data. ' + (s.industry || cacheTitle))}
+          ${classCell('indval', s.industry, 'industry', ' industry', asOfDate ? (s.industry || cacheTitle) : 'Source: the data feed. ' + (s.industry || cacheTitle))}
           ${exchangeCell(s)}
           ${instrumentCell(s)}${filerCell(s)}${spCell(s)}
           <td class="grp-info"${attr(tdT)}>${mktCap != null ? mktCap : '<span class="na">—</span>'}</td>
@@ -4157,7 +4156,7 @@
           ${pctCell(s.chipSelloff, 'grp-react', cacheTitle)}
           ${magPctCell(s.marketSelloff, 'grp-react', cacheTitle)}
           ${signedPctCell(s.marketRally, 'grp-react', cacheTitle)}
-          ${signedPctCell(s.shortBuild, 'grp-react', s.shortBuildTo ? 'FINRA reports of ' + s.shortBuildFrom + ' and ' + s.shortBuildTo : '')}
+          ${signedPctCell(s.shortBuild, 'grp-react', s.shortBuildTo ? 'Short interest reports of ' + s.shortBuildFrom + ' and ' + s.shortBuildTo : '')}
           ${signedPctCell(s.insiderNet, 'grp-react', s.insiderSince ? (s.insiderBuyers || 0) + ' bought, ' + (s.insiderSellers || 0) + ' sold since ' + s.insiderSince + (s.insiderNet == null && (s.insiderBuyers || s.insiderSellers) ? ' — a filed value too large to be real' : '') : '', 2)}
           ${lastEventCell(s)}
           ${isFund ? naRun(6, 'grp-size') : `
@@ -4598,8 +4597,8 @@
       const money = (v, what) => (v == null ? `<td class="na grp-aier">\u2014</td>` : td(we(RV.money(v, cur)), what + inCur));
       const eps = (v, what) => (v == null ? `<td class="na grp-aier">\u2014</td>` : td(we(RV.eps(v, cur)), what + inCur));
       return [
-        `<td class="left grp-aier er-tx"${attr('Results release filed ' + s.erFiled + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : '') + '. Click to open the release.')}><span>`
-          + (s.erUrl ? `<a class="er-a" href="${we(s.erUrl)}" target="_blank" rel="noopener">${we(dshort(s.erFiled))}</a>` : we(dshort(s.erFiled)))
+        `<td class="left grp-aier er-tx"${attr('Results release filed ' + s.erFiled + (s.erPeriodLabel ? ', ' + s.erPeriodLabel : '') + '.')}><span>`
+          + we(dshort(s.erFiled))
           + ` <span class="na">${days === 0 ? 'today' : days + 'd'}</span></span></td>`,
         s.erPeriodEnd ? td(we(dshort(s.erPeriodEnd)), s.erPeriodLabel || 'Quarter ended ' + s.erPeriodEnd) : `<td class="na grp-aier">\u2014</td>`,
         money(s.erRevenue, 'Revenue for the quarter'),
@@ -6068,7 +6067,7 @@
     // ---- shared "being refreshed" notice ------------------------------------
     // A Refresh All re-pulls only a handful of companies per call, so it runs for
     // several minutes. The flag lives in the database rather than in a variable,
-    // because every open page needs to see it — and on Vercel no two requests
+    // because every open page needs to see it — and on our hosting no two requests
     // are guaranteed to share a process anyway.
     let refreshPoll = null;
     let refreshingHere = false;   // true while THIS tab is the one doing the work
@@ -6576,7 +6575,7 @@
     // the table can be brought up to date from that alone.
     //
     // NO API PULL. Adding a ticker used to call refresh(), which sets
-    // ?refresh=1 and recomputes the entire universe from Twelve Data — roughly
+    // ?refresh=1 and recomputes the entire universe from the data feed — roughly
     // 560 credits and a wait, to reflect a change the server had already made
     // and had already told us about. The membership, the badges, the tab counts
     // and the purge warning all come out of this map. Only the price and

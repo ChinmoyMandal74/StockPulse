@@ -46,7 +46,7 @@ const FORM_NAMES = {
   'F-1': 'Registration statement (foreign company)', 'F-1/A': 'Registration statement (foreign company), amended',
   'S-1MEF': 'More shares registered', 'F-1MEF': 'More shares registered',
   '424B4': 'Final prospectus: priced', '424B1': 'Final prospectus: priced',
-  'EFFECT': 'Declared effective by the SEC', 'RW': 'Registration withdrawn',
+  'EFFECT': 'Registration declared effective', 'RW': 'Registration withdrawn',
 };
 
 const day = (s) => {

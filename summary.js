@@ -119,6 +119,7 @@
     '5. A total of insider sales is not a judgement: if you mention sales, mention the share under a pre-arranged plan where it is given. Options figures are counts of contracts outstanding and say nothing about direction.',
     '6. Where the sheet has nothing on a topic, leave the topic out. Never say data is missing.',
     '7. Plain, calm English. No superlatives, no exclamation marks, no bullet lists, no bold.',
+    '8. Never say where the data comes from: do not name any data provider, regulator, news service or AI model. Say "the company\'s filings" or "its results release" where a source matters.',
     'Format: Markdown. Exactly these five second-level headings, in this order, each followed by one or two short paragraphs: ' + HEADINGS.map((h) => '"## ' + h + '"').join(', ') + '. Leave a heading out only if the sheet has nothing for it. No title, no introduction before the first heading, nothing after the last paragraph. 280 to 420 words in all.',
   ].join('\n');
 
@@ -135,6 +136,9 @@
   const FREE = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '13', '50', '52', '100', '200', '500']);
   const BANNED = /\b(buy|sell|strong buy|undervalued|overvalued|bullish|bearish|upside|downside|price target|target price|recommend(?:s|ed|ation)?|opportunity|outperform(?:s|ed)?|underperform(?:s|ed)?|should|must own|attractive|bargain|cheap|expensive)\b/gi;
 
+  // Data sources the site never names (owner, 2026-11-09); a summary must not either.
+  const SOURCE_NAMES = /\b(?:Twelve ?Data|Alpha Vantage|Yahoo(?: Finance)?|FINRA|SEC|EDGAR|sec\.gov|XBRL|Securities and Exchange Commission|Options Clearing Corporation|OCC|Anthropic|Claude|Haiku|Sonnet|Google News|Wikipedia)\b/g;
+
   function check(text, sections, d) {
     const problems = [];
     const body = String(text || '');
@@ -146,6 +150,8 @@
     if (bad.length) problems.push('Figures not on the fact sheet: ' + bad.slice(0, 12).join(', ') + (bad.length > 12 ? ' and ' + (bad.length - 12) + ' more' : ''));
     const words = [...new Set((body.match(BANNED) || []).map((w) => w.toLowerCase()))];
     if (words.length) problems.push('Words of advice or prediction: ' + words.join(', '));
+    const named = [...new Set(body.match(SOURCE_NAMES) || [])];
+    if (named.length) problems.push('Names a data source: ' + named.join(', '));
     const heads = (body.match(/^##\s+(.+)$/gm) || []).map((h) => h.replace(/^##\s+/, '').trim());
     const odd = heads.filter((h) => !HEADINGS.includes(h));
     if (!heads.length) problems.push('No section headings came back');
@@ -168,7 +174,7 @@
     const figures = sections.filter((s) => s.title !== 'What the company says it does')
       .map((s) => '### ' + s.title + '\n\n' + s.items.map(([k, v]) => '- **' + k + ':** ' + v).join('\n')).join('\n\n');
     return flag + head + '\n\n' + String(narrative || '').trim() + '\n\n---\n\n## The figures behind this summary\n\n' + figures
-      + '\n\n---\n\n*Sources: prices and fundamentals from the screener\'s data provider; statements, insider trades, 13F and fund holdings, large-holder filings and announcements from the SEC; options from the Options Clearing Corporation. Figures are as of the dates shown and go out of date. The Signal is a mechanical reading of fixed rules. Nothing here is a recommendation to trade.*\n';
+      + '\n\n---\n\n*Sources: prices and fundamentals from the screener\'s data provider; statements, insider trades, 13F and fund holdings, large-holder filings and announcements from regulatory filings; options open interest from the options market.Figures are as of the dates shown and go out of date. The Signal is a mechanical reading of fixed rules. Nothing here is a recommendation to trade.*\n';
   }
 
   const slugOf = (symbol, asOf) => String(symbol).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-company-summary-' + String(asOf || '').slice(0, 10);

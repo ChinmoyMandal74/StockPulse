@@ -122,10 +122,10 @@ function filings(F, rows, relQ) {
   if (points.length > 40) points.splice(0, points.length - 40);
   const cur = (Array.isArray(rows) ? rows : []).find((r) => r && r.currency);
   return {
-    source: rel ? 'SEC filings and the results release' : 'SEC filings', basis: 'Trailing year at each quarter end',
+    source: rel ? 'Filings and the results release' : 'Filings', basis: 'Trailing year at each quarter end',
     points, cols: ['Quarter to', 'In the quarter', 'Trailing year'], colKinds: ['text', F.kind, F.kind], rows: table,
     note: (F.say ? F.say + ' ' : '')
-      + (rel ? 'The newest quarter, ' + monthOf(rel.periodEnd) + ', is from the company’s results release' + (rel.filed ? ' of ' + dayOf(rel.filed) : '') + ': its quarterly report to the SEC is not on file yet, and replaces it once it is. ' : '')
+      + (rel ? 'The newest quarter, ' + monthOf(rel.periodEnd) + ', is from the company’s results release' + (rel.filed ? ' of ' + dayOf(rel.filed) : '') + ': its quarterly report is not on file yet, and replaces it once it is. ' : '')
       + (cur ? 'Filed in ' + cur.currency + ' and converted to US dollars at each period’s rate. ' : '')
       + 'A trailing year needs four consecutive quarters on file.',
     filed: q.length ? q[0].filed || null : null,
@@ -156,7 +156,7 @@ function eps(rows, splits) {
     if (table.length < TABLE_ROWS && (v != null || y != null)) table.push([monthOf(r.periodEnd), v, y]);
   }
   return {
-    source: 'SEC filings', basis: F ? 'Each fiscal year, on today’s share basis' : 'Each fiscal year, as filed',
+    source: 'Filings', basis: F ? 'Each fiscal year, on today’s share basis' : 'Each fiscal year, as filed',
     points: years.slice(-12).map((r) => ({ d: r.periodEnd, v: adj(r) })),
     cols: ['Period to', 'In the quarter', 'Fiscal year'], colKinds: ['text', 'eps', 'eps'], rows: table,
     note: 'Diluted earnings per share under the accounting rules, not the adjusted figure in a press release. '
@@ -197,7 +197,7 @@ function value(F, quarters, series, rows, carryDays) {
     table.push([monthOf(qs[i]), num(vals[i]), num(cap[i]), num(under[i])]);
   }
   return {
-    source: 'SEC filings and the price archive', basis: 'At each calendar quarter end',
+    source: 'Filings and the price archive', basis: 'At each calendar quarter end',
     points, cols: ['Quarter end', F.title, 'Market value', underName], colKinds: ['text', 'ratio', 'money', 'money'], rows: table,
     note: 'Market value at the quarter’s last close, over the company’s own filed figures. '
       + (F.series === 'pe' ? 'Blank where the trailing year was a loss: a multiple of a loss is not shown. ' : '')
@@ -213,11 +213,11 @@ function short(F, rows) {
   const points = list.slice(-52).map((r) => ({ d: r.d, v: num(r[F.key]) })).filter((p) => p.v != null);
   const table = list.slice(-TABLE_ROWS).reverse().map((r) => [dayOf(r.d), num(r.shares), num(r.changePct), num(r.dtc)]);
   return {
-    source: 'FINRA', basis: 'Each settlement date, twice a month',
+    source: 'Short interest reports', basis: 'Each settlement date, twice a month',
     points, cols: ['Settlement', 'Shares short', 'Change', 'Days to cover'], colKinds: ['text', 'shares', 'signed', 'days'], rows: table,
     note: F.key === 'shares'
-      ? 'FINRA publishes a count of shares, not a percentage. The cell divides the latest count by today’s share count, which is why this is in shares.'
-      : 'Shares sold short over the average daily volume at that settlement, as FINRA reports it.',
+      ? 'The short interest report gives a count of shares, not a percentage. The cell divides the latest count by today’s share count, which is why this is in shares.'
+      : 'Shares sold short over the average daily volume at that settlement, as the short interest report gives it.',
     filed: null,
   };
 }
@@ -236,7 +236,7 @@ function earnings(rows) {
   const points = list.slice(-12).map((r) => ({ d: r.date, v: pct(r) })).filter((p) => p.v != null);
   const table = list.slice(-TABLE_ROWS).reverse().map((r) => [dayOf(r.date), num(r.epsEstimate), num(r.epsActual), pct(r)]);
   return {
-    source: 'Price provider', basis: 'Each announcement, against the estimate',
+    source: 'The data feed', basis: 'Each announcement, against the estimate',
     points, bars: true, cols: ['Announced', 'Estimate', 'Reported', 'Against it'], colKinds: ['text', 'eps', 'eps', 'signed'], rows: table,
     note: 'Earnings per share as announced, against the average estimate beforehand. These are usually the company’s adjusted figures, not the ones in its filings.',
     filed: null,

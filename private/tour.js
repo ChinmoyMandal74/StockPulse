@@ -372,12 +372,12 @@
 
   // ---- 6. the filings ------------------------------------------------------
   const SOURCES = [
-    ['8-K filings', 'Read the next morning', 'SEC'],
-    ['Insider trades', 'Forms 3, 4 and 5', 'SEC'],
-    ['Institutional holders', 'Form 13F, every quarter', 'SEC'],
-    ['Fund holders', 'Form N-PORT', 'SEC'],
-    ['Short interest', 'Twice a month', 'FINRA'],
-    ['Options open interest', 'Calls and puts', 'OCC'],
+    ['8-K filings', 'Read the next morning', 'FILED'],
+    ['Insider trades', 'Forms 3, 4 and 5', 'FILED'],
+    ['Institutional holders', 'Form 13F, every quarter', 'FILED'],
+    ['Fund holders', 'Form N-PORT', 'FILED'],
+    ['Short interest', 'Twice a month', 'REPORTED'],
+    ['Options open interest', 'Calls and puts', 'COUNTED'],
   ];
   function sceneFilings(g, M, t, A) {
     const I = M.ink;

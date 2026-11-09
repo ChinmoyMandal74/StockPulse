@@ -43,7 +43,7 @@
   // figure. The others are defined differently from their cell and say so in
   // their note instead.
   const COMPARE = { revenueTtm: 1, grossProfitTtm: 1, netIncomeTtm: 1, operatingCashFlowTtm: 1, grossMargin: 1, operatingMargin: 1, profitMargin: 1 };
-  const APART = 5;                 // per cent, the SEC data page's own line
+  const APART = 5;                 // per cent, the filings data page's own line
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthOf = (d) => (/^\d{4}-\d{2}/.test(String(d)) ? MONTHS[Number(String(d).slice(5, 7)) - 1] + ' ' + String(d).slice(0, 4) : String(d || ''));

@@ -131,11 +131,11 @@
 
   <main class="page">
     <header class="masthead">
-      <span class="eyebrow"><span class="pip"></span>SEC filings</span>
+      <span class="eyebrow"><span class="pip"></span>Regulatory filings</span>
       <h1>Filings</h1>
       <p class="lede">Every filing by a holder crossing 5% of a company (Schedules 13D and 13G) and every company
-        announcement (Form 8-K) about the stocks tracked here, a day at a time. Read each morning from the SEC's
-        index of the previous business day, so the newest day is normally yesterday. Results releases filed that day
+        announcement (Form 8-K) about the stocks tracked here, a day at a time. Read each morning from the
+        previous business day's index of filings, so the newest day is normally yesterday. Results releases filed that day
         are listed first, their figures copied from the release by an AI model and checked against its text.</p>
     </header>
 
@@ -176,10 +176,10 @@
       an amendment saying the stake has fallen below what must be reported. Joint filers (a fund, its manager and
       its owner) report one holding several times; it is shown once, at the largest stake stated. An 8-K's items say
       what kind of event it reports; the ones marked in amber are worth noticing (a bankruptcy, a restatement warning,
-      an auditor change, a listing notice and the like). The filing itself, linked on each row, is where what happened
+      an auditor change, a listing notice and the like). The filing itself is where what happened
       is written. A filing is a record, not a reading of the stock.</p>
     <p class="fl-foot">Results reported: each company's results press release (the 8-K's Exhibit 99.1), read by an
-      AI model (Claude Haiku) that copies the figures out as printed; every figure is then checked against the
+      AI model that copies the figures out as printed; every figure is then checked against the
       release's own text and one that cannot be found there is left out. "EPS, as reported" is the GAAP diluted
       figure; the adjusted one is the company's own, under its own name (hover for what it leaves out), and has no
       standard definition. The estimate and the provider's figure come from the price data provider. A summary
@@ -257,7 +257,7 @@
       const companies = new Set([...(showH ? H : []), ...(showE ? E : []), ...(showE ? RL : [])].map((x) => x.symbol)).size;
       $('count').textContent = (showE && RL.length ? RL.length + ' results release' + (RL.length === 1 ? '' : 's') + ' · ' : '') + (showH ? H.length + ' holder filing' + (H.length === 1 ? '' : 's') + ' · ' : '') + (showE ? E.length + ' 8-K' + (E.length === 1 ? '' : 's') + ' · ' : '') + companies + ' compan' + (companies === 1 ? 'y' : 'ies');
       const coCell = (s) => '<td class="fl-co"><a href="/stock/' + encodeURIComponent(s) + '">' + we(s) + '</a><span>' + we(co(s).name || '') + '</span></td>';
-      const link = (u) => (u ? '<a class="fl-link" href="' + we(u) + '" target="_blank" rel="noopener">sec.gov &#8599;</a>' : '');
+      const link = (u) => (u ? 'On file' : '');
       const none = 'Nothing of this kind matches on ' + long(data.date) + '.';
       $('hold').innerHTML = !H.length ? '<div class="fl-empty">' + we(none) + '</div>'
         : '<table><thead><tr><th>Company</th><th>Holder</th><th>Form</th><th class="fl-num">Stake</th><th>Filing</th></tr></thead><tbody>'
@@ -287,7 +287,7 @@
         + '<td class="fl-num">' + (r.epsAdj == null ? '—' : we(RV.eps(r.epsAdj, cur)) + '<span class="fl-sub" title="' + we((r.epsAdjLabel || '') + (r.epsAdjExcludes ? ' — leaves out ' + r.epsAdjExcludes : '')) + '">' + we(r.epsAdjLabel || 'adjusted') + '</span>') + '</td>'
         + '<td class="fl-num">' + RV.estimate(r) + '</td>'
         + '<td class="fl-out"' + (r.guideSentence ? ' title="' + we(r.guideSentence) + '"' : '') + '>' + (r.guideSentence ? we(r.guideSentence.length > 150 ? r.guideSentence.slice(0, 147) + '…' : r.guideSentence) : '—') + '</td>'
-        + '<td>' + (r.url ? '<a class="fl-link" href="' + we(r.url) + '" target="_blank" rel="noopener">' + we(r.exhibit || 'Release') + ' &#8599;</a>' : '') + sub(we(r.periodLabel || '')) + '</td></tr>'
+        + '<td>' + (r.url ? we(r.exhibit || 'Release') : '') + sub(we(r.periodLabel || '')) + '</td></tr>'
         + '<tr class="fl-rsum"><td></td><td colspan="6">' + we(r.summary || '') + (tq ? ' ' + tq : '') + RV.aiLine(r)
         + (probs ? ' <span class="rv-amb" title="' + we(figs.join('; ')) + '">' + probs + ' figure' + (probs === 1 ? '' : 's') + ' left out: not found in the release as given.</span>' : '') + '</td></tr>';
     }
@@ -321,7 +321,7 @@
                 + '<td class="fl-co"><a href="/stock/' + encodeURIComponent(x.symbol) + '">' + we(x.symbol) + '</a><span>' + we(x.name || '') + '</span></td>'
                 + '<td><span class="fl-form' + (x.kind === 'D' ? ' fl-d' : '') + '">' + (x.kind === 'D' ? '13D' : '13G') + (x.amended ? ' amended' : '') + '</span></td>'
                 + '<td class="fl-num">' + we(x.pctWord || '—') + '</td>'
-                + '<td>' + (x.url ? '<a class="fl-link" href="' + we(x.url) + '" target="_blank" rel="noopener">sec.gov &#8599;</a>' : '') + '</td></tr>').join('')
+                + '<td>' + (x.url ? 'On file' : '') + '</td></tr>').join('')
               + '</tbody></table></div>');
         wire();
       } catch (e) {

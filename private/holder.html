@@ -295,7 +295,7 @@
         document.title = H.name + ' — Tickr Lab';
         $('name').textContent = H.name;
         $('lede').textContent = isFund
-          ? (H.family && H.family.toLowerCase() !== H.name.toLowerCase() ? H.family + '. ' : '') + 'What this fund held among the stocks tracked here, from its own portfolio report to the SEC (Form N-PORT)' + (H.asOf ? ' as of ' + day(H.asOf) : '') + '. A fund’s report becomes public sixty days after the month it describes.'
+          ? (H.family && H.family.toLowerCase() !== H.name.toLowerCase() ? H.family + '. ' : '') + 'What this fund held among the stocks tracked here, from its own filed portfolio report (Form N-PORT)' + (H.asOf ? ' as of ' + day(H.asOf) : '') + '. A fund’s report becomes public sixty days after the month it describes.'
           : 'What this manager held among the stocks tracked here at the end of ' + (H.label || 'the last published quarter') + ', from its quarterly Form 13F. A manager reports every account it runs, its funds included, forty-five days after the quarter ends.';
         const fig = (k, v, x) => '<div class="bezel hb-stat"><div class="core"><span class="k">' + we(k) + '</span><div class="hb-val">' + we(v) + '</div><div class="hb-sub">' + we(x || '') + '</div></div></div>';
         $('stats').innerHTML = fig('In tracked stocks', money(H.value), isFund && H.nav > 0 && H.value != null ? pct(H.value / H.nav * 100, 1) + ' of the fund’s ' + money(H.nav) + ' net assets' : 'not the manager’s whole portfolio')

@@ -31,7 +31,7 @@
   }
 
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  // How far the SEC filing date must lead the vendor's announcement date
+  // How far the filing date must lead the data feed's announcement date
   // before we call the earnings feed BEHIND rather than merely lagging.
   //
   // THE DATA CHOSE THIS NUMBER, not judgement. Measured across 1,094
@@ -59,12 +59,12 @@
   // announcement — so in sync they are the same day, and the threshold only
   // has to clear same-day noise. Tuning one must not silently move the other.
   //
-  // Shared for the reason its neighbour is: the screener's Announced (SEC)
-  // column and /stock's Announced (SEC) row must agree about what "ahead"
+  // Shared for the reason its neighbour is: the screener's Announced (filing)
+  // column and /stock's Announced (filing) row must agree about what "ahead"
   // means, and two copies drift the first time one is tuned.
   const ANN_AHEAD_DAYS = 40;
 
-  // ---- Announced (SEC): the Item 2.02 8-K date ------------------------------
+  // ---- Announced (filing): the Item 2.02 8-K date ------------------------------
   //
   // ONE DECISION, TWO SURFACES — the screener's cell and /stock's row. It was
   // the screener's alone until 2026-10-04, and the moment the stock page
@@ -87,9 +87,9 @@
     const iso = s && s.secLastResults;
     if (!iso) {
       return o.pending
-        ? { t: '—', c: 'na', title: 'Reading the filings from EDGAR…' }
-        : { t: '—', c: 'na', title: 'No Item 2.02 filing recorded. These dates are loaded locally by'
-            + ' sec-results-load.js; 102 of 1,168 companies have none in their recent filings.' };
+        ? { t: '—', c: 'na', title: 'Reading the filings…' }
+        : { t: '—', c: 'na', title: 'No Item 2.02 filing recorded.'
+            + ' 102 of 1,168 companies have none in their recent filings.' };
     }
     const d = new Date(iso + 'T12:00:00');   // local noon, the card-dating rule
     const vend = s.lastEarningsDate;
@@ -105,7 +105,7 @@
     // resignation in a results column.
     if (gap < -ANN_AHEAD_DAYS) {
       return { t: '—', c: 'na',
-        title: `This company's newest Item 2.02 is ${iso}, which predates Twelve Data's own date (${vend}).`
+        title: `This company's newest Item 2.02 is ${iso}, which predates the data feed's own date (${vend}).`
           + ' It announces results under a different 8-K item — 7.01 or 8.01 — so Item 2.02 cannot answer for it.'
           + ' Read Last results out instead. 51 of 1,062 companies are like this.' };
     }
@@ -113,18 +113,18 @@
     const t = shortDate(iso) + (thisYear ? '' : ` '${String(d.getFullYear()).slice(2)}`);
     // AHEAD OF THE VENDOR IS THE SIGNAL. Both dates describe the same event,
     // so in sync they are the same day: measured, NVDA reads 2026-08-26 from
-    // EDGAR and Aug 26 from the feed.
+    // the filings and Aug 26 from the feed.
     const miss = gap > ANN_AHEAD_DAYS;
     // Since the source rule the row's figures may already include the
-    // quarter Twelve Data missed, from the release or the filings.
+    // quarter the data feed missed, from the release or the filings.
     const fq = (figuresTo(s) || {}).iso;
     const covered = fq && Math.round((d - new Date(fq + 'T12:00:00')) / 86400000) <= STALE_FIG_DAYS;
     return { t, c: miss ? 'warn' : '',
-      title: `Announced ${iso} — the newest 8-K carrying Item 2.02, from EDGAR`
-        + (miss ? `\n\nTWELVE DATA HAS MISSED THIS: it still shows ${vend}, ${gap} days earlier.`
+      title: `Announced ${iso} — the newest 8-K carrying Item 2.02, from the filings`
+        + (miss ? `\n\nTHE DATA FEED HAS MISSED THIS: it still shows ${vend}, ${gap} days earlier.`
             + (covered ? ` The figures on this row already include that quarter, to ${fq}, from the results release or the filings (Figures to).`
               : ' The figures on this row predate this announcement.')
-          : vend ? '' : '\n\nNo Twelve Data date to compare against.') };
+          : vend ? '' : '\n\nNo data feed date to compare against.') };
   }
 
   // ---- Out of date: what on this row is behind, in words -------------------
@@ -134,16 +134,16 @@
   // entry is one fact the row's own dates prove; none is a guess. Null for a
   // fund (no reports to be behind on) and an empty list when nothing is.
   //   figures   the row's figures (figuresTo) end more than STALE_FIG_DAYS
-  //             before the newest results announcement, Twelve Data's or the
-  //             SEC's: that quarter's figures are not in yet (a report lands
+  //             before the newest results announcement, the data feed's or the
+  //             filings': that quarter's figures are not in yet (a report lands
   //             23-29 days after its quarter, so 75 clears it)
-  //   sec       the company filed an Item 2.02 Twelve Data has not recorded;
+  //   sec       the company filed an Item 2.02 the data feed has not recorded;
   //             the title says whether the row's figures already cover it
   //   quiet     no results, by either date, for more than a quarter
   //   next      the next report date has passed and neither date is newer
-  // Since the source rule (2026-10-29) the figures and Twelve Data's dates
+  // Since the source rule (2026-10-29) the figures and the data feed's dates
   // are different things: GOOGL's figures ran to Sep 30 from its Oct 28
-  // release while Twelve Data still said Jun 30 and Jul 22.
+  // release while the data feed still said Jun 30 and Jul 22.
   //   profile   company data not re-pulled for STALE_PROFILE_DAYS
   //   price     no price for STALE_PRICE_DAYS
   // Client-only inputs (secLastResults) are read when present, so the cell
@@ -152,11 +152,11 @@
   // THE PERIOD THE ROW'S COMPANY FIGURES RUN TO (2026-10-30). Since the
   // owner's source rule (2026-10-29) revenue, the margins, net income, cash
   // flow, growth and the balance sheet come from the results release or the
-  // SEC filings where they have them, and run to that quarter (row.srcQ, the
-  // company's own period end), not to Twelve Data's (mostRecentQuarter,
+  // filings where they have them, and run to that quarter (row.srcQ, the
+  // company's own period end), not to the data feed's (mostRecentQuarter,
   // rounded to a month end). from: 'release' (the newest quarter is a results
   // release whose 10-Q is not filed yet), 'filings', or 'td'.
-  const FIG_FROM = { release: 'the results release and the SEC filings', filings: 'the SEC filings (10-Q, 10-K)', td: 'Twelve Data' };
+  const FIG_FROM = { release: 'the results release and the filed reports', filings: 'the filed reports (10-Q, 10-K)', td: 'the data feed' };
   function figuresTo(s) {
     if (!s) return null;
     if (s.srcQ) {
@@ -176,7 +176,7 @@
     const fig = figuresTo(s), per = fig && fig.iso;
     // The newest results announcement either source knows of.
     const last = rep && sec ? (day(sec) > day(rep) ? sec : rep) : (rep || sec);
-    const lastBy = last && last === sec && !(rep && day(rep) >= day(sec)) ? ' (its SEC filing)' : '';
+    const lastBy = last && last === sec && !(rep && day(rep) >= day(sec)) ? ' (its 8-K)' : '';
     if (last && per) {
       const gap = Math.round((day(last) - day(per)) / 86400000);
       if (gap > STALE_FIG_DAYS) out.push({ k: 'figures', t: 'Figures predate last results',
@@ -185,16 +185,16 @@
     if (sec && rep) {
       const gap = Math.round((day(sec) - day(rep)) / 86400000);
       const covered = per && Math.round((day(sec) - day(per)) / 86400000) <= STALE_FIG_DAYS;
-      if (gap > ANN_AHEAD_DAYS) out.push({ k: 'sec', t: 'Twelve Data missed a report',
-        title: `The company filed results with the SEC (Item 2.02) on ${sec}, ${gap} days after Twelve Data's last report date (${rep}).`
-          + (covered ? ` The figures on this row already include that quarter, to ${per}, from ${FIG_FROM[fig.from]}; what is behind is Twelve Data's own record: Last results out, and the figures only it supplies, such as forward P/E.`
+      if (gap > ANN_AHEAD_DAYS) out.push({ k: 'sec', t: 'Data feed missed a report',
+        title: `The company filed results (8-K Item 2.02) on ${sec}, ${gap} days after the data feed's last report date (${rep}).`
+          + (covered ? ` The figures on this row already include that quarter, to ${per}, from ${FIG_FROM[fig.from]}; what is behind is the data feed's own record: Last results out, and the figures only it supplies, such as forward P/E.`
             : ' The figures on this row predate it too.') });
     }
     if (last && ago(last) > STALE_QUIET_DAYS) out.push({ k: 'quiet', t: 'No results in ' + ago(last) + 'd',
       title: `Last reported ${last}${lastBy}, ${ago(last)} days ago: more than a quarter.` });
     const nx = s.nextEarningsDate;
     if (nx && ago(nx) > 0 && !(last && day(last) >= day(nx))) out.push({ k: 'next', t: 'Report date passed',
-      title: `The next report date on file (${String(nx).slice(0, 10)}${s.nextEarningsEstimated ? ', estimated' : ''}) passed ${ago(nx)} days ago with no newer results recorded, by Twelve Data or at the SEC.` });
+      title: `The next report date on file (${String(nx).slice(0, 10)}${s.nextEarningsEstimated ? ', estimated' : ''}) passed ${ago(nx)} days ago with no newer results recorded, by the data feed or in the filings.` });
     if (s.profileFetchedAt) {
       const d = Math.floor((t - Number(s.profileFetchedAt)) / 86400000);
       if (d > STALE_PROFILE_DAYS) out.push({ k: 'profile', t: 'Company data ' + d + 'd old',
@@ -279,7 +279,7 @@
     // about the security, not a reading of it — so it carries no colour and
     // nothing in the engine reads it.
     ['info',  'Instrument',     (s) => V.text(s.instrumentType)],
-    // How the company files with the SEC: 'US GAAP', or 'Foreign · EUR' for a
+    // How the company files its reports: 'US GAAP', or 'Foreign · EUR' for a
     // foreign filer under international standards, with its reporting currency.
     ['info',  'Filer',          (s) => V.text(s.filer)],
     // Boolean only. The index WEIGHT is deliberately not here: it stays on
@@ -567,7 +567,7 @@
     // only -- the time of day lives in earnings_history, which a snapshot row
     // does not carry; /stock's caption has it because that page reads it.
     // The period the row's figures run to: the source rule's quarter where it
-    // set them, else Twelve Data's (figuresTo).
+    // set them, else the data feed's (figuresTo).
     ['report', 'Period',         (s) => { const f = figuresTo(s); return f ? { t: shortDate(f.iso), c: '' } : null; }],
     ['report', 'Reported',       (s) => (s.lastEarningsDate
       ? { t: shortDate(s.lastEarningsDate), c: '' } : null)],
@@ -1529,7 +1529,7 @@
         // FIELD_SPEC would print an em-dash in the hover card on every other page.
         const extras = (o.extra && o.extra[g]) || [];
         // AN EXTRA ROW MAY NAME THE ROW IT BELONGS BESIDE (`after`), and a
-        // date is the case that needs it: /stock's Announced (SEC) is read
+        // date is the case that needs it: /stock's Announced (filing) is read
         // AGAINST Reported — it is marked when it runs ahead of it — and
         // appended it would land twenty-five rows below the only value it
         // can be compared with. Named but not found, and it appends, which
@@ -1739,7 +1739,7 @@
   // and a Google Finance URL is a small pile of venue trivia that would only
   // be corrected in one of the copies.
   //
-  // Maps a Twelve Data MIC / exchange to the code Google uses in its quote URL
+  // Maps the listing's MIC / exchange to the code Google uses in its quote URL
   // (https://www.google.com/finance/quote/SYMBOL:EXCHANGE). The MIC is
   // authoritative; the free-text exchange is the fallback.
   const GF_MIC = {
@@ -1794,10 +1794,10 @@
     return `https://finance.yahoo.com/quote/${encodeURIComponent(sym)}/`;
   }
 
-  // ---- Reuters, MarketWatch and the SEC (2026-10-19, the owner) ---------------
-  // Three more places to look a stock up, beside Google and Yahoo, here for the
+  // ---- Reuters and MarketWatch (2026-10-19, the owner) -------------------------
+  // Two more places to look a stock up, beside Google and Yahoo, here for the
   // reason those two are: a third-party URL derived from a row belongs in one
-  // place. None of the three answers an automated request (401 and 403), so
+  // place. Neither answers an automated request (401 and 403), so
   // the shapes are the sites' own published conventions, not something this
   // code could check; each falls back to nothing rather than a guessed page.
   //
@@ -1818,19 +1818,13 @@
     if (!s || !s.symbol) return null;
     return `https://www.marketwatch.com/investing/${isFund(s) ? 'fund' : 'stock'}/${encodeURIComponent(String(s.symbol).toLowerCase())}`;
   }
-  // THE SEC'S OWN PAGE FOR THE COMPANY, by its CIK: every filing, newest first.
-  // The CIK is the filings reader's (sec_state), not the price provider's.
-  function secUrl(cik) {
-    const n = Number(cik);
-    return n > 0 && Number.isInteger(n) ? `https://www.sec.gov/edgar/browse/?CIK=${n}` : null;
-  }
 
   // WHERE A FIGURE CAME FROM (the owner's source rule, 2026-10-29,
-  // sourcerule.js): the hover text for a cell the rule set, with what Twelve
-  // Data said beside it. '' when the rule did not touch the row, so a caller
+  // sourcerule.js): the hover text for a cell the rule set, with what the data
+  // feed said beside it. '' when the rule did not touch the row, so a caller
   // falls back to its own title. The server stamps row.src (the source code
-  // per field), row.srcQ (the newest quarter's end) and row.srcTd (Twelve
-  // Data's own figures).
+  // per field), row.srcQ (the newest quarter's end) and row.srcTd (the data
+  // feed's own figures).
   const SRC_TTM = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, dilutedEpsTtm: 1, operatingMargin: 1, priceToSales: 1,
     netIncomeTtm: 1, fcfTtm: 1, grossMargin: 1, profitMargin: 1, fcfMargin: 1, roe: 1, fcfYield: 1 };
   const SRC_MONEY = { revenueTtm: 1, grossProfitTtm: 1, operatingCashFlowTtm: 1, totalCash: 1, totalDebt: 1, netCash: 1, enterpriseValue: 1, netIncomeTtm: 1, fcfTtm: 1 };
@@ -1846,19 +1840,19 @@
     'finpos|Book value/share': 'bookValuePerShare' };
   const SRC_FCF = { fcfTtm: 1, fcfMargin: 1, fcfYield: 1 };
   // The short name of a figure's source, for the "Source: ..." that opens a
-  // screener cell's hover: the rule's code, or Twelve Data where the rule left
+  // screener cell's hover: the rule's code, or the data feed where the rule left
   // the field alone.
   function srcLabel(s, key) {
     const code = s && s.src ? s.src[key] : null;
-    if (!code) return 'Twelve Data';
-    if (key === 'sharesOutstanding') return 'SEC filing (cover page)';
+    if (!code) return 'Data feed';
+    if (key === 'sharesOutstanding') return 'Filed report (cover page)';
     return {
-      s: 'SEC filings (10-Q, 10-K)',
-      r: SRC_TTM[key] ? 'Results release and SEC filings' : 'Results release',
-      m: 'SEC filings and results release',
+      s: 'Filed reports (10-Q, 10-K)',
+      r: SRC_TTM[key] ? 'Results release and filed reports' : 'Results release',
+      m: 'Filed reports and results release',
       o: 'Results releases',
       n: 'None',
-    }[code] || 'Twelve Data';
+    }[code] || 'Data feed';
   }
   function srcNote(s, key) {
     const code = s && s.src ? s.src[key] : null;
@@ -1871,28 +1865,28 @@
     if (own && code !== 'n') {
       const td0 = s.srcTd ? s.srcTd[key] : null;
       const tdTxt0 = !ok(td0) ? '' : SRC_MONEY[key] ? fmtMktCap(td0, s.currency) : SRC_PCT[key] ? td0.toFixed(1) + '%' : td0.toFixed(2);
-      return 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings: the newest quarter’s results release, to ' + (s.srcQ || '') + ', printed no cash flow statement.' + (tdTxt0 ? ' Twelve Data: ' + tdTxt0 + '.' : '');
+      return 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings: the newest quarter’s results release, to ' + (s.srcQ || '') + ', printed no cash flow statement.' + (tdTxt0 ? ' Data feed: ' + tdTxt0 + '.' : '');
     }
     const text = {
       s: ttm ? 'Four quarters to ' + q + ', from the company’s 10-Q and 10-K filings.' : 'At ' + q + ', from the company’s 10-Q or 10-K.',
       r: ttm ? 'Four quarters to ' + q + ': the newest from the results release (its 10-Q not filed yet), the rest from the filings.' : 'At ' + q + ', from the results release (its 10-Q not filed yet).',
       m: 'Four quarters to ' + q + ' from the filings, with a quarter the filings disagreed on taken from its results release.',
-      o: 'Four quarters to ' + q + ' from the results releases: the filings’ figure agreed with neither the releases nor Twelve Data, so it was set aside.',
-      n: SRC_FCF[key] ? 'No figure: neither the release nor the filings give operating cash flow and capex for four quarters, and Twelve Data’s figure is levered free cash flow, another measure (here it is operating cash flow less capex).'
-        : 'No figure: the release and the filings give no debt lines, and Twelve Data’s total counts leases (here debt is borrowings only).',
+      o: 'Four quarters to ' + q + ' from the results releases: the filings’ figure agreed with neither the releases nor the data feed, so it was set aside.',
+      n: SRC_FCF[key] ? 'No figure: neither the release nor the filings give operating cash flow and capex for four quarters, and the data feed’s figure is levered free cash flow, another measure (here it is operating cash flow less capex).'
+        : 'No figure: the release and the filings give no debt lines, and the data feed’s total counts leases (here debt is borrowings only).',
     }[code] || '';
     const growth = SRC_GROWTH[key] ? (code === 'r' ? 'The quarter to ' + q + ' against the same quarter a year earlier, as its results release printed both.' : 'The quarter to ' + q + ' against the same quarter a year earlier, from the company’s 10-Q and 10-K filings.')
       + (s[key] == null ? ' No percentage: the year-earlier figure was a loss or nothing.' : '') : '';
     const lead = key === 'sharesOutstanding' ? 'From the cover page of the company’s newest 10-Q or 10-K.' : growth || text;
     const td = s.srcTd ? s.srcTd[key] : null;
     const tdTxt = !ok(td) ? '' : SRC_MONEY[key] ? fmtMktCap(td, s.currency) : SRC_PCT[key] ? td.toFixed(1) + '%' : key === 'sharesOutstanding' ? fmtMktCap(td, null).replace('$', '') : td.toFixed(2);
-    return lead + (tdTxt ? ' Twelve Data: ' + tdTxt + '.' : '');
+    return lead + (tdTxt ? ' Data feed: ' + tdTxt + '.' : '');
   }
 
   global.RowCard = {
     srcNote, srcLabel,
     buildHTML, attach, fmtMktCap, FIELD_SPEC,
-    gfUrl, yfUrl, reutersUrl, mwUrl, secUrl, googleExchange, canHover,
+    gfUrl, yfUrl, reutersUrl, mwUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
     scoreTip, placeTip,

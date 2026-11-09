@@ -43,5 +43,15 @@ ok(FieldSource.sourceOf('marketCap', 'info') === 'Twelve Data', 'Market Cap stay
 ok(FieldSource.sourceOf('rsi', 'rel') === FieldSource.S.prices, 'RSI: from the price group default');
 ok(FieldSource.sourceOf('noSuchField', 'nogroup') === null, 'an unknown column has no source');
 
+// What a member reads names no data source (owner, 2026-11-09), for every column, and says the same thing otherwise.
+const VENDOR = /twelve|\bSEC\b|finra|yahoo|nasdaq|alpha vantage|google|clearing|edgar/i;
+const named = cols.filter((c) => VENDOR.test(FieldSource.publicSourceOf(c.id, c.g) || '')).map((c) => c.id + ': ' + FieldSource.publicSourceOf(c.id, c.g));
+ok(named.length === 0, 'the member wording names no source', named);
+ok(cols.every((c) => !!FieldSource.publicSourceOf(c.id, c.g)), 'every column keeps a member source');
+ok(FieldSource.publicSourceOf('forwardPe', 'value') === 'The data feed (analysts’ estimate)', 'Fwd P/E for a member', FieldSource.publicSourceOf('forwardPe', 'value'));
+ok(FieldSource.publicSourceOf('shortBuild', 'react') === 'Short interest reports', 'short interest for a member');
+ok(FieldSource.publicSourceOf('instManagers', 'own') === 'Form 13F filings', 'form names stay');
+ok(FieldSource.publicSourceOf('noSuchField', 'nogroup') === null, 'an unknown column has no member source either');
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

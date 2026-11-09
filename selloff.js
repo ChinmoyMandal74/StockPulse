@@ -291,7 +291,7 @@ function workbookSheets(body) {
     ['Since reaction', 'The reaction day’s close to the latest price.'],
     ['From 52-week high', 'The latest price against the highest close of the past year.'],
     ['P/E', 'Trailing twelve months as the data provider reports it; empty when its own earnings per share are a loss.'],
-    ['Revenue growth, profit margin, the two descriptions', 'As the screener shows them: the results release while it is the newest report, then the SEC filings, else the data provider. Revenue growth is the latest quarter on the same quarter a year earlier.'],
+    ['Revenue growth, profit margin, the two descriptions', 'As the screener shows them: the results release while it is the newest report, then the filed reports, else the data feed. Revenue growth is the latest quarter on the same quarter a year earlier.'],
     ['Market cap', 'Market value at the latest price, in billions of US dollars.'],
     ['Today', 'The latest session’s price change: the previous close to the latest price (during trading) or to the close.'],
     ['Signal', 'The screener’s mechanical reading of strength under its Balanced rules (Very Weak, Weak, Neutral, Strong – Elevated Risk, Strong, Very Strong), with the rule that fired. A description of where the stock stands on those rules, not an instruction to trade.'],

@@ -245,11 +245,11 @@ const row = (o) => Object.assign({ symbol: 'TST', currency: 'USD', sector: 'Tech
   ok(last.d === '2026-09-30' && last.rel === true && last.v === Math.round((3e8 + 2.8e8 + 1.3e8 + 1.2e8) / (1.5e9 + 1.4e9 + 1.3e9 + 1.2e9) * 10000) / 100, 'drill: the newest margin point is the release quarter with three filed', last);
   ok(!pm.points[pm.points.length - 2].rel, 'drill: the filed points stay unmarked');
   eq(pm.rows[0].slice(0, 2), ['Sep 2026 · release', 20], 'drill: the table names the release quarter');
-  ok(pm.source === 'SEC filings and the results release' && /results release of 29 Oct 2026/.test(pm.note) && pm.release.periodEnd === '2026-09-30', 'drill: source and note say so');
+  ok(pm.source === 'Filings and the results release' && /results release of 29 Oct 2026/.test(pm.note) && pm.release.periodEnd === '2026-09-30', 'drill: source and note say so');
   const gm = DH.build('grossMargin', { facts: s, releaseQuarter: q });
-  ok(gm.source === 'SEC filings' && !gm.release && !gm.points.some((p) => p.rel), 'drill: a measure the release lacks is drawn as filed and says so');
+  ok(gm.source === 'Filings' && !gm.release && !gm.points.some((p) => p.rel), 'drill: a measure the release lacks is drawn as filed and says so');
   const plain = DH.build('profitMargin', { facts: s, releaseQuarter: null });
-  ok(plain.source === 'SEC filings' && plain.points[plain.points.length - 1].d === '2026-06-30', 'drill: no release quarter, as before');
+  ok(plain.source === 'Filings' && plain.points[plain.points.length - 1].d === '2026-06-30', 'drill: no release quarter, as before');
   const old = DH.build('revenueTtm', { facts: s, releaseQuarter: Object.assign({}, q, { periodEnd: '2026-06-30' }) });
   ok(!old.release && old.points[old.points.length - 1].d === '2026-06-30', 'drill: a release quarter not newer than the filings is ignored');
 }

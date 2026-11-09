@@ -824,7 +824,7 @@
         <label>Index</label>
         <select id="daySp500"></select>
         <p class="hint">Both of these narrow the movers only. The sectors are the
-          eleven Select Sector SPDRs' own returns — those funds divide the S&amp;P 500
+          eleven sector funds' own returns — those funds divide the S&amp;P 500
           between them, so that block is already an index reading with nothing in it
           to cut — and neither the indexes nor the sector funds are ever counted
           among the movers.</p>
@@ -1075,7 +1075,7 @@
         <label>How many</label>
         <select id="bbCount"><option value="5">5</option><option value="8">8</option><option value="10" selected>10</option><option value="12">12</option></select>
         <p class="hint">Cash each company spent buying back its own
-          shares over its latest twelve months on file, from its SEC
+          shares over its latest twelve months on file, from its
           filings. By share of market value a small company can lead;
           by dollars the largest companies do. A company that files
           no buyback line is not listed. The last column is what the
@@ -1100,7 +1100,7 @@
         <select id="oiSym"></select>
         <p class="hint">Call and put contracts open on one stock at the
           last close, in total and at the expiry dates holding the
-          most, from the Options Clearing Corporation. It counts what
+          most, as counted by the clearing house. It counts what
           is outstanding and does not say which way anyone is
           leaning: every contract has a buyer and a seller. Works for
           the index funds too. Refreshed each trading day.</p>
@@ -1219,7 +1219,7 @@
         <label>Stock</label>
         <select id="fhSym"></select>
         <p class="hint">The mutual funds and ETFs holding the stock, from
-          each fund's own portfolio report to the SEC. The bar is the
+          each fund's own portfolio report. The bar is the
           shares the fund holds; "of the fund" is how much of that
           fund this one stock is, not a share of the company. The
           reports are months old and not all as of the same date; the
@@ -1280,7 +1280,7 @@
           Schedule 13D or 13G from the past thirteen months. Not a full
           register: a holder with nothing to amend in that time is not
           listed, and nobody under 5% is. A fund has no card. Names are
-          as filed with the SEC.</p>
+          as filed.</p>
       </div>
       <!-- Who added, who cut (2026-10-17): one stock's institutional holders
            over the quarters, and the latest quarter's buyers and sellers. -->
@@ -1360,8 +1360,8 @@
         <select id="fldShow"></select>
         <label>Index</label>
         <select id="fldSp500"></select>
-        <p class="hint">What the SEC received on one business day about the companies on the screen:
-          5% holder filings (13D, 13G) and 8-Ks. Read each morning from the SEC's daily index, so the
+        <p class="hint">What was filed on one business day about the companies on the screen:
+          5% holder filings (13D, 13G) and 8-Ks. Read each morning from the day's filings index, so the
           newest day is normally yesterday.</p>
       </div>
       <!-- Results reported (2026-10-22, Market): one day's results press releases. -->
@@ -1371,7 +1371,7 @@
         <label>Index</label>
         <select id="rptSp500"></select>
         <p class="hint">Each company on the screen that filed a results press release that day, the largest first:
-          revenue, EPS against the estimate. Read from the SEC each weekday morning, so the newest day is
+          revenue, EPS against the estimate. Read from the filings each weekday morning, so the newest day is
           normally yesterday.</p>
       </div>
       <!-- Results summary (2026-10-22, Market): the reporting season across an index. -->
@@ -1535,7 +1535,7 @@
         <label>Index</label>
         <select id="sbaSp500"></select>
         <p class="hint">Each bar is one company's short position on the two
-          most recent FINRA dates, as a share of its float: grey is what
+          most recent reporting dates, as a share of its float: grey is what
           was held on both, the colour is what was added or bought back.
           The figures beside it are before then after. Ranking by percent
           and by points of the float give different companies, since a
@@ -1562,7 +1562,7 @@
         <select id="smovFloor"></select>
         <label>Index</label>
         <select id="smovSp500"></select>
-        <p class="hint">FINRA publishes short interest twice a month and it
+        <p class="hint">Short interest is published twice a month and it
           reaches us about eight business days after it settles, so the card
           dates itself rather than implying today. The two rankings are
           different questions and in practice share no names at all —
@@ -1950,7 +1950,7 @@
       </div>
       <!-- Earnings growth: the members' summed net income against a year
            earlier, and the companies the difference is made of. From the
-           SEC filings, fetched for the chosen index. No scope pickers. -->
+           company filings, fetched for the chosen index. No scope pickers. -->
       <div id="egrBox">
         <label>Index</label>
         <select id="egrSp500"></select>
@@ -2278,7 +2278,7 @@
           <option value="10" selected>Last 10 years</option>
           <option value="0">Everything filed</option>
         </select>
-        <p class="hint">From the company’s own SEC filings — a trailing twelve
+        <p class="hint">From the company’s own filings — a trailing twelve
           months at every filed quarter, up to eighteen years. Market value is
           each quarter’s close times the share count the company filed that
           quarter, adjusted for splits since; where that history is not held
@@ -2578,7 +2578,7 @@
       { id: 'movegrid', name: 'Moves by sector', note: 'Every company counted by sector and by how far its price moved over a period — the pivot view’s grid' },
       { id: 'corrections', name: 'Market drawdowns', note: 'How many companies are near their high, in a pullback, a correction or a bear market (the screener’s Drawdown column, counted) — beside how far each index is from its own high' },
       { id: 'insiders', name: 'Insider activity', note: 'What one company’s insiders bought and sold on the open market, added up and by person, from their own filings' },
-      { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, from the Options Clearing Corporation' },
+      { id: 'optoi', name: 'Options open interest', note: 'Call and put contracts open on one stock at the last close, in total and by expiry, as counted by the clearing house' },
       { id: 'capreturn', name: 'Capital returns', note: 'What one company did with its cash — shares bought back and dividends paid, year by year, from its own filings' },
       { id: 'tonestock', name: 'Article tone', note: 'How the articles about one stock read — its latest, each with an AI model’s reading and summary' },
       { id: 'sectone', name: 'Article tone, a sector', note: 'How the articles about one sector’s companies read, industry by industry: the split, the average and the coverage' },
@@ -4528,7 +4528,7 @@
           const el = node.parentNode;
           // .ov-art: the Too much to read cartoon's bubbles are jargon (ETF, IPO,
           // BETA, RSI ...), several of them somebody's ticker, never a company.
-          // .ar-map: How it's built names data sources (OCC, FINRA), not stocks.
+          // .ar-map: How it's built names data kinds (Options, Database), not stocks.
           // .id-map, .id-rd: the Ideas card names groups and readings (Power, Compute, RSI), not stocks.
           if (!el || el.closest('a') || el.closest('.s-top') || el.closest('.ov-art') || el.closest('.ar-map') || el.closest('.id-map') || el.closest('.id-rd') || el.closest('style, script')) continue;
           const raw = node.nodeValue || '';

@@ -111,7 +111,7 @@
       <h1>What this site stores,<br />and who else sees it</h1>
       <p class="lede">This is a description of what the software actually does, written from its own
         database schema rather than from a template. Where something is kept, it says for how long.
-        Where a third party is involved, it says which and what reaches them.</p>
+        Where a third party is involved, it says what kind of service it is and what reaches it.</p>
       <div class="when">Last updated 9 October 2026</div>
     </header>
 
@@ -219,21 +219,21 @@
           <table>
             <thead><tr><th>Service</th><th>What it is for</th><th>What reaches it</th></tr></thead>
             <tbody>
-              <tr><td>Vercel</td><td>Hosting</td><td>Every request, including your IP address</td></tr>
-              <tr><td>Turso</td><td>The database</td><td>Everything described above, at rest</td></tr>
-              <tr><td>Resend</td><td>Sending email</td><td>The recipient address and the message</td></tr>
-              <tr><td>Anthropic</td><td>The assistant at <code>/chat</code>, the article tone on stock pages and <code>/news</code>, and the results releases on <code>/filings</code></td><td>Your question and the screener table, only when you ask something. For article tone and results releases, published news articles and companies&rsquo; own press releases, and nothing about you</td></tr>
+              <tr><td>Our hosting provider</td><td>Hosting</td><td>Every request, including your IP address</td></tr>
+              <tr><td>Our database host</td><td>The database</td><td>Everything described above, at rest</td></tr>
+              <tr><td>Our email delivery provider</td><td>Sending email</td><td>The recipient address and the message</td></tr>
+              <tr><td>An AI provider</td><td>The assistant at <code>/chat</code>, the article tone on stock pages and <code>/news</code>, and the results releases on <code>/filings</code></td><td>Your question and the screener table, only when you ask something. For article tone and results releases, published news articles and companies&rsquo; own press releases, and nothing about you</td></tr>
               <tr><td>Google Fonts</td><td>The typeface</td><td>Your IP and user-agent, on every page</td></tr>
-              <tr><td>Twelve Data</td><td>Market data</td><td><b>Nothing about you.</b> Ticker symbols only</td></tr>
-              <tr><td>Alpha Vantage, Nasdaq</td><td>The earnings calendar: the days companies have announced they will report</td><td><b>Nothing about you.</b> A request for the calendar, once a night</td></tr>
-              <tr><td>The SEC (EDGAR)</td><td>Companies&rsquo; public filings: their reports, 8-Ks, large-holder filings and, at <code>/ipos</code>, the registration filings of companies going public, kept by company and date</td><td><b>Nothing about you.</b> Requests for public filings, carrying the site owner&rsquo;s contact address as the SEC requires</td></tr>
+              <tr><td>Our market data provider</td><td>Market data</td><td><b>Nothing about you.</b> Ticker symbols only</td></tr>
+              <tr><td>Earnings calendar providers</td><td>The earnings calendar: the days companies have announced they will report</td><td><b>Nothing about you.</b> A request for the calendar, once a night</td></tr>
+              <tr><td>The public regulatory filings archive</td><td>Companies&rsquo; public filings: their reports, 8-Ks, large-holder filings and, at <code>/ipos</code>, the registration filings of companies going public, kept by company and date</td><td><b>Nothing about you.</b> Requests for public filings, carrying the site owner&rsquo;s contact address as the archive requires</td></tr>
             </tbody>
           </table>
         </div>
         <p>If you sign in with Google, Google tells this site your Google account id, your email
           address, whether that address is verified, and your name. Nothing is sent back to Google,
           and no other Google data is requested or accessible.</p>
-        <p>No data is sold, rented, or shared with anyone not named above.</p>
+        <p>No data is sold, rented, or shared with anyone not listed above.</p>
       </section>
 
       <section>

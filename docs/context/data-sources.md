@@ -149,7 +149,52 @@ The owner: "do 1 and 3" (close the free cash flow gaps; the screener follow-ups)
 
 A third re-read of every company (`sec-reread.js`) loaded the new tags, quarters and Exxon's history.
 
-## Sources as members see them (2026-10-30)
+## Sources are not named to users (2026-11-09)
+
+The owner: "I do not want to tell the world where any data comes from as a
+matter of intellectual property .. remove all such text from the main
+website .. and anything the end user can see". Chosen with it: links to
+filings on sec.gov go too, and AI-written or AI-read text still says "AI"
+but never names the model or vendor.
+
+**The rule.** No data provider, regulator archive, news service, AI model
+or infrastructure vendor is named anywhere a non-admin sees: rendered text,
+hovers, empty states, card images and videos, member email, generated blog
+posts, and the comments in files served to browsers (view-source shows
+them). Form names stay (8-K, 10-Q, 13F, 13D/13G, Form 4, Form D, N-PORT):
+they say what a row is. Index and exchange names stay (Nasdaq 100, the
+listing exchange). The word list: "the data feed", "filings" / "the filed
+report", "short interest", "news" / "the news feed", "announced report
+dates", "options open interest", "index membership", "AI". Admin pages keep
+their source names (`/sources`, `/edgar`, `/recon` and the rest).
+
+**What enforces it**
+- `ADMIN_ONLY_ASSET` (server.js, gateAssets): an admin page's file is a
+  404 to anyone else. Before this, a member who asked for
+  `/sources.html` by name read its text. `admin-asset-test.js` keeps the
+  list in step with the admin routes.
+- The `/api/` middleware above the terms gate: a JSON answer holding a
+  sec.gov address goes out as it is only to the admin and the cron secret
+  (the laptop loaders read those addresses); anyone else gets each address
+  replaced by `filed` (`AuthSec.scrubFilingUrls`), which is truthy, as the
+  pages test it ("On file"). `authsec-test.js` covers it.
+- `/api/fields` gives non-admins `FieldSource.publicSourceOf` (neutral
+  words), the admin `sourceOf`.
+- summary.js tells the model never to name a provider, regulator, news
+  service or model, and flags a draft that does ("Names a data source").
+
+**Left as they were, by design or for the owner:** the stock page's
+outbound "look it up" links to Google and Yahoo Finance (not attribution);
+the landing page's comparison of how soon a quarter shows up against Yahoo
+Finance and TradingView (competitors named, the owner's call); headline
+outlet labels and the article links themselves (news.js now falls back to
+"News" for an unnamed outlet, new rows only); the AI watchlist's credit to
+the Instagram account it follows (`selloff.js WATCH.source`); API field
+keys and identifiers (`erUrl`, `/api/sec/...`, `td`), which are code;
+blog posts already published; and the public GitHub repository, which
+names every source until it is made private (backlog 47).
+
+## Sources as members see them (2026-10-30, superseded in its wording by the section above)
 
 `/fields` gives every screener column a short Source line from `fieldsource.js`. The source-rule columns take theirs from `sourcerule.js` (FIELDS, NO_TD), so a change to the rule shows there without an edit; a change to any other column's source (a new provider, a column moving from Twelve Data to the filings) updates its entry in `fieldsource.js` in the same commit as /sources.
 

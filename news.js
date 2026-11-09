@@ -69,7 +69,7 @@
       const url = tag('link');
       const ts = Date.parse(tag('pubDate'));
       if (!headline || !url || !isFinite(ts)) continue;
-      items.push({ headline, source: source || 'Google News', url, published_at: new Date(ts).toISOString() });
+      items.push({ headline, source: source || 'News', url, published_at: new Date(ts).toISOString() });
     }
     return items;
   }
@@ -80,7 +80,7 @@
     for (const x of Array.isArray(json) ? json : []) {
       const ts = Number(x && x.datetime) * 1000;
       if (!x || !x.headline || !x.url || !isFinite(ts) || ts <= 0) continue;
-      items.push({ headline: String(x.headline).trim(), source: String(x.source || 'Finnhub').trim(),
+      items.push({ headline: String(x.headline).trim(), source: String(x.source || 'News').trim(),
         url: String(x.url), published_at: new Date(ts).toISOString() });
     }
     return items;

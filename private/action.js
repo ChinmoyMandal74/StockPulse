@@ -334,7 +334,7 @@
     // this thing", not a rule — a fund is the usual reason a row looks like
     // that. A caller that KNOWS better may say so with `notFund`, and the
     // guess is then skipped. Nothing in the live path sets it, so every
-    // existing surface is unchanged; `/adjusted` sets it from the SEC CIK
+    // existing surface is unchanged; `/adjusted` sets it from the filer
     // map, which answers "is this a company that files?" directly instead of
     // inferring it from two absent vendor fields. Without it a loss-maker —
     // no positive earnings, so no honest P/E — would be typed as a fund and

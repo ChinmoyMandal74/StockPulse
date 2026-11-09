@@ -388,7 +388,7 @@ The archive is today's list of stocks, without most of those that fell and were 
 
 ## 19. A long, intact compounding record, against the S&P 500 — 2026-10-26
 
-*Family: Quality · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC annual and quarterly reports as filed, daily prices · Sample: 128 monthly readings, 2016–2026, about 64 companies a month in the group tested*
+*Family: Quality · Verdict: No edge · Horizon: 1 to 2 months · Data: Annual and quarterly reports as filed, daily prices · Sample: 128 monthly readings, 2016–2026, about 64 companies a month in the group tested*
 
 ### The idea
 A company's own future return cannot be foreseen, but its return against the S&P 500 might be. The candidate: companies whose last ten years of annual reports pass most of the compounding record's five checks (revenue up most years, earnings per share up 10% a year, margins holding through the worst year, profits arriving as cash, no dilution) and whose latest quarters are still growing. If such a record says anything, these companies should beat the index over the following month or two.
@@ -454,10 +454,10 @@ Nineteen observations, one per four years. The pattern was picked from many poss
 
 ## 21. The whole Signal replayed on what the filings said at the time — 2026-11-07
 
-*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: SEC quarterly and annual reports as filed, daily prices · Sample: 161,983 stock-months in 1,247 stocks, 2010–2026*
+*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: Quarterly and annual reports as filed, daily prices · Sample: 161,983 stock-months in 1,247 stocks, 2010–2026*
 
 ### The idea
-Until now only the price half of the Signal had been tested over the long run: the fundamentals half could not be replayed, because the provider gives today's figures only. The SEC filings carry the day each figure became public, so the fundamentals the Signal reads can be rebuilt as they stood on any past date. The question: does the fundamentals half make the Signal better at what it is good at, sorting the bad outcomes?
+Until now only the price half of the Signal had been tested over the long run: the fundamentals half could not be replayed, because the provider gives today's figures only. The company filings carry the day each figure became public, so the fundamentals the Signal reads can be rebuilt as they stood on any past date. The question: does the fundamentals half make the Signal better at what it is good at, sorting the bad outcomes?
 
 ### What was done
 On the first trading day of every month from January 2010 to August 2026, every stock was scored by the real Signal twice: once on price alone, and once with growth, margins, cash flow, return on equity and market value as its filings stood that day (only reports filed by then; share counts put on the same split basis as the prices). Each stock's return over the next 21, 42 and 63 trading sessions was set against the average stock's. Decided in advance: the measure is the gap between the worst tenth of outcomes on the Strong side (Very Strong, Strong, Strong – Elevated Risk) and on the Weak side (Weak, Very Weak), price alone against price and filings, before and after 2020, with 95% intervals from resampling months; and the Strong side's typical result must not get worse.
@@ -481,7 +481,7 @@ The list of stocks is today's. Forward P/E is replaced by the trailing P/E (no f
 
 ## 22. A cut outlook on the Strong side — 2026-11-07
 
-*Family: Signal · Verdict: No edge · Horizon: 2 to 3 months · Data: results releases read by the AI reader, SEC filings as filed, daily prices · Sample: 283 stock-months in 142 stocks, 2017–2026*
+*Family: Signal · Verdict: No edge · Horizon: 2 to 3 months · Data: results releases read by the AI reader, company filings as filed, daily prices · Sample: 283 stock-months in 142 stocks, 2017–2026*
 
 ### The idea
 Entry 18 found that companies which cut or withdrew their outlook lagged the average stock by one to two points over the next two months. If so, a stock the Signal reads as Strong side despite a cut in the last 63 days might be better read as Neutral until the cut has played out.
@@ -497,7 +497,7 @@ No change. The Signal's existing rules already keep most companies that cut thei
 
 ## 23. Breakdowns with a reason, and breakdowns without one — 2026-11-07
 
-*Family: Signal · Verdict: Wrong way · Horizon: 2 to 3 months · Data: results releases read by the AI reader, SEC filings as filed, daily prices · Sample: 2,653 stock-months with a cut outlook, 40,687 without, 2017–2026*
+*Family: Signal · Verdict: Wrong way · Horizon: 2 to 3 months · Data: results releases read by the AI reader, company filings as filed, daily prices · Sample: 2,653 stock-months with a cut outlook, 40,687 without, 2017–2026*
 
 ### The idea
 The Signal's known flaw is that Very Weak stocks often bounce. Perhaps a fall with a stated cause (a cut outlook) keeps going, while a fall without one is the kind that bounces. If so, the Signal could tell the two apart.
@@ -513,7 +513,7 @@ No change. It fits entry 18: an earnings disappointment is priced when it is ann
 
 ## 24. Dilution on the Strong side — 2026-11-07
 
-*Family: Signal · Verdict: Weak lead · Horizon: 3 months · Data: SEC filings as filed, daily prices · Sample: 487 stock-months in 159 established companies, 2010–2026*
+*Family: Signal · Verdict: Weak lead · Horizon: 3 months · Data: Company filings as filed, daily prices · Sample: 487 stock-months in 159 established companies, 2010–2026*
 
 ### The idea
 Companies whose share count grows fast tend to lag over a year. If that shows up in the bad cases within three months, a share count up sharply on a year earlier could count against an established company's fundamentals.
@@ -529,7 +529,7 @@ A lead on the bad cases, which is what the Signal is judged on, from too few cas
 
 ## 25. Young companies that slid for three months — 2026-11-07
 
-*Family: Signal · Verdict: Weak lead · Horizon: 2 to 3 months · Data: SEC filings as filed, daily prices · Sample: 1,742 stock-months, 2010–2026*
+*Family: Signal · Verdict: Weak lead · Horizon: 2 to 3 months · Data: Company filings as filed, daily prices · Sample: 1,742 stock-months, 2010–2026*
 
 ### The idea
 Not decided in advance: found while reading entry 21. The Signal tests young (Early) companies for a breakdown differently from established ones, and the difference matters in one place: a young company that has fallen well over three months but steadied in the latest month is not read as a breakdown.
@@ -545,7 +545,7 @@ The clearest gap the data has shown in the Signal's current rules. Because it wa
 
 ## 26. Young companies that slid for three months: the confirming test — 2026-11-07
 
-*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: SEC filings as filed, daily prices · Sample: 2,145 stock-months in 2010–2026, on a different day of each month from entry 25*
+*Family: Signal · Verdict: Weak lead · Horizon: 1 to 3 months · Data: Company filings as filed, daily prices · Sample: 2,145 stock-months in 2010–2026, on a different day of each month from entry 25*
 
 ### The idea
 Entry 25 found the gap by looking. Before any change, one candidate was fixed in writing and measured: a young company also counts as a breakdown when it has fallen sharply over three months, the same three-month test established companies already have. Nothing else in the Signal changes and no rule moves.
@@ -564,7 +564,7 @@ The same as entry 21. At the time of writing the candidate would move 19 of 598 
 
 ## 27. Health, rebuilt for the past: high scores, and high scores after a fall — 2026-11-07
 
-*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC filings as filed, results releases, daily prices · Sample: 117,029 stock-months in 1,087 stocks, 2010–2026*
+*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: Company filings as filed, results releases, daily prices · Sample: 117,029 stock-months in 1,087 stocks, 2010–2026*
 
 ### The idea
 Health sums up a stock in one number from 0 to 100. Two questions: does a higher Health come before a better month or two, and do stocks with Health of 90 or more that have fallen at least 15% from their 52-week high do better than the average stock afterwards?
@@ -619,7 +619,7 @@ All figures are points against the equal-weight average stock; intervals are 95%
 
 ## 28. Health against the S&P 500 — 2026-11-07
 
-*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: SEC filings as filed, results releases, daily prices · Sample: 196 monthly readings, 2010–2026, about 166 stocks a month with Health 80+*
+*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: Company filings as filed, results releases, daily prices · Sample: 196 monthly readings, 2010–2026, about 166 stocks a month with Health 80+*
 
 ### The idea
 Entry 27 compared Health with the average stock. The question here is the plainer one: did stocks with a higher Health beat the S&P 500 over the next one or two months?

@@ -111,12 +111,12 @@
 
   <main class="page">
     <header class="masthead">
-      <span class="eyebrow"><span class="pip"></span>SEC filings</span>
+      <span class="eyebrow"><span class="pip"></span>Regulatory filings</span>
       <h1>IPO pipeline</h1>
-      <p class="lede">Companies that have filed with the SEC to sell shares to the public for the first time in the
-        US, each with every registration filing on its record: the confidential drafts once the SEC releases them, the
+      <p class="lede">Companies that have filed to sell shares to the public for the first time in the
+        US, each with every registration filing on its record: the confidential drafts once they are made public, the
         public registration statement (Form S-1, or F-1 for a foreign company) and its amendments, the final
-        prospectus that sets the price, and any withdrawal. Read each morning from the SEC's index of the previous
+        prospectus that sets the price, and any withdrawal. Read each morning from the index of filings for the previous
         business day. A company has no share price here until it trades.</p>
     </header>
 
@@ -136,7 +136,7 @@
     <p class="ip-foot">The proposed ticker, the exchange, the price range and the number of new shares the company
       offers are read from the cover page of its newest registration statement; a range appears only once the
       company prints one, normally in an amendment a week or two before pricing. "Priced" means the final
-      prospectus (Form 424B) is filed; "Listed" means the SEC now lists a ticker for the company. A registration
+      prospectus (Form 424B) is filed; "Listed" means a ticker is now on record for the company. A registration
       with no filing for nine months or more is marked in amber: many are never completed and never withdrawn.
       Blank-cheque companies (SPACs) and companies that were already filing annual or quarterly reports are left
       out. A filing is a record, not a reading of the company.</p>
@@ -157,7 +157,7 @@
     const big = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n.toLocaleString('en-US'));
     const tabOf = (c) => (c.status === 'filed' || c.status === 'confidential' ? 'reg' : c.status);
     const STATUS = { filed: 'Filed', confidential: 'Drafts released', priced: 'Priced', listed: 'Listed', withdrawn: 'Withdrawn' };
-    // The exchange the SEC lists for a trading company, else the one its prospectus names.
+    // The exchange on record for a trading company, else the one its prospectus names.
     const NATIONAL = (c) => { const x = c.listedOn || c.exchange; return !!x && !/^OTC/i.test(x); };
 
     async function load() {
@@ -200,7 +200,7 @@
         : '<span class="ip-sub">No range yet</span>';
       const shares = c.shares ? '<span class="ip-sub">' + big(c.shares) + ' new shares</span>' : '';
       const open = state.open.has(c.cik);
-      // The state of incorporation for a US company; the SEC's country codes (V8, E9) mean nothing to a reader.
+      // The state of incorporation for a US company; the filings' country codes (V8, E9) mean nothing to a reader.
       return '<tr class="' + (open ? 'ip-open' : '') + '">'
         + '<td class="ip-co"><b>' + we(c.name) + '</b><span>' + we([c.industry, /^[A-Z]{2}$/.test(c.state || '') ? c.state : ''].filter(Boolean).join(' · ')) + '</span></td>'
         + '<td>' + sym + '</td><td>' + price + shares + '</td>'
@@ -211,8 +211,8 @@
         + '<td class="hide-sm"><button class="ip-more" data-cik="' + c.cik + '">' + (open ? 'Hide' : c.filings.length + ' filing' + (c.filings.length === 1 ? '' : 's')) + '</button></td></tr>'
         + (open ? '<tr class="ip-list"><td></td><td colspan="6"><div class="ip-files">'
           + [...c.filings].reverse().map((f) => '<span class="ip-day">' + we(fmtDay(f.filed)) + '</span><span class="ip-form">' + we(f.form) + '</span>'
-            + '<a href="' + we(f.url) + '" target="_blank" rel="noopener">' + we(f.what) + ' &#8599;</a>').join('')
-          + '</div><a class="ip-link" href="' + we(c.url) + '" target="_blank" rel="noopener">Every filing on sec.gov &#8599;</a></td></tr>' : '');
+            + '<span>' + we(f.what) + '</span>').join('')
+          + '</div></td></tr>' : '');
     }
     $('list').addEventListener('click', (e) => {
       const b = e.target.closest('[data-cik]');

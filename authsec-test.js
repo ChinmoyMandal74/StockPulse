@@ -132,5 +132,16 @@ const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
 check('no HMAC is keyed on ADMIN_PASSWORD', /createHmac\(\s*'sha256'\s*,\s*ADMIN_PASSWORD/.test(srv), false);
 check('the gate uses assetRel', /const rel = AuthSec\.assetRel\(req\.path\)/.test(srv), true);
 
+console.log('filing addresses are kept from everyone but the admin (2026-11-09)');
+const S = AuthSec.scrubFilingUrls;
+check('an address becomes the token, which is truthy', S('https://www.sec.gov/Archives/edgar/data/1/000000000126000001/x.htm'), 'filed');
+check('every host spelling', [S('https://data.sec.gov/submissions/CIK1.json'), S('http://sec.gov/x'), S('https://efts.sec.gov/LATEST/x')], ['filed', 'filed', 'filed']);
+check('inside text it is cut out', S('See https://www.sec.gov/cgi-bin/browse-edgar?CIK=1 for it.'), 'See for it.');
+check('nested in arrays and objects', S({ a: [{ url: 'https://www.sec.gov/a' }], b: { c: 'https://www.sec.gov/b' } }), { a: [{ url: 'filed' }], b: { c: 'filed' } });
+check('everything else untouched: other hosts, numbers, null, booleans', S({ u: 'https://example.com/sec.gov/x', n: 0, z: null, t: false, s: 'SEC' }), { u: 'https://example.com/sec.gov/x', n: 0, z: null, t: false, s: 'SEC' });
+check('nothing to find, nothing found', AuthSec.HAS_FILING_HOST.test('{"url":"https://www.sec.gov.example.com"}'), false);
+check('server.js scrubs API answers for non-admins, the cron secret excepted',
+  /if \(isCron\(req\)\) return json\(body\);\s*isAdmin\(req\)\.then\(\(admin\) => json\(admin \? body : AuthSec\.scrubFilingUrls\(body\)\)/.test(srv), true);
+
 console.log(`\n${n - failed} of ${n} passed${failed ? `, ${failed} FAILED` : ''}`);
 process.exitCode = failed ? 1 : 0;

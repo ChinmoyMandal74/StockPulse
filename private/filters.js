@@ -274,7 +274,7 @@
     // day high west of Greenwich.
     // Since the source rule (2026-10-29) the column shows the quarter the
     // row's figures run to (srcQ) where the rule set them, so it filters on
-    // that too; else Twelve Data's period.
+    // that too; else the data feed's period.
     if (key === 'mostRecentQuarter') {
       const per = x.srcQ || x.mostRecentQuarter;
       return per

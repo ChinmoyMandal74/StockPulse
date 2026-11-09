@@ -46,7 +46,7 @@
   let getEvolution = () => null;
   // The fortnight's short-interest change, per symbol. A fourth channel
   // beside the basket, the per-symbol closes and the filings series,
-  // because it is the only card fed by the FINRA archive and both hosts
+  // because it is the only card fed by the short-interest archive and both hosts
   // cache it themselves.
   let getShortMoves = () => null;
   let getEarnGrowth = () => null;
@@ -164,7 +164,7 @@
       ['IWM', 'Russell 2000'], ['DIA', 'Dow 30']];
     const IS_BENCH = new Set(BENCH.map((b) => b[0]));
 
-    // THE ELEVEN SELECT SECTOR SPDRs, one per GICS sector. Our sector names
+    // THE ELEVEN SECTOR FUNDS, one per GICS sector. Our sector names
     // map one-to-one onto GICS at sector level, which is what makes this a
     // complete set rather than a sample.
     //
@@ -916,9 +916,9 @@
             ] },
           { kind: 'stmts', label: 'From the public record', kick: 'Where it comes from', title: 'From the<br><span class="dim">public record</span>',
             rows: [
-              ['y', 'Read from the SEC every day', '10-Ks and 10-Qs, 8-K announcements, 5% holders, insider trades, institutions’ 13Fs and fund holdings.'],
+              ['y', 'Read from the filings every day', '10-Ks and 10-Qs, 8-K announcements, 5% holders, insider trades, institutions’ 13Fs and fund holdings.'],
               ['y', 'Prices through the day', 'Daily closes going back years, refreshed every half hour while the market is open.'],
-              ['y', 'Short interest and options', 'Twice-monthly short positions from FINRA, and open calls and puts by expiry from the OCC.'],
+              ['y', 'Short interest and options', 'Twice-monthly short positions, and open calls and puts by expiry.'],
             ] },
           { kind: 'close' },
         ],
@@ -1281,7 +1281,7 @@
         id: 'margins', name: 'Margins, from the filings',
         slides: [
           { kind: 'cover', kick: 'How to', title: 'Margins,<br><span class="dim">from the filings</span>',
-            sub: 'What a company keeps of each dollar of revenue, and whether that is more or less than a year ago, taken from its own SEC filings rather than from a data feed.',
+            sub: 'What a company keeps of each dollar of revenue, and whether that is more or less than a year ago, taken from its own filings rather than from a data feed.',
             who: 'everyone' },
           { kind: 'hsteps', kick: 'Four steps', title: 'The level,<br><span class="dim">then the direction</span>',
             rows: [
@@ -2238,8 +2238,8 @@
     // be extended to other metrics such as revenue, net income, p/e ratio",
     // then "Also include profit margin") --------------------------------------
     // A BAR RACE, quarter by quarter: the N largest companies by market value
-    // in the cut, each a bar of its trailing twelve months as filed with the
-    // SEC, re-sorting as they overtake one another. The series is the
+    // in the cut, each a bar of its trailing twelve months as filed in its
+    // reports, re-sorting as they overtake one another. The series is the
     // Evolution card's own (evolutionSeries through /api/evolution): revenue
     // and net income are trailing twelve months, the margin is one over the
     // other, market value is the split-adjusted share count at each quarter
@@ -2323,7 +2323,7 @@
       const last = ends.length - 1;
       const kick = esc(sc.label + ' \u00b7 ' + bars.length + ' largest \u00b7 ' + labels[0] + '\u2013' + labels[last]);
       const title = esc(mLabel) + '<br><span class="dim">' + esc(mWhat) + '</span>';
-      const note = 'Each bar is a company\u2019s ' + (field === 'pe' ? 'P/E' : mLabel.toLowerCase()) + (kind === 'money' && field !== 'cap' ? ' over the trailing twelve months' : '') + ' from its SEC filings, at each calendar quarter end: its latest filed quarter on or before that date. '
+      const note = 'Each bar is a company\u2019s ' + (field === 'pe' ? 'P/E' : mLabel.toLowerCase()) + (kind === 'money' && field !== 'cap' ? ' over the trailing twelve months' : '') + ' from its filings, at each calendar quarter end: its latest filed quarter on or before that date. '
         + (field === 'cap' ? 'Market value is the split-adjusted share count times that day\u2019s close. ' : '')
         + (field === 'pe' ? 'P/E is market value over trailing net income, and is left out in a loss year. ' : '')
         + 'The ' + bars.length + ' largest by market value today in ' + sc.label + (dropped ? '; ' + dropped + ' without dollar filings for the window left out' : '') + '. '
@@ -2543,7 +2543,7 @@
           + (story ? '<div class="shw-facts">' + [
             [String(COV_DATA.length), 'data sets kept on the stocks tracked'],
             ['1998', 'the earliest daily prices on file'],
-            ['SEC', 'filings, insiders and institutional holders, from the source'],
+            ['Daily', 'filings, insiders and institutional holders, from the source'],
           ].map(([a, b]) => '<div><b>' + esc(a) + '</b><span>' + esc(b) + '</span></div>').join('') + '</div>' : '');
       }
       // ---- the backdrop: dots joined to their nearest neighbours, fixed seed --
@@ -2765,27 +2765,27 @@
     function tplArch() {
       const STAGES = [
         ['Sources', 'Read where it is published', [
-          ['Twelve Data', 'Daily prices since 1998, and company fundamentals'],
-          ['SEC EDGAR', 'Reports, 8-Ks, insider trades, 13F, 13D/G and fund holdings'],
-          ['FINRA', 'Short interest, twice a month'],
-          ['OCC', 'Options open interest'],
+          ['Market data', 'Daily prices since 1998, and company fundamentals'],
+          ['Company filings', 'Reports, 8-Ks, insider trades, 13F, 13D/G and fund holdings'],
+          ['Short interest', 'Positions reported twice a month'],
+          ['Options', 'Open interest by expiry'],
           ['News feeds', 'Headlines for every company'],
           ['Earnings calendars', 'The report dates companies announce'],
         ]],
         ['Collect and check', 'On a schedule, every trading day', [
           ['Scheduled jobs', 'Prices every 30 minutes in market hours; a full run before the open and after the close'],
-          ['AI reading', 'A Claude model reads each results release and news article; every figure it returns must appear in the text'],
-          ['The source rule', 'Each company figure from the release while newest, then the filing, then Twelve Data'],
+          ['AI reading', 'An AI model reads each results release and news article; every figure it returns must appear in the text'],
+          ['The source rule', 'Each company figure from the release while newest, then the filing, then the market data'],
         ]],
         ['Store', 'One database, history kept', [
-          ['Turso', 'Hosted SQLite: every price, filing, holding and reading'],
+          ['Database', 'Every price, filing, holding and reading'],
           ['History kept', 'New figures are added by date, beside the old ones'],
           ['Research copy', 'Backtests run on a local copy, never on the live data'],
         ]],
         ['Measure and show', 'The same method for every stock', [
           ['Readings', 'Returns, trend, volume and fundamentals, worked out one way for all'],
           ['The Signal', 'Ordered rules, first match wins; it names the rule that fired'],
-          ['Vercel', 'Serves the screener, stock pages, the phone page and these cards'],
+          ['Web app', 'Serves the screener, stock pages, the phone page and these cards'],
         ]],
       ];
       const rows = STAGES.map(([h, g, tiles], i) => '<li class="ar-st">'
@@ -3732,9 +3732,9 @@
     // above, and here the only coherent one. It was measured rather than
     // assumed: the other two blocks are ALREADY index readings and have
     // nothing in them to filter. The chips ARE the benchmarks; and the sector
-    // block is drawn from the eleven SELECT SECTOR SPDRs, which divide the
-    // S&P 500 by construction — the provider's own names say so ("State
-    // Street Technology Select Sector SPDR ETF"), so cutting that block would
+    // block is drawn from the eleven sector funds, which divide the
+    // S&P 500 by construction — the funds' own names say so, so cutting
+    // that block would
     // be filtering the index out of itself.
     //
     // The computed fallback is deliberately not cut either. Cutting one path
@@ -4633,7 +4633,7 @@
           : 'All four as of ' + esc(Z.d) + ', the last filed quarter')
       + '</p></div></div>'
       + '<p class="s-sub wide">Trailing twelve months at every filed quarter, from the '
-      + 'company\u2019s own SEC filings. The two panels keep their own scales. '
+      + 'company\u2019s own filings. The two panels keep their own scales. '
       // WHICH SHARE COUNT, said on the card because it changes what a past
       // multiple means. 'filed' is each quarter at the count the company filed
       // then, restated for splits since; 'today' is the fallback where the
@@ -4974,7 +4974,7 @@
       + symA + ' ' + zA.d + ', ' + symB + ' ' + zB.d + ')'
       + (liveD ? ' \u00b7 ' + SHORT[vKey] + ' at the ' + liveD + ' close' : '');
 
-    const note = 'Trailing twelve months at every filed quarter, from each company\u2019s own SEC filings, lined up by calendar quarter. '
+    const note = 'Trailing twelve months at every filed quarter, from each company\u2019s own filings, lined up by calendar quarter. '
       + (bizLog || valLog ? 'A log scale is used where the two differ in size by more than four times: equal slopes are equal growth rates. ' : '')
       + (flatWarn ? 'With a loss in the window the dollar axis stays plain, so the smaller company reads flat; profit margin is the like-for-like view. ' : '')
       + multNote
@@ -5614,7 +5614,7 @@
     // Nor does it claim they DO add up, which they do: that is an identity a
     // reader cannot check off this card, because the weights it would need
     // are the START weights and the percentages drawn are today's share --
-    // the SEC ratio card's rule, that a figure on screen has to be checkable
+    // the filings ratio card's rule, that a figure on screen has to be checkable
     // against another figure on screen. So the note explains the choice.
     const note = 'Each ribbon is one ' + partWord + ', as thick as its share of market value, and it '
       + 'lands in the band its own cap-weighted return ' + esc(phrase) + ' puts it in — against '
@@ -6506,7 +6506,7 @@
   // THE ONE THING THE APP COULD NOT SHOW. Every other short-interest surface
   // is a LEVEL: the Ownership column, the /stock card, the two histogram
   // measures. This is the CHANGE, which is the half that is news, and it is
-  // the only card here fed by the FINRA archive rather than the snapshot.
+  // the only card here fed by the short-interest archive rather than the snapshot.
   //
   // A FACT ABOUT POSITIONING, NEVER A VERDICT. Heavy short interest is a
   // bearish bet and also the fuel for a squeeze, so the card reports what
@@ -6647,10 +6647,10 @@
     };
 
     // THE WINDOW IS ON THE CARD'S FACE. This data is fortnightly and about
-    // eight business days old when FINRA publishes it, so a card that does
+    // eight business days old when it is published, so a card that does
     // not date itself implies a currency it does not have.
     const win = (d.from && d.to) ? dayStr(d.from) + ' to ' + dayStr(d.to) : 'the latest fortnight';
-    const note = 'FINRA publishes short interest twice a month and it reaches us about eight '
+    const note = 'Short interest is published twice a month and it reaches us about eight '
       + 'business days after it settles, so this is the fortnight to ' + dayStr(d.to)
       + ' rather than today. '
       + (metric === 'pct'
@@ -6659,7 +6659,7 @@
         : 'Ranked by what the change is worth at today’s price, which is a different question '
           + 'from how much it changed and gives different names. ')
       + ((d.counts && d.counts.splits)
-        ? d.counts.splits + ' skipped over a split, FINRA not restating for one. ' : '')
+        ? d.counts.splits + ' skipped over a split, the published counts not restated for one. ' : '')
       + 'A short position is a bet against, and also the fuel for a squeeze. Not a forecast.';
 
     return chromeTop()
@@ -6785,7 +6785,7 @@
       + '<span>' + (by === 'amount' ? 'Bought back, 12 months' : 'Bought back, of market value') + '</span>'
       + '<span class="sb-hr">' + (by === 'amount' ? 'Spent' : 'Yield') + '</span><span class="sb-hr">' + (by === 'amount' ? 'Yield' : 'Spent') + '</span><span class="sb-hr">Shares</span></div>';
     const shrank = top.filter((p) => p.sh != null && p.sh < -0.05).length, known = top.filter((p) => p.sh != null).length;
-    const note = 'Cash each company spent buying back its own shares over its latest twelve months on file, from the cash-flow statements in its SEC filings'
+    const note = 'Cash each company spent buying back its own shares over its latest twelve months on file, from the cash-flow statements in its filings'
       + (by === 'amount' ? '; the yield is that as a share of today\u2019s market value. ' : ', as a share of today\u2019s market value. ')
       + 'These are the ' + top.length + ' largest of the ' + pool.length + ' ' + cut + ' that report a buyback. '
       + 'Bought back is before new shares handed out as pay, so \u201cShares\u201d is what the diluted count did on the fiscal year before'
@@ -7560,7 +7560,7 @@
         + '<span class="eg-cl">' + esc(short(h)) + '</span></div>').join('') + '</div></div>' : '';
 
     const newer = qi > 0 ? qs[0] : null;
-    const note = 'Net income as each company filed it with the SEC, ' + Q.label + ' against the same quarter a year earlier, '
+    const note = 'Net income as each company filed it, ' + Q.label + ' against the same quarter a year earlier, '
       + 'for the ' + Q.n.toLocaleString() + ' of ' + Q.members.toLocaleString() + ' ' + (cut === 'All' ? 'companies' : 'members')
       + ' that have filed both. A company’s points are its own change over the group’s year-ago total, so the rows add up to the headline. '
       + (hasRate ? '' : 'The group lost money a year earlier, so there is no growth rate to state and the rows are in dollars. ')
@@ -8688,7 +8688,7 @@
   // AS A SHARE OF THE FLOAT, because that is the only axis two companies can
   // share: a share count favours whoever has more shares and a dollar figure
   // whoever is bigger. It is the unit of the screener's own Short % Float
-  // column. The share COUNTS are FINRA's, as settled on each date; the float
+  // column. The share COUNTS are the published ones, as settled on each date; the float
   // is today's, from the profile, for both ends -- so the bar moves only
   // because the position did. A company with no float on file cannot be
   // placed and is counted in the note. A reading past 100% of the float is
@@ -8878,7 +8878,7 @@
     const left = [];
     if (noFloat) left.push(noFloat + ' with no float on file');
     if (over) left.push(over + ' reading past 100% of the float');
-    const note = 'FINRA publishes short interest twice a month, about eight business days after it settles, so this is the fortnight to '
+    const note = 'Short interest is published twice a month, about eight business days after it settles, so this is the fortnight to '
       + dayStr(d.to) + ' rather than today. Each bar is the position on both dates against today\u2019s float; the percentage is the change in shares short. '
       + 'Ranked ' + SBA_RANKS[rank] + ', among positions worth $' + fmtMoney(floor) + ' or more. '
       + (left.length ? 'Left out: ' + left.join('; ') + '. ' : '')
@@ -8903,7 +8903,7 @@
   // ---- Fund holders: which funds hold one stock ----------------------------
   //
   // (2026-10-11.) The mutual funds and ETFs holding one stock, largest
-  // first, from their own portfolio reports to the SEC (Form N-PORT; the
+  // first, from their own portfolio reports (Form N-PORT; the
   // rules are nport.js on the server).
   //
   // TWO NUMBERS A ROW, ANSWERING TWO QUESTIONS. The bar and the first figure
@@ -9077,24 +9077,24 @@
   // source that cannot be filled in backwards. `sq` marks the rows the 1:1
   // card keeps.
   const COV_DATA = [
-    { name: 'Daily prices', src: 'Twelve Data', from: '1998-12-23', every: 'Every 30 min, trading days', sq: 1 },
+    { name: 'Daily prices', src: 'Market data', from: '1998-12-23', every: 'Every 30 min, trading days', sq: 1 },
     { name: 'Weekly trend readings', src: 'worked out from prices', from: '2001-03-21', every: 'Weekly' },
-    { name: 'Financial statements', src: 'SEC filings', from: '2007-01-01', every: 'Weekly a company', sq: 1 },
-    { name: 'Short interest', src: 'FINRA', from: '2017-12-29', every: 'Twice a month', sq: 1 },
-    { name: 'Earnings, reported', src: 'Twelve Data', from: '2020-05-01', every: 'Weekly a company', typ: 1 },
-    { name: 'Institutional holdings (13F)', src: 'SEC filings', from: '2024-06-30', every: 'Quarterly', sq: 1 },
-    { name: 'Insider trades', src: 'SEC Forms 3, 4, 5', from: '2024-07-01', every: 'Each weekday', sq: 1 },
-    { name: 'Large holders (13D, 13G)', src: 'SEC filings', from: '2024-12-01', every: 'Weekly a company' },
-    { name: 'Company events (8-K)', src: 'SEC filings', from: '2025-09-06', every: 'Weekly a company' },
-    { name: 'Fund holdings (N-PORT)', src: 'SEC filings', from: '2026-04-01', every: 'Quarterly', sq: 1 },
-    { name: 'Fundamentals, day by day', src: 'Twelve Data', from: '2026-08-30', every: 'Each trading day', sq: 1 },
+    { name: 'Financial statements', src: 'Company filings', from: '2007-01-01', every: 'Weekly a company', sq: 1 },
+    { name: 'Short interest', src: 'Published positions', from: '2017-12-29', every: 'Twice a month', sq: 1 },
+    { name: 'Earnings, reported', src: 'Market data', from: '2020-05-01', every: 'Weekly a company', typ: 1 },
+    { name: 'Institutional holdings (13F)', src: 'Company filings', from: '2024-06-30', every: 'Quarterly', sq: 1 },
+    { name: 'Insider trades', src: 'Forms 3, 4, 5', from: '2024-07-01', every: 'Each weekday', sq: 1 },
+    { name: 'Large holders (13D, 13G)', src: 'Company filings', from: '2024-12-01', every: 'Weekly a company' },
+    { name: 'Company events (8-K)', src: 'Company filings', from: '2025-09-06', every: 'Weekly a company' },
+    { name: 'Fund holdings (N-PORT)', src: 'Company filings', from: '2026-04-01', every: 'Quarterly', sq: 1 },
+    { name: 'Fundamentals, day by day', src: 'Market data', from: '2026-08-30', every: 'Each trading day', sq: 1 },
     { name: 'Days each Signal has held', src: 'worked out here', from: '2026-09-17', every: 'Each trading day' },
-    { name: 'Headlines', src: 'Google News', from: '2026-09-22', every: 'Three times a day', sq: 1 },
-    { name: 'Index membership', src: 'SPY and QQQ holdings files', from: '2026-10-03', every: 'Each weekday' },
-    { name: 'Options open interest', src: 'OCC', from: '2026-10-09', every: 'Each weekday', sq: 1 },
-    { name: 'Company profile and ratios', src: 'Twelve Data', from: null, every: 'Weekly a company' },
+    { name: 'Headlines', src: 'News feeds', from: '2026-09-22', every: 'Three times a day', sq: 1 },
+    { name: 'Index membership', src: 'Index fund holdings', from: '2026-10-03', every: 'Each weekday' },
+    { name: 'Options open interest', src: 'Options market', from: '2026-10-09', every: 'Each weekday', sq: 1 },
+    { name: 'Company profile and ratios', src: 'Market data', from: null, every: 'Weekly a company' },
   ];
-  const COV_DATA_SRC = 6; // Twelve Data, SEC, FINRA, OCC, the two index funds' issuers, Google News
+  const COV_DATA_SRC = 6; // market data, filings, short interest, options, index fund holdings, news
   function coverageData() {
     const square = size.id === 'square', story = size.id === 'story';
     const list = square ? COV_DATA.filter((d) => d.sq) : COV_DATA;
@@ -9127,7 +9127,7 @@
     const fig = (k, v, x) => '<div class="cr-fig"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="x">' + esc(x || ' ') + '</span></div>';
     const years = new Date(now).getFullYear() - 1998;
     const figs = fig('Data sets', String(COV_DATA.length), 'kept on the stocks tracked')
-      + fig('Sources', String(COV_DATA_SRC), 'price feed, SEC, FINRA, OCC and more')
+      + fig('Sources', String(COV_DATA_SRC), 'market data, filings, short interest and more')
       + fig('Prices back', years + ' years', 'daily, for the longest listed')
       + fig('Quickest', '30 min', 'prices, while the market is open');
     const note = 'Each bar runs from the earliest day stored to today. A short bar is where this site began recording a source that cannot be filled in backwards; '
@@ -9588,7 +9588,7 @@
     const big = has.slice().sort((a, b) => b.n - a.n).slice(0, 2);
     const bigShare = Math.round(big.reduce((s, x) => s + x.n, 0) / (C + P) * 100);
     const note = 'Option contracts open on ' + has.length.toLocaleString() + ' ' + (T.dim ? 'companies in ' + name : 'companies')
-      + (asOf ? ' at the close of ' + day(asOf) : '') + ', as counted by the Options Clearing Corporation'
+      + (asOf ? ' at the close of ' + day(asOf) : '') + ', as counted by the clearing house'
       + (pool.length > has.length ? '; ' + (pool.length - has.length) + ' more have none on file' : '') + '. '
       + (rows.length > top.length ? 'These are the ' + top.length + ' ' + (T.by ? (T.by === 'sector' ? 'sectors' : 'industries') : 'companies') + ' with the most contracts, of ' + rows.length + '. ' : '')
       + (big.length === 2 && bigShare >= 15 ? big[0].r.symbol + ' and ' + big[1].r.symbol + ' alone account for ' + bigShare + '% of the contracts, which is why the ratio over every contract and the middle company\u2019s differ. ' : '')
@@ -9680,7 +9680,7 @@
         people: top.slice(0, 7).map((p) => ({ name: p.name, role: p.role || '', b: p.bought / scale, s: p.sold / scale, bt: p.bought > 0 ? money(p.bought) : '', st: p.sold > 0 ? money(p.sold) : '' })),
         a: pal.ink('#7c9cff'), bc: B, date: dateStr().split(' \u00b7 ')[0], ink: reelInk(pal) };
     }
-    const note = 'Open-market purchases and sales of ' + sym + ' shares by its own officers, directors and largest holders, from the Form 4s filed with the SEC in the ' + span + ' to ' + day(data.digest.today) + '. '
+    const note = 'Open-market purchases and sales of ' + sym + ' shares by its own officers, directors and largest holders, from the Form 4s filed in the ' + span + ' to ' + day(data.digest.today) + '. '
       + (W.peopleCount > top.length ? 'These are the ' + top.length + ' with the largest net amounts, of ' + W.peopleCount + '. ' : '')
       + 'Stock received as pay, option exercises and shares withheld for tax are not trades and are left out. '
       + (starred ? '* every one of that person\u2019s trades was under a plan set up months in advance. ' : '')
@@ -9702,7 +9702,7 @@
   //
   // (2026-10-11, the owner: "can you work on options open interest".) Calls
   // and puts open on one stock, in total and at the expiry dates that hold
-  // the most, from the Options Clearing Corporation's own count.
+  // the most, from the clearing house's own count.
   //
   // A COUNT, NOT A LEAN. Every contract has a buyer and a seller, and a put
   // can be a bet, insurance, or one leg of a neutral trade. So the card
@@ -9754,7 +9754,7 @@
       + '<span>Contracts open</span><span class="sb-hr" style="color:' + A + '">Calls</span><span class="sb-hr" style="color:' + B + '">Puts</span></div>';
     const tc = (P.topCalls || [])[0], tp = (P.topPuts || [])[0];
     const strike = (s) => '$' + (Number(s.strike) % 1 ? Number(s.strike).toFixed(2) : Number(s.strike).toFixed(0)) + ' for ' + day(s.exp) + ' (' + cnt(s.oi) + ')';
-    const note = 'Option contracts open on ' + sym + ' at the close of ' + day(P.asOf) + ', as counted by the Options Clearing Corporation, which clears every listed US option. '
+    const note = 'Option contracts open on ' + sym + ' at the close of ' + day(P.asOf) + ', as counted by the clearing house for every listed US option. '
       + (exps.length < (P.expiryCount || 0) ? 'These are the ' + exps.length + ' expiry dates holding the most, of ' + P.expiryCount + '. ' : '')
       + (tc ? 'The single largest call position is the ' + strike(tc) + (tp ? ', and the largest put the ' + strike(tp) : '') + '. ' : tp ? 'The single largest put position is the ' + strike(tp) + '. ' : '')
       + 'Every contract has a buyer and a seller, and a put can be a bet, insurance on shares already owned, or one side of a neutral trade: this is how much is outstanding, not which way anyone is leaning. '
@@ -9774,7 +9774,7 @@
   //
   // (2026-10-18, the owner: "Can you create a promo card", after article tone
   // shipped; see newstone.js.) A model reads each article in a semiconductor
-  // stock's Yahoo Finance feed and scores how its content leans towards the
+  // stock's news feed and scores how its content leans towards the
   // company, -1 to +1. Two cards: the industry, one row a stock, and one
   // stock with its latest articles.
   //
@@ -9806,7 +9806,7 @@
   const TONE_WORDS = /\b(buy|sell|hold|bullish|bearish|outperform|underperform|overweight|underweight|price target|target price)\b/i;
   const toneLabel = (t) => (t == null || !isFinite(t) ? '' : t >= TONE_BAND ? 'Positive' : t <= -TONE_BAND ? 'Negative' : 'Neutral');
   const toneNum = (t) => (t == null || !isFinite(t) ? '—' : (t > 0 ? '+' : t < 0 ? '−' : '') + Math.abs(t).toFixed(2));
-  const TONE_NOTE = 'An AI model (Claude Haiku 5.5; Claude Sonnet 5.5 before 20 October 2026) read each article in the Yahoo Finance news feed in full and scored how its content leans towards the company, from −1 to +1. '
+  const TONE_NOTE = 'An AI model read each article in the company\u2019s news feed in full and scored how its content leans towards the company, from −1 to +1. '
     + 'Only articles mainly about the company are counted; one that names it in passing, or that could not be read, is left out rather than counted as neutral. A description of what was written, not a forecast, not a rating, and never an input to the Signal.';
   function toneBoardNeed(tpl, opts) {
     const o = opts || {};
@@ -10165,7 +10165,7 @@
         + '<span class="bx-v rm-pct">' + esc(of == null ? '\u2014' : Math.round(of) + '%') + '</span></div>'; }).join('');
     const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Fiscal year</span>'
       + '<span>Cash returned</span><span class="sb-hr" style="color:' + A + '">Bought back</span><span class="sb-hr" style="color:' + B + '">Dividends</span><span class="sb-hr">Of FCF</span></div>';
-    const note = 'Cash ' + sym + ' paid out to its shareholders, from the cash-flow statements it filed with the SEC; the figures above the bars are for ' + span + '. '
+    const note = 'Cash ' + sym + ' paid out to its shareholders, from the cash-flow statements it filed; the figures above the bars are for ' + span + '. '
       + '\u201cOf FCF\u201d is that cash as a share of the free cash flow the business generated in the year; over 100% means it paid out more than it made. '
       + (L.stockComp != null ? 'Bought back is before new shares handed out as pay (' + money(L.stockComp) + ' of stock pay in the same period), so the share count is what shows whether buybacks reduced it. ' : 'Bought back is before any new shares handed out as pay, so the share count is what shows whether buybacks reduced it. ')
       + (R.currency && R.currency !== 'USD' ? 'Filed in ' + R.currency + ' and converted to dollars at each period\u2019s rate. ' : '')
@@ -10223,7 +10223,7 @@
     const note = F.count.toLocaleString('en-US') + (F.count === 1 ? ' fund reports' : ' funds report') + ' holding ' + sym
       + (F.pct == null ? '' : ', ' + (F.pct >= 10 ? F.pct.toFixed(0) : F.pct.toFixed(1)) + '% of its shares between them') + '; the ' + top.length + ' largest are shown.' + chg + ' '
       + '\u201cOf the fund\u201d is how much of that fund\u2019s assets this one stock is, not a share of the company. '
-      + 'From each fund\u2019s own portfolio report to the SEC, as of ' + (F.asOf || 'the latest month end each has made public') + ': months old, and not the same date for every fund. '
+      + 'From each fund\u2019s own portfolio report, as of ' + (F.asOf || 'the latest month end each has made public') + ': months old, and not the same date for every fund. '
       + 'Mutual funds and ETFs only; a fund\u2019s manager reports these same shares again in its own filing. What was reported, not a forecast.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">'
@@ -10299,7 +10299,7 @@
       + '<span class="bx-v rm-pct">' + (p.isNew ? '<span class="hb-new">NEW</span>' : esc(pc(p.ofBook))) + '</span></div>').join('');
     const hd = '<div class="bx-r sb-hd" style="grid-template-columns:' + cols + '"><span>Stock</span>'
       + '<span style="grid-column:2 / 4">Value</span><span class="sb-hr">Share</span></div>';
-    const filing = isFund ? 'its latest portfolio report to the SEC (Form N-PORT)' : 'its quarterly Form 13F';
+    const filing = isFund ? 'its latest portfolio report (Form N-PORT)' : 'its quarterly Form 13F';
     const note = 'The largest ' + top.length + ' of ' + cnt(H.positionsAll) + ' positions in the stocks tracked here, from ' + filing
       + (H.asOf ? ', as of ' + H.asOf : '') + '. Value is the shares times one quarter-end price per stock; \u201cshare\u201d is of what is shown, not of the '
       + (isFund ? 'fund' : 'manager') + '. Only stocks tracked on this site are counted, so the total is not the size of the ' + (isFund ? 'fund' : 'manager') + '. '
@@ -10478,7 +10478,7 @@
     // A 13F quarter names the one before it; a fund's report dates do not.
     const qm = /^Q([1-4]) (\d{4})$/.exec(String(H.label || ''));
     const since = qm ? 'since ' + (qm[1] === '1' ? 'Q4 ' + (Number(qm[2]) - 1) : 'Q' + (Number(qm[1]) - 1) + ' ' + qm[2]) : 'since the report before';
-    const filing = isFund ? 'its two latest portfolio reports to the SEC (Form N-PORT)' : 'its two latest quarterly Form 13F filings';
+    const filing = isFund ? 'its two latest portfolio reports (Form N-PORT)' : 'its two latest quarterly Form 13F filings';
     const note = 'From ' + filing + (H.asOf ? ', the latest as of ' + H.asOf : '') + '. Each change is in shares, valued at one price a stock'
       + (latest ? ' (an exit without its period’s price on file at the latest close)' : '')
       + ', so a price move is not counted as buying or selling. New: not held the period before; exit: held then, none now; otherwise the change in the share count. '
@@ -10749,7 +10749,7 @@
         : 'Every holder that filed about ' + sym + ' since ' + day(oldest) + ' now reports no stake. ')
       + 'Anyone who comes to hold more than 5% of a company must file: a 13D if they may seek to influence it, a 13G if they are passive, such as an index fund. '
       + 'Each row is that holder\u2019s newest filing. This is not a full register: a holder with nothing to amend in that time is not here, and nobody under 5% is. '
-      + 'From the SEC. Which form a holder chose is a fact about the holder, not a forecast for the share.';
+      + 'From the filings. Which form a holder chose is a fact about the holder, not a forecast for the share.';
     return chromeTop()
       + '<div class="s-body"><div class="bx-in">' + head
       + (top.length ? '<div class="bx-rows">' + hd + rows + '</div>' : '')
@@ -12692,7 +12692,7 @@
       + '<span class="s-kick">' + esc(kick) + '</span>'
       + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
       + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
-    if (!d) return shell('SEC filings', 'Reading', 'the filings…');
+    if (!d) return shell('Filings', 'Reading', 'the filings…');
     const cut = O.fldSp500 || 'All';
     const show = FLD_SHOW.some(([k]) => k === O.fldShow) ? O.fldShow : 'both';
     const bySym = new Map(spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol)), cut).map((x) => [x.symbol, x]));
@@ -12704,7 +12704,7 @@
     const day = new Date(d.date + 'T12:00:00');
     const weekday = day.toLocaleDateString('en-US', { weekday: 'long' });
     const full = day.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    const kick = 'SEC filings' + (cut !== 'All' && SP_CUT_LABEL[cut] ? ' · ' + SP_CUT_LABEL[cut] : '');
+    const kick = 'Filings' + (cut !== 'All' && SP_CUT_LABEL[cut] ? ' · ' + SP_CUT_LABEL[cut] : '');
     const wantH = show !== 'events', wantE = show !== 'holders';
     const nH = wantH ? H.length : 0, nE = wantE ? E.length : 0;
     if (!nH && !nE) {
@@ -12738,7 +12738,7 @@
         + '<span class="fd-what">' + esc(e.label) + '</span>'
         + '<span class="fd-dot' + (e.notable ? ' fd-on' : '') + '"></span></div>').join('')
       + more(nE - re) + '</div>';
-    const note = 'Filed with the SEC on ' + weekday + ', ' + full + ', about companies on this screen'
+    const note = 'Filed on ' + weekday + ', ' + full + ', about companies on this screen'
       + (cut !== 'All' && SP_CUT_PROSE[cut] ? ' in ' + SP_CUT_PROSE[cut] : '') + '. '
       + (wantH ? 'A 13D comes from a holder who may seek influence, a 13G from a passive one; amended updates an earlier filing. ' : '')
       + (wantE ? 'An amber dot marks an 8-K item worth noticing, such as a restatement warning, an auditor change or a listing notice. ' : '')
@@ -12779,7 +12779,7 @@
       + '<h2 class="s-title">' + esc(a) + '<br><span class="dim">' + esc(b) + '</span></h2>'
       + (msg ? '<p class="s-empty">' + esc(msg) + '</p>' : '') + '</div></div>' + chromeFoot();
     if (!d) return shell('Results reported', 'Reading', 'the releases…');
-    if (!d.date) return shell('Results reported', 'No releases', 'on file yet', 'Results press releases are read each weekday morning from the SEC.');
+    if (!d.date) return shell('Results reported', 'No releases', 'on file yet', 'Results press releases are read each weekday morning from the filings.');
     const cut = O.rptSp500 || 'All';
     const bySym = new Map(spFilter(stocks.filter((x) => x && x.symbol && !IS_BENCH.has(x.symbol)), cut).map((x) => [x.symbol, x]));
     const capOf = (s) => Number((bySym.get(s) || {}).marketCap) || 0;
@@ -12818,7 +12818,7 @@
         + '<span class="rp-vs">' + esc(vsTxt) + '</span></div>';
     }).join('');
     const more = rows.length > cap ? '<div class="fd-more">and ' + (rows.length - cap) + ' more</div>' : '';
-    const note = 'Results press releases filed with the SEC on ' + weekday + ', ' + full + ', by companies on this screen'
+    const note = 'Results press releases filed on ' + weekday + ', ' + full + ', by companies on this screen'
       + (cut !== 'All' && SP_CUT_PROSE[cut] ? ' in ' + SP_CUT_PROSE[cut] : '') + ', the largest first. '
       + 'Figures as printed in each release, read by an AI model and checked against its text. Revenue’s change is on the same quarter a year earlier. '
       + 'EPS is the company’s own adjusted figure where it gives one (adj.), which has no standard definition, otherwise as reported (GAAP); '
@@ -12866,7 +12866,7 @@
     const d = getRelease(need);
     if (!d) return shell('Quarterly results', n, 'reading the release…');
     const r = ((d && d.releases) || [])[0];
-    if (!r) return shell('Quarterly results', n, 'no release on file', 'Results press releases are read from the SEC each weekday morning; there is none on file for ' + sym + ' from the last few months.');
+    if (!r) return shell('Quarterly results', n, 'no release on file', 'Results press releases are read from the filings each weekday morning; there is none on file for ' + sym + ' from the last few months.');
     const pre = (c) => (!c || c === 'USD' ? '$' : c + ' ');
     const money = (v, c) => { if (v == null) return '—'; const a = Math.abs(v); return (v < 0 ? '−' : '') + pre(c) + (a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : Math.round(a).toLocaleString('en-US')); };
     const eps = (v, c) => (v == null ? '—' : (v < 0 ? '−' : '') + pre(c) + Math.abs(v).toFixed(2));
@@ -12911,7 +12911,7 @@
     // otherwise left a third of the card empty under the reasons).
     const sum = size.id !== 'square' && r.summary ? '<p class="sr-sum" style="--c:' + SRC.sum + '">' + esc(r.summary) + '</p>' : '';
     const filed = r.filed ? new Date(r.filed + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
-    const note = 'From ' + n + '’s results press release filed with the SEC' + (filed ? ' on ' + filed : '') + ', read by an AI model and checked against its text. '
+    const note = 'From ' + n + '’s results press release' + (filed ? ' on ' + filed : '') + ', read by an AI model and checked against its text. '
       + 'Changes are on the same quarter a year earlier. Adjusted EPS is the company’s own figure, with no standard definition. '
       + 'What helped and what weighed are the reasons the company gives. A record of what was reported, not a reading of the stock.';
     return chromeTop()
@@ -13003,7 +13003,7 @@
     const BAR = pal.ink('#60a5fa');
     const bars = revs.length >= 2 ? '<div class="tk-rev"><h4><span>Revenue, quarter by quarter</span><em>' + esc(money(lastRev, T.currency)) + (yoy ? ' · ' + esc(yoy) : '') + '</em></h4>'
       + '<div class="tk-bars">' + revs.map((x) => '<i style="height:' + Math.max(3, Math.round(x.revenue / top * 100)) + '%;background:' + BAR + '"></i>').join('') + '</div></div>' : '';
-    const note = 'From ' + n + '’s results press releases filed with the SEC since ' + since + ', each read by an AI model and checked against its own text. '
+    const note = 'From ' + n + '’s results press releases filed since ' + since + ', each read by an AI model and checked against its own text. '
       + 'Each mark is one release, coloured by what the company itself said it did to its outlook. Revenue is compared with the middle of the quarterly revenue guide the release before gave. '
       + 'A record of what was said and reported, not a reading of the stock.';
     if (trackCap) {
@@ -13264,7 +13264,7 @@
     const inGroup = new Set(members.map((m) => m.symbol));
     const poolRows = pool.map((m) => ({ m, r: (col.rows || {})[m.symbol] })).filter((x) => x.r && x.r.periodEnd);
     const rows = poolRows.filter((x) => inGroup.has(x.m.symbol));
-    if (!poolRows.length) return { early: shell(title + ' \u00b7 ' + label, 'No results', 'releases on file yet', 'Results releases are read each weekday morning from the SEC.') };
+    if (!poolRows.length) return { early: shell(title + ' \u00b7 ' + label, 'No results', 'releases on file yet', 'Results releases are read each weekday morning from the filings.') };
     if (!members.length) return { early: shell(title + ' \u00b7 ' + label, name || 'Nothing chosen', 'no company on this screen', 'No company on this screen is in that group.') };
     // THE SEASON is the cut's, not the group's: the quarter most of the last
     // 75 days' releases across the whole cut fall in. A group of six left to
@@ -14153,7 +14153,7 @@
         : (model.pmFrom > 0 ? ', which starts at ' + PC.fmtPct(model.pmFrom) + ' rather than zero, so a small move looks steep. ' : '. '))
       + 'Each margin is printed under its ' + word + '. '
       + (model.anyDerived ? 'A dashed bar was computed from the annual filing, since no company files a fourth quarter. ' : '')
-      + 'From the company’s own SEC filings. A record of what was reported, not a forecast.';
+      + 'From the company’s own filings. A record of what was reported, not a forecast.';
     return chromeTop()
       + '<div class="s-body"><div class="pf-in">'
       + '<span class="s-kick">' + esc((row.sector ? row.sector + ' · ' : '') + (model.mode === 'annual' ? 'By fiscal year' : 'By quarter')
@@ -14270,7 +14270,7 @@
   // ONE ENGINE. Everything comes from ActionRules.explain over the row the
   // host holds, the same call the stock page's Signal panel and the intro
   // card's ladder make; nothing here re-derives a rule. The row is the one the
-  // screener is served (the source rule's figures laid over Twelve Data's), so
+  // screener is served (the source rule's figures laid over the market data's), so
   // the card and the screener read the same Signal.
   //
   // A READING, NOT AN INSTRUCTION. Six words of strength, the rule always beside

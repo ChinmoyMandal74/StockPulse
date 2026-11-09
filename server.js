@@ -363,6 +363,29 @@ app.use('/api/', (req, res, next) => {
   next();
 });
 
+// NO FILING ADDRESSES BEYOND THE ADMIN (the owner, 2026-11-09: where the data
+// comes from is not to be shown). Several payloads carry the address of a
+// filing for a link; the member pages no longer draw those links, and here the
+// addresses themselves leave only for the admin and the scheduled jobs (the
+// cron secret: the laptop loaders read them). Everyone else gets the same
+// payload with each such address replaced by AuthSec.FILED_TOKEN, which is
+// truthy, as the pages test it ("On file" when there is a filing). The check
+// is a substring test on the JSON the route was sending anyway, so a payload
+// without one costs nothing more.
+app.use('/api/', (req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    let str;
+    try { str = JSON.stringify(body); } catch (_) { return json(body); }
+    if (str === undefined || !AuthSec.HAS_FILING_HOST.test(str)) return json(body);
+    if (isCron(req)) return json(body);
+    isAdmin(req).then((admin) => json(admin ? body : AuthSec.scrubFilingUrls(body)),
+      () => json(AuthSec.scrubFilingUrls(body)));
+    return res;
+  };
+  next();
+});
+
 // THE TERMS GATE. A signed-in member who has not agreed to the current terms
 // gets one page -- /accept-terms -- and nothing else: a page request is
 // redirected there and an API call answers 403. ENFORCED HERE rather than in
@@ -815,11 +838,10 @@ function resultsPage(rels, names, today) {
         cell(htmlEsc(RV.eps(r.epsGaap, cur)), pctTxt(pct(r.epsGaap, r.epsGaapPrior))) +
         adj +
         `<td class="er-sum">${htmlEsc(r.summary || '')}${RV.driversHtml(r)}${r.guideSentence ? `<span class="er-guide">Guidance${r.guideChange ? ' ' + RV.changeTag(r.guideChange, r.guideChangeQuote ? '“' + r.guideChangeQuote + '”' : '') : ''}: ${htmlEsc(r.guideSentence)}</span>` : ''}</td>` +
-        `<td>${/^https:\/\/www\.sec\.gov\//.test(r.url || '') ? `<a href="${htmlEsc(r.url)}" target="_blank" rel="noopener">The release</a>` : ''}</td>` +
         '</tr>';
     }).join('');
     return `<details class="er-day"${i < 3 ? ' open' : ''}><summary><h2>${htmlEsc(long)}</h2><span class="er-n">${list.length} ${list.length === 1 ? 'company' : 'companies'}</span></summary>` +
-      '<div class="er-wrap"><table class="er-t"><thead><tr><th>Company</th><th>Quarter</th><th class="n">Revenue</th><th class="n">Net income</th><th class="n">EPS (GAAP)</th><th class="n">Adjusted EPS</th><th>What the release says</th><th></th></tr></thead>' +
+      '<div class="er-wrap"><table class="er-t"><thead><tr><th>Company</th><th>Quarter</th><th class="n">Revenue</th><th class="n">Net income</th><th class="n">EPS (GAAP)</th><th class="n">Adjusted EPS</th><th>What the release says</th></tr></thead>' +
       `<tbody>${trs}</tbody></table></div></details>`;
   }).join('\n');
   const asof = 'Updated ' + new Date(today + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' · releases filed since ' + RV.shortDay(addDaysIso(today, -RESULTS_DAYS));
@@ -942,6 +964,11 @@ const gateAssets = route(async (req, res, next) => {
   if (rel == null) return res.status(400).json({ error: 'Bad path.' });
   if (!PRIVATE_FILES.has(rel)) return next();
   if (await isSignedIn(req)) {
+    // An admin page's file is the admin's alone, as its route is (2026-11-09):
+    // a member asking for /sources.html by name read the page's text, data
+    // sources and all, though its data stayed refused. A 404, as for a file
+    // that is not there.
+    if (ADMIN_ONLY_ASSET.has(rel) && !(await isAdmin(req))) return res.status(404).send('Not found');
     if (GUEST_BLOCKED_ASSET.test(rel) && (await isGuest(req))) {
       return res.status(403).json({ error: 'Not on the guest preview.' });
     }
@@ -2603,6 +2630,14 @@ async function isGuest(req) {
 }
 // The research data — every close, every stored run — is exactly what the
 // guest view exists to not hand out, and so are the pages built on it.
+// The pages whose routes admit the admin only, and the one script only they
+// load. gateAssets refuses their files to everyone else; admin-asset-test.js
+// checks this list against the routes, so a new admin page cannot be missed.
+const ADMIN_ONLY_ASSET = new Set(['activity.html', 'adjusted.html', 'adjustedbacktest.html', 'admin.html', 'ai-spend.html', 'architecture.html',
+  'backlog.html', 'backtest.html', 'blog-visitors.html', 'buildlog.html', 'chat.html', 'columns.html', 'database.html', 'edgar.html', 'emails.html',
+  'export.html', 'holdings.html', 'mobile-setup.html', 'nasdaq.html', 'news-runs.html', 'onboarding.html', 'posts.html', 'quality.html', 'recon.html',
+  'reelmaker.html', 'refreshes.html', 'schedule.html', 'sources.html', 'subscribers.html', 'themes.html', 'tour.html', 'trend-backtest.html',
+  'users.html', 'visitors.html', 'tour.js']);
 const GUEST_BLOCKED_ASSET =
   /^(strategy-.*\.json|single-closes\.json|lab-grid\.json|sp-years\.json|day-moves\.json|chat\.html|analysis\.html|signal\.html|lab\.html|strategy\.html|single\.html|contact\.html)$/;
 
@@ -4184,9 +4219,8 @@ function releaseDigestEmail(rels, names, opts) {
     + (sub ? `<div class="em-quiet"${st(`font-size:11.5px;line-height:1.35;color:${MC.faint};margin-top:2px`)}>${mailEsc(sub)}</div>` : '') + '</td>';
   const card = (r) => {
     const cur = r.currency;
-    const rel = /^https:\/\/www\.sec\.gov\//.test(r.url || '') ? r.url : null;
-    const links = [rel ? `<a href="${mailEsc(rel)}"${st(`color:${MC.mute};text-decoration:underline`)}>The release on sec.gov</a>` : '',
-      site ? `<a href="${site}/stock/${encodeURIComponent(r.symbol)}"${st(`color:${MC.mute};text-decoration:underline`)}>Stock page</a>` : ''].filter(Boolean).join(' &nbsp;&middot;&nbsp; ');
+    // No link to the filing itself (owner, 2026-11-09: the site never says where its data comes from).
+    const links = [site ? `<a href="${site}/stock/${encodeURIComponent(r.symbol)}"${st(`color:${MC.mute};text-decoration:underline`)}>Stock page</a>` : ''].filter(Boolean).join(' &nbsp;&middot;&nbsp; ');
     return `<table class="em-box" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st(`margin:14px 0 0;border:1px solid ${MC.line};border-radius:12px;border-collapse:separate`)}>`
       // Who and which quarter.
       + `<tr><td class="em-in"${st('padding:14px 16px 0')}><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
@@ -4254,7 +4288,7 @@ function releaseDigestEmail(rels, names, opts) {
     + (beyond > 0 ? `<p${st(`margin:12px 0 0;font-size:13px;color:${MC.mute}`)}>And ${beyond} more on the results page.</p>` : '')
     + (site ? mailButton(site + '/results', 'See every result on Tickr Lab') : '');
   const heading = `${n} ${cos} reported`;
-  const intro = `Results filed with the SEC on ${dayText}, read by AI from each company's own press release.`
+  const intro = `Results filed on ${dayText}, read by AI from each company's own press release.`
     + (revKnown.length ? ` Revenue was up on a year earlier at ${revUp.length} of ${revKnown.length}.` : '');
   // The reading's caveat goes in every copy; a list copy adds the reader's own
   // preferences and unsubscribe links under it, the owner's says why it came.
@@ -4265,7 +4299,7 @@ function releaseDigestEmail(rels, names, opts) {
   const text = textShell({ heading, intro, note: o.noteText ? caveat + '\n\n' + o.noteText : note, lines: rows.flatMap((r) => [
     `${r.symbol}  ${names[r.symbol] || ''}  (${r.periodLabel || ''})`,
     `  Revenue ${RV.money(r.revenue, r.currency)} ${chg(pct(r.revenue, r.revenuePrior))} | Net income ${RV.money(r.netIncome, r.currency)} ${chg(pct(r.netIncome, r.netIncomePrior))} | EPS ${RV.eps(r.epsGaap, r.currency)}` + (r.epsAdj != null ? ` | Adj. EPS ${RV.eps(r.epsAdj, r.currency)}` : ''),
-    ...(r.summary ? ['  ' + r.summary] : []), ...(r.guideSentence ? ['  Guidance: ' + r.guideSentence] : []), ...(r.url ? ['  ' + r.url] : []), '']).concat(site ? ['Every result: ' + site + '/results'] : []) });
+    ...(r.summary ? ['  ' + r.summary] : []), ...(r.guideSentence ? ['  Guidance: ' + r.guideSentence] : []), '']).concat(site ? ['Every result: ' + site + '/results'] : []) });
   const subject = `[Tickr Lab] Earnings results: ${n} ${cos}, ${dayText}`;
   return { subject, html, text, companies: n };
 }
@@ -13739,14 +13773,16 @@ app.get('/api/fields', requireAuth, route(async (req, res) => {
     store.readHiddenColumns(), store.readHiddenColumnsAdmin().catch(() => null), isAdmin(req).catch(() => false),
   ]);
   const hidden = new Set((admin && adminHidden) || memberHidden || []);
+  // Sources by name for the admin only; members read the neutral wording (owner, 2026-11-09).
+  const srcOf = admin ? FieldSource.sourceOf : FieldSource.publicSourceOf;
   const groups = [];
   for (const c of columnCatalogue()) {
     if (hidden.has(c.id)) continue;
     let g = groups[groups.length - 1];
     if (!g || g.id !== c.group) groups.push(g = { id: c.group, label: c.groupLabel, def: c.groupDef, columns: [] });
-    g.columns.push({ id: c.id, label: c.label, def: c.def, src: FieldSource.sourceOf(c.id, c.group) });
+    g.columns.push({ id: c.id, label: c.label, def: c.def, src: srcOf(c.id, c.group) });
   }
-  res.json({ frozen: COLUMN_FROZEN.map((c) => Object.assign({}, c, { src: FieldSource.sourceOf(c.id, 'stock') })), groups });
+  res.json({ frozen: COLUMN_FROZEN.map((c) => Object.assign({}, c, { src: srcOf(c.id, 'stock') })), groups });
 }));
 
 // The announcement. Read by everyone through /api/prefs; written only here.

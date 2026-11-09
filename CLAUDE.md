@@ -135,6 +135,7 @@ Port 3000. Needs `.env` with `TWELVE_DATA_API_KEY`, `TURSO_DATABASE_URL`, `TURSO
 **Access**
 - Four tiers: anonymous, guest (`GUEST_SYMBOLS`, 20), member, admin. Enforce in the route on every new endpoint; a hidden button is not security. Test auth changes as guest and as member.
 - Gates default closed (`REQUIRE_APPROVAL`, `REQUIRE_TERMS`). No account enumeration. Never echo upstream error bodies to a client. Logs hold facts, never content.
+- **No source is named to a non-admin** (owner, 2026-11-09, as intellectual property): no data provider, sec.gov link, news service, AI model or vendor on any page, hover, card, video, member email, blog draft or served comment. Say "the data feed", "filings", "AI"; form names stay. Admin page files are 404 to others (`ADMIN_ONLY_ASSET`); sec.gov addresses in API answers are scrubbed for non-admins. See `data-sources.md`.
 - Research pages and the chatbot are admin only. Index-fund holdings weights from the issuer's daily file (`/holdings`) never leave admin. A fund's own SEC filing is a different source: the holder pages (`/holder/...`) show its positions to members, by the owner's decision of 2026-10-12, and never to guests.
 
 **Values**

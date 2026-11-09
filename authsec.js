@@ -97,4 +97,28 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
-module.exports = { assetRel, overLimit, tokenHash, newToken, EMAIL_RE, isEmail, crossSite, snapTo, CSP, SECURITY_HEADERS };
+// Filing addresses kept from everyone but the admin (2026-11-09; the middleware
+// in server.js). A string that IS such an address becomes FILED_TOKEN (truthy,
+// as the pages test it); one found inside longer text is cut out of it.
+const FILING_HOST = /https?:\/\/(?:www\.|data\.|efts\.)?sec\.gov\/[^\s"'<>)]*/gi;
+const HAS_FILING_HOST = /https?:\/\/(?:www\.|data\.|efts\.)?sec\.gov\//i;
+const FILED_TOKEN = 'filed';
+function scrubFilingUrls(v) {
+  if (typeof v === 'string') {
+    if (!HAS_FILING_HOST.test(v)) return v;
+    FILING_HOST.lastIndex = 0;
+    const whole = v.trim().replace(FILING_HOST, '') === '';
+    FILING_HOST.lastIndex = 0;
+    return whole ? FILED_TOKEN : v.replace(FILING_HOST, '').replace(/\s{2,}/g, ' ');
+  }
+  if (Array.isArray(v)) return v.map(scrubFilingUrls);
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) o[k] = scrubFilingUrls(x);
+    return o;
+  }
+  return v;
+}
+
+module.exports = { assetRel, overLimit, tokenHash, newToken, EMAIL_RE, isEmail, crossSite, snapTo, CSP, SECURITY_HEADERS,
+  HAS_FILING_HOST, FILED_TOKEN, scrubFilingUrls };

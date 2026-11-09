@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Earnings results — Tickr Lab</title>
-  <meta name="description" content="The quarterly results US companies reported in the last three weeks, read from each company's own press release filed with the SEC: revenue, net income, earnings per share and guidance." />
+  <meta name="description" content="The quarterly results US companies reported in the last three weeks, read from each company's own press release, filed as an 8-K: revenue, net income, earnings per share and guidance." />
   <meta property="og:title" content="Earnings results, read from the press releases" />
-  <meta property="og:description" content="Revenue, net income, EPS and guidance from each company's own results release, filed with the SEC." />
+  <meta property="og:description" content="Revenue, net income, EPS and guidance from each company's own results release, filed as an 8-K." />
   <meta property="og:type" content="website" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#071120" />
@@ -114,9 +114,9 @@
   <main class="er-page">
     <header class="er-head">
       <h1>Earnings results, read from the press releases</h1>
-      <p class="er-lede">Every quarterly results release a company we track has filed with the SEC in the last three weeks.
+      <p class="er-lede">Every quarterly results release a company we track has filed in the last three weeks.
         Revenue, net income, earnings per share and guidance come straight from the company's own press release (Exhibit 99.1 to its 8-K),
-        with the change on the same quarter a year earlier. Each release is linked, so every figure can be checked at the source.</p>
+        with the change on the same quarter a year earlier.</p>
       <div class="er-asof">%ASOF%</div>
     </header>
 
@@ -126,7 +126,7 @@
 
     <section class="er-note bezel"><div class="core">
       <h3>How these figures are read</h3>
-      <p>An AI model (Claude Haiku) reads each release and copies the figures as printed. Our own code then checks every figure
+      <p>An AI model reads each release and copies the figures as printed. Our own code then checks every figure
         against the release text and refuses any it cannot find there, or any whose size does not fit the company. A refused figure is shown as a dash rather than guessed.</p>
       <p>The adjusted EPS is the company's own non-GAAP figure, under the company's own name for it. Guidance is shown in the words the company used.
         Companies define revenue and adjusted earnings differently, so compare a company with its own past rather than with another company.</p>
