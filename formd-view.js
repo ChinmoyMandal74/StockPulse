@@ -34,6 +34,7 @@ const STATIC = {
   '/employers': [path.join(__dirname, 'employers-view.html'), 'text/html; charset=utf-8'],
   '/factsheet.js': [path.join(__dirname, 'factsheet.js'), 'text/javascript; charset=utf-8'],
   '/contacts': [path.join(__dirname, 'contacts-view.html'), 'text/html; charset=utf-8'],
+  '/data-sources': [path.join(__dirname, 'sources-view.html'), 'text/html; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
   '/favicon.svg': [path.join(__dirname, 'public', 'favicon.svg'), 'image/svg+xml'],

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data sources — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. The private-company
+       data sources (backlog 61): built, not started, not taken. Everything this page adds is prefixed ds- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .ds-page { max-width: 1320px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 16px; }
+    .ds-page > * { min-width: 0; }
+    .ds-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .ds-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .ds-head h1 span { color: var(--muted); font-weight: 400; }
+    .ds-head nav { display: flex; gap: 14px; font-size: 13.5px; }
+    .ds-head nav a { color: var(--accent); text-decoration: none; }
+    .ds-head nav b { color: var(--strong); font-weight: 500; }
+    .ds-lede { color: var(--muted); font-size: 13.5px; line-height: 1.55; max-width: 92ch; margin: 0; }
+    .ds-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .ds-tile { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 12px 14px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+    .ds-tile[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+    .ds-tile b { display: block; font: 600 24px var(--mono); color: var(--strong); }
+    .ds-tile span { font-size: 12px; color: var(--muted); }
+    .ds-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .ds-tablebox { overflow-x: auto; }
+    .ds-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ds-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .ds-table td { padding: 10px; border-bottom: 1px solid var(--hair); vertical-align: top; line-height: 1.45; }
+    .ds-table tr.ds-group td { background: var(--panel); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 8px 10px; }
+    .ds-id { font-family: var(--mono); color: var(--faint); white-space: nowrap; }
+    .ds-name { font-weight: 500; color: var(--strong); min-width: 180px; }
+    .ds-name small { display: block; color: var(--faint); font-weight: 400; font-size: 11.5px; margin-top: 2px; }
+    .ds-gives { min-width: 240px; }
+    .ds-note { color: var(--muted); min-width: 260px; }
+    .ds-code { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+    .ds-st { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hair-2); white-space: nowrap; }
+    .ds-st-built { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+    .ds-st-part { color: var(--blue, var(--accent)); border-color: color-mix(in srgb, var(--blue, var(--accent)) 50%, transparent); }
+    .ds-st-next { color: var(--orange, var(--amber)); border-color: color-mix(in srgb, var(--orange, var(--amber)) 55%, transparent); }
+    .ds-st-idea { color: var(--muted); }
+    .ds-st-no { color: var(--faint); border-style: dashed; }
+    .ds-join { min-width: 120px; }
+    .ds-foot { color: var(--muted); font-size: 12.5px; line-height: 1.55; display: grid; gap: 8px; max-width: 100ch; }
+    .ds-foot b { color: var(--text); font-weight: 500; }
+    @media (max-width: 860px) { .ds-page { padding: 16px 16px 0; } }
+  </style>
+</head>
+<body>
+<div class="ds-page">
+  <div class="ds-head">
+    <h1>Data sources <span>· private companies, what we have, what we could, what we passed on</span></h1>
+    <nav><a href="/">Form D</a><a href="/employers">Employers</a><a href="/contacts">Contacts</a><b>Data sources</b></nav>
+  </div>
+  <p class="ds-lede">Private companies publish no accounts, so no one source covers them. This is every source considered for the private-company work (backlog entry 61), with where it stands on 2026-11-10. Everything built is kept in the local <span class="ds-code">formd.db</span> on this machine, never in the site's database and never served; it moves to the private-company module later. Click a tile to filter.</p>
+  <div class="ds-tiles" id="tiles"></div>
+  <div class="ds-box ds-tablebox">
+    <table class="ds-table">
+      <thead><tr><th>Ref</th><th>Source</th><th>Status</th><th>What it gives</th><th>Joined by</th><th>Cost and effort</th><th>Notes</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="ds-foot">
+    <div><b>Recommended next:</b> E14, work-visa filings: exact matches by tax ID onto the retirement-plan data, wages and job titles that no current source has, and from the Labor Department, so no risk to the SEC access. Then E8 bank call reports, the quickest full set of accounts.</div>
+    <div><b>Unfinished:</b> the federal contracts download for fiscal 2016–24 (half done, resumes run by run), then its load; the slow SEC reads (acquired-company accounts for Continental's peers, then Form C and Reg A).</div>
+    <div><b>The gap to be honest about:</b> most small private companies never raise registered money or get bought by a filer, so for them the free sources give headcount and government work at best. That is why the paid tools exist; the edge here is the free sources joined to the listed peers the app already covers well.</div>
+    <div><b>Rules for every loader:</b> bulk files only, one request at a time with a long pause, a daily cap, any refusal stops the run and nothing is retried, nothing fetched twice. SEC files with the declared user agent (the address has had a 429 and a 403). People's names and roles kept, never their street addresses. The full notes are in <span class="ds-code">docs/backlog.md</span>, entry 61.</div>
+  </div>
+</div>
+<script>
+'use strict';
+const STATUS = {
+  built: ['Built', 'ds-st-built'],
+  part: ['Partly built', 'ds-st-part'],
+  next: ['Recommended next', 'ds-st-next'],
+  idea: ['Not started', 'ds-st-idea'],
+  no: ['Not taken', 'ds-st-no'],
+};
+// [ref, name, from, status, gives, joins, cost, notes, where]
+const GROUPS = [
+  ['From the SEC', [
+    ['a', 'Form D', 'SEC quarterly data sets, 2008 on', 'built', 'Every private raise under Regulation D: amount offered and sold, date, industry group, revenue range (often withheld), the people named (executives, directors, promoters), brokers.', 'SEC company number (CIK)', 'Free; about 75 files, 200 MB', 'The base of the module. Loaded and viewable here.', 'formd-load.js · form-d.md'],
+    ['E1', 'The SEC profile of each issuer', 'SEC bulk submissions file, already on disk', 'built', 'Tax ID (on 150,914 issuers), state of incorporation, fiscal year end, former names, every other form filed; 2,890 have a ticker.', 'CIK', 'Free; no request', 'Shown in the side panel; links to our own stock page where we track the ticker.', 'formd-load.js --profiles'],
+    ['b', 'Acquired companies’ accounts', '8-K item 2.01, then 9.01 by amendment', 'part', 'Audited accounts of private businesses that public companies buy: revenue, profit, assets, as filed by the buyer.', 'Buyer’s CIK; the target by name', 'Free; a request a filing and one an exhibit, 10s apart, 1,000 a day; about $70 of AI reading for every filer', 'Our universe’s buyers done (1,139 amendments listed). Every filer (about 37,000 requests) not started.', 'acq-load.js · acquired-companies.md'],
+    ['E3', 'Crowdfunding filings (Form C)', 'SEC quarterly data sets, 2016 on', 'idea', 'Revenue, net income, assets, cash, debt and employees for the last two fiscal years.', 'CIK; 1,922 of our issuers have filed one', 'Free; about 40 files, Form D’s care', 'Small companies only, but real figures.', ''],
+    ['E4', 'Reg A filings (1-A, 1-K)', 'SEC data sets', 'idea', 'Annual financial statements.', 'CIK; 662 issuers', 'Free; SEC care', 'Check the data sets hold up before building.', ''],
+    ['E5', 'Private companies that file 10-K and 10-Q', 'SEC facts feed', 'idea', 'Full financial statements, through the reader the app already has.', 'CIK; 5,979 of our issuers', 'Free; one request a company, slowly', 'Includes companies with public debt that report for their bonds.', ''],
+    ['E9', 'Investment adviser registrations (Form ADV)', 'SEC adviser database, monthly bulk', 'idea', 'About 15,000 advisory firms, nearly all private: assets under management, employees, clients, owners.', 'SEC and CRD numbers', 'Free; SEC care', '', ''],
+    ['', 'Broker-dealer annual audited statements (X-17A-5)', 'EDGAR', 'idea', 'Audited balance sheets of private broker-dealers.', 'CIK', 'Free; per-filing reads', 'Mentioned as possible, not costed.', ''],
+  ]],
+  ['From other agencies: size and activity', [
+    ['E2', 'Retirement-plan filings (Form 5500)', 'Labor Department yearly bulk files', 'built', 'Participants (a headcount proxy) and plan assets year by year, business code (NAICS); every employer with a plan.', 'Tax ID (EIN), exact', 'Free; files a minute apart, 40 a day', 'The headcount behind every brief. A plan count is a floor: union crews sit in union funds.', 'f5500-load.js · form-5500.md'],
+    ['E6', 'PPP loans', 'SBA, 2020–21', 'built', 'Jobs reported, loan size (so an implied payroll), industry code.', 'Name and state, inexact', 'Free', 'Businesses only; no street, demographics or people kept.', 'ppp-load.js · ppp-loans.md'],
+    ['E13', 'SBA 7(a) and 504 loans', 'SBA FOIA data, fiscal 1991 on', 'built', 'Loan size, jobs supported, industry, lender, paid in full or charged off.', 'Name and state, inexact', 'Free; shares the PPP download cap', '', 'sba-load.js · sba-loans.md'],
+    ['E7', 'Federal contracts', 'USAspending yearly files', 'part', 'Government revenue by recipient by fiscal year.', 'Name and state, or the filed telephone', 'Free; large files', 'Fiscal 2025–27 loaded; the 2016–24 download is half done.', 'contracts-load.js · federal-contracts.md'],
+    ['E14', 'Work-visa filings (LCA and PERM)', 'Labor Department, quarterly', 'next', 'Employer tax ID, job titles, wages offered, worksite.', 'Tax ID, exact, straight onto the plan filings', 'Free; Labor Department, no SEC risk', 'The only source with wages and job titles.', ''],
+    ['E15', 'OSHA inspections', 'Labor Department enforcement data', 'idea', 'Employee count at each inspected site.', 'Name and address', 'Free', 'Reaches companies with no retirement plan.', ''],
+    ['E16', 'Trucking carriers', 'FMCSA census file', 'idea', 'Each carrier’s trucks, drivers and miles.', 'Name, DOT number', 'Free', '', ''],
+    ['', 'NLRB cases', 'National Labor Relations Board', 'idea', 'Bargaining-unit sizes; labour disputes.', 'Name', 'Free', 'Listed as possible.', ''],
+    ['', 'EPA facility records', 'EPA', 'idea', 'Facilities, permits and violations.', 'Name and address', 'Free', 'Listed as possible.', ''],
+    ['', 'SAM.gov entity registrations', 'GSA', 'idea', 'Who is registered to sell to the government; size standards.', 'UEI, name', 'Free', 'Listed as possible; pairs with E7.', ''],
+    ['', 'Public pension funds’ private-equity reports', 'State and city pension funds', 'idea', 'Fund-by-fund returns (as PitchBook uses).', 'Fund name', 'Free; scattered PDFs', 'Listed as possible.', ''],
+    ['', 'Bankruptcy filings', 'CourtListener free copies', 'idea', 'Who failed, debts and creditors.', 'Name', 'Free', 'Listed as possible.', ''],
+    ['i', 'City building permits', 'Each city', 'idea', 'Project volume for construction trades.', 'Name and address', 'Free but scattered and messy', 'Useful for contractors like Continental; no common format.', ''],
+  ]],
+  ['From other agencies: full accounts, industry by industry', [
+    ['E8', 'Bank call reports', 'FFIEC and FDIC', 'idea', 'Every US bank, about 4,000 private: balance sheet and income every quarter.', 'Bank ID (RSSD), name', 'Free bulk; low effort', 'The quickest full set of accounts to add.', ''],
+    ['E10', 'Hospital and nursing-home cost reports', 'CMS (HCRIS)', 'idea', 'Revenue, costs and beds for every hospital and nursing home, private ones included.', 'Provider number, name', 'Free bulk; medium', '', ''],
+    ['E11', 'Nonprofit returns (Form 990)', 'IRS bulk XML', 'idea', 'Full accounts, staff and top salaries for hospital systems, universities and other large nonprofits.', 'Tax ID, exact', 'Free; large files, medium', '', ''],
+    ['E12', 'Franchise disclosure documents', 'State filings: Wisconsin, Minnesota, California', 'idea', 'Franchisors’ audited accounts (Item 21) and unit counts.', 'Name', 'Free; PDFs read by AI with every figure checked; high effort', 'High value: audited accounts for mostly private companies.', ''],
+    ['', 'Private utilities (FERC Form 1)', 'FERC', 'idea', 'Full accounts of private utilities.', 'Name', 'Free', 'Listed as possible.', ''],
+    ['', 'Airlines (Form 41)', 'Bureau of Transportation Statistics', 'idea', 'Airline accounts and traffic.', 'Carrier code', 'Free', 'Listed as possible.', ''],
+    ['', 'Credit unions', 'NCUA call reports', 'idea', 'Quarterly accounts of every credit union.', 'Charter number', 'Free', 'Listed as possible.', ''],
+  ]],
+  ['From the companies themselves', [
+    ['E17', 'Companies’ own websites', 'The company’s site, found by guessing the address', 'part', 'What it does, founding year, size as stated, places, people named, customers, hiring.', 'Name plus city or telephone on the pages', 'Free; about $0.0016 of AI a company; robots.txt obeyed, 3s apart', 'Pilot of 200: 37% confirmed and read. Main limit: the brand differs from the filed name; an address can be given by hand.', 'website-load.js · company-websites.md'],
+    ['', 'The latest news', 'Web search, by hand in a session', 'built', 'Acquisitions, owners, size as reported, each item from its primary source.', 'Name, brand, owner', 'Free; by hand per brief', 'For briefs only; estimate and profile sites left out.', 'private-company-briefs.md'],
+  ]],
+  ['Considered and not pursued', [
+    ['h', 'State business registries and UCC lien filings', 'Each state’s Secretary of State', 'no', 'Existence, officers, secured lenders and collateral (no amounts).', 'Name and state', 'Texas $1,150 once (+$65 a day new); Kentucky $1,500 a month commercial, free non-commercial; Minnesota $9,600; Connecticut $5,000 a year; Washington $500 + $150 a week; California, Illinois, New York unpriced; Florida none', 'Owner, 2026-11-10: “No leave this .. I am not paying”. One company can still be looked up by hand for a brief.', 'backlog 61 h'],
+    ['', 'The Inc. 5000 list', 'inc.com', 'no', 'Self-reported revenue and growth for 5,000 fast growers a year.', 'Name', 'Site refuses automated reading (403); terms forbid reuse', 'Look a company up by hand for a brief; a bulk copy needs a licence from Inc.', ''],
+    ['', 'Common Crawl', 'The free public copy of the web', 'no', 'Every crawled page, to find company sites without visiting them.', 'Domain', 'Free', 'Its index answered 504 three times on 2026-11-10; websites are read directly instead (E17).', 'company-websites.md'],
+    ['j', 'Industry benchmarks', 'RMA Annual Statement Studies, BizMiner', 'no', 'Typical margins and ratios by industry and size; not company by company.', 'Industry code', 'Paid', 'The listed peers stand in for this.', ''],
+    ['k', 'Private deal multiples', 'DealStats, GF Data', 'no', 'Prices paid for private companies.', 'Industry', 'Paid', '', ''],
+    ['l', 'Company estimates', 'Crunchbase, Dun & Bradstreet, ZoomInfo, PitchBook-style profiles', 'no', 'Funding, revenue and headcount estimates.', 'Name', 'Paid; licences usually forbid resale', 'Estimates, often assembled from scraps; conflicted with CITCO’s own words.', ''],
+    ['m', 'Full private-market platforms', 'PitchBook, CB Insights, Preqin, Capital IQ', 'no', 'Deals, valuations, investors.', 'Their own IDs', 'Five figures a seat a year; licences forbid resale', 'Worth a trial only if buyer briefs become a regular product.', ''],
+    ['', 'Sutton Place Strategies', 'S&P Global / With Intelligence', 'no', 'Private-equity deals reported by deal-makers (give-to-get).', 'Name', 'Paid', 'As above.', ''],
+  ]],
+];
+
+const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const all = GROUPS.flatMap(([, rows]) => rows);
+const TILES = [
+  ['all', 'All sources', all.length],
+  ['have', 'Built or partly built', all.filter((r) => r[3] === 'built' || r[3] === 'part').length],
+  ['todo', 'Not started', all.filter((r) => r[3] === 'idea' || r[3] === 'next').length],
+  ['no', 'Not taken', all.filter((r) => r[3] === 'no').length],
+];
+const match = { all: () => true, have: (s) => s === 'built' || s === 'part', todo: (s) => s === 'idea' || s === 'next', no: (s) => s === 'no' };
+let pick = 'all';
+try { const h = location.hash.slice(1); if (match[h]) pick = h; } catch (e) { /* ignore */ }
+
+function paint() {
+  document.getElementById('tiles').innerHTML = TILES.map(([k, t, n]) =>
+    '<button type="button" class="ds-tile" data-k="' + k + '" aria-pressed="' + (k === pick) + '"><b>' + n + '</b><span>' + esc(t) + '</span></button>').join('');
+  let h = '';
+  for (const [title, rows] of GROUPS) {
+    const shown = rows.filter((r) => match[pick](r[3]));
+    if (!shown.length) continue;
+    h += '<tr class="ds-group"><td colspan="7">' + esc(title) + '</td></tr>';
+    for (const [ref, name, from, st, gives, joins, cost, notes, where] of shown) {
+      const [label, cls] = STATUS[st];
+      h += '<tr><td class="ds-id">' + esc(ref || '—') + '</td>'
+        + '<td class="ds-name">' + esc(name) + '<small>' + esc(from) + '</small></td>'
+        + '<td><span class="ds-st ' + cls + '">' + label + '</span></td>'
+        + '<td class="ds-gives">' + esc(gives) + '</td>'
+        + '<td class="ds-join">' + esc(joins) + '</td>'
+        + '<td>' + esc(cost) + '</td>'
+        + '<td class="ds-note">' + esc(notes) + (where ? '<div class="ds-code">' + esc(where) + '</div>' : '') + '</td></tr>';
+    }
+  }
+  document.getElementById('rows').innerHTML = h;
+}
+document.getElementById('tiles').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  pick = b.dataset.k;
+  try { history.replaceState(null, '', pick === 'all' ? location.pathname : '#' + pick); } catch (er) { /* ignore */ }
+  paint();
+});
+paint();
+</script>
+</body>
+</html>

@@ -230,6 +230,20 @@ sharing a company or telephone across states. The rebuild joined 27,027
 name-and-state entries into 24,139 people: **525,858 people** and 89,462
 firms, 1,413,144 company roles.
 
+## Data sources page (2026-11-10)
+
+Owner: "create an html page on these Data sources and have it available to
+admin .. include the ones we considered but did not pursue .. only publish to
+the local page ... all of this will goto private company module some time
+later". The viewer's **Data sources** page (`/data-sources`,
+`sources-view.html`, linked from the other three pages' headers) lists every
+source considered for backlog 61: built, partly built, not started, not taken
+(with the reason and the prices asked), each with what it gives, how it joins,
+its cost and where its loader and notes are. Static: the list is written in
+the page itself, so **update it when a source is built, started or turned
+down**, together with `docs/backlog.md` entry 61. Behind the viewer's admin
+password like the rest; never served by the site.
+
 ## What happens after a first Form D (2026-11-09)
 
 `formd-outcomes.js` (read only, no request): every operating company by the
