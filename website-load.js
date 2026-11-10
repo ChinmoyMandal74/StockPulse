@@ -27,6 +27,7 @@
 //   node --use-system-ca website-load.js --commit --ein 330747275   # one company
 //   node --use-system-ca website-load.js --commit --no-read          # find and fetch only; no model
 //   node --use-system-ca website-load.js --stats
+//   node --use-system-ca website-load.js --commit --eins targets-eins.txt   # a shortlist (the viewer's Targets page), in its order
 'use strict';
 require('dotenv').config({ override: true });
 const fs = require('fs');
@@ -57,6 +58,7 @@ function options(argv) {
     maxUsd: Math.max(0, Number(arg('--max-usd')) || 3),
     gapS: Math.max(MIN_GAP_S, Number(arg('--gap')) || 3),
     ein: arg('--ein') ? String(arg('--ein')).replace(/\D/g, '') : null,
+    eins: arg('--eins') || null,     // a file of tax IDs, one a line
     // --url with --ein: the address given by hand (the owner knows CITCO is
     // citcowater.com; no file says so). No guessing; read whatever the match.
     url: arg('--url') ? String(arg('--url')).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') : null,
@@ -92,6 +94,11 @@ function pilot(db, opts) {
   const withTel = (rs) => rs.map((r) => ({ ...r, phone: tel.get(r.ein) || null }));
   const named = (rs) => rs.map((r) => ({ ...r, others: othersOf(r.ein, r.name) }));
   if (opts.ein) return named(withTel(db.prepare(base + ' where l.ein = ?').all(opts.ein)));
+  // A shortlist: the tax IDs in the file's order (best fit first), up to --max.
+  if (opts.einList) {
+    const one = db.prepare(base + ' where l.ein = ?');
+    return named(withTel(opts.einList.slice(0, opts.max).map((e) => one.get(e)).filter(Boolean)));
+  }
   const rows = withTel(db.prepare(base + ' where l.staff between 100 and 2000 and l.year >= 2023').all());
   const h = (e) => crypto.createHash('sha1').update(String(e)).digest('hex');
   rows.sort((a, b) => (h(a.ein) < h(b.ein) ? -1 : 1));
@@ -222,6 +229,10 @@ async function run(opts, deps) {
     return { ok: true };
   }
   if (opts.url && !opts.ein) throw new Error('--url names one company\'s address: give --ein with it');
+  if (opts.eins && !opts.einList) {
+    const list = String(deps.readFile(opts.eins)).split(/\s+/).map((e) => e.replace(/\D/g, '')).filter((e) => /^\d{9}$/.test(e));
+    opts = { ...opts, einList: [...new Set(list)] };
+  }
   const all = pilot(db, opts);
   // --retry: the companies where nothing was found are tried again (after a
   // change to how sites are found); every other verdict stands.
@@ -308,6 +319,7 @@ if (require.main === module) {
     try {
       const r = await run(opts, {
         db, archive,
+        readFile: (file) => fs.readFileSync(file, 'utf8'),
         fetch: (...a) => fetch(...a),
         lookup: async (d) => { const a = await dns.lookup(d); return a && a.address; },
         sleep: (ms) => new Promise((res) => setTimeout(res, ms)),

@@ -70,6 +70,7 @@ function ensureSchema(db) {
       jobs real, naics text, amount real, forgiven real, business_type text, business_age text, nonprofit integer, file text
     );
     create index if not exists idx_ppp_key on ppp_loans (name_key, state);
+    create index if not exists idx_ppp_naics on ppp_loans (naics, jobs);
     create table if not exists ppp_files (file text primary key, read integer, kept integer, withheld integer, people integer, bad integer, at integer not null);
   `);
 }

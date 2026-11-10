@@ -349,6 +349,60 @@ eq(CF.where(CF.filters(sp('q=0001639406'))).params, ['1639406'], 'digits search 
   eq([call3('/api/crowd'), call3('/api/crowd-company?cik=1'), call3('/api/crowd-company?cik=abc'), call3('/crowdfunding')], [200, 200, 404, 200], 'the routes and the page');
 }
 
+// ---- acquisition targets (targets.js), on the archive ----
+{
+  // A water company in West Virginia with a plan and a loan, the same in Ohio
+  // with a ticker (left out), a plumbing supply house whose site says nothing
+  // of water, and a well driller in Kentucky known only from its loan.
+  db.exec(`insert into f5500_latest (ein, year, name, dba, city, state, business_code, staff, first_year, first_staff, y2019, years) values
+    ('550421240', 2025, 'THE C. I. THORNBURG CO, INC.', null, 'HUNTINGTON', 'WV', '423700', 120, 2009, 96, 96, 17),
+    ('660000001', 2025, 'LISTED PUMP CO', null, 'COLUMBUS', 'OH', '423700', 100, 2009, 90, 90, 17),
+    ('660000002', 2025, 'VALLEY PLUMBING SUPPLY INC', null, 'CHARLESTON', 'WV', '423700', 80, 2010, 70, 75, 16),
+    ('660000003', 2025, 'BIG SEWER BUILDERS INC', null, 'PITTSBURGH', 'PA', '237100', 900, 2009, 800, 850, 17);`);
+  const hist = (ein, pairs) => db.exec(`insert into f5500_employers (ein, year, name, city, state, business_code, staff) values ${pairs.map(([y, s]) => `('${ein}', ${y}, 'X', 'C', 'WV', '423700', ${s})`).join(', ')}`);
+  hist('550421240', [[2016, 117], [2017, 108], [2018, 96], [2019, 96], [2020, 91], [2021, 100], [2022, 102], [2023, 104], [2024, 118], [2025, 120]]);
+  hist('660000002', [[2016, 70], [2017, 72], [2018, 74], [2019, 75], [2020, 76], [2021, 77], [2022, 78], [2023, 79], [2024, 80], [2025, 80]]);
+  db.exec(`insert into fd_profiles (cik, as_of, ein, name, tickers) values ('9001', '2026-11-01', '660000001', 'LISTED PUMP CO', 'LPC')`);
+  db.exec(`insert into ppp_loans (loan, approved, draw, name, name_key, city, state, zip, jobs, naics, amount, forgiven, business_type, nonprofit, file) values
+    ('W1', '2020-04-20', 1, 'THE C. I. THORNBURG CO., INC.', 'C I THORNBURG', 'HUNTINGTON', 'WV', '25701', 95, '237110', 1729327, 1729327, 'Corporation', 0, 'f'),
+    ('W2', '2020-04-20', 1, 'BLUEGRASS WELL DRILLING LLC', 'BLUEGRASS WELL DRILLING', 'LEXINGTON', 'KY', '40505', 40, '237110', 300000, 300000, 'LLC', 0, 'f'),
+    ('W3', '2020-04-20', 1, 'TEXAS WELL DRILLING LLC', 'TEXAS WELL DRILLING', 'AUSTIN', 'TX', '78701', 40, '237110', 300000, 300000, 'LLC', 0, 'f'),
+    ('W4', '2020-04-20', 1, 'VALLEY PLUMBING SUPPLY', 'VALLEY PLUMBING SUPPLY', 'CHARLESTON', 'WV', '25301', 20, '423720', 100000, 100000, 'Corporation', 0, 'f'),
+    ('W5', '2020-04-20', 1, 'BIG SEWER BUILDERS, INC.', 'BIG SEWER BUILDERS', 'PITTSBURGH', 'PA', '15201', 150, '237110', 900000, 900000, 'Corporation', 0, 'f');`);
+  db.exec(`insert into web_sites (ein, name, domain, url, verdict, name_hit, city_hit, phone_hit, checked_at) values
+    ('550421240', 'THE C. I. THORNBURG CO, INC.', 'citcowater.com', 'https://citcowater.com/', 'given', 1, 1, 0, 1),
+    ('660000002', 'VALLEY PLUMBING SUPPLY INC', 'valleyplumbing.com', 'https://valleyplumbing.com/', 'confirmed', 1, 1, 0, 1)`);
+  const { DatabaseSync: DS } = require('node:sqlite');
+  const webDb = new DS(':memory:');
+  webDb.exec('create table pages (url text primary key, ein text, kind text, fetched_at integer not null, text text)');
+  webDb.exec(`insert into pages values ('https://citcowater.com/', '550421240', 'home', 1, 'Water well drilling, well pumps and water treatment since 1931.'),
+    ('https://valleyplumbing.com/', '660000002', 'home', 1, 'Faucets, fixtures and pumps for the trade.')`);
+  const apiT = V.makeApi(db, { web: webDb });
+  const R = apiT.targets(sp('buyer=addon&region=near:WV&minStaff=15&maxStaff=200'));
+  const names = R.all.map((r) => r.name);
+  ok(names.includes('THE C. I. THORNBURG CO, INC.') && names.includes('VALLEY PLUMBING SUPPLY INC'), 'plan companies in the region and band');
+  ok(!names.includes('LISTED PUMP CO'), 'a listed company is never a target');
+  ok(!names.includes('BIG SEWER BUILDERS INC'), 'outside the size band');
+  ok(names.includes('BLUEGRASS WELL DRILLING LLC') && !names.includes('TEXAS WELL DRILLING LLC'), 'a loan-only company in a neighbouring state, not one outside the region');
+  ok(!names.includes('VALLEY PLUMBING SUPPLY'), 'a loan to a company with a plan is not listed again as loan only');
+  ok(!names.includes('BIG SEWER BUILDERS, INC.'), 'nor a loan to a company whose plan is outside the search (900 staff): it is not "loan only"');
+  const ct = R.all.find((r) => r.ein === '550421240');
+  eq([ct.pppCodes, ct.pppJobs, ct.site.status, ct.site.hits], [['237110'], 95, 'read', ['water well', 'well drilling', 'well pump', 'water treatment']], 'its loan matched by name and state, its site read for the words');
+  const vp = R.all.find((r) => r.ein === '660000002');
+  ok(vp.site.status === 'read' && !vp.site.hits.length && vp.flags.includes('site: other business'), 'a supply house whose site names no water work is marked so');
+  ok(ct.score > vp.score, 'the water company ranks above the supply house');
+  eq(R.all[0].ein, '550421240', 'and first');
+  eq(apiT.targets(sp('buyer=addon&region=near:WV&minStaff=15&maxStaff=200&confirmed=1')).all.map((r) => r.ein), ['550421240'], 'only those their site bears out');
+  eq(apiT.targets(sp('buyer=addon&region=near:WV&minStaff=15&maxStaff=200&pppOnly=0')).all.filter((r) => r.source === 'ppp').length, 0, 'loan-only companies can be left out');
+  const csvT = require('./targets.js').toCsv(R.all);
+  ok(csvT.split('\r\n').length === R.all.length + 2 && /55-0421240/.test(csvT), 'the spreadsheet: a row each');
+  const call4 = (url) => { const out = { status: 0, body: '' }; V.handler(apiT)({ method: 'GET', url, headers: { authorization: 'Basic ' + Buffer.from('a:pw-test').toString('base64') } }, { writeHead(s) { out.status = s; }, end(b) { out.body = String(b || ''); } }); return out; };
+  const tx = call4('/api/targets.txt?buyer=addon&region=near:WV&minStaff=15&maxStaff=200');
+  eq(tx.body.trim(), '', 'the website reader\'s list: only plan companies not yet tried (both here have been)');
+  eq([call4('/targets').status, call4('/api/targets').status, call4('/api/targets.csv').status], [200, 200, 200], 'the page and its routes');
+  ok(!('all' in JSON.parse(call4('/api/targets').body)), 'the page gets one page of rows, not the whole list');
+}
+
 // ---- the door ----
 const req = (auth, url = '/api/options') => ({ method: 'GET', url, headers: auth ? { authorization: 'Basic ' + Buffer.from(auth).toString('base64') } : {} });
 function call(r) {

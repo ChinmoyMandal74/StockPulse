@@ -23,6 +23,12 @@ data steps they call are.
   attachment preview runs no JavaScript, so a script-drawn chart shows as an
   empty box.
 
+## Companies like one already briefed
+
+The viewer's Targets page (`acquisition-targets.md`): a profile per kind of
+company (the water preset is CITCO's), a buyer type, a region; the website
+reader on its shortlist decides who is really in the business.
+
 ## Finding the company
 
 - The local viewer (`formd-view.js`, Employers page) or a query on

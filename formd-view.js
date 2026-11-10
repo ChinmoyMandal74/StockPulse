@@ -23,6 +23,7 @@ const Q = require('./formdquery.js');
 const E = require('./employerquery.js');
 const CQ = require('./contactquery.js');
 const CF = require('./crowdquery.js');
+const T = require('./targets.js');
 const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
@@ -36,6 +37,7 @@ const STATIC = {
   '/factsheet.js': [path.join(__dirname, 'factsheet.js'), 'text/javascript; charset=utf-8'],
   '/contacts': [path.join(__dirname, 'contacts-view.html'), 'text/html; charset=utf-8'],
   '/crowdfunding': [path.join(__dirname, 'crowdfunding-view.html'), 'text/html; charset=utf-8'],
+  '/targets': [path.join(__dirname, 'targets-view.html'), 'text/html; charset=utf-8'],
   '/data-sources': [path.join(__dirname, 'sources-view.html'), 'text/html; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
@@ -372,7 +374,104 @@ function makeApi(db, opts = {}) {
       facts: facts({ cik, names, state: co.state }) };
   }
 
-  return { options, list, filing, employers, employer, contacts, contactsCsv, contact, crowd, crowdCompany };
+  // ---- acquisition targets (targets.js): candidates for a buyer's profile ----
+  // From the plan filings (business code, size, years filing, staff history)
+  // and, for companies with no plan, the payroll loans (the exact six-digit
+  // code and jobs). Each is checked against its own website where the website
+  // reader has been, and scored with its reasons. A result is kept per set of
+  // filters while the viewer runs (the archive only changes on a load).
+  const web = opts.web || null;   // web-archive.db, read only: the pages' text
+  const planByName = new Map();   // state -> Map(name key -> ein), built when first needed
+  function planKeys(st) {
+    if (!planByName.has(st)) {
+      const m = new Map();
+      for (const r of db.prepare('select ein, name, dba from f5500_latest where state = ?').iterate(st)) {
+        for (const n of [r.name, r.dba]) { const k = NK(n); if (k && !m.has(k)) m.set(k, r.ein); }
+      }
+      planByName.set(st, m);
+    }
+    return planByName.get(st);
+  }
+  const targetCache = new Map();
+  function targetRows(f) {
+    const key = JSON.stringify({ ...f, page: 0 });
+    if (targetCache.has(key)) return targetCache.get(key);
+    const inStates = f.states ? ` and state in (${f.states.map(() => '?').join(', ')})` : '';
+    const stP = f.states || [];
+    // A code's start as a range, so the index on business_code serves it (a like does not).
+    const codeW = f.planCodes.length ? '(' + f.planCodes.map(() => '(business_code >= ? and business_code < ?)').join(' or ') + ')' : '0';
+    const codeP = f.planCodes.flatMap((c) => [c, c.slice(0, -1) + String.fromCharCode(c.charCodeAt(c.length - 1) + 1)]);
+    const plan = db.prepare(`select ein, year, name, dba, city, state, business_code, staff, first_year, y2019, years from f5500_latest indexed by idx_f5500_latest_code
+      where ${codeW} and staff between ? and ? and year >= 2022 and years >= ?${inStates}`)
+      .all(...codeP, f.minStaff, f.maxStaff, f.minYears, ...stP);
+    const series = db.prepare('select year, staff from f5500_employers where ein = ? and year >= 2000 order by year');
+    const prof = db.prepare('select cik, tickers from fd_profiles where ein = ? order by as_of desc limit 1');
+    const loans = db.prepare('select loan, name, jobs, naics, amount, city from ppp_loans where name_key = ? and state = ?');
+    const siteQ = hasTable('web_sites') ? db.prepare('select domain, verdict from web_sites where ein = ?') : null;
+    const pagesQ = web ? web.prepare('select text from pages where ein = ?') : null;
+    const siteOf = (ein) => {
+      const s = siteQ ? siteQ.get(ein) : null;
+      if (!s) return { status: 'not tried', hits: [] };
+      if (s.verdict !== 'confirmed' && s.verdict !== 'given') return { status: s.verdict, domain: s.domain, hits: [] };
+      const text = pagesQ ? pagesQ.all(ein).map((p) => p.text).join('\n') : '';
+      return text ? { status: 'read', domain: s.domain, hits: T.keywordHits(text, f.keywords) } : { status: 'found, not read', domain: s.domain, hits: [] };
+    };
+    const out = [];
+    const seenLoans = new Set();
+    for (const r of plan) {
+      const pr = prof.get(r.ein);
+      if (pr && pr.tickers) continue;   // listed: not a private target
+      const ppp = [];
+      for (const n of [r.name, r.dba]) { const k = NK(n); if (k) for (const l of loans.all(k, r.state)) if (!ppp.some((x) => x.loan === l.loan)) ppp.push(l); }
+      ppp.forEach((l) => seenLoans.add(l.loan));
+      const hist = series.all(r.ein);
+      const c = { key: r.ein, source: 'plan', ein: r.ein, name: r.name, dba: r.dba, city: r.city, state: r.state, planCode: r.business_code,
+        staff: r.staff, staffYear: r.year, y2019: r.y2019, firstYear: r.first_year, years: r.years,
+        growth: r.y2019 >= 10 && r.year > 2019 ? r.staff / r.y2019 - 1 : null,
+        pattern: T.pattern(hist), history: hist.map((h) => [h.year, h.staff]),
+        pppCodes: [...new Set(ppp.map((l) => l.naics).filter(Boolean))], pppJobs: ppp.length ? Math.max(...ppp.map((l) => l.jobs || 0)) || null : null,
+        pppAmount: ppp.reduce((a, l) => a + (l.amount || 0), 0) || null,
+        formd: !!pr, vehicle: T.VEHICLE.test(r.name || ''), site: siteOf(r.ein) };
+      out.push(c);
+    }
+    if (f.pppOnly && f.pppCodes.length) {
+      const pq = db.prepare(`select loan, name, name_key, city, state, jobs, naics, amount from ppp_loans
+        where naics in (${f.pppCodes.map(() => '?').join(', ')}) and jobs between ? and ?${inStates} order by jobs desc`)
+        .all(...f.pppCodes, f.minStaff, f.maxStaff, ...stP);
+      const seenKey = new Set();
+      for (const l of pq) {
+        if (seenLoans.has(l.loan) || seenKey.has(l.name_key + '|' + l.state)) continue;
+        seenKey.add(l.name_key + '|' + l.state);
+        if (planKeys(l.state).has(l.name_key)) continue;   // it has a plan, under another code or size: not "loan only"
+        out.push({ key: 'P' + l.loan, source: 'ppp', ein: null, name: l.name, dba: null, city: l.city, state: l.state, planCode: null,
+          staff: null, staffYear: null, y2019: null, firstYear: null, years: 0, growth: null, pattern: { kind: 'short' }, history: [],
+          pppCodes: [l.naics], pppJobs: l.jobs, pppAmount: l.amount, formd: false, vehicle: T.VEHICLE.test(l.name || ''), site: { status: 'no tax ID', hits: [] } });
+      }
+    }
+    for (const c of out) Object.assign(c, T.fit(c, f));
+    out.sort((a, b) => b.score - a.score || (b.staff ?? b.pppJobs ?? 0) - (a.staff ?? a.pppJobs ?? 0) || String(a.name).localeCompare(String(b.name)));
+    if (targetCache.size >= 50) targetCache.delete(targetCache.keys().next().value);
+    targetCache.set(key, out);
+    return out;
+  }
+  function targets(sp) {
+    const f = T.filters(sp);
+    let rows = targetRows(f);
+    const all = rows;
+    if (f.hideBacked) rows = rows.filter((r) => !r.backed);
+    if (f.confirmedOnly) rows = rows.filter((r) => r.site.status === 'read' && r.site.hits.length);
+    const totals = {
+      n: rows.length, plan: rows.filter((r) => r.source === 'plan').length, ppp: rows.filter((r) => r.source === 'ppp').length,
+      confirmed: all.filter((r) => r.site.status === 'read' && r.site.hits.length).length,
+      siteOther: all.filter((r) => r.site.status === 'read' && !r.site.hits.length).length,
+      notTried: all.filter((r) => r.source === 'plan' && r.site.status === 'not tried').length,
+      backed: all.filter((r) => r.backed).length,
+    };
+    return { filters: f, totals, page: f.page, pageSize: 50, rows: rows.slice(f.page * 50, f.page * 50 + 50), all: rows, presets: T.PRESETS,
+      divisions: Object.keys(T.DIVISIONS), regions: Object.keys(T.REGIONS), states: T.STATES };
+  }
+
+  return { options, list, filing, employers, employer, contacts, contactsCsv, contact, crowd, crowdCompany, targets };
 }
 
 function handler(api) {
@@ -393,6 +492,20 @@ function handler(api) {
       if (u.pathname === '/api/employers') return send(res, 200, api.employers(u.searchParams));
       if (u.pathname === '/api/contacts') return send(res, 200, api.contacts(u.searchParams));
       if (u.pathname === '/api/crowd') return send(res, 200, api.crowd(u.searchParams));
+      if (u.pathname === '/api/targets') { const r = api.targets(u.searchParams); delete r.all; return send(res, 200, r); }
+      if (u.pathname === '/api/targets.csv' || u.pathname === '/api/targets.txt') {
+        const r = api.targets(u.searchParams);
+        const day = new Date().toISOString().slice(0, 10);
+        if (u.pathname.endsWith('.txt')) {
+          // The tax IDs for the website reader: plan companies it has not tried, best fit first.
+          const top = Math.min(1000, Math.max(1, Number(u.searchParams.get('top')) || 150));
+          const eins = r.all.filter((x) => x.ein && x.site.status === 'not tried').slice(0, top).map((x) => x.ein);
+          res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="targets-eins-${day}.txt"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+          return res.end(eins.join('\n') + '\n');
+        }
+        res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="targets-${day}.csv"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        return res.end(String.fromCharCode(0xFEFF) + T.toCsv(r.all));
+      }
       if (u.pathname === '/api/crowd-company') {
         const r = api.crowdCompany(String(u.searchParams.get('cik') || ''));
         return r ? send(res, 200, r) : send(res, 404, { error: 'no such company' });
@@ -438,7 +551,9 @@ if (require.main === module) {
   const t = Date.now();
   let naics = {};
   try { naics = require('./naics.json').codes; } catch (_) { /* no titles: codes alone */ }
-  const api = makeApi(db, { tracked, naics });
+  let web = null;
+  try { if (fs.existsSync(path.join(__dirname, 'web-archive.db'))) { web = new DatabaseSync(path.join(__dirname, 'web-archive.db'), { readOnly: true }); web.exec('pragma busy_timeout = 10000'); } } catch (_) { /* no page text: sites shown as found, not read */ }
+  const api = makeApi(db, { tracked, naics, web });
   http.createServer(handler(api)).listen(PORT, HOST, () => {
     console.log(`Form D viewer: http://localhost:${PORT}  (${api.options.filings.toLocaleString('en-US')} filings, ready in ${((Date.now() - t) / 1000).toFixed(1)}s; this machine only, admin password)`);
   });

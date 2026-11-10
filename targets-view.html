@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Targets — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed tg- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .tg-page { max-width: 1400px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 18px; }
+    .tg-page > * { min-width: 0; }
+    .tg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .tg-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .tg-head h1 span { color: var(--muted); font-weight: 400; }
+    .tg-head nav { display: flex; gap: 14px; font-size: 13.5px; flex-wrap: wrap; }
+    .tg-head nav a { color: var(--accent); text-decoration: none; }
+    .tg-head nav b { color: var(--strong); font-weight: 500; }
+    .tg-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .tg-profile { padding: 14px; display: grid; gap: 12px; }
+    .tg-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .tg-f { display: grid; gap: 5px; min-width: 0; }
+    .tg-f > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .tg-f input, .tg-f select { height: 34px; border-radius: 10px; border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--text); font: 13.5px var(--sans); padding: 0 10px; min-width: 0; }
+    .tg-f input:focus, .tg-f select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+    .tg-f.tg-wide { flex: 1 1 360px; } .tg-f.tg-wide input { width: 100%; }
+    .tg-seg { display: inline-flex; border: 1px solid var(--hair-2); border-radius: 10px; overflow: hidden; height: 34px; }
+    .tg-seg button { border: 0; background: var(--surface-2); color: var(--muted); font: 13px var(--sans); padding: 0 12px; cursor: pointer; }
+    .tg-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, var(--surface-2)); color: var(--strong); }
+    .tg-check { display: flex; align-items: center; gap: 7px; height: 34px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .tg-hint { color: var(--faint); font-size: 12px; line-height: 1.5; }
+    .tg-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    .tg-tile { padding: 14px 16px; }
+    .tg-tile b { display: block; font: 600 22px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .tg-tile span { font-size: 12px; color: var(--faint); }
+    .tg-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .tg-actions a { text-decoration: none; }
+    .tg-tablebox { overflow-x: auto; }
+    .tg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tg-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .tg-table td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .tg-table tbody tr[data-ein] { cursor: pointer; }
+    .tg-table tbody tr[data-ein]:hover td { background: var(--panel); }
+    .tg-table .tg-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .tg-name { font-weight: 500; color: var(--strong); max-width: 320px; }
+    .tg-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .tg-why { color: var(--muted); font-size: 11.5px; line-height: 1.45; max-width: 360px; }
+    .tg-fit { font: 600 15px var(--mono); color: var(--strong); }
+    .tg-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent); color: var(--accent-2); margin: 0 0 0 6px; vertical-align: 1px; white-space: nowrap; }
+    .tg-flag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent); color: var(--amber); margin: 2px 4px 0 0; white-space: nowrap; }
+    .tg-site-ok { color: var(--accent); } .tg-dash { color: var(--faint); }
+    .tg-spark { display: block; margin-top: 4px; }
+    .tg-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+    .tg-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
+    .tg-empty { padding: 30px; text-align: center; color: var(--muted); }
+    .tg-note { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin: 0; }
+    body.tg-busy .tg-results { opacity: 0.55; }
+    @media (max-width: 900px) { .tg-page { padding: 16px 16px 0; } .tg-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+<div class="tg-page">
+  <div class="tg-head">
+    <h1>Targets <span>· private companies that fit a buyer's profile</span></h1>
+    <nav><a href="/">Form D</a><a href="/employers">Employers</a><a href="/contacts">Contacts</a><a href="/crowdfunding">Crowdfunding</a><b>Targets</b><a href="/data-sources">Data sources</a></nav>
+  </div>
+
+  <div class="tg-box tg-profile">
+    <div class="tg-row">
+      <label class="tg-f"><span>Profile</span><select id="preset"></select></label>
+      <div class="tg-f"><span>Buyer</span>
+        <div class="tg-seg" role="group" aria-label="Buyer">
+          <button type="button" data-buyer="addon" aria-pressed="true" title="A company already in the field (often owned by a private equity firm) buying smaller ones">Add-on for an owner</button>
+          <button type="button" data-buyer="platform" aria-pressed="false" title="A private equity firm looking for a first company in the field">New platform</button>
+        </div>
+      </div>
+      <label class="tg-f"><span>Region</span><select id="regionKind">
+        <option value="">The whole country</option>
+        <option value="near">A state and its neighbours</option>
+        <option value="near2">A state, its neighbours and theirs</option>
+        <option value="states">These states</option>
+        <optgroup label="Census regions" id="og-region"></optgroup>
+        <optgroup label="Census divisions" id="og-division"></optgroup>
+      </select></label>
+      <label class="tg-f" id="regionValBox" hidden><span id="regionValLabel">State</span><input id="regionVal" type="search" placeholder="WV" style="width:150px;text-transform:uppercase" autocomplete="off" /></label>
+      <label class="tg-f"><span>Staff from</span><input id="minStaff" type="number" min="1" style="width:84px" /></label>
+      <label class="tg-f"><span>to</span><input id="maxStaff" type="number" min="1" style="width:84px" /></label>
+      <label class="tg-f" title="Years of retirement-plan filings: a long record usually means an established company"><span>Years filing at least</span><select id="minYears"><option value="0">Any</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option><option value="15">15</option></select></label>
+    </div>
+    <div class="tg-row">
+      <label class="tg-f" title="Starts of the business code on the plan filings, comma-separated"><span>Plan business codes</span><input id="planCodes" type="search" style="width:150px" autocomplete="off" /></label>
+      <label class="tg-f" title="Six-digit codes on the 2020–21 payroll loans, comma-separated"><span>Loan codes</span><input id="pppCodes" type="search" style="width:210px" autocomplete="off" /></label>
+      <label class="tg-f tg-wide" title="What its own website should say, comma-separated"><span>Its website says</span><input id="keywords" type="search" autocomplete="off" /></label>
+    </div>
+    <div class="tg-row">
+      <label class="tg-check"><input type="checkbox" id="pppOnly" checked /> Include companies known only from a payroll loan</label>
+      <label class="tg-check"><input type="checkbox" id="hideBacked" /> Hide those that look already bought or backed</label>
+      <label class="tg-check"><input type="checkbox" id="confirmed" /> Only those whose website bears it out</label>
+    </div>
+  </div>
+
+  <div class="tg-tiles" id="tg-tiles"></div>
+  <div class="tg-actions">
+    <a class="btn" id="csv" href="#">Spreadsheet (CSV)</a>
+    <a class="btn" id="eins" href="#" title="Run: node --use-system-ca website-load.js --commit --eins &lt;file&gt;">Tax IDs for the website reader (best 150 not yet read)</a>
+    <span class="tg-hint" id="tg-time"></span>
+  </div>
+
+  <div class="tg-box tg-results">
+    <div class="tg-tablebox">
+      <table class="tg-table">
+        <thead><tr>
+          <th class="tg-n">Fit</th><th>Company</th><th>Place</th><th>Business</th><th class="tg-n">Staff</th><th>Pattern</th><th>Its website</th><th>Why</th>
+        </tr></thead>
+        <tbody id="tg-rows"></tbody>
+      </table>
+    </div>
+    <div class="tg-pager"><span id="tg-count"></span><span><button class="btn" id="prev" type="button">Previous</button> <button class="btn" id="next" type="button">Next</button></span></div>
+  </div>
+
+  <p class="tg-note"><b>How the fit is scored</b> (a description against the profile above, not advice): +15 the plan's business code, +20 the exact code on its payroll loan, +30 its own website names two or more of the words (+15 one, −20 none), +10 size in range, +10 ten years of plan filings (+5 five), +10 steady staff, +5 in the chosen state; −5 raised outside money, −5 a holding-company name. <b>Pattern:</b> "jump" is the newest year's staff a third above the typical year three to eight years before, the way a buy-and-build shows (CITCO went from about 100 to 180 once its owner began buying); for a new platform it counts −10. Staff is the largest count a company's own plans report; a company with no plan is known only from its 2020–21 payroll loan (jobs then). Codes on the plan forms are broad, so a company is only confirmed in the business once its own website has been read. Local archive, this machine only.</p>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="tg-dash">—</span>';
+const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const FIELDS = ['preset', 'minStaff', 'maxStaff', 'minYears', 'planCodes', 'pppCodes', 'keywords'];
+const state = { buyer: 'addon', page: 0, presets: null, loaded: false };
+let seq = 0;
+
+function region() {
+  const k = $('regionKind').value, v = $('regionVal').value.trim().toUpperCase();
+  if (!k) return '';
+  if (k === 'near' || k === 'near2') return /^[A-Z]{2}$/.test(v) ? k + ':' + v : '';
+  if (k === 'states') return v ? 'states:' + v : '';
+  return k;   // region:… or division:…
+}
+function params(extra) {
+  const sp = new URLSearchParams();
+  for (const id of FIELDS) { const v = $(id).value.trim(); if (v !== '') sp.set(id, v); }
+  sp.set('buyer', state.buyer);
+  const r = region(); if (r) sp.set('region', r);
+  if (!$('pppOnly').checked) sp.set('pppOnly', '0');
+  if ($('hideBacked').checked) sp.set('hideBacked', '1');
+  if ($('confirmed').checked) sp.set('confirmed', '1');
+  if (state.page) sp.set('page', String(state.page));
+  for (const [k, v] of Object.entries(extra || {})) sp.set(k, v);
+  return sp;
+}
+function readUrl() {
+  const sp = new URLSearchParams(location.search);
+  for (const id of FIELDS) if (sp.has(id)) $(id).value = sp.get(id);
+  if (sp.get('buyer') === 'platform') state.buyer = 'platform';
+  const r = sp.get('region') || '';
+  const m = /^(near2?|states):(.*)$/.exec(r);
+  if (m) { $('regionKind').value = m[1]; $('regionVal').value = m[2]; } else $('regionKind').value = r;
+  $('pppOnly').checked = sp.get('pppOnly') !== '0';
+  $('hideBacked').checked = sp.get('hideBacked') === '1';
+  $('confirmed').checked = sp.get('confirmed') === '1';
+  state.page = Math.max(0, Number(sp.get('page')) || 0);
+}
+function showRegionVal() {
+  const k = $('regionKind').value;
+  $('regionValBox').hidden = !(k === 'near' || k === 'near2' || k === 'states');
+  $('regionValLabel').textContent = k === 'states' ? 'States' : 'State';
+  $('regionVal').placeholder = k === 'states' ? 'WV, OH, KY' : 'WV';
+}
+function buyerButtons() { for (const b of document.querySelectorAll('[data-buyer]')) b.setAttribute('aria-pressed', String(b.dataset.buyer === state.buyer)); }
+
+// The staff history as a small line: one point a plan year.
+function spark(h) {
+  if (!h || h.length < 2) return '';
+  const W = 90, H = 22, xs = h.map((p) => p[0]), ys = h.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y1 = Math.max(...ys, 1);
+  const pts = h.map((p) => ((p[0] - x0) / Math.max(1, x1 - x0) * (W - 2) + 1).toFixed(1) + ',' + (H - 1 - p[1] / y1 * (H - 3)).toFixed(1)).join(' ');
+  return '<svg class="tg-spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><polyline points="' + pts + '"/></svg>';
+}
+const PATTERN = { steady: 'steady', jump: 'jump', shrinking: 'shrinking', short: 'too few years' };
+function siteCell(r) {
+  const s = r.site || {};
+  if (s.status === 'read') return s.hits.length ? '<span class="tg-site-ok">' + esc(s.domain) + '</span><span class="tg-sub">' + esc(s.hits.join(', ')) + '</span>' : esc(s.domain) + '<span class="tg-sub">none of the words</span>';
+  if (s.status === 'not tried') return DASH + '<span class="tg-sub">not read yet</span>';
+  if (s.status === 'no tax ID') return DASH + '<span class="tg-sub">loan only: no tax ID to look it up</span>';
+  return esc(s.domain || '') + '<span class="tg-sub">' + esc(s.status) + '</span>';
+}
+
+async function load() {
+  const my = ++seq, sp = params();
+  history.replaceState(null, '', '?' + sp.toString());
+  document.body.classList.add('tg-busy');
+  $('csv').href = '/api/targets.csv?' + params({ page: '0' });
+  $('eins').href = '/api/targets.txt?' + params({ page: '0', top: '150' });
+  const t0 = performance.now();
+  let d;
+  try { const r = await fetch('/api/targets?' + sp); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { if (my === seq) { document.body.classList.remove('tg-busy'); $('tg-rows').innerHTML = '<tr><td colspan="8" class="tg-empty">Could not read the list (' + esc(e.message) + ').</td></tr>'; } return; }
+  if (my !== seq) return;
+  document.body.classList.remove('tg-busy');
+  $('tg-time').textContent = 'Searched in ' + ((performance.now() - t0) / 1000).toFixed(1) + 's' + (d.filters.states ? ' · ' + d.filters.states.join(', ') : ' · every state');
+  if (!state.presets) {
+    state.presets = d.presets;
+    $('preset').innerHTML = Object.entries(d.presets).map(([k, p]) => '<option value="' + esc(k) + '">' + esc(p.label) + '</option>').join('');
+    $('preset').value = d.filters.preset;
+    $('og-region').innerHTML = d.regions.map((x) => '<option value="region:' + esc(x) + '">' + esc(x) + '</option>').join('');
+    $('og-division').innerHTML = d.divisions.map((x) => '<option value="division:' + esc(x) + '">' + esc(x) + '</option>').join('');
+    readUrl(); showRegionVal();
+  }
+  // The profile's values show in the empty fields as placeholders.
+  const f = d.filters;
+  $('minStaff').placeholder = f.minStaff; $('maxStaff').placeholder = f.maxStaff;
+  $('planCodes').placeholder = f.planCodes.join(', '); $('pppCodes').placeholder = f.pppCodes.join(', '); $('keywords').placeholder = f.keywords.join(', ');
+  const t = d.totals;
+  $('tg-tiles').innerHTML = [[num(t.n), 'candidates (' + num(t.plan) + ' with plans, ' + num(t.ppp) + ' loan only)'], [num(t.confirmed), 'website bears it out'], [num(t.siteOther), 'website says another business'], [num(t.notTried), 'websites not read yet'], [num(t.backed), 'look already bought or backed']]
+    .map(([b, s]) => '<div class="tg-box tg-tile"><b>' + b + '</b><span>' + s + '</span></div>').join('');
+  $('tg-rows').innerHTML = d.rows.map((r) => '<tr' + (r.ein ? ' data-ein="' + esc(r.ein) + '" title="Open its fact sheet"' : '') + '>'
+    + '<td class="tg-n"><span class="tg-fit">' + r.score + '</span></td>'
+    + '<td class="tg-name">' + esc(r.name) + (r.source === 'ppp' ? '<span class="tg-tag">loan only</span>' : '') + (r.dba && r.dba !== r.name ? '<span class="tg-sub">' + esc(r.dba) + '</span>' : '')
+      + (r.flags.length ? '<div>' + r.flags.map((x) => '<span class="tg-flag">' + esc(x) + '</span>').join('') + '</div>' : '') + '</td>'
+    + '<td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
+    + '<td>' + (r.planCode ? 'plan ' + esc(r.planCode) : DASH) + '<span class="tg-sub">' + (r.pppCodes.length ? 'loan ' + esc(r.pppCodes.join(', ')) : 'no loan matched') + '</span></td>'
+    + '<td class="tg-n">' + (r.staff != null ? num(r.staff) + '<span class="tg-sub">' + esc(r.staffYear) + (r.y2019 ? ' · 2019: ' + num(r.y2019) : '') + '</span>' : num(r.pppJobs) + '<span class="tg-sub">jobs on its loan</span>') + '</td>'
+    + '<td>' + esc(PATTERN[r.pattern.kind] || r.pattern.kind) + (r.years ? '<span class="tg-sub">' + esc(r.firstYear) + '–' + esc(r.staffYear) + '</span>' : '') + spark(r.history) + '</td>'
+    + '<td>' + siteCell(r) + '</td>'
+    + '<td class="tg-why">' + r.why.map(esc).join('<br>') + '</td></tr>').join('')
+    || '<tr><td colspan="8" class="tg-empty">No companies fit this profile. Widen the region or the size.</td></tr>';
+  const n = t.n, a = d.page * d.pageSize;
+  $('tg-count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + d.rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') : '';
+  $('prev').disabled = d.page === 0; $('next').disabled = a + d.rows.length >= n;
+}
+
+let timer = null;
+const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 450); };
+for (const id of ['minStaff', 'maxStaff', 'planCodes', 'pppCodes', 'keywords', 'regionVal']) $(id).addEventListener('input', soon);
+for (const id of ['minYears', 'pppOnly', 'hideBacked', 'confirmed']) $(id).addEventListener('change', () => { state.page = 0; load(); });
+$('preset').addEventListener('change', () => { for (const id of ['minStaff', 'maxStaff', 'planCodes', 'pppCodes', 'keywords']) $(id).value = ''; state.page = 0; load(); });
+$('regionKind').addEventListener('change', () => { showRegionVal(); state.page = 0; load(); });
+for (const b of document.querySelectorAll('[data-buyer]')) b.addEventListener('click', () => {
+  state.buyer = b.dataset.buyer; buyerButtons();
+  $('minStaff').value = ''; $('maxStaff').value = '';   // each buyer has its own size band
+  state.page = 0; load();
+});
+$('prev').addEventListener('click', () => { if (state.page) { state.page--; load(); window.scrollTo({ top: 0 }); } });
+$('next').addEventListener('click', () => { state.page++; load(); window.scrollTo({ top: 0 }); });
+$('tg-rows').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-ein]'); if (tr) window.open('/employers?q=' + encodeURIComponent(tr.dataset.ein) + '&open=' + encodeURIComponent(tr.dataset.ein), '_blank', 'noopener'); });
+readUrl(); buyerButtons(); showRegionVal();
+load();
+</script>
+</body>
+</html>
