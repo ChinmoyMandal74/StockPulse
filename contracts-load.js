@@ -86,7 +86,9 @@ async function download(opts, deps) {
       }
       // The whole file's size, as the server states it: the total in Content-Range, else Content-Length.
       const cr = /\/(\d+)$/.exec(F.r.headers.get('content-range') || ''), expect = cr ? Number(cr[1]) : Number(F.r.headers.get('content-length')) || null;
-      const bytes = await deps.save(F.r, file.file_name, had > 0, expect);
+      let bytes;
+      try { bytes = await deps.save(F.r, file.file_name, had > 0, expect); }
+      catch (e) { F.done(0); throw e; }   // a transfer that broke off was still a request: it counts against the cap
       F.done(bytes);
       log(`FY${fy}: ${file.file_name}, ${(bytes / 1e9).toFixed(2)}GB in ${((deps.now() - F.t0) / 1000).toFixed(0)}s${had ? `, resumed from ${(had / 1e6).toFixed(0)}MB` : ''}`);
     } catch (e) { log(`FY${fy}: ${e.message}`); return { ok: false, stopped: e.message }; }

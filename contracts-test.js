@@ -84,6 +84,11 @@ eq([...y24.agencies.keys()], ['Department of Defense', 'Department of Energy'], 
   rh = resume(200, null);
   const whole = await L.download({ commit: true, gapS: 60, years: [2016] }, rh.deps);
   ok(!whole.ok && rh.saved.length === 0 && rh.calls.length === 2, 'a full 200 to a resume request stops; nothing retried');
+  rh = resume(206, 'bytes 600-999/1000');
+  rh.deps.save = async () => { throw new Error('terminated'); };
+  const broke = await L.download({ commit: true, gapS: 60, years: [2016] }, rh.deps);
+  const logged = rh.deps.readLog().filter((r) => r.url === URL).length;
+  ok(!broke.ok && logged === 1, 'a transfer that breaks off is still logged, so it counts against the daily cap');
   console.log(`contracts-test: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
