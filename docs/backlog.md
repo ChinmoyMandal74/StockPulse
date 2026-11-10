@@ -2909,9 +2909,9 @@ buy only where it must.
     new filings only); bulk data under 19 NYCRR 155, price not found.
   - **Florida**: the registry is run by a private contractor as a
     pay-per-search site; no bulk product found.
-  Next, if wanted: ask Kentucky whether this use counts as
-  non-commercial (the owner's call how to describe it), and ask
-  California and Illinois for a price.
+  **Not taken** (owner, 2026-11-10: "No leave this .. I am not paying").
+  A single company can still be looked up by hand on a state's search
+  page for a brief.
 - **i. City building permits**: project volume for construction trades.
   Scattered and messy.
 
