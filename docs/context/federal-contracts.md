@@ -17,7 +17,7 @@ October 1), about 19GB on disk.
 
 | File | What |
 |---|---|
-| `contracts-load.js` | The download, careful as the other loaders (a broken transfer resumes on the next run, below): the listing service (`api.usaspending.gov .../list_monthly_files/`, one request a year) gives the dated file name, then the file; one request at a time a minute apart, any non-200 stops and nothing is retried, kept in `%TEMP%\tickrlab-usaspending` and never fetched twice (streamed to `.part`), 30 requests a day at most (24 for the twelve years) |
+| `contracts-load.js` | The download, careful as the other loaders (a broken transfer resumes on the next run, below): the listing service (`api.usaspending.gov .../list_monthly_files/`, one request a year) gives the dated file name, then the file; one request at a time a minute apart, any non-200 stops and nothing is retried, kept in `downloads\usaspending` (in the project, gitignored) and never fetched twice (streamed to `.part`), 30 requests a day at most (24 for the twelve years) |
 | `contracts-read.js` | The read step (`--load`): each ZIP into `fed_contracts` in the LOCAL `formd.db`, one row a recipient a fiscal year: UEI, name and match key, parent, city, state, ZIP, telephone (one form), dollars obligated (modifications can be negative, so a year can net below zero), actions, the largest agency, the most frequent industry code. **No street, no fax**, nothing per action |
 | `contracts-test.js` | The rules and the download's stop, cap and gap |
 

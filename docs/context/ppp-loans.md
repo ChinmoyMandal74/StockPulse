@@ -18,7 +18,7 @@ Form D issuers by name and state only: inexact, and every page says so.
 
 | File | What |
 |---|---|
-| `ppp-load.js` | The download, careful as the other loaders: thirteen bulk files (about 420MB each), one at a time a minute apart (`--gap`, never under 30s), any non-200 stops and nothing is retried, kept in `%TEMP%\tickrlab-sba` and never fetched twice (streamed to `.part`, kept only once whole and starting with the header), 20 requests a day at most (logged in `requests.json` beside the files), one run at a time |
+| `ppp-load.js` | The download, careful as the other loaders: thirteen bulk files (about 420MB each), one at a time a minute apart (`--gap`, never under 30s), any non-200 stops and nothing is retried, kept in `downloads\sba` (in the project, gitignored) and never fetched twice (streamed to `.part`, kept only once whole and starting with the header), 20 requests a day at most (logged in `requests.json` beside the files), one run at a time |
 | `pppload-read.js` | The read step (`--load`): the files on disk into `ppp_loans` in the LOCAL `formd.db`, no request; `nameKey`, the match key (capitals, `&` as AND, punctuation and legal suffixes dropped: "Continental Electrical Construction Co., LLC" and "CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC" both give "CONTINENTAL ELECTRICAL CONSTRUCTION") |
 | `ppp-test.js` | The row rules, the read step over a file made in the test, the download's stop, cap and gap |
 

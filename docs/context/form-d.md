@@ -40,7 +40,7 @@ This address has had a 429 and then a 403 (`sec-edgar.md`). The loader:
 - **stops at any answer but a 200**, a 429, a 403, a 5xx or a dropped
   connection alike, and retries nothing; a quarter refused is not marked
   done, so the next run picks it up;
-- **never fetches a file twice**: ZIPs are kept in `%TEMP%\tickrlab-sec`,
+- **never fetches a file twice**: ZIPs are kept in `downloads\sec` (in the project, gitignored),
   the data-set page for a week;
 - keeps **at most 100 sec.gov requests in any 24 hours**, counted in the
   archive's own `requests` table (every request logged with its status);
@@ -152,7 +152,7 @@ can we get that from somewhere", then "add all this to backlog first and
 start with 1" (backlog 61, E1 to E6).
 
 `formd-load.js --profiles [--commit]` reads the SEC's bulk submissions file
-already on disk (`submissions-YYYY-MM-DD.zip` in `%TEMP%	ickrlab-sec`,
+already on disk (`submissions-YYYY-MM-DD.zip` in `downloads\1` (in the project, gitignored),
 fetched once by `acq-load.js --list`) and **makes no request**: a missing
 file is an error, never a download. `formd.js filerProfile` turns each
 issuer's JSON (and its older pages) into one row of `fd_profiles`, keyed

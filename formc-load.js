@@ -5,7 +5,7 @@
 //   - bulk files only: one ZIP a quarter since 2016 Q2; never a request a filing;
 //   - one request at a time, --gap seconds apart (60 by default, never under 15);
 //   - every answer but a 200 stops the run, with nothing retried;
-//   - every file is kept in the system temp folder and never fetched twice; the
+//   - every file is kept in the project's downloads folder (gitignored) and never fetched twice; the
 //     data-set page is kept for a week;
 //   - at most 100 requests to sec.gov in any 24 hours, counted TOGETHER with
 //     Form D's log (formd.db) and the acquired-companies loader's (acq.db);
@@ -27,7 +27,7 @@ const FC = require('./formc.js');
 const { makeGetter } = require('./formd-load.js');
 
 const PAGE_URL = 'https://www.sec.gov/data-research/sec-markets-data/crowdfunding-offerings-data-sets';
-const DIR = path.join(os.tmpdir(), 'tickrlab-sec');
+const DIR = path.join(__dirname, 'downloads', 'sec');
 const PAGE_FILE = path.join(DIR, 'formc-data-sets.html');
 const LOCK = path.join(DIR, 'formc-load.lock');
 const PAGE_MAX_AGE = 7 * 86400e3;

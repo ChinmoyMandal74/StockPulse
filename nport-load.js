@@ -38,7 +38,7 @@ const TOP = 15;
 const UA = process.env.SEC_UA
   || `Tickr Lab (${process.env.REPORT_TO || process.env.MAIL_FROM || 'owner@example.com'})`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const DIR = path.join(os.tmpdir(), 'tickrlab-sec');
+const DIR = path.join(__dirname, 'downloads', 'sec');
 fs.mkdirSync(DIR, { recursive: true });
 
 // A data set, kept on disk between runs: these never change once published.

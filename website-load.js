@@ -36,7 +36,7 @@ const crypto = require('crypto');
 const W = require('./websites.js');
 const Rel = require('./releases.js');
 
-const DIR = path.join(os.tmpdir(), 'tickrlab-web');
+const DIR = path.join(__dirname, 'downloads', 'web');
 const LOCK = path.join(DIR, 'website-load.lock');
 const MIN_GAP_S = 2;
 const MAX_TRIES = 5;                 // addresses visited a company (DNS lookups are free)

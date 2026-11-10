@@ -40,7 +40,7 @@ Every institutional manager with more than $100 million in US-listed securities 
 
 ## Refreshing
 
-**Four times a year, by hand**: `node --use-system-ca inst13f-load.js --commit`. It reads whichever two data sets are newest and says which quarters they are. Nothing schedules it, and running it before the SEC publishes a new set changes nothing. Downloads are kept in the system temp folder (`tickrlab-sec`) and reused.
+**Four times a year, by hand**: `node --use-system-ca inst13f-load.js --commit`. It reads whichever two data sets are newest and says which quarters they are. Nothing schedules it, and running it before the SEC publishes a new set changes nothing. Downloads are kept in the project's `downloadssec` folder (gitignored) and reused.
 
 ## First load, 2026-10-11
 

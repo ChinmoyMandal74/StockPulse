@@ -30,7 +30,7 @@ count.
 
 1. **`--list`: one request in all.** The SEC's bulk submissions file
    (`submissions.zip`, 1.57GB on 2026-11-09: every filer's filing list, each
-   8-K with its items) is downloaded once into `%TEMP%\tickrlab-sec` and read
+   8-K with its items) is downloaded once into `downloads\sec` (in the project, gitignored) and read
    from disk. That replaces a request a company (about 3,000 for our own
    companies alone). Read in about 3 minutes: 992,106 filers; since 2009,
    10,500 filers closed an acquisition (831 of them ours), with 28,016
@@ -116,4 +116,4 @@ node --use-system-ca acq-load.js --search "lattice"
 `--all-filers` widens `--index` and `--read` from our companies to every
 filer (12,338 amendments; about 37,000 requests and $70 of model time at
 the rates above, so weeks at the daily cap). A new bulk file is needed only
-for new filings; delete the old ZIP from `%TEMP%\tickrlab-sec` to fetch one.
+for new filings; delete the old ZIP from `downloads\sec` (in the project, gitignored) to fetch one.

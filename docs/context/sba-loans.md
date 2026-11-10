@@ -28,7 +28,7 @@ plan sponsors and the Form D issuers by name and state (the PPP match key,
 
 | File | What |
 |---|---|
-| `sba-load.js` | The six files' names and address, and the command. The download is the PPP loader's (`ppp-load.js` `download` and `fileDeps`, given `files`, `base` and the header to expect): same folder `%TEMP%\tickrlab-sba`, same request log and **20-a-day cap shared with PPP** (one host), same lock, one request a minute, any non-200 stops, nothing retried, never fetched twice |
+| `sba-load.js` | The six files' names and address, and the command. The download is the PPP loader's (`ppp-load.js` `download` and `fileDeps`, given `files`, `base` and the header to expect): same folder `downloads\sba` (in the project, gitignored), same request log and **20-a-day cap shared with PPP** (one host), same lock, one request a minute, any non-200 stops, nothing retried, never fetched twice |
 | `sbaload-read.js` | The read step (`--load`): the files on disk into `sba_loans` in the LOCAL `formd.db`, no request. A loan's key is a hash of its own fields (program, name, city, state, ZIP, approval date, amount, lender, term), so a status change keeps the key. A later quarterly release adds the loans it does not hold; the status of a loan already kept stays as first read |
 | `sba-test.js` | The row rules, the read step over files made in the test, and the shared download pointed at these files |
 

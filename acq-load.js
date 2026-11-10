@@ -45,7 +45,7 @@ const Q = require('./acq.js');
 const Rel = require('./releases.js');
 
 const LIST_URL = 'https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip';
-const DIR = path.join(os.tmpdir(), 'tickrlab-sec');
+const DIR = path.join(__dirname, 'downloads', 'sec');
 const LOCK = path.join(DIR, 'acq-load.lock');
 const MIN_GAP_S = 5;
 const DAY_CAP = 1000;

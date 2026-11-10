@@ -65,3 +65,7 @@ acq.db-shm
 web-archive.db
 web-archive.db-wal
 web-archive.db-shm
+
+# Bulk files the local loaders download (SEC, Labor, SBA, USAspending, websites):
+# kept so nothing is fetched twice. Large; never committed.
+downloads/

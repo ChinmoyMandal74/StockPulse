@@ -8,7 +8,7 @@
 //   - bulk files only, one a fiscal year, never a request per company;
 //   - one request at a time, --gap seconds apart (60 by default, never under 30);
 //   - any answer but a 200 stops the run, nothing retried;
-//   - every file kept in the system temp folder and never fetched twice
+//   - every file kept in the project's downloads folder (gitignored) and never fetched twice
 //     (streamed to .part, kept only once whole and a ZIP);
 //   - at most 30 requests in any 24 hours; one run at a time; nothing schedules it.
 // The file names carry the archive's refresh date; the listing service
@@ -23,7 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const DIR = path.join(os.tmpdir(), 'tickrlab-usaspending');
+const DIR = path.join(__dirname, 'downloads', 'usaspending');
 const LOCK = path.join(DIR, 'contracts-load.lock');
 const LIST = 'https://api.usaspending.gov/api/v2/bulk_download/list_monthly_files/';
 const MIN_GAP_S = 30;

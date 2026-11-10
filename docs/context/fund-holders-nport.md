@@ -40,7 +40,7 @@ The second is inside the first: a manager's 13F adds up its funds and its other 
 
 ## Refreshing
 
-**Four times a year, by hand**: `node --use-system-ca nport-load.js --commit`, after the SEC publishes a new data set (a few weeks after each calendar quarter). About 30 seconds to download and two and a half minutes to read both sets. Downloads are kept in the system temp folder (`tickrlab-sec`), about 900MB for the two, and reused.
+**Four times a year, by hand**: `node --use-system-ca nport-load.js --commit`, after the SEC publishes a new data set (a few weeks after each calendar quarter). About 30 seconds to download and two and a half minutes to read both sets. Downloads are kept in the project's `downloadssec` folder (gitignored), about 900MB for the two, and reused.
 
 ## First load, 2026-10-11
 

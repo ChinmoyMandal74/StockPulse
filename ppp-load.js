@@ -9,7 +9,7 @@
 //   - thirteen bulk CSVs, about 420MB each, never a request per business;
 //   - one request at a time, --gap seconds apart (60 by default, never under 30);
 //   - any answer but a 200 stops the run, nothing retried;
-//   - every file kept in the system temp folder and never fetched twice
+//   - every file kept in the project's downloads folder (gitignored) and never fetched twice
 //     (streamed to .part, kept only once whole);
 //   - at most 20 requests in any 24 hours, counted in the archive's own log;
 //   - one run at a time (a lock file); nothing schedules it.
@@ -25,7 +25,7 @@ const path = require('path');
 
 const BASE = 'https://data.sba.gov/sites/default/files/distribution/SBA-OCA-2022-07-001/';
 const FILES = ['public_150k_plus_240930.csv', ...Array.from({ length: 12 }, (_, i) => `public_up_to_150k_${i + 1}_240930.csv`)];
-const DIR = path.join(os.tmpdir(), 'tickrlab-sba');
+const DIR = path.join(__dirname, 'downloads', 'sba');
 const LOCK = path.join(DIR, 'ppp-load.lock');
 const MIN_GAP_S = 30;
 const DAY_CAP = 20;

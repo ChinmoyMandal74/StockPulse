@@ -16,7 +16,7 @@
 //   - a few fails-to-deliver files, read only for the one thing they are
 //     uniquely good for here: each line carries a security's CUSIP beside its
 //     ticker, which is the map a 13F needs and the app did not have.
-// Downloads are kept in the system temp folder and reused on a second run.
+// Downloads are kept in the project's downloads folder (gitignored) and reused on a second run.
 //
 //   node --use-system-ca inst13f-load.js                 # report, write nothing
 //   node --use-system-ca inst13f-load.js --commit
@@ -40,7 +40,7 @@ const TOP = 15;
 const UA = process.env.SEC_UA
   || `Tickr Lab (${process.env.REPORT_TO || process.env.MAIL_FROM || 'owner@example.com'})`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const DIR = path.join(os.tmpdir(), 'tickrlab-sec');
+const DIR = path.join(__dirname, 'downloads', 'sec');
 fs.mkdirSync(DIR, { recursive: true });
 
 async function page(url) {

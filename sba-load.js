@@ -11,7 +11,7 @@
 //   - six bulk CSVs, never a request per business;
 //   - one request at a time, --gap seconds apart (60 by default, never under 30);
 //   - any answer but a 200 stops the run, nothing retried;
-//   - every file kept in the system temp folder and never fetched twice;
+//   - every file kept in the project's downloads folder (gitignored) and never fetched twice;
 //   - one run at a time; nothing schedules it.
 //
 //   node --use-system-ca sba-load.js                      # what it would do; no request

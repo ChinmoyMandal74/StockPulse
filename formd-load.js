@@ -9,7 +9,7 @@
 //   - one request at a time, with a pause between requests (--gap, 30s by
 //     default, never under 15s);
 //   - every answer but a 200 stops the run, with nothing retried;
-//   - every file is kept in the system temp folder and never fetched twice;
+//   - every file is kept in the project's downloads folder (gitignored) and never fetched twice;
 //     the data-set page is kept for a week;
 //   - at most 100 requests to sec.gov in any 24 hours, counted in the
 //     archive's own request log; a run that would pass it stops first;
@@ -37,7 +37,7 @@ const Zip = require('./zipread.js');
 const F = require('./formd.js');
 
 const PAGE_URL = 'https://www.sec.gov/data-research/sec-markets-data/form-d-data-sets';
-const DIR = path.join(os.tmpdir(), 'tickrlab-sec');
+const DIR = path.join(__dirname, 'downloads', 'sec');
 const PAGE_FILE = path.join(DIR, 'formd-data-sets.html');
 const LOCK = path.join(DIR, 'formd-load.lock');
 const PAGE_MAX_AGE = 7 * 86400e3;

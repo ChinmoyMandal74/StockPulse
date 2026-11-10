@@ -8,7 +8,7 @@
 //     30 to 140MB each), never a request per company;
 //   - one request at a time, --gap seconds apart (60 by default, never under 30);
 //   - every answer but a 200 stops the run, nothing retried;
-//   - every ZIP is kept in the system temp folder and never fetched twice;
+//   - every ZIP is kept in the project's downloads folder (gitignored) and never fetched twice;
 //   - at most 40 requests to the Labor Department in any 24 hours, counted
 //     in the archive's own request log;
 //   - one run at a time (a lock file); nothing schedules it.
@@ -30,7 +30,7 @@ const path = require('path');
 const Zip = require('./zipread.js');
 const P = require('./f5500.js');
 
-const DIR = path.join(os.tmpdir(), 'tickrlab-dol');
+const DIR = path.join(__dirname, 'downloads', 'dol');
 const LOCK = path.join(DIR, 'f5500-load.lock');
 const MIN_GAP_S = 30;
 const DAY_CAP = 40;
