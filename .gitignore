@@ -69,3 +69,5 @@ web-archive.db-shm
 # Bulk files the local loaders download (SEC, Labor, SBA, USAspending, websites):
 # kept so nothing is fetched twice. Large; never committed.
 downloads/
+# Zips of the local databases made by backup-db.js; never committed.
+backups/
