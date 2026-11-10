@@ -107,6 +107,7 @@ async function run(opts, deps) {
     }
   }
   log(`done: ${loadedN} quarter(s) loaded; ${todo.length - loadedN} still to go.`);
+  if (loadedN && deps.summarise) deps.summarise({ commit: true }, deps);   // the formc summary, from what is stored; no requests
   return { ok: true, loaded: loadedN, left: todo.length - loadedN };
 }
 

@@ -58,6 +58,40 @@ const T = () => ({ SUBMISSION: FC.parseTsv(tsv(H_SUB, SUB)), DISCLOSURE: FC.pars
   eq(C.loadQuarter('2027Q1', 'u', T(), 1).rows, 4, 'the next quarter after a rollback still loads');
 }
 
+// ---- the summary (the data set's own column names, values as filed) ----
+eq(FC.fcDate('20260930'), '2026-09-30', 'a filing date as the data set writes it');
+eq(FC.fcDate('2026-10-27'), '2026-10-27', 'a deadline as the data set writes it');
+eq(FC.fcDate(''), null, 'a blank date is null');
+{
+  const A = Archive.open(':memory:');
+  const C = CArchive.open(A.db);
+  const H_ISS = 'ACCESSION_NUMBER\tNAMEOFISSUER\tLEGALSTATUSFORM\tLEGALSTATUSOTHERDESC\tSTREET1\tZIPCODE\tCITY\tSTATEORCOUNTRY\tISSUERWEBSITE\tCOMPANYNAME\tCOMMISSIONCIK';
+  const ISS = ['0001670254-26-000101\tGoSun Inc.\tCorporation\t\t1 Main St\t45202\tCincinnati\tOH\thttps://www.gosun.co\tStartEngine Primary, LLC\t0001661779',
+    '0001670254-26-000102\tCGB Green Liberty Notes LLC\tOther\tSeries LLC\t2 Elm St\t06103\tHARTFORD\tCT\tinvest.ctgreenbank.com\t\t'];
+  const H_D = 'ACCESSION_NUMBER\tSECURITYOFFEREDTYPE\tSECURITYOFFEREDOTHERDESC\tPRICE\tOFFERINGAMOUNT\tMAXIMUMOFFERINGAMOUNT\tDEADLINEDATE\tOVERSUBSCRIPTIONACCEPTED\tCURRENTEMPLOYEES\tREVENUEMOSTRECENTFISCALYEAR\tREVENUEPRIORFISCALYEAR\tNETINCOMEMOSTRECENTFISCALYEAR\tTOTALASSETMOSTRECENTFISCALYEAR';
+  const D = ['0001670254-26-000101\tCommon Stock\t\t4.0\t20000.0\t3741608.0\t2026-12-29\tY\t12\t987762\t\t-1124120\t2423162',
+    '0001670254-26-000102\tOther\tNotes\t\t\t\t\t\t1\t0\t237030\t232788\t8127713'];
+  const SUB3 = SUB.concat('0001670254-26-000103\tC-TR\t20260420\t0001900003');
+  C.loadQuarter('2026Q2', 'u', { SUBMISSION: FC.parseTsv(tsv(H_SUB, SUB3)), ISSUER_INFORMATION: FC.parseTsv(tsv(H_ISS, ISS)), DISCLOSURE: FC.parseTsv(tsv(H_D, D)) }, 10);
+  const logs = [];
+  eq(CArchive.summarise(A.db, {}, { log: (l) => logs.push(l) }).rows, 3, 'dry run counts every filing');
+  ok(!A.db.prepare("select 1 from sqlite_master where name = 'formc'").get(), 'a dry run writes nothing');
+  CArchive.summarise(A.db, { commit: true }, { log: () => {} });
+  const get = (a) => A.db.prepare('select * from formc where accn = ?').get(a);
+  const g = get('0001670254-26-000101');
+  eq([g.form, g.filed, g.cik, g.name, g.city, g.state, g.portal, g.portal_cik], ['C', '2026-04-03', '1900001', 'GoSun Inc.', 'Cincinnati', 'OH', 'StartEngine Primary, LLC', '1661779'], 'the filing, the company and its portal');
+  eq([g.security, g.price, g.target, g.maximum, g.deadline, g.oversubscription, g.employees], ['Common Stock', 4, 20000, 3741608, '2026-12-29', 1, 12], 'the offering');
+  eq([g.revenue, g.revenue_prior, g.net_income, g.assets], [987762, null, -1124120, 2423162], 'the figures as filed: a loss stays negative, a blank stays blank');
+  const n = get('0001670254-26-000102');
+  eq([n.form, n.legal_form, n.security, n.revenue, n.revenue_prior], ['C-AR', 'Series LLC', 'Notes', 0, 237030], 'an annual report: Other spelled out, a 0 revenue stays 0, not blank');
+  const t = get('0001670254-26-000103');
+  eq([t.form, t.name, t.revenue], ['C-TR', null, null], 'a termination with no offering tables still gets its row');
+  const cols = A.db.prepare('pragma table_info(formc)').all().map((x) => x.name);
+  ok(!cols.some((c) => /street|zip/i.test(c)), 'the summary keeps no street or zip');
+  CArchive.summarise(A.db, { commit: true }, { log: () => {} });
+  eq(A.db.prepare('select count(*) n from formc').get().n, 3, 'a rebuild refreshes rows, never doubles them');
+}
+
 // ---- the loader's care with sec.gov ----
 function makeZip(files) {
   const parts = [], central = [];

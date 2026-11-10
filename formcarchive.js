@@ -87,4 +87,37 @@ function open(db) {
   return { loaded, loadQuarter, stats, tableName };
 }
 
-module.exports = { open, ensureSchema, tableName };
+// The `formc` summary, one row a filing, built from the stored tables (no
+// requests). Rows are written with `insert or replace` on the accession, so a
+// rebuild only refreshes them and nothing is removed. Dry run unless opts.commit.
+function summarise(db, opts = {}, deps = {}) {
+  const log = deps.log || console.log;
+  ensureSchema(db);
+  const have = new Set(db.prepare("select name from sqlite_master where type = 'table'").all().map((r) => r.name));
+  const byAccn = (name) => {
+    const t = tableName(name);
+    const m = new Map();
+    if (!have.has(t)) return m;
+    for (const r of db.prepare(`select * from ${ident(t)}`).iterate()) if (r.ACCESSION_NUMBER && !m.has(r.ACCESSION_NUMBER)) m.set(r.ACCESSION_NUMBER, r);
+    return m;
+  };
+  const sub = byAccn('SUBMISSION'), iss = byAccn('ISSUER_INFORMATION'), dis = byAccn('DISCLOSURE');
+  const rows = [];
+  for (const [accn, s] of sub) rows.push(FC.summaryRow(accn, s.quarter, s, iss.get(accn), dis.get(accn)));
+  const withFigures = rows.filter((r) => r.revenue != null || r.assets != null).length;
+  log(`formc summary: ${rows.length} filings, ${withFigures} with the company's figures, from ${new Set(rows.map((r) => r.quarter)).size} quarters`);
+  if (!opts.commit) { log('DRY RUN: add --commit to write the summary.'); return { ok: true, rows: rows.length }; }
+
+  const C = FC.SUMMARY_COLS;
+  const num = new Set(['price', 'target', 'maximum', 'oversubscription', 'employees', ...FC.FIN.flatMap(([k]) => [k, k + '_prior'])]);
+  db.exec(`create table if not exists formc (${C.map((c) => `${c} ${c === 'accn' ? 'text primary key' : num.has(c) ? 'real' : 'text'}`).join(', ')});
+    create index if not exists idx_formc_cik on formc (cik);
+    create index if not exists idx_formc_filed on formc (filed);`);
+  const ins = db.prepare(`insert or replace into formc (${C.join(', ')}) values (${C.map(() => '?').join(', ')})`);
+  db.exec('begin');
+  try { for (const r of rows) ins.run(...C.map((c) => r[c] ?? null)); db.exec('commit'); } catch (e) { try { db.exec('rollback'); } catch (_) { /* gone */ } throw e; }
+  log(`formc summary written: ${rows.length} rows.`);
+  return { ok: true, rows: rows.length };
+}
+
+module.exports = { open, ensureSchema, tableName, summarise };

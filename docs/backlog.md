@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), every employer, E6 (PPP loans) and the phase 5 fact sheet in the local viewer, E3 to E5 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), every employer, E6 (PPP loans) and the phase 5 fact sheet in the local viewer, E3 (Form C, formc-load.js, 2026-11-10; not yet in the viewer), E4 and E5 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2965,7 +2965,10 @@ buy only where it must.
    - **E3. Form C (crowdfunding) data sets**: revenue, net income, assets,
      cash, debt and employee count for the last two fiscal years. 1,922 of
      the issuers have filed one. SEC quarterly bulk sets since 2016, about
-     40 files, Form D's care.
+     40 files, Form D's care. **Loaded 2026-11-10** (formc-load.js; 36,478
+     filings by 9,166 companies, 1,919 also Form D issuers; the `formc`
+     summary in formd.db; docs/context/form-c.md). Not yet in the viewer or
+     the fact sheet.
    - **E4. Reg A (1-A, 1-K) data sets**: annual financial statements; 662
      issuers.
    - **E5. Companies that file 10-K/10-Q** (5,979): full financials through
