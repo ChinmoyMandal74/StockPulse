@@ -71,3 +71,4 @@ web-archive.db-shm
 downloads/
 # Zips of the local databases made by backup-db.js; never committed.
 backups/
+website-load.log

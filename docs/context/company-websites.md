@@ -199,3 +199,27 @@ PDFs (brochures, line cards) are not fetched.
 **Using it later with AI:** `web-search.js` finds the companies and pages
 for a question; those pages are what a model is given to answer it, with
 every quote checked against the text, as the reader does.
+
+## Nationwide, every night (2026-11-10)
+
+The owner: "Lets do the nationwide , 12GB is fine". Every employer with its own
+retirement plan, **100 or more staff**, filing 2023 or later (about 117,000),
+found, read and kept whole, a night at a time, by the laptop task
+**TickrLab websites** (`website-task.ps1`, 01:00 every night; `schedule.js`
+id `websites`):
+
+```
+website-load.js --commit --min-staff 100 --max-staff 0 --max 200000 --workers 4 --then-deep --minutes 345 --max-usd 2 --max-gb 12
+```
+
+- `--workers 4`: four companies at once, each worker with its own getter,
+  so each site still sees one request every 3 seconds.
+- `--then-deep`: a confirmed site is kept whole by the same worker straight
+  after it is read.
+- `--minutes`, `--max-usd`, `--max-gb`: no new company is started past
+  any of them; the next night carries on (companies tried are skipped).
+- The log is `website-load.log` (gitignored).
+
+Expected: about 240 companies an hour, about 1,400 a night, so roughly 80
+nights for the list; about $0.65 a night of reading (some $60 in all); about
+0.3 MB a site kept, 12 GB at most. A night the laptop sleeps is skipped.

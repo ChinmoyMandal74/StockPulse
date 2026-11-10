@@ -61,6 +61,14 @@ function options(argv) {
     eins: arg('--eins') || null,     // a file of tax IDs, one a line
     deep: argv.includes('--deep'),   // the rest of each confirmed site, kept whole (no model)
     pages: Math.min(100, Math.max(1, Number(arg('--pages')) || W.MAX_DEEP)),
+    thenDeep: argv.includes('--then-deep'),   // each site confirmed, kept whole straight away
+    workers: Math.min(6, Math.max(1, Number(arg('--workers')) || 1)),
+    minutes: Math.max(0, Number(arg('--minutes')) || 0),   // stop starting companies after this long (0: no limit)
+    maxGb: Math.max(0, Number(arg('--max-gb')) || 0),      // stop when web-archive.db reaches this size (0: no limit)
+    // The companies: retirement-plan employers filing 2023 or later, between
+    // these staff counts (--max-staff 0: no upper bound). The pilot was 100 to 2,000.
+    minStaff: Math.max(1, Number(arg('--min-staff')) || 100),
+    maxStaff: arg('--max-staff') != null ? Math.max(0, Number(arg('--max-staff')) || 0) : 2000,
     // --url with --ein: the address given by hand (the owner knows CITCO is
     // citcowater.com; no file says so). No guessing; read whatever the match.
     url: arg('--url') ? String(arg('--url')).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') : null,
@@ -101,7 +109,10 @@ function pilot(db, opts) {
     const one = db.prepare(base + ' where l.ein = ?');
     return named(withTel(opts.einList.slice(0, opts.max).map((e) => one.get(e)).filter(Boolean)));
   }
-  const rows = withTel(db.prepare(base + ' where l.staff between 100 and 2000 and l.year >= 2023').all());
+  const minStaff = opts.minStaff || 100, maxStaff = opts.maxStaff == null ? 2000 : opts.maxStaff;
+  const rows = withTel(maxStaff
+    ? db.prepare(base + ' where l.staff between ? and ? and l.year >= 2023').all(minStaff, maxStaff)
+    : db.prepare(base + ' where l.staff >= ? and l.year >= 2023').all(minStaff));
   const h = (e) => crypto.createHash('sha1').update(String(e)).digest('hex');
   rows.sort((a, b) => (h(a.ein) < h(b.ein) ? -1 : 1));
   const half = Math.ceil(opts.max / 2);
@@ -341,11 +352,28 @@ async function run(opts, deps) {
   if (!opts.commit) { log('DRY RUN: nothing looked up or fetched. Add --commit.'); return { ok: true, todo: todo.length }; }
   if (opts.read && !deps.post) throw new Error('no ANTHROPIC_API_KEY (or run with --no-read)');
   const note = (url, status, bytes, ms) => { try { db.prepare('insert into web_requests (at, url, status, bytes, ms) values (?, ?, ?, ?, ?)').run(deps.now(), url, status, bytes, ms); } catch (_) { /* bookkeeping */ } };
-  const get = makeGetter(deps, opts.gapS * 1000, note);
-  const sum = { companies: 0, confirmed: 0, nameOnly: 0, none: 0, read: 0, usd: 0, problems: 0 };
-  let dead = 0;
-  for (const co of todo) {
-    if (opts.read && sum.usd >= opts.maxUsd) { log(`reached the $${opts.maxUsd} cap`); break; }
+  const sum = { companies: 0, confirmed: 0, nameOnly: 0, none: 0, read: 0, usd: 0, problems: 0, crawled: 0, pages: 0 };
+  let dead = 0, stop = null, next = 0;
+  const t0 = deps.now();
+  // Why no new company is started: the money, the clock, the disk, the line.
+  const halt = () => {
+    if (stop) return stop;
+    if (opts.read && sum.usd >= opts.maxUsd) stop = `reached the $${opts.maxUsd} cap`;
+    else if (opts.minutes && deps.now() - t0 >= opts.minutes * 60000) stop = `${opts.minutes} minutes up; the next run carries on`;
+    else if (opts.maxGb && deps.archiveBytes && deps.archiveBytes() >= opts.maxGb * 1e9) stop = `the page archive reached ${opts.maxGb} GB: stopped (raise --max-gb to go on)`;
+    return stop;
+  };
+  // WORKERS (--workers): several companies at once, each worker with its own
+  // getter, so each site still sees one request every --gap seconds.
+  async function worker() {
+    const get = makeGetter(deps, opts.gapS * 1000, note);
+    while (!halt() && next < todo.length) {
+      const co = todo[next++];
+      const r = await oneCompany(co, get);
+      if (r === 'stop') return;
+    }
+  }
+  async function oneCompany(co, get) {
     const f = await findSite(opts.url ? { ...co, url: opts.url } : co, get, deps);
     sum.companies++;
     const answered = f.tried.some((t) => t.status || t.robots);
@@ -372,15 +400,29 @@ async function run(opts, deps) {
       } catch (e) {
         if (e.usd) sum.usd += e.usd;
         line += ' · read failed: ' + e.message;
-        if (e.stop) { log(line); log(`stopped: ${e.message}`); return { ok: false, ...sum }; }
+        if (e.stop) { log(line); stop = stop || `stopped: ${e.message}`; return 'stop'; }
       }
     }
+    // --then-deep: the rest of a confirmed site, kept whole, by the same worker.
+    if (opts.thenDeep && (v.verdict === 'confirmed' || v.verdict === 'given') && f.url) {
+      const d0 = deps.now();
+      const c = await deepCrawl({ url: f.url }, get, opts.pages);
+      let chars = 0;
+      for (const p of c.pages) { deps.archive.writePage(p.url, co.ein, p.kind, p.text); chars += p.text.length; }
+      deps.archive.noteCrawl(co.ein, f.landed || f.domain, d0, deps.now(), c.pages.length, chars, c.stopped);
+      sum.crawled++; sum.pages += c.pages.length;
+      line += ` · kept ${c.pages.length} pages (${Math.round(chars / 1000)}K)${c.stopped ? ' · ' + c.stopped : ''}`;
+    }
     log(line);
-    if (dead >= STOP_AFTER_DEAD) { log(`${STOP_AFTER_DEAD} companies in a row with no answer from any address: stopped (check the connection).`); return { ok: false, ...sum }; }
+    if (dead >= STOP_AFTER_DEAD) { stop = stop || `${STOP_AFTER_DEAD} companies in a row with no answer from any address: stopped (check the connection).`; return 'stop'; }
+    return 'ok';
   }
+  await Promise.all(Array.from({ length: Math.min(opts.workers || 1, Math.max(1, todo.length)) }, worker));
+  if (stop) log(stop);
   const hit = sum.companies ? (100 * sum.confirmed / sum.companies).toFixed(0) : '0';
-  log(`done: ${sum.companies} companies; ${sum.confirmed} confirmed (${hit}%), ${sum.nameOnly} name only, ${sum.none} none; ${sum.read} read for $${sum.usd.toFixed(3)}, ${sum.problems} phrases dropped by the checks.`);
-  return { ok: true, ...sum };
+  log(`done: ${sum.companies} companies; ${sum.confirmed} confirmed (${hit}%), ${sum.nameOnly} name only, ${sum.none} none; ${sum.read} read for $${sum.usd.toFixed(3)}, ${sum.problems} phrases dropped by the checks${opts.thenDeep ? `; ${sum.crawled} sites kept whole, ${sum.pages} pages` : ''}; ${todo.length - next} still to go.`);
+  const failed = stop && !/minutes up|cap|GB/.test(stop);
+  return { ok: !failed, ...sum, left: todo.length - next };
 }
 
 // The page text archive (web-archive.db, LOCAL, gitignored). A page fetched
@@ -459,6 +501,8 @@ if (require.main === module) {
       const r = await run(opts, {
         db, archive,
         readFile: (file) => fs.readFileSync(file, 'utf8'),
+        // The page archive's size on disk, its write-ahead log included (--max-gb).
+        archiveBytes: () => ['', '-wal'].reduce((a, s) => { try { return a + fs.statSync(path.join(__dirname, 'web-archive.db' + s)).size; } catch (_) { return a; } }, 0),
         fetch: (...a) => fetch(...a),
         lookup: async (d) => { const a = await dns.lookup(d); return a && a.address; },
         sleep: (ms) => new Promise((res) => setTimeout(res, ms)),

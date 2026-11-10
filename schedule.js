@@ -105,6 +105,16 @@ const JOBS = [
     log: '/schedule',
   },
   {
+    // COMPANIES' OWN WEBSITES, NATIONWIDE (2026-11-10, the owner: "Lets do the
+    // nationwide , 12GB is fine"). On the laptop because formd.db and
+    // web-archive.db are. Carries on night after night until the list is done.
+    id: 'websites', name: 'Company websites', task: 'TickrLab websites', host: 'laptop', script: 'website-load.js', taskScript: 'website-task.ps1',
+    days: ALL_DAYS, times: ['01:00'], minutes: 345,
+    spends: { kind: 'anthropic', text: 'Claude Haiku, about $0.0015 a confirmed site, capped at $2 a run (about $0.65 a night)' },
+    what: 'Finds the own website of every employer with a retirement plan and 100 or more staff (about 117,000), four at a time, robots.txt obeyed; reads each confirmed site and keeps up to 40 useful pages of it in web-archive.db on the laptop, searchable. Stops after 345 minutes or at 12 GB and carries on the next night.',
+    log: '/schedule',
+  },
+  {
     // NEW STOCKS FINISHED BY THEMSELVES (2026-11-04, the owner: "This should
     // all be one one click of a button somehow"). On the laptop because the
     // local copy and the release text archive are.

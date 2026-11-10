@@ -197,6 +197,34 @@ ok(!W.SCHEMA.required.some((k) => /email|phone|address/.test(k)), 'the model is 
   eq(archive.db.prepare("select text from pages_history where url = 'https://acmepumps.com/locations'").all().map((x) => /Dothan/.test(x.text)), [false], 'its earlier text is kept in the history');
   eq(archive.db.prepare("select count(*) n from pages_fts where pages_fts match 'Dothan'").get().n, 1, 'and the index follows the new text');
   eq(archive.db.prepare("select count(*) n from pages_fts where pages_fts match 'Huntsville NOT Dothan'").get().n, 0, 'with the old text gone from it');
+  // ---- the nationwide run: workers, --then-deep, the clock and the disk ----
+  db.exec("delete from f5500_latest where ein like '9%'");   // the dead companies above
+  ins.run('777', 'ACME PUMPS INC', null, 'BIRMINGHAM', 'AL', '423830', 5000);   // above the pilot's 2,000
+  for (const e of ['801', '802', '803']) ins.run(e, 'NOWHERE CO ' + e, null, 'X', 'TX', '445110', 150);
+  fetched.length = 0;
+  const big = await L.run({ commit: false, read: false, max: 100000, minStaff: 100, maxStaff: 0, gapS: 2 }, deps);
+  eq(big.todo, 4, 'no upper bound on staff: the 5,000-person company is in, with the three not yet tried');
+  const nw = await L.run({ commit: true, read: false, max: 100000, minStaff: 100, maxStaff: 0, gapS: 2, workers: 3, thenDeep: true, pages: 3 }, deps);
+  eq([nw.companies, nw.confirmed, nw.crawled, nw.left], [4, 1, 1, 0], 'three workers take every company; the confirmed one is kept whole straight away');
+  eq(archive.db.prepare("select pages from crawls where ein = '777'").get().pages, 3, 'its crawl, to the page cap (the pages themselves already kept from the same site under 111)');
+  ok(!fetched.some((u) => /\/private/.test(u)), 'robots.txt obeyed by every worker');
+  // Each worker keeps the gap to its own requests: the gap stays per worker.
+  const waits = [];
+  let clock = 1e6;
+  const timed = { ...deps, now: () => clock, sleep: async (ms) => { waits.push(ms); clock += ms; } };
+  db.exec("delete from web_sites where ein in ('801', '802', '803')");
+  await L.run({ commit: true, read: false, max: 100000, minStaff: 100, maxStaff: 0, gapS: 2, workers: 3 }, { ...timed, lookup: async () => '1.2.3.4' });
+  ok(waits.every((w) => w <= 2000), 'no wait longer than the gap');
+  // The clock: a run stops starting companies when its minutes are up.
+  db.exec("delete from web_sites where ein in ('801', '802', '803')");
+  let tick = 0;
+  const late = await L.run({ commit: true, read: false, max: 100000, minStaff: 100, maxStaff: 0, gapS: 2, minutes: 1 }, { ...deps, now: () => (tick += 40000) });
+  ok(late.ok && late.companies < 3 && late.left > 0, 'minutes up: stopped cleanly with companies left for the next run ' + JSON.stringify([late.companies, late.left]));
+  // The disk: nothing started once the archive is at its limit.
+  db.exec("delete from web_sites where ein in ('801', '802', '803')");
+  const full = await L.run({ commit: true, read: false, max: 100000, minStaff: 100, maxStaff: 0, gapS: 2, maxGb: 12 }, { ...deps, archiveBytes: () => 12.5e9 });
+  eq([full.companies, full.left], [0, 3], 'the archive at its size limit: no company started');
+
   // The archive's writes: new, same, changed.
   const A2 = L.openArchive(null, { db: new (require('node:sqlite').DatabaseSync)(':memory:'), now: () => 5 });
   eq([A2.writePage('u', 'e', 'k', 'a'), A2.writePage('u', 'e', 'k', 'a'), A2.writePage('u', 'e', 'k', 'b')], ['new', 'same', 'changed'], 'new, the same, changed');
