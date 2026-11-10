@@ -394,7 +394,9 @@ function makeApi(db, opts = {}) {
   }
   const targetCache = new Map();
   function targetRows(f) {
-    const key = JSON.stringify({ ...f, page: 0 });
+    // The website reader writes while the viewer runs: a newer check makes a new result.
+    const sitesAt = hasTable('web_sites') ? db.prepare('select max(checked_at) t, count(*) n from web_sites').get() : null;
+    const key = JSON.stringify({ ...f, page: 0, sitesAt });
     if (targetCache.has(key)) return targetCache.get(key);
     const inStates = f.states ? ` and state in (${f.states.map(() => '?').join(', ')})` : '';
     const stP = f.states || [];
