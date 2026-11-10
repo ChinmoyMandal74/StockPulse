@@ -160,6 +160,48 @@ ok(!W.SCHEMA.required.some((k) => /email|phone|address/.test(k)), 'the model is 
   for (let i = 0; i < 12; i++) ins.run('9' + i, 'DEAD CO NUMBER ' + i, null, 'X', 'TX', '445110', 200);
   const down = await L.run({ commit: true, read: false, max: 20, maxUsd: 1, gapS: 2 }, { ...deps, lookup: async () => '1.2.3.4', fetch: async () => { throw new Error('ECONNRESET'); } });
   ok(!down.ok && down.companies === 10, 'ten companies in a row with no answer from anyone stops the run');
+  // ---- the deep crawl (--deep): the rest of a confirmed site, kept whole ----
+  eq(W.pageUrl('/about/?utm_source=x#top', new URL('https://www.acme.com/')).href, 'https://www.acme.com/about', 'an address made comparable: no tracking, fragment or trailing slash');
+  eq(W.pageUrl('https://other.com/x', new URL('https://acme.com/')), null, 'another site is not followed');
+  eq([W.pageUrl('/brochure.pdf', new URL('https://acme.com/')), W.pageUrl('/privacy-policy', new URL('https://acme.com/')) && 'x', W.pageUrl('/privacy', new URL('https://acme.com/')), W.pageUrl('/wp-login.php', new URL('https://acme.com/'))],
+    [null, 'x', null, null], 'no files, no privacy page, no login (a longer path that only starts so is kept)');
+  eq(W.pageUrl('/a/b/c/d', new URL('https://acme.com/')), null, 'four levels down is too deep');
+  eq(W.pageScore(new URL('https://acme.com/our-history'), '').kind, 'about', 'a history page is telling');
+  eq(W.sitemapUrls('<urlset><url><loc>https://acme.com/a?x=1&amp;y=2</loc></url></urlset>'), ['https://acme.com/a?x=1&y=2'], 'sitemap addresses, entities undone');
+  ok(!/Menu item/.test(W.mainHtml('<nav>Menu item</nav><main>Body</main>')), 'menus are left out of a page\'s text');
+  Object.assign(site, {
+    'https://acmepumps.com/sitemap.xml': [200, '<urlset><url><loc>https://acmepumps.com/services/well-drilling</loc></url><url><loc>https://acmepumps.com/private/our-history</loc></url><url><loc>https://acmepumps.com/copy</loc></url></urlset>'],
+    'https://acmepumps.com/services/well-drilling': [200, '<nav>Home About Team</nav><h1>Water well drilling</h1><p>We drill residential and municipal water wells across Alabama.</p><a href="/locations">Our branches</a><a href="/files/linecard.pdf">Line card</a><a href="/privacy">Privacy</a>'],
+    'https://acmepumps.com/locations': [200, '<h1>Branches</h1><p>Birmingham, Huntsville and Mobile.</p>'],
+    'https://acmepumps.com/copy': [200, '<p>' + page + '</p>'],
+  });
+  db.exec("insert or replace into web_sites (ein, name, city, state, domain, url, verdict, name_hit, city_hit, phone_hit, checked_at) values ('111', 'ACME PUMPS INC', 'BIRMINGHAM', 'AL', 'acmepumps.com', 'https://acmepumps.com/', 'confirmed', 1, 1, 1, 1)");
+  fetched.length = 0;
+  const dd = await L.run({ commit: false, deep: true, pages: 5, max: 10, gapS: 2 }, deps);
+  eq([dd.todo, fetched.length], [1, 0], 'deep, dry run: the one confirmed site, nothing fetched');
+  const d1 = await L.run({ commit: true, deep: true, pages: 5, max: 10, gapS: 2 }, deps);
+  eq([d1.sites, d1.pages], [1, 5], 'the confirmed site crawled to the page cap');
+  const urls = archive.db.prepare("select url, kind from pages where ein = '111' order by url").all().map((x) => x.url);
+  ok(urls.includes('https://acmepumps.com/services/well-drilling') && urls.includes('https://acmepumps.com/locations'), 'pages from the sitemap and from links found on the way: ' + urls.join(' '));
+  ok(!fetched.some((u) => /\/private/.test(u)), 'robots.txt still keeps us off /private, sitemap or not');
+  ok(!fetched.some((u) => /\.pdf$|\/privacy$/.test(u)), 'no file, no privacy page');
+  ok(!urls.includes('https://acmepumps.com/copy'), 'the same text at a second address is kept once');
+  const wd = archive.db.prepare("select text from pages where url = 'https://acmepumps.com/services/well-drilling'").get().text;
+  ok(/municipal water wells/.test(wd) && !/Home About Team/.test(wd), 'a page\'s own text, without its menu');
+  const hit = archive.db.prepare("select p.ein, p.url from pages_fts f join pages p on p.rowid = f.rowid where pages_fts match 'municipal AND well'").all();
+  eq(hit.map((x) => x.url), ['https://acmepumps.com/services/well-drilling'], 'the full-text index finds it, word forms and all');
+  eq((await L.run({ commit: true, deep: true, pages: 5, max: 10, gapS: 2 }, deps)).sites, 0, 'a site crawled is not crawled again');
+  site['https://acmepumps.com/locations'] = [200, '<h1>Branches</h1><p>Birmingham, Huntsville, Mobile and Dothan.</p>'];
+  const d2 = await L.run({ commit: true, deep: true, retry: true, pages: 5, max: 10, gapS: 2 }, deps);
+  eq(d2.changed, 1, 'crawled again on request: one page changed');
+  eq(archive.db.prepare("select text from pages_history where url = 'https://acmepumps.com/locations'").all().map((x) => /Dothan/.test(x.text)), [false], 'its earlier text is kept in the history');
+  eq(archive.db.prepare("select count(*) n from pages_fts where pages_fts match 'Dothan'").get().n, 1, 'and the index follows the new text');
+  eq(archive.db.prepare("select count(*) n from pages_fts where pages_fts match 'Huntsville NOT Dothan'").get().n, 0, 'with the old text gone from it');
+  // The archive's writes: new, same, changed.
+  const A2 = L.openArchive(null, { db: new (require('node:sqlite').DatabaseSync)(':memory:'), now: () => 5 });
+  eq([A2.writePage('u', 'e', 'k', 'a'), A2.writePage('u', 'e', 'k', 'a'), A2.writePage('u', 'e', 'k', 'b')], ['new', 'same', 'changed'], 'new, the same, changed');
+  eq(A2.db.prepare('select count(*) n from pages_history').get().n, 1, 'only a change goes to the history');
+
   archive.close(); db.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`website-test: ${pass} passed, ${fail} failed`);

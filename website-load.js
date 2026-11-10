@@ -59,6 +59,8 @@ function options(argv) {
     gapS: Math.max(MIN_GAP_S, Number(arg('--gap')) || 3),
     ein: arg('--ein') ? String(arg('--ein')).replace(/\D/g, '') : null,
     eins: arg('--eins') || null,     // a file of tax IDs, one a line
+    deep: argv.includes('--deep'),   // the rest of each confirmed site, kept whole (no model)
+    pages: Math.min(100, Math.max(1, Number(arg('--pages')) || W.MAX_DEEP)),
     // --url with --ein: the address given by hand (the owner knows CITCO is
     // citcowater.com; no file says so). No guessing; read whatever the match.
     url: arg('--url') ? String(arg('--url')).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') : null,
@@ -120,7 +122,7 @@ function makeGetter(deps, gapMs, note) {
       const r = await deps.fetch(url, { redirect: 'follow', headers: { 'User-Agent': UA, Accept: 'text/html,text/plain;q=0.9,*/*;q=0.1' }, signal: AbortSignal.timeout(20000) });
       const type = String(r.headers.get('content-type') || '');
       let html = '';
-      if (r.status === 200 && (/html|text\/plain/i.test(type) || !type)) {
+      if (r.status === 200 && (/html|text\/plain|xml/i.test(type) || !type)) {   // xml: a sitemap
         const reader = r.body.getReader();
         const chunks = [];
         let n = 0;
@@ -219,10 +221,107 @@ async function findSite(co, get, deps) {
   return { domain: null, verify: { verdict: 'none found', name: false, city: false, phone: false }, pages: [], tried };
 }
 
+// ---- the deep crawl (--deep): the rest of a confirmed site, kept whole ----
+// From the address already confirmed: robots.txt, the sitemap it names (or
+// /sitemap.xml), then the most telling pages first (websites.js pageScore),
+// following links found on the way, to --pages pages. A page's text without
+// its menus and footer; the same text at two addresses kept once.
+async function deepCrawl(site, get, maxPages) {
+  let start;
+  try { start = new URL(site.url); } catch (_) { return { pages: [], stopped: 'no address' }; }
+  const origin = start.origin;
+  const rb = await get(origin + '/robots.txt');
+  const allowed = rb.status === 200 ? W.robots(rb.html) : rb.status === 404 || rb.status === 410 ? () => true : null;
+  if (!allowed) return { pages: [], stopped: 'robots.txt ' + (rb.status || 'no answer') };
+  const queue = new Map(), seen = new Set();
+  const push = (c) => { if (c && !seen.has(c.url) && (!queue.has(c.url) || queue.get(c.url).s < c.s)) queue.set(c.url, c); };
+  const home = W.pageUrl(start.href, start);
+  if (home) push({ url: home.href, kind: 'home', s: 100 });
+  // The sitemap: the one robots.txt names, else the usual place; an index's
+  // child sitemaps, pages before posts, two at most.
+  let requests = 1;
+  const named = rb.status === 200 ? (/^\s*sitemap:\s*(\S+)/im.exec(rb.html) || [])[1] : null;
+  let smUrl = origin + '/sitemap.xml';
+  if (named) {
+    try { const u = new URL(named, origin); if (u.hostname.replace(/^www\./, '') === start.hostname.replace(/^www\./, '')) smUrl = u.href; } catch (_) { /* the usual place */ }
+  }
+  let smPath = '/sitemap.xml';
+  try { smPath = new URL(smUrl).pathname; } catch (_) { /* the usual place */ }
+  if (allowed(smPath)) {
+    const sm = await get(smUrl); requests++;
+    let locs = sm.status === 200 ? W.sitemapUrls(sm.html) : [];
+    if (/<sitemapindex/i.test(sm.html || '')) {
+      const kids = locs.filter((l) => /\.xml/i.test(l)).sort((a, b) => (/post|blog|news/i.test(a) ? 1 : 0) - (/post|blog|news/i.test(b) ? 1 : 0)).slice(0, 2);
+      locs = [];
+      for (const k of kids) { const r = await get(k); requests++; if (r.status === 200) locs.push(...W.sitemapUrls(r.html)); }
+    }
+    for (const l of locs.slice(0, 2000)) { const u = W.pageUrl(l, start); if (u && u.pathname !== '/') push({ url: u.href, ...W.pageScore(u, '') }); }
+  }
+  const pages = [], texts = new Set();
+  let fails = 0;
+  while (pages.length < maxPages && queue.size && requests < maxPages + 15) {
+    let best = null;
+    for (const c of queue.values()) if (!best || c.s > best.s) best = c;
+    queue.delete(best.url); seen.add(best.url);
+    let pathName = '/';
+    try { pathName = new URL(best.url).pathname; } catch (_) { continue; }
+    if (!allowed(pathName)) continue;
+    const r = await get(best.url); requests++;
+    if (r.status !== 200 || !r.html) { if (++fails >= 8 && !pages.length) return { pages, stopped: 'pages would not load' }; continue; }
+    let landed;
+    try { landed = new URL(r.url || best.url); } catch (_) { continue; }
+    if (landed.hostname.replace(/^www\./, '') !== start.hostname.replace(/^www\./, '')) continue;   // sent off the site
+    const text = textOf(best.kind === 'home' ? r.html : W.mainHtml(r.html));
+    const sig = crypto.createHash('sha1').update(text).digest('hex');
+    if (!texts.has(sig)) { texts.add(sig); pages.push({ url: landed.href, kind: best.kind, text }); }
+    seen.add(landed.href.replace(/\/+$/, ''));
+    for (const c of W.crawlLinks(r.html, landed.href)) push(c);
+  }
+  return { pages, stopped: null, requests };
+}
+
+async function runDeep(opts, deps) {
+  const log = deps.log || console.log;
+  const db = deps.db;
+  const pick = 'select ein, name, city, state, domain, url from web_sites where verdict in (\'confirmed\', \'given\') and url is not null';
+  let sites = opts.einList
+    ? opts.einList.map((e) => db.prepare(pick + ' and ein = ?').get(e)).filter(Boolean)
+    : db.prepare(pick + ' order by checked_at').all();
+  const done = deps.archive.crawled();
+  const todo = sites.filter((s) => opts.retry || !done.has(s.ein)).slice(0, opts.max);
+  log(`${sites.length} confirmed sites; ${todo.length} to crawl, up to ${opts.pages} pages each, ${opts.gapS}s between requests (about ${Math.round(todo.length * (opts.pages + 3) * opts.gapS / 60)} minutes at most). No model.`);
+  if (!opts.commit) { log('DRY RUN: nothing fetched. Add --commit.'); return { ok: true, todo: todo.length }; }
+  const note = (url, status, bytes, ms) => { try { db.prepare('insert into web_requests (at, url, status, bytes, ms) values (?, ?, ?, ?, ?)').run(deps.now(), url, status, bytes, ms); } catch (_) { /* bookkeeping */ } };
+  const get = makeGetter(deps, opts.gapS * 1000, note);
+  const sum = { sites: 0, pages: 0, chars: 0, changed: 0 };
+  let dead = 0;
+  for (const s of todo) {
+    const t0 = deps.now();
+    const c = await deepCrawl(s, get, opts.pages);
+    let changed = 0;
+    for (const p of c.pages) if (deps.archive.writePage(p.url, s.ein, p.kind, p.text) === 'changed') changed++;
+    const chars = c.pages.reduce((a, p) => a + p.text.length, 0);
+    deps.archive.noteCrawl(s.ein, s.domain, t0, deps.now(), c.pages.length, chars, c.stopped);
+    sum.sites++; sum.pages += c.pages.length; sum.chars += chars; sum.changed += changed;
+    dead = c.pages.length ? 0 : dead + 1;
+    const kinds = {};
+    for (const p of c.pages) kinds[p.kind] = (kinds[p.kind] || 0) + 1;
+    log(`${s.name} (${s.domain}): ${c.pages.length} pages, ${Math.round(chars / 1000)}K characters${changed ? `, ${changed} changed since last time (earlier text kept)` : ''}${c.stopped ? ' · ' + c.stopped : ''} · ${Object.entries(kinds).map(([k, n]) => k + ' ' + n).join(', ')}`);
+    if (dead >= STOP_AFTER_DEAD) { log(`${STOP_AFTER_DEAD} sites in a row gave nothing: stopped (check the connection).`); return { ok: false, ...sum }; }
+  }
+  log(`done: ${sum.sites} sites, ${sum.pages} pages, ${Math.round(sum.chars / 1e6 * 10) / 10}M characters kept.`);
+  return { ok: true, ...sum };
+}
+
 async function run(opts, deps) {
   const log = deps.log || console.log;
   const db = deps.db;
   ensureSchema(db);
+  if (opts.eins && !opts.einList && opts.deep) {
+    const list = String(deps.readFile(opts.eins)).split(/\s+/).map((e) => e.replace(/\D/g, '')).filter((e) => /^\d{9}$/.test(e));
+    opts = { ...opts, einList: [...new Set(list)] };
+  }
+  if (opts.deep) return runDeep(opts, deps);
   if (opts.stats) {
     log(JSON.stringify(db.prepare('select verdict, count(*) n from web_sites group by verdict order by n desc').all()));
     log(JSON.stringify(db.prepare('select count(*) reads, round(sum(usd), 4) usd from web_reads').get()));
@@ -284,13 +383,53 @@ async function run(opts, deps) {
   return { ok: true, ...sum };
 }
 
-function openArchive(file) {
+// The page text archive (web-archive.db, LOCAL, gitignored). A page fetched
+// again with different text keeps its earlier text in pages_history (the
+// owner's rule: history is kept). pages_fts indexes every page's text for
+// search (web-search.js), kept in step by triggers; rows are written by insert
+// and update, never "insert or replace" (whose delete fires no trigger).
+function archiveSchema(db) {
+  db.exec(`create table if not exists pages (url text primary key, ein text, kind text, fetched_at integer not null, text text);
+    create index if not exists idx_pages_ein on pages (ein);
+    create table if not exists pages_history (url text not null, ein text, kind text, fetched_at integer not null, text text, replaced_at integer not null);
+    create index if not exists idx_pages_history_url on pages_history (url);
+    create table if not exists crawls (ein text not null, domain text, started_at integer not null, finished_at integer, pages integer, chars integer, stopped text);
+    create index if not exists idx_crawls_ein on crawls (ein);`);
+  const hadFts = !!db.prepare("select 1 from sqlite_master where name = 'pages_fts'").get();
+  db.exec(`create virtual table if not exists pages_fts using fts5(text, content='pages', content_rowid='rowid', tokenize='porter unicode61');
+    create trigger if not exists pages_ai after insert on pages begin insert into pages_fts (rowid, text) values (new.rowid, new.text); end;
+    create trigger if not exists pages_ad after delete on pages begin insert into pages_fts (pages_fts, rowid, text) values ('delete', old.rowid, old.text); end;
+    create trigger if not exists pages_au after update of text on pages begin
+      insert into pages_fts (pages_fts, rowid, text) values ('delete', old.rowid, old.text);
+      insert into pages_fts (rowid, text) values (new.rowid, new.text);
+    end;`);
+  if (!hadFts) db.exec("insert into pages_fts (pages_fts) values ('rebuild')");   // the pages already kept
+}
+
+function openArchive(file, opts = {}) {
   const { DatabaseSync } = require('node:sqlite');
-  const db = new DatabaseSync(file || process.env.WEB_ARCHIVE_DB || path.join(__dirname, 'web-archive.db'));
+  const db = opts.db || new DatabaseSync(file || process.env.WEB_ARCHIVE_DB || path.join(__dirname, 'web-archive.db'));
   db.exec('pragma busy_timeout = 10000; pragma journal_mode = wal;');
-  db.exec('create table if not exists pages (url text primary key, ein text, kind text, fetched_at integer not null, text text)');
-  const put = db.prepare('insert or replace into pages (url, ein, kind, fetched_at, text) values (?, ?, ?, ?, ?)');
-  return { db, writePage: (url, ein, kind, text) => put.run(url, ein, kind, Date.now(), text), close: () => db.close() };
+  archiveSchema(db);
+  const now = opts.now || (() => Date.now());
+  const getQ = db.prepare('select text from pages where url = ?');
+  const insQ = db.prepare('insert into pages (url, ein, kind, fetched_at, text) values (?, ?, ?, ?, ?)');
+  const updQ = db.prepare('update pages set ein = ?, kind = ?, fetched_at = ?, text = ? where url = ?');
+  const seenQ = db.prepare('update pages set fetched_at = ? where url = ?');
+  const histQ = db.prepare('insert into pages_history (url, ein, kind, fetched_at, text, replaced_at) select url, ein, kind, fetched_at, text, ? from pages where url = ?');
+  // 'new', 'same' (only the date moves on) or 'changed' (the old text kept).
+  function writePage(url, ein, kind, text) {
+    const old = getQ.get(url);
+    if (!old) { insQ.run(url, ein, kind, now(), text); return 'new'; }
+    if (old.text === text) { seenQ.run(now(), url); return 'same'; }
+    db.exec('begin');
+    try { histQ.run(now(), url); updQ.run(ein, kind, now(), text, url); db.exec('commit'); } catch (e) { try { db.exec('rollback'); } catch (_) { /* gone */ } throw e; }
+    return 'changed';
+  }
+  const crawled = () => new Set(db.prepare('select distinct ein from crawls where pages > 0').all().map((r) => r.ein));
+  const noteCrawl = (ein, domain, a, b, pages, chars, stopped) =>
+    db.prepare('insert into crawls (ein, domain, started_at, finished_at, pages, chars, stopped) values (?, ?, ?, ?, ?, ?, ?)').run(ein, domain, a, b, pages, chars, stopped || null);
+  return { db, writePage, crawled, noteCrawl, close: () => (opts.db ? null : db.close()) };
 }
 
 function lock() {
@@ -336,4 +475,4 @@ if (require.main === module) {
   })().catch((e) => { console.error(e.message); unlock(); process.exit(1); });
 }
 
-module.exports = { options, ensureSchema, pilot, makeGetter, findSite, run, openArchive, textOf, MAX_TRIES, UA };
+module.exports = { options, ensureSchema, pilot, makeGetter, findSite, deepCrawl, runDeep, run, openArchive, archiveSchema, textOf, MAX_TRIES, UA };

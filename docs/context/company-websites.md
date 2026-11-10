@@ -70,6 +70,9 @@ The model is never asked for contact details.
 | The checked facts, tokens and cost | `web_reads` |
 | Each request | `web_requests` |
 | The page text | the LOCAL `web-archive.db` (gitignored), table `pages` |
+| A page's earlier text, when it changed | `pages_history` (web-archive.db) |
+| Each deep crawl | `crawls` (web-archive.db) |
+| The full-text index of every page | `pages_fts` (web-archive.db; FTS5, word forms matched) |
 
 Never Turso, never served.
 
@@ -83,7 +86,8 @@ website" block gives the quotes and lists. A name-only site is marked so.
 |---|---|
 | `websites.js` | The rules, pure: guesses, robots.txt, pages picked, the match, the schema and the checks |
 | `website-load.js` | The pilot list, the careful getter, finding and reading, the archive |
-| `website-test.js` | The rules, and the loader over a made-up web |
+| `website-test.js` | The rules, and the loader over a made-up web (the deep crawl too; the history and robots.txt guards proven by reverting them) |
+| `web-search.js` | Search the kept text: companies, their best pages, a snippet each |
 
 ## Running it
 
@@ -93,6 +97,11 @@ node --use-system-ca website-load.js --commit --max 200 --max-usd 2   # the pilo
 node --use-system-ca website-load.js --commit --ein 330747275          # one company
 node --use-system-ca website-load.js --commit --ein 550421240 --url citcowater.com   # its address given by hand
 node --use-system-ca website-load.js --stats
+node --use-system-ca website-load.js --commit --eins <file>            # a shortlist (the viewer's Targets page)
+node --use-system-ca website-load.js --deep                             # dry run: the confirmed sites not yet crawled
+node --use-system-ca website-load.js --commit --deep [--pages 40] [--eins <file>] [--retry]
+node web-search.js "water well" [--state WV,OH] [--limit 30]
+node web-search.js --stats
 ```
 
 The pilot draws employers of 100 to 2,000 people (filed 2023 or later), half
@@ -158,3 +167,35 @@ and confirmed by name and city. Seven requests, six pages, $0.0023. It
 returned seven practice areas, nine office locations, its CEO and founding
 partner, and a hiring line. The check dropped one office the model added
 that was not on the pages.
+
+## The deep crawl (2026-11-10)
+
+The owner: "bring the entire website content that might be useful and store
+it so that any query can be run using AI later". `--deep` takes each site
+already confirmed (or given) and keeps the rest of it, **no model**:
+
+- robots.txt first (a site that will not serve it is left alone), then the
+  sitemap it names or `/sitemap.xml` (an index: two child sitemaps, pages
+  before posts), then the pages, **the most telling first**
+  (`websites.js` `DEEP_KINDS`: about and history, services and
+  equipment, locations, team and owners, projects and customers, careers,
+  certifications and safety, news, contact), following links found on the
+  way, to `--pages` (40 by default, 100 at most).
+- Same site only, HTML only, three path levels at most, no files, no login,
+  cart, search, privacy, terms, tag or date-archive pages, at most one query
+  parameter; tracking parameters dropped.
+- A page's own text without its menu, header and footer (the home page keeps
+  them: the city and telephone are often only there). The same text at two
+  addresses is kept once.
+- The same 3 seconds between requests; about two minutes a site at 40 pages.
+- A site crawled is not crawled again unless `--retry`. A page fetched again
+  with different text keeps the earlier text in `pages_history`.
+- `pages_fts` (built over the pages already kept when first created) is kept
+  in step by triggers; pages are written by insert and update, never "insert
+  or replace", whose delete fires no trigger.
+
+PDFs (brochures, line cards) are not fetched.
+
+**Using it later with AI:** `web-search.js` finds the companies and pages
+for a question; those pages are what a model is given to answer it, with
+every quote checked against the text, as the reader does.

@@ -142,6 +142,71 @@ function pickPages(html, baseUrl) {
   return [...found.values()].sort((a, b) => b.s - a.s).slice(0, MAX_PAGES).map(({ kind, url }) => ({ kind, url }));
 }
 
+// ---- the deep crawl: the rest of a confirmed site, kept for later questions ----------
+// The owner, 2026-11-10: "bring the entire website content that might be useful
+// and store it so that any query can be run using AI later". Same site only,
+// HTML only, robots.txt obeyed (the loader), at most MAX_DEEP pages, the most
+// telling first: what it does, where, who, its history, its work, its jobs.
+const MAX_DEEP = 40;
+const MAX_DEPTH = 3;                 // path segments
+const DEEP_KINDS = [
+  ['about', /about|who-?we-?are|our-?(story|company|firm|history|family)|history|heritage|mission|values|overview/, 6],
+  ['services', /services?|what-?we-?do|capabilit|solutions|products?|equipment|fleet|expertise|specialt|offerings?/, 5],
+  ['locations', /locations?|branch|offices?|service-?area|areas-?served|where-?we/, 5],
+  ['team', /team|leadership|management|people|owners?|executives|our-?board|staff|principals/, 5],
+  ['work', /projects?|portfolio|case-?stud|our-?work|gallery|clients?|customers?|industries|markets|sectors|testimonials/, 4],
+  ['careers', /careers?|jobs|employment|join-?(us|our)|work-?with-?us|opportunit|benefits|apply/, 4],
+  ['credentials', /certif|licen|safety|quality|accredit|awards?|affiliat|associations?|partners?/, 3],
+  ['news', /news|press|media|announcements|events|blog/, 2],
+  ['contact', /contact|find-?us|directions/, 2],
+];
+const SKIP_PATH = /(^|\/)(wp-admin|wp-login|wp-json|login|log-?in|sign-?in|sign-?up|register|account|my-?account|cart|checkout|basket|search|feed|rss|xmlrpc|cdn-cgi|privacy|terms|cookie|legal|disclaimer|accessibility|sitemap|tag|tags|category|author|page\/\d+|\d{4}\/\d{2}\/\d{2})(\/|$|\.php)/i;
+const FILE_EXT = /\.(pdf|jpe?g|png|gif|svg|webp|ico|zip|rar|docx?|xlsx?|pptx?|csv|mp4|mov|mp3|wav|ics|xml|json|js|css|woff2?|ttf|eot)$/i;
+
+// A link's address made comparable: no fragment, no tracking parameters, no
+// trailing slash; null when it is not a page of this site worth fetching.
+function pageUrl(href, base) {
+  let u;
+  try { u = new URL(String(href).trim(), base); } catch (_) { return null; }
+  if (!/^https?:$/.test(u.protocol) || host0(u.hostname) !== host0(base.hostname)) return null;
+  if (FILE_EXT.test(u.pathname) || SKIP_PATH.test(u.pathname)) return null;
+  u.hash = '';
+  for (const k of [...u.searchParams.keys()]) if (/^(utm_|fbclid|gclid|mc_|_ga|ref$|source$)/i.test(k)) u.searchParams.delete(k);
+  if ([...u.searchParams.keys()].length > 1) return null;   // filters, calendars and the like
+  if (u.pathname.split('/').filter(Boolean).length > MAX_DEPTH) return null;
+  u.pathname = u.pathname.replace(/\/+$/, '') || '/';
+  return u;
+}
+// How telling a page looks from its address and link text; 1 for any other page.
+function pageScore(u, label) {
+  const t = (u.pathname + ' ' + (label || '')).toLowerCase().replace(/\s+/g, '-');
+  const depth = u.pathname.split('/').filter(Boolean).length;
+  for (const [kind, rx, s] of DEEP_KINDS) if (rx.test(t)) return { kind, s: s - depth * 0.5 };
+  return { kind: 'page', s: 1 - depth * 0.5 };
+}
+// Every link on a page worth a visit, scored.
+function crawlLinks(html, baseUrl) {
+  const base = new URL(baseUrl);
+  const out = new Map();
+  for (const m of String(html || '').matchAll(/<a\b[^>]*href\s*=\s*["']([^"'#][^"']*)["'][^>]*>([\s\S]{0,300}?)<\/a>/gi)) {
+    const u = pageUrl(m[1], base);
+    if (!u || u.pathname === '/') continue;
+    const { kind, s } = pageScore(u, m[2].replace(/<[^>]+>/g, ' '));
+    const prev = out.get(u.href);
+    if (!prev || s > prev.s) out.set(u.href, { url: u.href, kind, s });
+  }
+  return [...out.values()];
+}
+// The page addresses a sitemap lists (or the child sitemaps a sitemap index lists).
+function sitemapUrls(xml) {
+  return [...String(xml || '').matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1].replace(/&amp;/g, '&'));
+}
+// A page's own text without the menus, header and footer every page repeats
+// (the home page keeps them: a company's city and telephone are often there).
+function mainHtml(html) {
+  return String(html || '').replace(/<(nav|header|footer|aside|script|style|noscript|svg|form)\b[\s\S]*?<\/\1>/gi, ' ');
+}
+
 // ---- is it the company's site -----------------------------------------------------
 const flat = (s) => ' ' + String(s || '').toUpperCase().replace(/['’`]/g, '').replace(/&/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim() + ' ';
 const PARKED = /domain (name )?(is |may be )?for sale|buy this domain|this domain (is|has been) (parked|registered)|parked (free|domain)|domain parking|hugedomains|sedo\.com|afternic|godaddy\.com\/domain|future home of|website coming soon|account suspended|default web site page|welcome to nginx|it works!/i;
@@ -270,4 +335,4 @@ function check(ans, text) {
   return { read, problems };
 }
 
-module.exports = { MODEL, MAX_PAGES, PAGE_CHARS, MAX_CHARS, MAX_CANDIDATES, UA_TOKEN, GENERIC, words, distinct, candidates, robots, pickPages, verify, PARKED, SCHEMA, SYSTEM, pagesText, request, check };
+module.exports = { MAX_DEEP, MAX_DEPTH, DEEP_KINDS, pageUrl, pageScore, crawlLinks, sitemapUrls, mainHtml, MODEL, MAX_PAGES, PAGE_CHARS, MAX_CHARS, MAX_CANDIDATES, UA_TOKEN, GENERIC, words, distinct, candidates, robots, pickPages, verify, PARKED, SCHEMA, SYSTEM, pagesText, request, check };
