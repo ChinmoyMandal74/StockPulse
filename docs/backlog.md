@@ -2946,7 +2946,7 @@ buy only where it must.
    - **E6. PPP loans (SBA)**: jobs reported, NAICS code, loan size,
      2020-21; small businesses; matched by name and state, so inexact.
      **Built 2026-11-09** (ppp-load.js; docs/context/ppp-loans.md).
-   - **E7. Federal contracts, built 2026-11-09** (contracts-load.js;
+   - **E7. Federal contracts, built 2026-11-09** (fiscal 2025-27 loaded; 2016-24 downloading, resumed run by run; contracts-load.js;
      docs/context/federal-contracts.md), and an outcomes study
      (formd-outcomes.js).
    - **Every employer** (2026-11-09): the plan sponsors of all employers,
@@ -2976,6 +2976,60 @@ buy only where it must.
    reads a handful of rows; the new tables join `SYMBOL_TABLES` if keyed
    by symbol, and `query-plan-test.js`; `/privacy` and `/sources` change
    in the same commit. The full archive stays on the laptop for research.
+
+**More free sources (owner, 2026-11-09: "Is there anything we can do more
+to get private company data .. Add all the to backlog").** Regulators make
+whole industries report, public or private; none of these is paid or
+scraped. Each would be a local loader with the usual care (bulk files, one
+request at a time, a daily cap, any refusal stops), kept in `formd.db`.
+
+*Full financial statements, industry by industry*
+- **E8. Bank call reports** (FFIEC, FDIC): every US bank, about 4,000 of
+  them privately held, balance sheet and income every quarter. Free bulk.
+  Low effort.
+- **E9. Investment adviser registrations** (Form ADV, SEC's adviser
+  database): about 15,000 advisory firms, nearly all private: assets under
+  management, employees, clients, owners. Monthly bulk files; SEC care, as
+  Form D.
+- **E10. Hospital and nursing-home cost reports** (CMS, HCRIS): revenue,
+  costs and beds for every hospital and nursing home, private ones
+  included. Free bulk. Medium.
+- **E11. Nonprofit returns** (IRS Form 990, bulk XML): full financials,
+  staff and top salaries for hospital systems, universities and other large
+  nonprofits. Medium (large files).
+- **E12. Franchise disclosure documents** (state filings: Wisconsin,
+  Minnesota, California): franchisors, mostly private, with **audited
+  accounts** (Item 21) and unit counts. PDFs, read by AI with the release
+  reader's checks. High effort, high value.
+- Also possible: broker-dealer annual audited statements (X-17A-5, on
+  EDGAR), private utilities (FERC Form 1), airlines (BTS Form 41),
+  credit unions (NCUA call reports).
+
+*Size and activity for ordinary companies, joined by name or tax ID*
+- **E13. SBA 7(a) and 504 loans**, 1990s to today (SBA FOIA data): loan
+  size, jobs supported, industry; like the PPP files but every year.
+- **E14. Work-visa filings** (Labor Department LCA and PERM disclosure
+  files, quarterly): employer **EIN**, job titles, wages, worksite; joins
+  straight onto Form 5500.
+- **E15. OSHA inspections** (Labor Department enforcement data): employee
+  count at each inspected site; reaches companies with no plan.
+- **E16. Trucking carriers** (FMCSA census file): every carrier's trucks,
+  drivers and miles.
+- Also possible: NLRB cases (bargaining-unit sizes), EPA facility records,
+  SAM.gov entity registrations, public pension funds' private-equity
+  holdings reports (fund returns, as PitchBook uses), bankruptcy filings
+  (CourtListener's free copies).
+
+*Looked at and not taken (2026-11-09)*
+- **The Inc. 5000 list**: self-reported revenue and growth for 5,000 fast
+  growers a year; inc.com refuses automated reading (403) and its terms
+  will not allow reuse; resold CSVs have no clear right. Owner may look a
+  company up by hand for a brief; a bulk copy needs a licence from Inc.
+- **Sutton Place Strategies (S&P Global / With Intelligence)** and
+  **PitchBook**: paid; their edge is deal-makers reporting deals to them
+  (give-to-get), research staff, and for venture rounds the companies'
+  charters. Worth a trial only if buyer briefs become a regular product;
+  licences forbid showing the data on the site.
 
 **The gap to be honest about.** Most small private companies (Continental
 probably among them) never raise registered money or are bought by a
