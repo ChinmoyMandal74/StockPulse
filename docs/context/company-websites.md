@@ -148,6 +148,9 @@ The three companies briefed:
   locations, nine executives, twelve services. Nothing was dropped by the
   checks; $0.0026.
 
+How a brief uses this, and the news step beside it:
+`private-company-briefs.md`.
+
 ## The first trial
 
 Bremer Whyte Brown & O'Meara: found at the second guess (`bremerwhyte.com`)
