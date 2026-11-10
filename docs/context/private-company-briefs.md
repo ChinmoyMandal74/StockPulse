@@ -66,6 +66,37 @@ data steps they call are.
    peers' results releases, who is buying and what was disclosed, the ways
    out, what Tickr Lab can do next, and **what it cannot tell you**.
 
+6. **The industry in Tickr Lab's data** (since 2026-11-10, owner: "like
+   the fire and safety work ... only use data from my app"). Placed before
+   "Ways out". It treats the listed peer group as one: Fire & Safety's deep
+   dive, as a section. **App data only:**
+   - **Prices:** the local research copy's daily bars (`analysis.db`). One
+     equal-weight line since the end of 2015, chain-linked so a member
+     counts from its first close. The 1, 3, 5 and 10-year returns against
+     SPY, the worst fall from a high, and year by year (members that
+     traded the whole year).
+   - **How they move together:** the correlation of daily returns over the
+     year, as the average pair, the closest pair, the member least like the
+     rest, and the typical member against SPY.
+   - **Per company** (per-symbol reads of the app's database):
+     - the session after each results release since July 2024, from the
+       stored release dates;
+     - days to cover and the change in shorted shares over a year;
+     - open-market insider buys and sells in twelve months;
+     - article tone;
+     - institutions holding, with the quarter's change.
+   - **What it says for this brief,** in plain words, tying it to the
+     other sections.
+   - **Checks learned on the first three:**
+     - A company buying a stake is not insider buying: Mitsui Sumitomo's
+       $705M of W. R. Berkley is shown apart, as a 10% owner.
+     - A split must not show as a crash: the stored bars are
+       split-adjusted (IES split two-for-one in August 2026).
+     - Section 01's form names stay out: "institutions holding", not the
+       form.
+     - Charts are SVG written by the builder (no script needed), with a
+       minimum width and a sideways scroll inside their box on a phone.
+
 Section numbers are referred to in the text ("section 01"). When a section
 is added, renumber the headings **and every reference**, and update the date
 line ("prepared ..., sections 02 and 03 added ...").
