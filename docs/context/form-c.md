@@ -93,5 +93,32 @@ Angel Studios ($123M, 2022), Skybound Holdings ($112M).
 A new quarter: run the load again after the SEC publishes it; it fetches only
 what is not loaded, then rebuilds the summary.
 
-Not yet done: Form C in the local viewer (a column or two in the list) and on
-the fact sheet (the figures year by year beside the plan and loan data).
+## In the local viewer (2026-11-10)
+
+The owner: "Go ahead with the local viewer for form c". The viewer
+(`formd-view.js`, on 127.0.0.1 behind the admin password, the archive read
+only) gained:
+
+| File | What |
+|---|---|
+| `crowdfunding-view.html` | `/crowdfunding`: every company that has filed a Form C, one row each from `formc_companies`: name (tagged when it has also filed a Form D) and website, place, revenue for its newest year with figures (and which year), the change on the year before, net income, staff, annual reports and filings, last filed. Search by name or CIK; state; revenue at least $100K, $1M, $5M or $25M; profitable; files annual reports; filed since 2024; also raised money by Form D. `?open=<cik>` opens a company. Prefix `cf-` |
+| `crowdquery.js` | The page's filters as SQL, pure (every value bound, the sort from a fixed list), and `fiscalYears`, a company's figures placed by fiscal year |
+| `formd-view.js` | `/api/crowd`, `/api/crowd-company?cik=`, and `crowd` in `facts()` |
+| `factsheet.js` | The line "Own figures (Form C)": revenue, net income and staff from the newest filing, with a link to the year by year |
+| `formd-view-test.js` | The crowd checks (filters, the list, the year-by-year rule, no street or zip, the routes); the year rule proven by reverting it |
+
+**The year by year.** Only an annual report (C-AR) names the year it covers
+(`period`, the year end). Each report gives its year and the one before; a
+year's own report wins over the next report's "year before" figure (they
+can differ: restated), and a year no report covers as its own is filled from
+the next report's year before, marked so. Staff is never carried back a year.
+A company with no annual report shows each filing's two years in the filing
+table instead, not placed by year.
+
+**Change** is the newest year's revenue against the year before from the same
+filing, when the year before was $50,000 or more.
+
+The company panel draws the fact sheet (its plans, Form D raises, PPP and SBA
+loans, federal contracts and website, by CIK and by name and state as on the
+other pages), the revenue bars, the table by fiscal year, every filing with a
+link to it on sec.gov, and a link to its Form D filings.

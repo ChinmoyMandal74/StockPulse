@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const Q = require('./formdquery.js');
 const E = require('./employerquery.js');
 const CQ = require('./contactquery.js');
+const CF = require('./crowdquery.js');
 const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
@@ -34,6 +35,7 @@ const STATIC = {
   '/employers': [path.join(__dirname, 'employers-view.html'), 'text/html; charset=utf-8'],
   '/factsheet.js': [path.join(__dirname, 'factsheet.js'), 'text/javascript; charset=utf-8'],
   '/contacts': [path.join(__dirname, 'contacts-view.html'), 'text/html; charset=utf-8'],
+  '/crowdfunding': [path.join(__dirname, 'crowdfunding-view.html'), 'text/html; charset=utf-8'],
   '/data-sources': [path.join(__dirname, 'sources-view.html'), 'text/html; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
@@ -239,6 +241,11 @@ function makeApi(db, opts = {}) {
         web = { ...s, read: r ? JSON.parse(r.read) : null };
       }
     }
+    // Crowdfunding (E3): the figures from its newest Form C that carries any,
+    // by the issuer's CIK (the same number Form D files under).
+    const crowd = issuer && hasTable('formc_companies')
+      ? db.prepare('select cik, name, filed, form, period, employees, revenue, net_income, assets, filings, reports from formc_companies where cik = ?').get(issuer) || null
+      : null;
     const last = yrs.length ? yrs[yrs.length - 1] : null;
     const y2019 = yrs.find((y) => y.year === 2019);
     const code = (yrs.slice().reverse().find((y) => y.business_code) || {}).business_code || (ppp.find((x) => x.naics) || {}).naics || null;
@@ -253,7 +260,7 @@ function makeApi(db, opts = {}) {
       raised: raised && raised.n ? raised : null,
       ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
       tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
-      fed, web,
+      fed, web, crowd,
       sba: sba.length ? { loans: sba, amount: sba.reduce((a, x) => a + (x.amount || 0), 0), jobs: Math.max(...sba.map((x) => x.jobs || 0)) || null, chargedOff: sba.filter((x) => x.status === 'CHGOFF').length } : null,
     };
   }
@@ -340,7 +347,32 @@ function makeApi(db, opts = {}) {
     return null;
   }
 
-  return { options, list, filing, employers, employer, contacts, contactsCsv, contact };
+  // ---- every company that has filed a Form C (the Crowdfunding page) ----
+  const cfCount = new Map();
+  function crowd(sp) {
+    if (!hasTable('formc_companies')) return { missing: true, rows: [], total: { n: 0 } };
+    const f = CF.filters(sp);
+    const c = CF.countSql(f), key = JSON.stringify([c.sql, c.params]);
+    if (!cfCount.has(key)) { if (cfCount.size >= 200) cfCount.delete(cfCount.keys().next().value); cfCount.set(key, one(c)); }
+    const inFormd = db.prepare('select 1 from formd where cik = ? limit 1');
+    const rows = all(CF.listSql(f)).map((r) => ({ ...r, formd: !!inFormd.get(r.cik) }));
+    return { filters: f, page: f.page, pageSize: CF.PAGE, rows, total: cfCount.get(key) };
+  }
+  function crowdCompany(cik) {
+    if (!/^\d{1,10}$/.test(cik) || !hasTable('formc_companies')) return null;
+    cik = String(Number(cik));
+    const co = db.prepare('select * from formc_companies where cik = ?').get(cik);
+    if (!co) return null;
+    const filings = db.prepare('select * from formc where cik = ? order by filed desc, accn desc').all(cik)
+      .map((r) => ({ ...r, sec: Q.secUrl(r.cik, r.accn) }));
+    const raises = db.prepare(`select ${Q.LIST_COLS} from formd where cik = ? order by filed desc`).all(cik)
+      .map((r) => ({ ...r, sec: Q.secUrl(r.cik, r.accn) }));
+    const names = [...new Set(filings.map((r) => r.name).filter(Boolean))];
+    return { company: co, filings, years: CF.fiscalYears(filings), names, raises,
+      facts: facts({ cik, names, state: co.state }) };
+  }
+
+  return { options, list, filing, employers, employer, contacts, contactsCsv, contact, crowd, crowdCompany };
 }
 
 function handler(api) {
@@ -360,6 +392,11 @@ function handler(api) {
       if (u.pathname === '/api/list') return send(res, 200, api.list(u.searchParams));
       if (u.pathname === '/api/employers') return send(res, 200, api.employers(u.searchParams));
       if (u.pathname === '/api/contacts') return send(res, 200, api.contacts(u.searchParams));
+      if (u.pathname === '/api/crowd') return send(res, 200, api.crowd(u.searchParams));
+      if (u.pathname === '/api/crowd-company') {
+        const r = api.crowdCompany(String(u.searchParams.get('cik') || ''));
+        return r ? send(res, 200, r) : send(res, 404, { error: 'no such company' });
+      }
       if (u.pathname === '/api/contacts.csv') {
         const r = api.contactsCsv(u.searchParams);
         if (!r) return send(res, 404, { error: 'the contact list is not built' });

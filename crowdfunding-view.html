@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crowdfunding — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <script src="/factsheet.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed cf- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .cf-page { max-width: 1320px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 18px; }
+    .cf-page > * { min-width: 0; }
+    .cf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .cf-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .cf-head h1 span { color: var(--muted); font-weight: 400; }
+    .cf-head nav { display: flex; gap: 14px; font-size: 13.5px; flex-wrap: wrap; }
+    .cf-head nav a { color: var(--accent); text-decoration: none; }
+    .cf-head nav b { color: var(--strong); font-weight: 500; }
+    .cf-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .cf-filters { padding: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .cf-f { display: grid; gap: 5px; min-width: 0; }
+    .cf-f > span { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .cf-f input, .cf-f select { height: 34px; border-radius: 10px; border: 1px solid var(--hair-2); background: var(--surface-2); color: var(--text); font: 13.5px var(--sans); padding: 0 10px; min-width: 0; }
+    .cf-f input:focus, .cf-f select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+    .cf-f.cf-wide input { width: 280px; }
+    .cf-check { display: flex; align-items: center; gap: 7px; height: 34px; color: var(--muted); font-size: 13px; cursor: pointer; }
+    .cf-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .cf-tile { padding: 14px 16px; }
+    .cf-tile b { display: block; font: 600 24px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .cf-tile span { font-size: 12px; color: var(--faint); }
+    .cf-tablebox { overflow-x: auto; }
+    .cf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cf-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 11px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; user-select: none; }
+    .cf-table th[data-sort] { cursor: pointer; }
+    .cf-table th.cf-sorted { color: var(--accent); }
+    .cf-table td { padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .cf-table tbody tr[data-cik] { cursor: pointer; }
+    .cf-table tbody tr[data-cik]:hover td { background: var(--panel); }
+    .cf-table .cf-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .cf-table .cf-name { font-weight: 500; color: var(--strong); max-width: 360px; }
+    .cf-sub { display: block; color: var(--faint); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+    .cf-dash { color: var(--faint); }
+    .cf-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent); color: var(--accent-2); margin-left: 6px; vertical-align: 1px; }
+    .cf-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; color: var(--muted); font-size: 12.5px; }
+    .cf-empty { padding: 30px; text-align: center; color: var(--muted); }
+    body.cf-busy .cf-page { opacity: 0.6; }
+    .cf-sheet { position: fixed; inset: 0 0 0 auto; width: min(780px, 100vw); z-index: 60; background: var(--surface); border-left: 1px solid var(--hair-2);
+      overflow-y: auto; padding: 20px 24px 40px; transform: translateX(102%); transition: transform 0.32s var(--ease), visibility 0s 0.32s; visibility: hidden; }
+    .cf-sheet.cf-open { transform: none; visibility: visible; transition: transform 0.32s var(--ease), visibility 0s; }
+    .cf-scrim { position: fixed; inset: 0; z-index: 59; background: color-mix(in srgb, var(--shade) 45%, transparent); }
+    .cf-sheet h2 { margin: 0; font-size: 21px; font-weight: 600; color: var(--strong); padding-right: 40px; }
+    .cf-sheet .cf-x { position: absolute; top: 16px; right: 16px; }
+    .cf-meta { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+    .cf-sheet h4 { margin: 22px 0 8px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .cf-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .cf-bars { display: flex; align-items: flex-end; gap: 4px; height: 130px; margin-top: 6px; }
+    .cf-bars div { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 3px; }
+    .cf-bars s { width: 100%; max-width: 34px; background: color-mix(in srgb, var(--accent) 75%, transparent); border-radius: 3px 3px 1px 1px; min-height: 1px; text-decoration: none; }
+    .cf-bars s.cf-prior { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+    .cf-bars i { font: normal 9.5px var(--mono); color: var(--faint); }
+    .cf-sheet a { color: var(--accent); }
+    @media (max-width: 860px) { .cf-page { padding: 16px 16px 0; } .cf-tiles { grid-template-columns: minmax(0, 1fr); } .cf-f.cf-wide, .cf-f.cf-wide input { width: 100%; flex: 1 1 100%; } }
+  </style>
+</head>
+<body>
+<div class="cf-page">
+  <div class="cf-head">
+    <h1>Crowdfunding <span>· small companies' own figures, from every Form C since 2016</span></h1>
+    <nav><a href="/">Form D</a><a href="/employers">Employers</a><a href="/contacts">Contacts</a><b>Crowdfunding</b><a href="/data-sources">Data sources</a></nav>
+  </div>
+  <div class="cf-box cf-filters">
+    <label class="cf-f cf-wide"><span>Company or CIK</span><input id="q" type="search" placeholder="e.g. Angel Studios, or 1671941" autocomplete="off" /></label>
+    <label class="cf-f"><span>State</span><input id="state" type="search" maxlength="2" placeholder="CA" style="width:70px;text-transform:uppercase" autocomplete="off" /></label>
+    <label class="cf-f"><span>Revenue at least</span><select id="minRevenue"><option value="">Any</option><option value="100000">$100K</option><option value="1000000">$1M</option><option value="5000000">$5M</option><option value="25000000">$25M</option></select></label>
+    <label class="cf-check"><input type="checkbox" id="profit" /> Profitable</label>
+    <label class="cf-check"><input type="checkbox" id="reports" /> Files annual reports</label>
+    <label class="cf-check"><input type="checkbox" id="recent" /> Filed since 2024</label>
+    <label class="cf-check"><input type="checkbox" id="formd" /> Also raised money (Form D)</label>
+  </div>
+  <div class="cf-tiles" id="cf-tiles"></div>
+  <div class="cf-box">
+    <div class="cf-tablebox">
+      <table class="cf-table">
+        <thead><tr>
+          <th data-sort="name">Company</th><th data-sort="state">Place</th>
+          <th data-sort="revenue" class="cf-n">Revenue</th><th data-sort="growth" class="cf-n" title="Revenue against the year before, both from the same filing, when the year before had $50K or more">Change</th>
+          <th data-sort="net_income" class="cf-n">Net income</th><th data-sort="employees" class="cf-n">Staff</th>
+          <th data-sort="reports" class="cf-n" title="Annual reports (C-AR) filed">Reports</th><th data-sort="filed" class="cf-n">Last filed</th>
+        </tr></thead>
+        <tbody id="cf-rows"></tbody>
+      </table>
+    </div>
+    <div class="cf-pager"><span id="cf-count"></span><span><button class="btn" id="prev" type="button">Previous</button> <button class="btn" id="next" type="button">Next</button></span></div>
+  </div>
+  <p class="cf-note">Each company's figures are from its newest Form C that carries any, as it filed them, for its most recent fiscal year; Change is that year against the one before. They are the company's own; the data set does not say whether an accountant reviewed or audited them. Local archive, this machine only.</p>
+</div>
+<div class="cf-scrim" id="cf-scrim" hidden></div>
+<aside class="cf-sheet" id="cf-sheet" aria-hidden="true"></aside>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="cf-dash">—</span>';
+const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n), s = n < 0 ? '−$' : '$'; return a >= 1e9 ? s + (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? s + (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? s + (a / 1e3).toFixed(0) + 'K' : s + a; };
+const pct = (v) => {
+  if (v == null || !isFinite(v)) return DASH;
+  const r = Math.round(v * 100);
+  return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toLocaleString('en-US') + '%';
+};
+const site = (u) => { const t = String(u || '').trim(); if (!t) return null; const h = /^https?:\/\//i.test(t) ? t : 'https://' + t; try { const x = new URL(h); return /^https?:$/.test(x.protocol) ? { href: x.href, host: x.hostname.replace(/^www\./, '') } : null; } catch (_) { return null; } };
+const IDS = ['q', 'state', 'minRevenue'];
+const CHECKS = ['profit', 'reports', 'recent', 'formd'];
+const state = { sort: 'revenue', dir: 'desc', page: 0 };
+let seq = 0;
+
+function params() {
+  const sp = new URLSearchParams();
+  for (const id of IDS) { const v = $(id).value.trim(); if (v) sp.set(id, v); }
+  for (const id of CHECKS) if ($(id).checked) sp.set(id, '1');
+  if (state.sort !== 'revenue') sp.set('sort', state.sort);
+  if (state.dir !== 'desc') sp.set('dir', state.dir);
+  if (state.page) sp.set('page', String(state.page));
+  return sp;
+}
+function readUrl() {
+  const sp = new URLSearchParams(location.search);
+  for (const id of IDS) if (sp.has(id)) $(id).value = sp.get(id);
+  for (const id of CHECKS) $(id).checked = sp.get(id) === '1';
+  if (sp.get('sort')) state.sort = sp.get('sort');
+  if (sp.get('dir') === 'asc') state.dir = 'asc';
+  state.page = Math.max(0, Number(sp.get('page')) || 0);
+  return sp.get('open');
+}
+async function load() {
+  const my = ++seq, sp = params();
+  history.replaceState(null, '', '?' + sp.toString());
+  document.body.classList.add('cf-busy');
+  for (const th of document.querySelectorAll('th[data-sort]')) {
+    const on = th.dataset.sort === state.sort;
+    th.classList.toggle('cf-sorted', on);
+    th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (on ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  }
+  let d;
+  try { const r = await fetch('/api/crowd?' + sp); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { if (my === seq) { document.body.classList.remove('cf-busy'); $('cf-rows').innerHTML = '<tr><td colspan="8" class="cf-empty">Could not read the list (' + esc(e.message) + ').</td></tr>'; } return; }
+  if (my !== seq) return;
+  document.body.classList.remove('cf-busy');
+  if (d.missing) { $('cf-rows').innerHTML = '<tr><td colspan="8" class="cf-empty">Form C is not loaded yet: run formc-load.js.</td></tr>'; return; }
+  const t = d.total || {};
+  $('cf-tiles').innerHTML = [[num(t.n), 'companies'], [money(t.revenue), 'revenue, newest year each'], [num(t.employees), 'staff, newest year each']]
+    .map(([b, s]) => '<div class="cf-box cf-tile"><b>' + b + '</b><span>' + esc(s) + '</span></div>').join('');
+  $('cf-rows').innerHTML = d.rows.map((r) => {
+    const w = site(r.website);
+    return '<tr data-cik="' + esc(r.cik) + '">'
+      + '<td class="cf-name">' + esc(r.name) + (r.formd ? '<span class="cf-tag" title="Has also raised money by Form D">Form D</span>' : '') + (w ? '<span class="cf-sub">' + esc(w.host) + '</span>' : '') + '</td>'
+      + '<td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
+      + '<td class="cf-n">' + money(r.revenue) + '<span class="cf-sub">' + esc(r.period ? 'year to ' + r.period.slice(0, 7) : 'filed ' + (r.filed || '').slice(0, 7)) + '</span></td>'
+      + '<td class="cf-n">' + pct(r.growth) + '</td>'
+      + '<td class="cf-n">' + money(r.net_income) + '</td>'
+      + '<td class="cf-n">' + num(r.employees) + '</td>'
+      + '<td class="cf-n">' + (r.reports ? num(r.reports) : DASH) + '<span class="cf-sub">' + num(r.filings) + ' filing' + (r.filings === 1 ? '' : 's') + '</span></td>'
+      + '<td class="cf-n">' + esc(r.last_filed || '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="cf-empty">No companies match these filters.</td></tr>';
+  const n = Number(t.n) || 0, a = d.page * d.pageSize;
+  $('cf-count').textContent = n ? (a + 1).toLocaleString('en-US') + '–' + Math.min(n, a + d.rows.length).toLocaleString('en-US') + ' of ' + n.toLocaleString('en-US') : '';
+  $('prev').disabled = d.page === 0; $('next').disabled = a + d.rows.length >= n;
+}
+
+async function openCompany(cik) {
+  const sh = $('cf-sheet');
+  sh.innerHTML = '<div class="cf-note">Reading…</div>'; sh.classList.add('cf-open'); sh.setAttribute('aria-hidden', 'false'); $('cf-scrim').hidden = false;
+  let d;
+  try { const r = await fetch('/api/crowd-company?cik=' + encodeURIComponent(cik)); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { sh.innerHTML = '<button class="btn icon cf-x" id="cf-x" type="button">✕</button><div class="cf-note">Could not read it (' + esc(e.message) + ').</div>'; return; }
+  const c = d.company, w = site(c.website), ys = d.years || [];
+  const facts = Object.assign({}, d.facts, { crowdLink: false });
+  const maxRev = Math.max(1, ...ys.map((y) => Number(y.revenue) || 0));
+  const others = d.names.filter((n) => n !== c.name);
+  sh.innerHTML = '<button class="btn icon cf-x" id="cf-x" type="button" aria-label="Close">✕</button>'
+    + '<h2>' + esc(c.name) + '</h2>'
+    + '<div class="cf-meta">' + [esc([c.city, c.state].filter(Boolean).join(', ')), 'CIK ' + esc(c.cik), w ? '<a href="' + esc(w.href) + '" target="_blank" rel="noopener noreferrer">' + esc(w.host) + '</a>' : '', c.portal ? 'raised through ' + esc(c.portal) : ''].filter(Boolean).join(' · ') + '</div>'
+    + FactSheet.html(facts)
+    + (others.length ? '<p class="cf-note">Also filed as: ' + others.map(esc).join('; ') + '</p>' : '')
+    + (ys.length
+      ? '<h4>Revenue by fiscal year</h4><div class="cf-bars">' + ys.map((y) => '<div title="' + esc('Fiscal ' + y.year + ': ' + (y.revenue == null ? '—' : '$' + Number(y.revenue).toLocaleString('en-US')) + (y.prior ? ' (as the year before, in the next report)' : '')) + '"><s class="' + (y.prior ? 'cf-prior' : '') + '" style="height:' + (Math.max(0, Number(y.revenue) || 0) / maxRev * 100).toFixed(1) + '%"></s><i>' + "'" + String(y.year).slice(2) + '</i></div>').join('') + '</div>'
+        + '<div class="cf-tablebox" style="margin-top:12px"><table class="cf-table"><thead><tr><th>Fiscal year</th><th class="cf-n">Revenue</th><th class="cf-n">Net income</th><th class="cf-n">Assets</th><th class="cf-n">Cash</th><th class="cf-n">Staff</th></tr></thead><tbody>'
+        + ys.slice().reverse().map((y) => '<tr><td class="cf-n" style="text-align:left">' + y.year + (y.prior ? '<span class="cf-sub">as the year before</span>' : '') + '</td><td class="cf-n">' + money(y.revenue) + '</td><td class="cf-n">' + money(y.net_income) + '</td><td class="cf-n">' + money(y.assets) + '</td><td class="cf-n">' + money(y.cash) + '</td><td class="cf-n">' + num(y.employees) + '</td></tr>').join('')
+        + '</tbody></table></div><p class="cf-note">From its annual reports (C-AR), the filings that name the year they cover. A year shown "as the year before" comes from the following year’s report.</p>'
+      : '<p class="cf-note">No annual report on file, so its figures cannot be placed by fiscal year; each filing below gives its most recent year and the one before.</p>')
+    + '<h4>Every filing (' + d.filings.length + ')</h4>'
+    + '<div class="cf-tablebox"><table class="cf-table"><thead><tr><th>Filed</th><th>Form</th><th class="cf-n">Revenue</th><th class="cf-n">Year before</th><th class="cf-n">Net income</th><th class="cf-n">Staff</th><th class="cf-n">Seeking up to</th></tr></thead><tbody>'
+    + d.filings.map((f) => '<tr><td class="cf-n" style="text-align:left">' + (f.sec ? '<a href="' + esc(f.sec) + '" target="_blank" rel="noopener noreferrer">' + esc(f.filed || '') + '</a>' : esc(f.filed || '')) + '</td><td>' + esc(f.form) + (f.period ? '<span class="cf-sub">year to ' + esc(f.period) + '</span>' : '') + '</td><td class="cf-n">' + money(f.revenue) + '</td><td class="cf-n">' + money(f.revenue_prior) + '</td><td class="cf-n">' + money(f.net_income) + '</td><td class="cf-n">' + num(f.employees) + '</td><td class="cf-n">' + (f.form === 'C' || f.form === 'C/A' ? money(f.maximum) : DASH) + (f.security && (f.form === 'C' || f.form === 'C/A') ? '<span class="cf-sub">' + esc(f.security) + '</span>' : '') + '</td></tr>').join('')
+    + '</tbody></table></div>'
+    + '<p class="cf-note">C: an offering · C/A: its amendment · C-U: progress update · C-AR: annual report · C-TR: offering ended · -W: withdrawn.</p>'
+    + (d.raises.length ? '<h4>Money raised (Form D)</h4><div class="cf-note">' + d.raises.length + ' Form D filing' + (d.raises.length === 1 ? '' : 's') + '. <a href="/?q=' + encodeURIComponent(c.cik) + '&kind=all&every=1" target="_blank" rel="noopener">Open in Form D</a></div>' : '');
+  sh.scrollTop = 0;
+}
+function closeSheet() { const sh = $('cf-sheet'); sh.classList.remove('cf-open'); sh.setAttribute('aria-hidden', 'true'); $('cf-scrim').hidden = true; }
+
+let timer = null;
+const soon = () => { clearTimeout(timer); timer = setTimeout(() => { state.page = 0; load(); }, 380); };
+for (const id of ['q', 'state']) $(id).addEventListener('input', soon);
+for (const id of ['minRevenue', ...CHECKS]) $(id).addEventListener('change', () => { state.page = 0; load(); });
+$('prev').addEventListener('click', () => { if (state.page) { state.page--; load(); window.scrollTo({ top: 0 }); } });
+$('next').addEventListener('click', () => { state.page++; load(); window.scrollTo({ top: 0 }); });
+document.querySelector('thead').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  if (state.sort === th.dataset.sort) state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+  else { state.sort = th.dataset.sort; state.dir = th.dataset.sort === 'name' || th.dataset.sort === 'state' ? 'asc' : 'desc'; }
+  state.page = 0; load();
+});
+$('cf-rows').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-cik]'); if (tr) openCompany(tr.dataset.cik); });
+$('cf-sheet').addEventListener('click', (e) => { if (e.target.closest('#cf-x')) closeSheet(); });
+$('cf-scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+const openFirst = readUrl();
+load();
+if (openFirst && /^\d{1,10}$/.test(openFirst)) openCompany(openFirst);
+</script>
+</body>
+</html>

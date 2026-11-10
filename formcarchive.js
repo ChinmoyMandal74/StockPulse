@@ -115,9 +115,41 @@ function summarise(db, opts = {}, deps = {}) {
     create index if not exists idx_formc_filed on formc (filed);`);
   const ins = db.prepare(`insert or replace into formc (${C.join(', ')}) values (${C.map(() => '?').join(', ')})`);
   db.exec('begin');
-  try { for (const r of rows) ins.run(...C.map((c) => r[c] ?? null)); db.exec('commit'); } catch (e) { try { db.exec('rollback'); } catch (_) { /* gone */ } throw e; }
-  log(`formc summary written: ${rows.length} rows.`);
-  return { ok: true, rows: rows.length };
+  try {
+    for (const r of rows) ins.run(...C.map((c) => r[c] ?? null));
+    companies(db);
+    db.exec('commit');
+  } catch (e) { try { db.exec('rollback'); } catch (_) { /* gone */ } throw e; }
+  const n = db.prepare('select count(*) n from formc_companies').get().n;
+  log(`formc summary written: ${rows.length} rows; ${n} companies.`);
+  return { ok: true, rows: rows.length, companies: n };
 }
 
-module.exports = { open, ensureSchema, tableName, summarise };
+// One row a company (`formc_companies`, for the viewer's Crowdfunding page):
+// the figures from its newest filing that carries any, and its counts. Refreshed
+// with the summary by `insert or replace` on the CIK; nothing is removed.
+const CO_COLS = ['cik', 'name', 'city', 'state', 'website', 'portal', 'accn', 'filed', 'form', 'period', 'employees',
+  'revenue', 'revenue_prior', 'net_income', 'net_income_prior', 'assets', 'cash', 'debt_short', 'debt_long',
+  'maximum', 'first_filed', 'last_filed', 'filings', 'offerings', 'reports'];
+function companies(db) {
+  db.exec(`create table if not exists formc_companies (cik text primary key, name text, city text, state text, website text, portal text,
+      accn text, filed text, form text, period text, employees real, revenue real, revenue_prior real, net_income real, net_income_prior real,
+      assets real, cash real, debt_short real, debt_long real, maximum real, first_filed text, last_filed text, filings integer, offerings integer, reports integer);
+    create index if not exists idx_formc_companies_revenue on formc_companies (revenue);`);
+  db.exec(`insert or replace into formc_companies (${CO_COLS.join(', ')})
+    select l.cik, l.name, l.city, l.state, l.website,
+      (select portal from formc p where p.cik = l.cik and p.portal is not null order by p.filed desc, p.accn desc limit 1),
+      l.accn, l.filed, l.form, l.period, l.employees, l.revenue, l.revenue_prior, l.net_income, l.net_income_prior,
+      l.assets, l.cash, l.debt_short, l.debt_long,
+      (select maximum from formc m where m.cik = l.cik and m.form = 'C' order by m.filed desc, m.accn desc limit 1),
+      a.first_filed, a.last_filed, a.filings, a.offerings, a.reports
+    from (select f.*, row_number() over (partition by cik order by
+            (revenue is null and assets is null and employees is null), filed desc, accn desc) rn
+          from formc f where cik is not null) l
+    join (select cik, min(filed) first_filed, max(filed) last_filed, count(*) filings,
+            sum(form = 'C') offerings, sum(form in ('C-AR', 'C-AR/A')) reports
+          from formc where cik is not null group by cik) a on a.cik = l.cik
+    where l.rn = 1`);
+}
+
+module.exports = { open, ensureSchema, tableName, summarise, CO_COLS };

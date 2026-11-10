@@ -8,7 +8,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const DASH = '<span style="color:var(--faint)">—</span>';
   const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
-  const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n); return a >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : a >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : a >= 1e3 ? '$' + (n / 1e3).toFixed(0) + 'K' : '$' + n; };
+  const money = (v) => { if (v == null || !isFinite(Number(v))) return DASH; const n = Number(v), a = Math.abs(n), s = n < 0 ? '−$' : '$'; return a >= 1e9 ? s + (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? s + (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? s + (a / 1e3).toFixed(0) + 'K' : s + a; };
   const pct = (a, b) => (a == null || b == null || b < 10 ? null : (a / b - 1) * 100);
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const STYLE = '<style>.fs-card{border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-radius:12px;padding:12px 14px;margin:4px 0 6px}'
@@ -30,6 +30,14 @@
       add('Plans on file', f.staff.firstYear + ' to ' + f.staff.year + ' (' + f.staff.years + ' years; ' + num(f.staff.first) + ' people in ' + f.staff.firstYear + ')');
     }
     if (f.raised) add('Money raised (Form D)', money(f.raised.sold) + ' <span style="color:var(--faint)">in ' + f.raised.n + ' offering' + (f.raised.n === 1 ? '' : 's') + ', ' + esc(String(f.raised.first || '').slice(0, 4)) + (f.raised.last && f.raised.last.slice(0, 4) !== String(f.raised.first || '').slice(0, 4) ? '–' + esc(f.raised.last.slice(0, 4)) : '') + '</span>');
+    if (f.crowd) {
+      const c = f.crowd, parts = [];
+      if (c.revenue != null) parts.push('revenue ' + money(c.revenue));
+      if (c.net_income != null) parts.push('net income ' + money(c.net_income));
+      if (c.employees != null) parts.push(num(c.employees) + ' staff');
+      add('Own figures (Form C)', (parts.join(' · ') || 'no figures filed') + ' <span style="color:var(--faint)">(' + (c.period ? 'year to ' + esc(c.period) : 'filed ' + esc(c.filed || '')) + ')</span>'
+        + (f.crowdLink === false ? '' : ' <a href="/crowdfunding?q=' + encodeURIComponent(c.cik) + '&open=' + encodeURIComponent(c.cik) + '" target="_blank" rel="noopener">by year</a>'));
+    }
     if (f.ppp) add('PPP loans, 2020–21', money(f.ppp.amount) + (f.ppp.jobs ? ' <span style="color:var(--faint)">· ' + num(f.ppp.jobs) + ' jobs reported</span>' : ''));
     if (f.sba) {
       const ys = f.sba.loans.map((x) => x.fy).filter(Boolean), a = Math.min(...ys), b = Math.max(...ys);

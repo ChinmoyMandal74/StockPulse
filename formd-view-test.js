@@ -287,6 +287,68 @@ bare.exec('create table formd (accn text, filed text, industry text)');
 let threw = ''; try { V.makeApi(bare); } catch (e) { threw = e.message; }
 ok(/superseded/.test(threw), 'an archive without the superseded column is refused with the fix named');
 
+// ---- crowdfunding (E3): the Crowdfunding page and the fact sheet line ----
+const CF = require('./crowdquery.js');
+eq(CF.filters(sp('sort=revenue;drop table formc')).sort, 'revenue', 'a sort not on the list falls back');
+eq(CF.filters(sp('sort=__proto__')).sort, 'revenue', 'an inherited key is not a sort');
+eq(CF.filters(sp('minRevenue=12345')).minRevenue, null, 'only the offered revenue floors');
+eq(CF.filters(sp('minRevenue=1000000')).minRevenue, 1000000, 'an offered floor');
+ok(!/drop|;/i.test(CF.listSql(CF.filters(sp('sort=x;drop&dir=x;drop'))).sql), 'nothing from the request is built into the crowd statement');
+eq(CF.where(CF.filters(sp('q=0001639406'))).params, ['1639406'], 'digits search the CIK, leading zeros dropped');
+{
+  const CArch = require('./formcarchive.js');
+  const C3 = CArch.open(db);
+  const T3 = (h, rows) => FC3.parseTsv([h, ...rows].join('\n') + '\n');
+  const FC3 = require('./formc.js');
+  C3.loadQuarter('2026Q2', 'u', {
+    SUBMISSION: T3('ACCESSION_NUMBER\tSUBMISSION_TYPE\tFILING_DATE\tCIK\tPERIOD', [
+      '0000000001-23-000001\tC\t20230301\t0000000001\t', '0000000001-25-000001\tC-AR\t20250420\t0000000001\t2024-12-31',
+      '0000000001-26-000003\tC-AR\t20260420\t0000000001\t2025-12-31', '0000000077-26-000001\tC\t20260501\t0000000077\t']),
+    ISSUER_INFORMATION: T3('ACCESSION_NUMBER\tNAMEOFISSUER\tSTREET1\tZIPCODE\tCITY\tSTATEORCOUNTRY\tISSUERWEBSITE\tCOMPANYNAME', [
+      '0000000001-23-000001\tKavia AI, Inc.\t2618 SUTTER ST\t94115\tSan Francisco\tCA\tkavia.ai\tWefunder Portal LLC',
+      '0000000001-25-000001\tKavia AI, Inc.\t2618 SUTTER ST\t94115\tSan Francisco\tCA\tkavia.ai\t',
+      '0000000001-26-000003\tKavia AI, Inc.\t2618 SUTTER ST\t94115\tSan Francisco\tCA\tkavia.ai\t',
+      '0000000077-26-000001\tTiny Bakery LLC\t9 OAK AVE\t30301\tAtlanta\tGA\t\tStartEngine Capital LLC']),
+    DISCLOSURE: T3('ACCESSION_NUMBER\tMAXIMUMOFFERINGAMOUNT\tCURRENTEMPLOYEES\tREVENUEMOSTRECENTFISCALYEAR\tREVENUEPRIORFISCALYEAR\tNETINCOMEMOSTRECENTFISCALYEAR\tNETINCOMEPRIORFISCALYEAR\tTOTALASSETMOSTRECENTFISCALYEAR', [
+      '0000000001-23-000001\t1235000\t4\t200000\t50000\t-90000\t-40000\t300000',
+      '0000000001-25-000001\t\t9\t900000\t600000\t-10000\t-50000\t800000',
+      '0000000001-26-000003\t\t12\t2100000\t950000\t120000\t-12000\t1500000',
+      '0000000077-26-000001\t50000\t2\t40000\t30000\t1000\t500\t20000']),
+  }, 10);
+  CArch.summarise(db, { commit: true }, { log: () => {} });
+  const api3 = V.makeApi(db, { naics: NAICS_T });
+  const CL = api3.crowd(sp(''));
+  eq(CL.rows.map((r) => [r.cik, r.revenue, r.formd]), [['1', 2100000, true], ['77', 40000, false]], 'one row a company, newest figures, largest first, Form D marked');
+  eq([CL.total.n, CL.total.revenue], [2, 2140000], 'the totals');
+  eq(Math.round(CL.rows[0].growth * 1000), 1211,'change: 2.1M against the 950K the same report gives for the year before');
+  eq(CL.rows[1].growth, null, 'no change off a base under $50K');
+  eq(CL.rows[0].portal, 'Wefunder Portal LLC', 'the portal from its newest offering that names one');
+  eq(api3.crowd(sp('profit=1&state=ga')).rows.map((r) => r.cik), ['77'], 'profitable, in a state');
+  eq(api3.crowd(sp('reports=1')).rows.map((r) => r.cik), ['1'], 'files annual reports');
+  eq(api3.crowd(sp('formd=1')).rows.map((r) => r.cik), ['1'], 'also a Form D issuer');
+  eq(api3.crowd(sp('minRevenue=1000000')).rows.map((r) => r.cik), ['1'], 'revenue at least');
+  eq(api3.crowd(sp('q=bakery')).rows.map((r) => r.cik), ['77'], 'by name');
+  eq(api3.crowd(sp('sort=name&dir=asc')).rows.map((r) => r.cik), ['1', '77'], 'by name, A first');
+  const CC = api3.crowdCompany('0000000001');
+  eq(CC.years.map((y) => [y.year, y.revenue, !!y.prior]), [[2023, 600000, true], [2024, 900000, false], [2025, 2100000, false]],
+    'by fiscal year from the annual reports: each its own year, the earliest from the year before');
+  eq(CC.years.find((y) => y.year === 2024).revenue, 900000, 'a year its own report gives is not overwritten by the next report’s year before (950K)');
+  eq(CC.years[0].employees, null, 'staff is never carried back a year');
+  eq(CC.filings.map((f) => f.form), ['C-AR', 'C-AR', 'C'], 'every filing, newest first');
+  eq(CC.raises.length, 2, 'its Form D filings');
+  const cblob = JSON.stringify(CC);
+  ok(!/SUTTER|94115/.test(cblob), 'no street or zip reaches the page');
+  eq(api3.crowdCompany('x1'), null, 'a malformed CIK is refused');
+  eq(api3.crowdCompany('999'), null, 'an unknown company is null');
+  const FKC = api3.filing('0000000001-26-000002').facts;
+  eq([FKC.crowd.revenue, FKC.crowd.period], [2100000, '2025-12-31'], 'the Form D fact sheet carries its Form C figures by CIK');
+  ok(/Own figures \(Form C\)/.test(require('./factsheet.js').html(FKC)) && /by year<\/a>/.test(require('./factsheet.js').html(FKC)), 'the card draws them, with a link to the year by year');
+  ok(!/by year<\/a>/.test(require('./factsheet.js').html({ ...FKC, crowdLink: false })), 'no link back on the Crowdfunding page itself');
+  eq(api3.employer('010750002').facts.crowd, null, 'no Form C, no line');
+  const call3 = (url) => { const out = { status: 0 }; V.handler(api3)({ method: 'GET', url, headers: { authorization: 'Basic ' + Buffer.from('a:pw-test').toString('base64') } }, { writeHead(s) { out.status = s; }, end() {} }); return out.status; };
+  eq([call3('/api/crowd'), call3('/api/crowd-company?cik=1'), call3('/api/crowd-company?cik=abc'), call3('/crowdfunding')], [200, 200, 404, 200], 'the routes and the page');
+}
+
 // ---- the door ----
 const req = (auth, url = '/api/options') => ({ method: 'GET', url, headers: auth ? { authorization: 'Basic ' + Buffer.from(auth).toString('base64') } : {} });
 function call(r) {
