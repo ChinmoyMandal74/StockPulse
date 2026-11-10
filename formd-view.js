@@ -24,6 +24,7 @@ const E = require('./employerquery.js');
 const CQ = require('./contactquery.js');
 const CF = require('./crowdquery.js');
 const T = require('./targets.js');
+const CS = require('./crawlstats.js');
 const P5 = require('./f5500.js');
 
 const PORT = Number(process.env.FORMD_VIEW_PORT) || 4100;
@@ -38,6 +39,7 @@ const STATIC = {
   '/contacts': [path.join(__dirname, 'contacts-view.html'), 'text/html; charset=utf-8'],
   '/crowdfunding': [path.join(__dirname, 'crowdfunding-view.html'), 'text/html; charset=utf-8'],
   '/targets': [path.join(__dirname, 'targets-view.html'), 'text/html; charset=utf-8'],
+  '/crawl': [path.join(__dirname, 'crawl-view.html'), 'text/html; charset=utf-8'],
   '/data-sources': [path.join(__dirname, 'sources-view.html'), 'text/html; charset=utf-8'],
   '/app.css': [path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8'],
   '/theme.js': [path.join(__dirname, 'public', 'theme.js'), 'text/javascript; charset=utf-8'],
@@ -473,7 +475,23 @@ function makeApi(db, opts = {}) {
       divisions: Object.keys(T.DIVISIONS), regions: Object.keys(T.REGIONS), states: T.STATES };
   }
 
-  return { options, list, filing, employers, employer, contacts, contactsCsv, contact, crowd, crowdCompany, targets };
+  // ---- the website crawl's progress (crawlstats.js; the Crawl page) ----
+  let crawlTarget = null;   // the list's size: counted once, it changes only with a plan-filings load
+  function crawl() {
+    const f = CS.figures(db, web, { target: crawlTarget, archiveBytes: opts.archiveBytes ? opts.archiveBytes() : null });
+    crawlTarget = f.target;
+    let log = null;
+    try { log = opts.readLog ? CS.lastRun(opts.readLog()) : null; } catch (_) { /* no log yet */ }
+    // The latest companies tried, with what was kept of each.
+    const kept = web && hasTableIn(web, 'crawls') ? web.prepare('select pages, chars from crawls where ein = ? and pages > 0 order by finished_at desc limit 1') : null;
+    const recent = hasTable('web_sites') ? db.prepare(`select w.ein, w.name, w.city, w.state, w.domain, w.verdict, w.checked_at, l.staff
+        from web_sites w left join f5500_latest l on l.ein = w.ein order by w.checked_at desc limit 40`).all()
+      .map((r) => { const k = kept ? kept.get(r.ein) : null; return { ...r, keptPages: k ? k.pages : null, keptChars: k ? k.chars : null }; }) : [];
+    return { ...f, lastRun: log, recent };
+  }
+  function hasTableIn(d, t) { return !!d.prepare("select 1 from sqlite_master where name = ?").get(t); }
+
+  return { options, list, filing, employers, employer, contacts, contactsCsv, contact, crowd, crowdCompany, targets, crawl };
 }
 
 function handler(api) {
@@ -494,6 +512,7 @@ function handler(api) {
       if (u.pathname === '/api/employers') return send(res, 200, api.employers(u.searchParams));
       if (u.pathname === '/api/contacts') return send(res, 200, api.contacts(u.searchParams));
       if (u.pathname === '/api/crowd') return send(res, 200, api.crowd(u.searchParams));
+      if (u.pathname === '/api/crawl') return send(res, 200, api.crawl());
       if (u.pathname === '/api/targets') { const r = api.targets(u.searchParams); delete r.all; return send(res, 200, r); }
       if (u.pathname === '/api/targets.csv' || u.pathname === '/api/targets.txt') {
         const r = api.targets(u.searchParams);
@@ -555,7 +574,14 @@ if (require.main === module) {
   try { naics = require('./naics.json').codes; } catch (_) { /* no titles: codes alone */ }
   let web = null;
   try { if (fs.existsSync(path.join(__dirname, 'web-archive.db'))) { web = new DatabaseSync(path.join(__dirname, 'web-archive.db'), { readOnly: true }); web.exec('pragma busy_timeout = 10000'); } } catch (_) { /* no page text: sites shown as found, not read */ }
-  const api = makeApi(db, { tracked, naics, web });
+  // The crawl page's file facts: the archive's size and the end of the loader's log.
+  const archiveBytes = () => ['', '-wal'].reduce((a, x) => { try { return a + fs.statSync(path.join(__dirname, 'web-archive.db' + x)).size; } catch (_) { return a; } }, 0);
+  const readLog = () => {
+    const file = path.join(__dirname, 'website-load.log');
+    const size = fs.statSync(file).size, fd = fs.openSync(file, 'r');
+    try { const n = Math.min(size, 65536), b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, size - n); return b.toString('utf8'); } finally { fs.closeSync(fd); }
+  };
+  const api = makeApi(db, { tracked, naics, web, archiveBytes, readLog });
   http.createServer(handler(api)).listen(PORT, HOST, () => {
     console.log(`Form D viewer: http://localhost:${PORT}  (${api.options.filings.toLocaleString('en-US')} filings, ready in ${((Date.now() - t) / 1000).toFixed(1)}s; this machine only, admin password)`);
   });

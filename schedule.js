@@ -111,7 +111,7 @@ const JOBS = [
     id: 'websites', name: 'Company websites', task: 'TickrLab websites', host: 'laptop', script: 'website-load.js', taskScript: 'website-task.ps1',
     days: ALL_DAYS, times: ['01:00'], minutes: 345,
     spends: { kind: 'anthropic', text: 'Claude Haiku, about $0.0015 a confirmed site, capped at $2 a run (about $0.65 a night)' },
-    what: 'Finds the own website of every employer with a retirement plan and 100 or more staff (about 117,000), four at a time, robots.txt obeyed; reads each confirmed site and keeps up to 40 useful pages of it in web-archive.db on the laptop, searchable. Stops after 345 minutes or at 12 GB and carries on the next night.',
+    what: 'Finds the own website of every employer with a retirement plan and 100 or more staff (about 117,000), four at a time, robots.txt obeyed; reads each confirmed site and keeps up to 40 useful pages of it in web-archive.db on the laptop, searchable. Stops after 345 minutes or at 12 GB and carries on the next night, then emails the owner the night\'s figures (crawl-report.js). Progress: the laptop\'s Crawl page, localhost:4100/crawl.',
     log: '/schedule',
   },
   {

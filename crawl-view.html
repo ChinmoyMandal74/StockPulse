@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crawl — Tickr Lab (local)</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <!-- Served only by formd-view.js on 127.0.0.1, never by the site. Everything this page adds is prefixed cr- . -->
+  <style>
+    body { min-height: 100dvh; padding: 0 0 60px; }
+    .cr-page { max-width: 1240px; margin: 0 auto; padding: 22px 28px 0; display: grid; gap: 18px; }
+    .cr-page > * { min-width: 0; }
+    .cr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .cr-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--strong); }
+    .cr-head h1 span { color: var(--muted); font-weight: 400; }
+    .cr-head nav { display: flex; gap: 14px; font-size: 13.5px; flex-wrap: wrap; }
+    .cr-head nav a { color: var(--accent); text-decoration: none; }
+    .cr-head nav b { color: var(--strong); font-weight: 500; }
+    .cr-box { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; }
+    .cr-progress { padding: 18px 20px; display: grid; gap: 10px; }
+    .cr-progress .cr-big { font: 600 30px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .cr-progress .cr-big span { font: 400 15px var(--sans); color: var(--muted); letter-spacing: 0; }
+    .cr-bar { height: 10px; border-radius: 6px; background: var(--hair); overflow: hidden; }
+    .cr-bar i { display: block; height: 100%; background: var(--accent); border-radius: 6px; min-width: 2px; }
+    .cr-bar.cr-disk i { background: var(--blue); }
+    .cr-line { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .cr-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+    .cr-tile { padding: 14px 16px; }
+    .cr-tile b { display: block; font: 600 21px var(--mono); color: var(--strong); letter-spacing: -0.02em; }
+    .cr-tile span { font-size: 12px; color: var(--faint); }
+    .cr-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+    .cr-sec { padding: 14px 16px; display: grid; gap: 8px; }
+    .cr-sec h2 { margin: 0; font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+    .cr-tablebox { overflow-x: auto; }
+    .cr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .cr-table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); padding: 9px 8px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    .cr-table td { padding: 8px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+    .cr-table .cr-n { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .cr-sub { display: block; color: var(--faint); font-size: 11.5px; }
+    .cr-ok { color: var(--accent); } .cr-dash { color: var(--faint); }
+    .cr-warn { color: var(--amber); }
+    .cr-note { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin: 0; }
+    @media (max-width: 1000px) { .cr-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cr-two { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 600px) { .cr-page { padding: 16px 16px 0; } .cr-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+<div class="cr-page">
+  <div class="cr-head">
+    <h1>Crawl <span>· companies' own websites, found and kept</span></h1>
+    <nav><a href="/">Form D</a><a href="/employers">Employers</a><a href="/contacts">Contacts</a><a href="/crowdfunding">Crowdfunding</a><a href="/targets">Targets</a><b>Crawl</b><a href="/data-sources">Data sources</a></nav>
+  </div>
+  <div class="cr-box cr-progress" id="cr-progress"><div class="cr-line">Reading…</div></div>
+  <div class="cr-tiles" id="cr-tiles"></div>
+  <div class="cr-box cr-sec">
+    <h2>Night by night</h2>
+    <div class="cr-tablebox"><table class="cr-table"><thead><tr>
+      <th>Night of</th><th>Ran</th><th class="cr-n">Tried</th><th class="cr-n">Confirmed</th><th class="cr-n">Name only</th><th class="cr-n">None</th><th class="cr-n">Kept whole</th><th class="cr-n">Pages</th><th class="cr-n">Text</th><th class="cr-n">Reading</th><th class="cr-n">Requests</th>
+    </tr></thead><tbody id="cr-nights"></tbody></table></div>
+  </div>
+  <div class="cr-box cr-sec">
+    <h2>Latest companies tried</h2>
+    <div class="cr-tablebox"><table class="cr-table"><thead><tr>
+      <th>Company</th><th>Place</th><th class="cr-n">Staff</th><th>Result</th><th class="cr-n">Kept</th><th>When</th>
+    </tr></thead><tbody id="cr-recent"></tbody></table></div>
+  </div>
+  <p class="cr-note">The list: every employer with its own retirement plan, 100 or more staff, filing 2023 or later. The nightly task (TickrLab websites, 01:00) tries four at a time with robots.txt obeyed, reads each confirmed site and keeps up to 40 pages of it, stopping after 345 minutes, $2 of reading or 12 GB. A night is named by the evening it starts. Search what is kept: <code>node web-search.js "phrase"</code>. Refreshes every minute. Local archive, this machine only.</p>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DASH = '<span class="cr-dash">—</span>';
+const num = (v) => (v == null || !isFinite(Number(v)) ? DASH : Number(v).toLocaleString('en-US'));
+const size = (b) => (b == null ? DASH : b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.round(b / 1e3) + ' KB');
+const chars = (c) => (c >= 1e6 ? (c / 1e6).toFixed(1) + 'M' : Math.round((c || 0) / 1e3) + 'K');
+const usd = (v) => '$' + Number(v || 0).toFixed(2);
+const time = (t) => (t ? new Date(t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '');
+const day = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const CAP = 12e9;
+
+async function load() {
+  let d;
+  try { const r = await fetch('/api/crawl'); if (!r.ok) throw new Error('HTTP ' + r.status); d = await r.json(); }
+  catch (e) { $('cr-progress').innerHTML = '<div class="cr-line">Could not read the figures (' + esc(e.message) + ').</div>'; return; }
+  const pct = d.target ? d.triedInList / d.target * 100 : 0;
+  const disk = d.archiveBytes != null ? d.archiveBytes / CAP * 100 : null;
+  const lr = d.lastRun;
+  $('cr-progress').innerHTML = '<div class="cr-big">' + num(d.triedInList) + ' <span>of ' + num(d.target) + ' companies tried (' + pct.toFixed(pct < 1 ? 2 : 1) + '%)</span></div>'
+    + '<div class="cr-bar"><i style="width:' + Math.min(100, pct).toFixed(2) + '%"></i></div>'
+    + '<div class="cr-line">' + (d.pace ? 'Recent pace ' + num(d.pace) + ' companies a night: about ' + num(d.nightsLeft) + ' nights to go, done around ' + esc(day(d.finish)) + '.' : 'No pace yet: it shows once nightly runs have worked.') + '</div>'
+    + (disk != null ? '<div class="cr-line">Page archive ' + size(d.archiveBytes) + ' of the 12 GB limit</div><div class="cr-bar cr-disk"><i style="width:' + Math.min(100, disk).toFixed(2) + '%"></i></div>' : '')
+    + (lr ? '<div class="cr-line"><b style="color:var(--strong);font-weight:500">Last run:</b> ' + esc(lr.done) + (lr.stop ? '<br><span class="' + (/minutes up/.test(lr.stop) ? '' : 'cr-warn') + '">' + esc(lr.stop) + '</span>' : '') + '</div>' : '');
+  $('cr-tiles').innerHTML = [[num(d.confirmed), 'sites confirmed (' + (d.tried ? Math.round(d.confirmed / d.tried * 100) : 0) + '% of tried)'], [num(d.kept), 'sites kept whole'], [num(d.pages), 'pages kept'],
+    [chars(d.pageChars), 'characters of text'], [num(d.earlierVersions), 'earlier versions kept'], [usd(d.usd), 'spent on reading']]
+    .map(([b, s]) => '<div class="cr-box cr-tile"><b>' + b + '</b><span>' + esc(s) + '</span></div>').join('');
+  $('cr-nights').innerHTML = d.nights.slice(0, 30).map((n) => '<tr><td>' + esc(day(n.night)) + '</td><td>' + esc(n.first ? time(n.first) + '–' + time(n.last) : '') + '</td>'
+    + '<td class="cr-n">' + num(n.tried) + '</td><td class="cr-n">' + num(n.confirmed) + '</td><td class="cr-n">' + num(n.nameOnly) + '</td><td class="cr-n">' + num(n.none) + '</td>'
+    + '<td class="cr-n">' + num(n.kept) + '</td><td class="cr-n">' + num(n.pages) + '</td><td class="cr-n">' + chars(n.chars) + '</td><td class="cr-n">' + usd(n.usd) + '</td><td class="cr-n">' + num(n.requests) + '</td></tr>').join('')
+    || '<tr><td colspan="11" class="cr-dash">No runs yet.</td></tr>';
+  const RES = { confirmed: 'confirmed', given: 'given by hand', 'name only': 'name only', 'none found': 'none found' };
+  $('cr-recent').innerHTML = d.recent.map((r) => '<tr><td>' + esc(r.name) + (r.domain ? '<span class="cr-sub">' + esc(r.domain) + '</span>' : '') + '</td><td>' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</td>'
+    + '<td class="cr-n">' + num(r.staff) + '</td><td class="' + (r.verdict === 'confirmed' || r.verdict === 'given' ? 'cr-ok' : '') + '">' + esc(RES[r.verdict] || r.verdict) + '</td>'
+    + '<td class="cr-n">' + (r.keptPages ? num(r.keptPages) + ' pages<span class="cr-sub">' + chars(r.keptChars) + '</span>' : DASH) + '</td><td>' + esc(new Date(r.checked_at).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</td></tr>').join('')
+    || '<tr><td colspan="6" class="cr-dash">None yet.</td></tr>';
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

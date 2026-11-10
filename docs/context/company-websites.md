@@ -223,3 +223,16 @@ website-load.js --commit --min-staff 100 --max-staff 0 --max 200000 --workers 4 
 Expected: about 240 companies an hour, about 1,400 a night, so roughly 80
 nights for the list; about $0.65 a night of reading (some $60 in all); about
 0.3 MB a site kept, 12 GB at most. A night the laptop sleeps is skipped.
+
+## The tracker and the morning email (2026-11-10)
+
+The owner: "Create a small crwal tracker page that tracks progress and send me
+a daily email in the morning on the crwal previous night".
+
+| File | What |
+|---|---|
+| `crawlstats.js` | The figures, one set for both: the list (100+ staff, filing 2023 on; its size counted once a viewer start), how much of it is tried, the verdicts, sites kept whole, pages, text, earlier versions, reading cost, night by night (a night named by the evening it starts: 01:00 to 06:45 on the 11th is the night of the 10th), the pace over the last three nights that worked and the finish at that pace, and the run's own last `done:` and stop lines from `website-load.log` |
+| `crawl-view.html` | `/crawl` in the local viewer: progress and archive-size bars, six tiles, night by night, the latest 40 companies tried with what was kept; refreshes every minute. Prefix `cr-` |
+| `crawl-report.js` | Counts the night on the laptop and posts it to `/api/cron/crawl-report` (CRON_SECRET), which mails the operator, kind `crawl-report`: last night, the whole list, and anything to look at (nothing tried, a run that ended other than by its minutes, under 15% confirmed, the archive past 80% of 12 GB). Counts only; no company or page reaches the server. `--dry` prints the body |
+| `website-task.ps1` | Runs it straight after the crawl in the same task, so the email comes about 06:45 |
+| `crawlstats-test.js` | The figures, the nights, the log lines, the body (no company in it) and the page's route; the list filter proven by reverting it |

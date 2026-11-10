@@ -24,7 +24,7 @@
 # IT SPENDS MONEY: about $0.0015 a confirmed site read (a third of companies),
 # roughly $0.65 a night; about $60 for the whole list.
 #
-# 01:00 LOCAL, EVERY NIGHT, for about six hours.
+# 01:00 LOCAL, EVERY NIGHT, for about six hours; then the morning email.
 param([switch]$Remove, [switch]$WhatIf)
 
 $ErrorActionPreference = 'Stop'
@@ -51,8 +51,12 @@ if (-not $node) { throw 'node is not on PATH for this shell.' }
 # this script (it holds this machine's node path, so it is not in git), and
 # run-hidden.vbs starts it hidden. The report goes to website-load.log.
 $cmdLine = "`"$node`" --use-system-ca --disable-warning=ExperimentalWarning website-load.js --commit --min-staff 100 --max-staff 0 --max 200000 --workers $Workers --then-deep --minutes $Minutes --max-usd $MaxUsd --max-gb $MaxGb >> website-load.log 2>&1"
+# THE MORNING EMAIL (2026-11-10, the owner: "send me a daily email in the
+# morning on the crwal previous night"): crawl-report.js counts the night and
+# the app mails it, straight after the crawl ends (about 06:45).
+$reportLine = "`"$node`" --use-system-ca --disable-warning=ExperimentalWarning crawl-report.js >> website-load.log 2>&1"
 $runCmd = Join-Path $Root 'websites.run.cmd'
-Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine)
+Set-Content -Path $runCmd -Encoding ascii -Value @('@echo off', "cd /d `"$Root`"", $cmdLine, $reportLine)
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $Root 'run-hidden.vbs')`" `"$runCmd`"" -WorkingDirectory $Root
 $triggers = @($Times | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
 # LOCAL WALL-CLOCK TIME (2026-11-01): without an offset the trigger is local
@@ -69,6 +73,7 @@ $settings = New-ScheduledTaskSettingsSet `
 if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
   Write-Output "  run   : $cmdLine (hidden, through run-hidden.vbs)"
+  Write-Output "  then  : $reportLine (the morning email)"
   Write-Output "  in    : $Root"
   Write-Output "  when  : every night at $($Times -join ', '), stopping after $Minutes minutes, `$$MaxUsd or $MaxGb GB"
   exit 0

@@ -21528,6 +21528,102 @@ app.post('/api/cron/archive-report', route(async (req, res) => {
   res.json({ sent: !!sent });
 }));
 
+// ---- The website crawl's morning email (2026-11-10) -------------------------
+// The owner: "send me a daily email in the morning on the crwal previous
+// night". The crawl's databases are on the laptop only (formd.db,
+// web-archive.db), so crawl-report.js counts them there (crawlstats.js) after
+// the nightly websites task and posts the figures; this mails them to the
+// operator, kind 'crawl-report'. Counts only reach the server: no page text
+// and no company.
+function crawlReportClean(b) {
+  const num = (v) => (Number.isFinite(Number(v)) && v != null && v !== '' ? Number(v) : null);
+  const str = (v, n) => (v == null ? null : String(v).replace(/[\u0000-\u001f]/g, ' ').slice(0, n || 80));
+  if (!b || typeof b !== 'object') return null;
+  const n = b.night || {}, t = b.total || {}, r = b.run || null;
+  return {
+    at: num(b.at), host: str(b.host, 60), error: str(b.error, 200),
+    night: b.night ? { night: /^\d{4}-\d\d-\d\d$/.test(String(n.night)) ? String(n.night) : null,
+      tried: num(n.tried) || 0, confirmed: num(n.confirmed) || 0, nameOnly: num(n.nameOnly) || 0, none: num(n.none) || 0, read: num(n.read) || 0,
+      usd: num(n.usd) || 0, kept: num(n.kept) || 0, pages: num(n.pages) || 0, chars: num(n.chars) || 0, requests: num(n.requests) || 0,
+      first: num(n.first), last: num(n.last) } : null,
+    total: b.total ? { target: num(t.target) || 0, tried: num(t.tried) || 0, left: num(t.left) || 0, confirmed: num(t.confirmed) || 0, kept: num(t.kept) || 0,
+      pages: num(t.pages) || 0, chars: num(t.chars) || 0, usd: num(t.usd) || 0, earlier: num(t.earlier) || 0, pace: num(t.pace),
+      nightsLeft: num(t.nightsLeft), finish: /^\d{4}-\d\d-\d\d$/.test(String(t.finish)) ? String(t.finish) : null,
+      archiveBytes: num(t.archiveBytes), capBytes: num(t.capBytes) || 12e9 } : null,
+    run: r && typeof r === 'object' ? { done: str(r.done, 400), stop: str(r.stop, 300) } : null,
+  };
+}
+function crawlReportEmail(r) {
+  const fmtN = (v) => Number(v || 0).toLocaleString('en-US');
+  const gb = (v) => (v >= 1e9 ? (v / 1e9).toFixed(2) + ' GB' : (v / 1e6).toFixed(1) + ' MB');
+  const tm = (t) => (t ? new Date(t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '—');
+  const dayLabel = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' });
+  const n = r.night, t = r.total;
+  const look = [];
+  if (r.error) look.push('The crawl figures could not be counted: ' + r.error);
+  if (n && t) {
+    if (!n.tried) look.push('Nothing was tried last night. The laptop may have been asleep or off, or the task is not registered (website-task.ps1).');
+    if (r.run && r.run.stop && !/minutes up/.test(r.run.stop)) look.push('The run ended early: ' + r.run.stop);
+    if (n.tried >= 50 && n.confirmed / n.tried < 0.15) look.push(`Only ${Math.round(n.confirmed / n.tried * 100)}% of sites were confirmed (about 30% is usual).`);
+    if (t.archiveBytes != null && t.archiveBytes >= 0.8 * t.capBytes) look.push(`The page archive is at ${gb(t.archiveBytes)} of its ${gb(t.capBytes)} limit.`);
+  }
+  const subject = r.error ? 'Website crawl: could not be counted'
+    : `Website crawl: ${fmtN(n.tried)} companies last night, ${fmtN(t.tried)} of ${fmtN(t.target)} done`;
+  const intro = r.error ? 'The morning count of the website crawl could not be made.'
+    : `Last night the crawl tried ${fmtN(n.tried)} companies, confirmed ${fmtN(n.confirmed)} websites and kept ${fmtN(n.pages)} pages. ${(t.tried / Math.max(1, t.target) * 100).toFixed(2)}% of the list is done.`;
+  const th = (x, right) => `<th${st(`padding:6px 8px;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:${MC.faint};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</th>`;
+  const td = (x, right) => `<td${st(`padding:7px 8px;font-size:13.5px;color:${MC.body};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</td>`;
+  const table = (rows) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse;margin:6px 0 18px')}><tr>${th('')}${th('', true)}</tr>${rows.map(([k, v]) => `<tr>${td(mailEsc(k))}${td(mailEsc(v), true)}</tr>`).join('')}</table>`;
+  const h2 = (x) => `<h2${st(`margin:22px 0 4px;font-size:15px;font-weight:700;color:${MC.ink}`)}>${x}</h2>`;
+  let body = '';
+  const lines = [];
+  if (look.length) {
+    body += `<div class="em-warn"${st(`margin:16px 0;padding:12px 14px;border-left:3px solid ${JD_AMBER};color:${JD_AMBER};font-size:14px`)}>${look.map(mailEsc).join('<br>')}</div>`;
+    lines.push('To look at:', ...look.map((x) => '  - ' + x), '');
+  }
+  if (n && t) {
+    const rowsNight = [
+      ['Ran', n.first ? tm(n.first) + ' to ' + tm(n.last) + ' ET' : '—'],
+      ['Companies tried', fmtN(n.tried)],
+      ['Websites confirmed', fmtN(n.confirmed) + (n.tried ? ' (' + Math.round(n.confirmed / n.tried * 100) + '%)' : '')],
+      ['Name only, not read', fmtN(n.nameOnly)], ['No website found', fmtN(n.none)],
+      ['Sites kept whole', fmtN(n.kept)], ['Pages kept', fmtN(n.pages)], ['Text kept', fmtN(Math.round(n.chars / 1e3)) + 'k characters'],
+      ['Reading cost', '$' + n.usd.toFixed(2)], ['Requests made', fmtN(n.requests)],
+    ];
+    const rowsAll = [
+      ['Companies tried', fmtN(t.tried) + ' of ' + fmtN(t.target) + ' (' + (t.tried / Math.max(1, t.target) * 100).toFixed(2) + '%)'],
+      ['Websites confirmed', fmtN(t.confirmed)], ['Sites kept whole', fmtN(t.kept)], ['Pages kept', fmtN(t.pages)],
+      ['Earlier versions kept', fmtN(t.earlier)],
+      ['Page archive', t.archiveBytes != null ? gb(t.archiveBytes) + ' of ' + gb(t.capBytes) : '—'],
+      ['Spent on reading', '$' + t.usd.toFixed(2)],
+      ['Pace', t.pace ? fmtN(t.pace) + ' companies a night' : '—'],
+      ['Done at that pace', t.finish ? 'around ' + dayLabel(t.finish) + ', ' + t.finish.slice(0, 4) + ' (' + fmtN(t.nightsLeft) + ' nights)' : '—'],
+    ];
+    body += h2('Last night') + table(rowsNight)
+      + (r.run && r.run.done ? `<p${st(`margin:-8px 0 12px;font-size:12.5px;color:${MC.mute}`)}>${mailEsc(r.run.stop ? r.run.stop + ' ' : '')}${mailEsc(r.run.done)}</p>` : '')
+      + h2('The whole list') + table(rowsAll)
+      + `<p${st(`margin:4px 0 0;font-size:12.5px;color:${MC.mute}`)}>The list is every employer with its own retirement plan, 100 or more staff, filing 2023 or later. Progress and the companies themselves are on the laptop's Crawl page (localhost:4100/crawl); the archive is on ${mailEsc(r.host || 'the laptop')} only.</p>`;
+    lines.push('Last night:', ...rowsNight.map(([k, v]) => '  ' + k + ': ' + v), '');
+    if (r.run && r.run.done) lines.push('  ' + (r.run.stop ? r.run.stop + ' ' : '') + r.run.done, '');
+    lines.push('The whole list:', ...rowsAll.map(([k, v]) => '  ' + k + ': ' + v));
+  }
+  const heading = 'Website crawl, night of ' + (n && n.night ? dayLabel(n.night) : 'last night');
+  const note = 'Sent to the site’s operator each morning by the laptop (crawl-report.js), after the nightly websites task.';
+  return { subject, html: emailShell({ heading, intro, body, note }), text: textShell({ heading, intro, lines, note }) };
+}
+app.post('/api/cron/crawl-report', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  const r = crawlReportClean(req.body);
+  if (!r || (!r.error && !(r.night && r.total))) return res.status(400).json({ error: 'The crawl figures, or the error that stopped them.' });
+  const e = crawlReportEmail(r);
+  if (req.query.dry === '1') return res.json({ dry: true, subject: e.subject, text: e.text, html: e.html });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sent = await sendMail({ kind: 'crawl-report', to, subject: e.subject, text: e.text, html: e.html });
+  res.json({ sent: !!sent });
+}));
+
 // ---- The daily jobs email (2026-10-30) --------------------------------------
 // The owner: "one daily email on all scheduled task runs ... end of day .. may
 // be 8pm ... a high level summary". jobsdigest.js builds it from the records
