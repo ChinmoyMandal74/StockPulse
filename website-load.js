@@ -57,6 +57,9 @@ function options(argv) {
     maxUsd: Math.max(0, Number(arg('--max-usd')) || 3),
     gapS: Math.max(MIN_GAP_S, Number(arg('--gap')) || 3),
     ein: arg('--ein') ? String(arg('--ein')).replace(/\D/g, '') : null,
+    // --url with --ein: the address given by hand (the owner knows CITCO is
+    // citcowater.com; no file says so). No guessing; read whatever the match.
+    url: arg('--url') ? String(arg('--url')).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '') : null,
   };
 }
 
@@ -160,7 +163,7 @@ async function ask(body, deps) {
 async function findSite(co, get, deps) {
   const tried = [];
   let visits = 0;
-  for (const domain of W.candidates(co.name, co.dba, co.naics, co.others)) {
+  for (const domain of co.url ? [co.url] : W.candidates(co.name, co.dba, co.naics, co.others)) {
     if (visits >= MAX_TRIES) break;
     // The bare name, else www. (some answer only there).
     let host = null;
@@ -184,7 +187,7 @@ async function findSite(co, get, deps) {
     const homeText = textOf(home.html);
     let v = W.verify(homeText, co);
     tried.push({ domain, dns: true, status: 200, landed: finalHost, verdict: v.verdict });
-    if (v.verdict === 'parked' || v.verdict === 'no match') continue;
+    if (!co.url && (v.verdict === 'parked' || v.verdict === 'no match')) continue;
     // The name is there: its other pages, each where robots.txt allows (the
     // landing host's robots.txt when the home page moved to another host).
     let allowedHere = allowed;
@@ -201,6 +204,9 @@ async function findSite(co, get, deps) {
       pages.push({ ...p, status: r.status, text: r.status === 200 ? textOf(r.html) : '' });
     }
     v = W.verify(pages.map((p) => p.text).join('\n'), co);
+    // An address given by hand is the company's whatever the pages show (a
+    // parked domain excepted); the hits are kept to say what matched.
+    if (co.url && v.verdict !== 'parked') v = { ...v, verdict: 'given' };
     return { domain, landed: finalHost, url: home.url, verify: v, pages, tried };
   }
   return { domain: null, verify: { verdict: 'none found', name: false, city: false, phone: false }, pages: [], tried };
@@ -215,6 +221,7 @@ async function run(opts, deps) {
     log(JSON.stringify(db.prepare('select count(*) reads, round(sum(usd), 4) usd from web_reads').get()));
     return { ok: true };
   }
+  if (opts.url && !opts.ein) throw new Error('--url names one company\'s address: give --ein with it');
   const all = pilot(db, opts);
   // --retry: the companies where nothing was found are tried again (after a
   // change to how sites are found); every other verdict stands.
@@ -229,7 +236,7 @@ async function run(opts, deps) {
   let dead = 0;
   for (const co of todo) {
     if (opts.read && sum.usd >= opts.maxUsd) { log(`reached the $${opts.maxUsd} cap`); break; }
-    const f = await findSite(co, get, deps);
+    const f = await findSite(opts.url ? { ...co, url: opts.url } : co, get, deps);
     sum.companies++;
     const answered = f.tried.some((t) => t.status || t.robots);
     dead = f.tried.some((t) => t.dns) && !answered ? dead + 1 : 0;
@@ -238,9 +245,9 @@ async function run(opts, deps) {
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(co.ein, co.name, co.dba || null, co.city, co.state, co.phone || null, f.landed || f.domain, f.url || null, v.verdict,
       v.name ? 1 : 0, v.city ? 1 : 0, v.phone ? 1 : 0, JSON.stringify(f.tried), f.pages.filter((p) => p.status === 200).length, deps.now());
     for (const p of f.pages) if (p.status === 200) deps.archive.writePage(p.url, co.ein, p.kind, p.text);
-    if (v.verdict === 'confirmed') sum.confirmed++; else if (v.verdict === 'name only') sum.nameOnly++; else sum.none++;
-    let line = `${co.name} (${co.city}, ${co.state}${co.phone ? ', tel' : ''}): ${v.verdict}${f.domain ? ' at ' + (f.landed || f.domain) : ''}${v.verdict === 'confirmed' ? ' [' + ['name', v.city && 'city', v.phone && 'tel'].filter(Boolean).join('+') + ', ' + f.pages.filter((p) => p.status === 200).length + ' pages]' : ''}`;
-    if (opts.read && v.verdict === 'confirmed') {
+    if (v.verdict === 'confirmed' || v.verdict === 'given') sum.confirmed++; else if (v.verdict === 'name only') sum.nameOnly++; else sum.none++;
+    let line = `${co.name} (${co.city}, ${co.state}${co.phone ? ', tel' : ''}): ${v.verdict}${f.domain ? ' at ' + (f.landed || f.domain) : ''}${v.verdict === 'confirmed' || v.verdict === 'given' ? ' [' + [v.name && 'name', v.city && 'city', v.phone && 'tel'].filter(Boolean).join('+') + ', ' + f.pages.filter((p) => p.status === 200).length + ' pages]' : ''}`;
+    if (opts.read && (v.verdict === 'confirmed' || v.verdict === 'given')) {
       try {
         const pages = f.pages.filter((p) => p.status === 200 && p.text);
         const a = await ask(W.request(co, pages), deps);

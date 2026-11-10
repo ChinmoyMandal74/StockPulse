@@ -142,6 +142,19 @@ ok(!W.SCHEMA.required.some((k) => /email|phone|address/.test(k)), 'the model is 
   eq(db.prepare("select ein, verdict, domain from web_sites where ein in ('222', '333') order by ein").all().map((x) => [x.verdict, x.domain]),
     [['confirmed', 'www.ghostwidgets.com'], ['confirmed', 'secretholdings.com']], 'a site answering only at www, and one serving only plain HTTP');
   ok(fetched.includes('http://secretholdings.com/robots.txt'), 'plain HTTP only after HTTPS got no answer');
+  // --url: the address given by hand for one company. No guessing; read even
+  // though the filed name is not on the pages (CITCO files as C. I. Thornburg).
+  site['https://tinybrand.com/robots.txt'] = [404, ''];
+  site['https://tinybrand.com/'] = [200, '<p>' + page + '</p>'];
+  const before = fetched.length, postsBefore = posts.length;
+  const g = await L.run({ commit: true, read: true, ein: '444', url: 'tinybrand.com', max: 10, maxUsd: 1, gapS: 2 },
+    { ...deps, lookup: async (d) => (d === 'tinybrand.com' ? '1.2.3.4' : null) });
+  const gs = db.prepare("select verdict, domain, name_hit from web_sites where ein = '444'").get();
+  eq([g.confirmed, gs.verdict, gs.domain, gs.name_hit, posts.length - postsBefore], [1, 'given', 'tinybrand.com', 0, 1], 'an address given by hand is read, its match recorded');
+  ok(fetched.slice(before).every((u) => u.startsWith('https://tinybrand.com/')), 'no guessing beside it');
+  let threw = null;
+  try { await L.run({ commit: true, read: false, url: 'x.com', max: 1, gapS: 2 }, deps); } catch (e) { threw = e.message; }
+  ok(/--ein/.test(threw || ''), 'an address without a company is refused');
   // The connection down: every address looked up answers nothing.
   db.exec('delete from web_sites');
   for (let i = 0; i < 12; i++) ins.run('9' + i, 'DEAD CO NUMBER ' + i, null, 'X', 'TX', '445110', 200);

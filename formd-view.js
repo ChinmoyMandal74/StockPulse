@@ -232,7 +232,7 @@ function makeApi(db, opts = {}) {
     // its city or telephone; what the pages say, read and checked.
     let web = null;
     if (tax && hasTable('web_sites')) {
-      const s = db.prepare("select domain, url, verdict, name_hit, city_hit, phone_hit, checked_at from web_sites where ein = ? and verdict in ('confirmed', 'name only')").get(tax);
+      const s = db.prepare("select domain, url, verdict, name_hit, city_hit, phone_hit, checked_at from web_sites where ein = ? and verdict in ('confirmed', 'given', 'name only')").get(tax);
       if (s) {
         const r = hasTable('web_reads') ? db.prepare('select read from web_reads where ein = ?').get(tax) : null;
         web = { ...s, read: r ? JSON.parse(r.read) : null };

@@ -40,7 +40,9 @@
       add('Federal contracts', money(f.fed.total) + ' <span style="color:var(--faint)">over fiscal ' + (a === b ? a : a + '–' + b) + (f.fed.agency ? ', mostly ' + esc(f.fed.agency) : '') + '</span>');
     }
     if (f.web) {
-      const how = f.web.verdict === 'confirmed' ? 'name and ' + [f.web.city_hit && 'city', f.web.phone_hit && 'telephone'].filter(Boolean).join(' and ') + ' on its pages' : 'name only on its pages; not read';
+      const hits = [f.web.name_hit && 'name', f.web.city_hit && 'city', f.web.phone_hit && 'telephone'].filter(Boolean);
+      const how = f.web.verdict === 'given' ? 'address given by hand' + (hits.length ? '; ' + hits.join(' and ') + ' on its pages' : '; its filed name and city are not on its pages')
+        : f.web.verdict === 'confirmed' ?'name and ' + [f.web.city_hit && 'city', f.web.phone_hit && 'telephone'].filter(Boolean).join(' and ') + ' on its pages' : 'name only on its pages; not read';
       add('Website', '<a href="' + esc(f.web.url || 'https://' + f.web.domain + '/') + '" target="_blank" rel="noopener noreferrer">' + esc(f.web.domain) + '</a> <span style="color:var(--faint)">(' + esc(how) + ')</span>');
       const r = f.web.read;
       if (r && r.founded) add('Founded (its site)', String(r.founded));

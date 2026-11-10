@@ -91,6 +91,7 @@ website" block gives the quotes and lists. A name-only site is marked so.
 node --use-system-ca website-load.js                                  # dry run
 node --use-system-ca website-load.js --commit --max 200 --max-usd 2   # the pilot
 node --use-system-ca website-load.js --commit --ein 330747275          # one company
+node --use-system-ca website-load.js --commit --ein 550421240 --url citcowater.com   # its address given by hand
 node --use-system-ca website-load.js --stats
 ```
 
@@ -137,7 +138,15 @@ The three companies briefed:
 - **CITCO Water:** files as The C. I. Thornburg Co. "CITCO" appears in no
   file we hold, so `thornburg.com` (an unrelated investment firm) came out
   name only and was not read. A brand that is not in any filing cannot be
-  guessed.
+  guessed. So the address can be **given by hand** (`--ein` with `--url`,
+  verdict "given"; owner, 2026-11-10). That is read whatever the match, and
+  the fact sheet says the address was given and what matched.
+  `--url citcowater.com` gave five pages: name and city matched on the
+  history page ("Charles Irving Thornburg created the C.I. Thornburg
+  Company ... in Huntington"), the 2020 rename to CITCO Water, founded
+  1931, "over 100 employees and seven full-service branches", eleven
+  locations, nine executives, twelve services. Nothing was dropped by the
+  checks; $0.0026.
 
 ## The first trial
 

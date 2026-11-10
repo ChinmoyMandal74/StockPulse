@@ -220,6 +220,7 @@ const W1 = api2.filing('0000000001-26-000002').facts.web, W2 = api2.employer('01
 eq([W1.domain, W1.verdict, W1.read.founded, W2.verdict, W2.read, api2.employer('555555555').facts.web], ['kavia.ai', 'confirmed', 2021, 'name only', null, null], 'the site by tax ID: confirmed and read, name only and not, none found left out');
 const wcard = FS.html({ ...FK, web: W1 });
 ok(/From its own website/.test(wcard) && /Kavia builds AI agents/.test(wcard) && /Ada Quill/.test(wcard) && /name and city on its pages/.test(wcard) && /Open jobs/.test(wcard), 'the card draws the site, how it was matched, and what its pages say');
+ok(/address given by hand; its filed name and city are not on its pages/.test(FS.html({ ...FK, web: { ...W1, verdict: 'given', name_hit: 0, city_hit: 0 } })), 'an address given by hand says so, and that the filed name is not on its pages');
 ok(/name only on its pages; not read/.test(FS.html({ ...FK, web: W2 })) && !/From its own website/.test(FS.html({ ...FK, web: W2 })), 'a name-only site is marked so, with nothing read');
 
 // ---- the contact list (contactsdb.js), through the viewer ----
