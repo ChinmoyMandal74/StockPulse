@@ -50,8 +50,8 @@
         + '<p class="fs-note">PPP loans are matched by name and state (the loan files carry no tax ID), so a loan to another business of the same name in the same state can appear here.</p>';
     }
     if (f.sba) {
-      const ST = { PIF: 'paid in full', CHGOFF: 'charged off', CANCLD: 'cancelled', COMMIT: 'not yet paid out', EXEMPT: 'running' };
-      out += '<table class="fs-ppp">' + f.sba.loans.map((x) => '<tr><td>' + esc(x.approved || x.fy || '') + ' · ' + (x.program === '504' ? '504' : '7(a)') + '</td><td>' + esc(x.name) + '<span style="display:block;color:var(--faint);font-size:11px">' + esc([[x.city, x.state].filter(Boolean).join(', '), x.lender, ST[x.status] || x.status].filter(Boolean).join(' · ')) + '</span></td><td class="n">' + money(x.amount) + '</td><td class="n">' + (x.jobs == null ? DASH : num(x.jobs) + ' jobs') + '</td></tr>').join('') + '</table>'
+      const ST = { PIF: 'paid in full', CHGOFF: 'charged off', CANCLD: 'cancelled', COMMIT: 'not yet paid out', EXEMPT: 'running', 'NOT FUNDED': 'not funded', CLOSED: 'closed' };
+      out += '<table class="fs-ppp">' + f.sba.loans.map((x) => '<tr><td>' + esc(x.approved || x.fy || '') + ' · ' + (x.program === '504' ? '504' : '7(a)') + '</td><td>' + esc(x.name) + '<span style="display:block;color:var(--faint);font-size:11px">' + esc([[x.city, x.state].filter(Boolean).join(', '), x.lender, ST[x.status] || x.status].filter(Boolean).join(' · ')) + '</span></td><td class="n">' + money(x.amount) + '</td><td class="n">' + (x.jobs ? num(x.jobs) + ' jobs' : DASH) + '</td></tr>').join('') + '</table>'
         + '<p class="fs-note">SBA loans are matched by name and state as PPP loans are. Jobs supported are the lender’s estimate on the application, not checked by the SBA.</p>';
     }
     if (f.fed) out += '<p class="fs-note">Federal contracts are matched ' + (f.fed.byPhone ? 'by the company’s own telephone or ' : '') + 'by name and state; recipients matched: ' + f.fed.recipients.slice(0, 4).map(esc).join('; ') + (f.fed.recipients.length > 4 ? '…' : '') + '.</p>';

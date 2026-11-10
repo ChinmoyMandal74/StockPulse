@@ -47,7 +47,8 @@ function rowOf(f, at) {
     term: num(g('TermInMonths')), naics: /^\d{2,6}$/.test(naics) ? naics : null, franchise: text(g('FranchiseName')),
     business_type: type, business_age: text(g('BusinessAge')), jobs: num(g('JobsSupported')),
     lender: text(g('BankName')) || text(g('CDC_Name')),
-    status: text(g('LoanStatus')), paid: day(g('PaidInFullDate')), charged_off: day(g('ChargeOffDate')), charged_off_amount: num(g('GrossChargeOffAmount')),
+    // Older loans write paid in full as 'P I F'.
+    status: (text(g('LoanStatus')) || '').replace(/^P I F$/i, 'PIF') || null, paid: day(g('PaidInFullDate')), charged_off: day(g('ChargeOffDate')), charged_off_amount: num(g('GrossChargeOffAmount')),
   };
   r.loan = crypto.createHash('sha1').update([r.program, r.name, r.city, r.state, r.zip, r.approved, r.amount, r.lender, r.term].join('|')).digest('hex').slice(0, 20);
   return r;

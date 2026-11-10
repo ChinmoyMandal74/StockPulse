@@ -30,6 +30,7 @@ eq([r.program, r.name_key, r.city, r.state, r.zip, r.approved, r.fy, r.amount, r
 ok(!JSON.stringify(r).includes('MAIN ST') && !JSON.stringify(r).includes('5TH AVE'), 'no street, the borrower\'s or the lender\'s');
 eq(R.rowOf(splitCsv(csv(H7, { ...base, BusinessType: 'INDIVIDUAL' })), at7), { skip: 'person' }, 'a loan to an individual is left out');
 eq(R.rowOf(splitCsv(csv(H7, { ...base, BorrName: '' })), at7), { skip: 'no name' }, 'no name: left out');
+eq(R.rowOf(splitCsv(csv(H7, { ...base, LoanStatus: 'P I F' })), at7).status, 'PIF', 'older loans\' "P I F" read as PIF');
 eq(r.loan, R.rowOf(splitCsv(csv(H7, { ...base, LoanStatus: 'CHGOFF' })), at7).loan, 'the key does not move when a loan\'s status does');
 ok(r.loan !== R.rowOf(splitCsv(csv(H7, { ...base, GrossApproval: '360000' })), at7).loan, 'another amount is another loan');
 eq([R.day('3/5/2012'), R.day('2012-03-05 00:00:00'), R.day(''), R.day('03/2012')], ['2012-03-05', '2012-03-05', null, null], 'dates in both forms, nothing invented');
