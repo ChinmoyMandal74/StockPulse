@@ -3043,6 +3043,12 @@ request at a time, a daily cap, any refusal stops), kept in `formd.db`.
   count at each inspected site; reaches companies with no plan.
 - **E16. Trucking carriers** (FMCSA census file): every carrier's trucks,
   drivers and miles.
+- **E17. Companies' own websites** (owner, 2026-11-10): no source gives
+  the address, so it is guessed from the name and confirmed by the name
+  and city or telephone on the pages; a handful of pages a site, robots.txt
+  obeyed, read by AI with every phrase checked. **Pilot built
+  2026-11-10** (`website-load.js`, 200 employers); results in
+  `docs/context/company-websites.md`.
 - Also possible: NLRB cases (bargaining-unit sizes), EPA facility records,
   SAM.gov entity registrations, public pension funds' private-equity
   holdings reports (fund returns, as PitchBook uses), bankruptcy filings

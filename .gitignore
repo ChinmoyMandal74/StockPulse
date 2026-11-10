@@ -62,3 +62,6 @@ formd.db-shm
 acq.db
 acq.db-wal
 acq.db-shm
+web-archive.db
+web-archive.db-wal
+web-archive.db-shm

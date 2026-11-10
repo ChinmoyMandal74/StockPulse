@@ -206,6 +206,21 @@ ok(/Known facts/.test(card) && /PPP loans/.test(card) && /matched by name and st
 ok(/SBA loans/.test(card) && /7\(a\)/.test(card) && /paid in full/.test(card) && /lender’s estimate/.test(card), 'the card draws the SBA loans, their status, and that jobs are the lender’s estimate');
 ok(!/SUTTER/.test(card), 'no street on the card');
 eq(FS.html(null), '', 'no facts, no card');
+// Its own website (E17): a confirmed site and its checked facts; a name-only
+// site shown as such and not read; none, no part.
+eq(FK.web, null, 'no website tried, no website part');
+require('./website-load.js').ensureSchema(db);
+db.exec(`insert into web_sites (ein, name, domain, url, verdict, name_hit, city_hit, phone_hit, checked_at) values
+  ('123456789', 'KAVIA AI, INC.', 'kavia.ai', 'https://kavia.ai/', 'confirmed', 1, 1, 0, 1),
+  ('010750002', 'FOURGEN', 'fourgen.com', 'https://fourgen.com/', 'name only', 1, 0, 0, 1),
+  ('555555555', 'GONE', 'gone.com', null, 'none found', 0, 0, 0, 1)`);
+db.prepare('insert into web_reads (ein, domain, model, read, at) values (?, ?, ?, ?, 1)').run('123456789', 'kavia.ai', 'm',
+  JSON.stringify({ what_they_do: 'Kavia builds AI agents for software teams.', founded: 2021, services: ['AI agents'], markets: [], locations: ['San Francisco, CA'], leaders: [{ name: 'Ada Quill', role: 'CEO' }], clients: [], history: [], open_jobs: 3, hiring_quote: null, employees_quote: null }));
+const W1 = api2.filing('0000000001-26-000002').facts.web, W2 = api2.employer('010750002').facts.web;
+eq([W1.domain, W1.verdict, W1.read.founded, W2.verdict, W2.read, api2.employer('555555555').facts.web], ['kavia.ai', 'confirmed', 2021, 'name only', null, null], 'the site by tax ID: confirmed and read, name only and not, none found left out');
+const wcard = FS.html({ ...FK, web: W1 });
+ok(/From its own website/.test(wcard) && /Kavia builds AI agents/.test(wcard) && /Ada Quill/.test(wcard) && /name and city on its pages/.test(wcard) && /Open jobs/.test(wcard), 'the card draws the site, how it was matched, and what its pages say');
+ok(/name only on its pages; not read/.test(FS.html({ ...FK, web: W2 })) && !/From its own website/.test(FS.html({ ...FK, web: W2 })), 'a name-only site is marked so, with nothing read');
 
 // ---- the contact list (contactsdb.js), through the viewer ----
 eq(api2.contacts(sp('')).missing, true, 'not built: the page is told so');

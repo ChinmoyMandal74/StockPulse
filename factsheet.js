@@ -39,6 +39,13 @@
       const ys = f.fed.years, a = ys[0].fy, b = ys[ys.length - 1].fy;
       add('Federal contracts', money(f.fed.total) + ' <span style="color:var(--faint)">over fiscal ' + (a === b ? a : a + '–' + b) + (f.fed.agency ? ', mostly ' + esc(f.fed.agency) : '') + '</span>');
     }
+    if (f.web) {
+      const how = f.web.verdict === 'confirmed' ? 'name and ' + [f.web.city_hit && 'city', f.web.phone_hit && 'telephone'].filter(Boolean).join(' and ') + ' on its pages' : 'name only on its pages; not read';
+      add('Website', '<a href="' + esc(f.web.url || 'https://' + f.web.domain + '/') + '" target="_blank" rel="noopener noreferrer">' + esc(f.web.domain) + '</a> <span style="color:var(--faint)">(' + esc(how) + ')</span>');
+      const r = f.web.read;
+      if (r && r.founded) add('Founded (its site)', String(r.founded));
+      if (r && r.open_jobs != null) add('Open jobs (its site)', num(r.open_jobs));
+    }
     add('Place', esc(f.place));
     if (f.incorporated) add('Incorporated in', esc(f.incorporated));
     if (f.fiscalYearEnd && /^\d{4}$/.test(f.fiscalYearEnd)) add('Fiscal year ends', MONTHS[Number(f.fiscalYearEnd.slice(0, 2)) - 1] + ' ' + Number(f.fiscalYearEnd.slice(2)));
@@ -53,6 +60,21 @@
       const ST = { PIF: 'paid in full', CHGOFF: 'charged off', CANCLD: 'cancelled', COMMIT: 'not yet paid out', EXEMPT: 'running', 'NOT FUNDED': 'not funded', CLOSED: 'closed' };
       out += '<table class="fs-ppp">' + f.sba.loans.map((x) => '<tr><td>' + esc(x.approved || x.fy || '') + ' · ' + (x.program === '504' ? '504' : '7(a)') + '</td><td>' + esc(x.name) + '<span style="display:block;color:var(--faint);font-size:11px">' + esc([[x.city, x.state].filter(Boolean).join(', '), x.lender, ST[x.status] || x.status].filter(Boolean).join(' · ')) + '</span></td><td class="n">' + money(x.amount) + '</td><td class="n">' + (x.jobs ? num(x.jobs) + ' jobs' : DASH) + '</td></tr>').join('') + '</table>'
         + '<p class="fs-note">SBA loans are matched by name and state as PPP loans are. Jobs supported are the lender’s estimate on the application, not checked by the SBA.</p>';
+    }
+    if (f.web && f.web.read) {
+      const r = f.web.read;
+      const line = (k, v) => (v ? '<p class="fs-note"><b style="color:var(--strong);font-weight:500">' + esc(k) + ':</b> ' + v + '</p>' : '');
+      const joined = (a) => (a && a.length ? a.map(esc).join(' · ') : '');
+      out += '<h4 style="margin:12px 0 4px!important">From its own website</h4>'
+        + (r.what_they_do ? '<p class="fs-note">“' + esc(r.what_they_do) + '”</p>' : '')
+        + line('Services', joined(r.services)) + line('Serves', joined(r.markets))
+        + line('Locations (' + (r.locations || []).length + ')', joined(r.locations))
+        + line('People named', (r.leaders || []).map((l) => esc(l.name) + (l.role ? ' <span style="color:var(--faint)">(' + esc(l.role) + ')</span>' : '')).join(' · '))
+        + line('Customers named', joined(r.clients))
+        + line('Staff', r.employees_quote ? '“' + esc(r.employees_quote) + '”' : '')
+        + line('History', (r.history || []).map((h) => esc(h.year) + ': “' + esc(h.quote) + '”').join(' · '))
+        + line('Hiring', r.hiring_quote ? '“' + esc(r.hiring_quote) + '”' : '')
+        + '<p class="fs-note">Every phrase above is copied from the company’s own pages and checked against them; the site was found by guessing its address from the name.</p>';
     }
     if (f.fed) out += '<p class="fs-note">Federal contracts are matched ' + (f.fed.byPhone ? 'by the company’s own telephone or ' : '') + 'by name and state; recipients matched: ' + f.fed.recipients.slice(0, 4).map(esc).join('; ') + (f.fed.recipients.length > 4 ? '…' : '') + '.</p>';
     if (!cells.length) out += '<p class="fs-note">Nothing more is held on this company.</p>';

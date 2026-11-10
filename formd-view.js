@@ -228,6 +228,16 @@ function makeApi(db, opts = {}) {
         }
       }
     }
+    // Its own website (E17), found by guessing and confirmed by its name and
+    // its city or telephone; what the pages say, read and checked.
+    let web = null;
+    if (tax && hasTable('web_sites')) {
+      const s = db.prepare("select domain, url, verdict, name_hit, city_hit, phone_hit, checked_at from web_sites where ein = ? and verdict in ('confirmed', 'name only')").get(tax);
+      if (s) {
+        const r = hasTable('web_reads') ? db.prepare('select read from web_reads where ein = ?').get(tax) : null;
+        web = { ...s, read: r ? JSON.parse(r.read) : null };
+      }
+    }
     const last = yrs.length ? yrs[yrs.length - 1] : null;
     const y2019 = yrs.find((y) => y.year === 2019);
     const code = (yrs.slice().reverse().find((y) => y.business_code) || {}).business_code || (ppp.find((x) => x.naics) || {}).naics || null;
@@ -242,7 +252,7 @@ function makeApi(db, opts = {}) {
       raised: raised && raised.n ? raised : null,
       ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
       tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
-      fed,
+      fed, web,
       sba: sba.length ? { loans: sba, amount: sba.reduce((a, x) => a + (x.amount || 0), 0), jobs: Math.max(...sba.map((x) => x.jobs || 0)) || null, chargedOff: sba.filter((x) => x.status === 'CHGOFF').length } : null,
     };
   }
