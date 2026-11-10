@@ -82,7 +82,7 @@ const size = (b) => (b == null ? DASH : b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' 
 const chars = (c) => (c >= 1e6 ? (c / 1e6).toFixed(1) + 'M' : Math.round((c || 0) / 1e3) + 'K');
 const usd = (v) => '$' + Number(v || 0).toFixed(2);
 const time = (t) => (t ? new Date(t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '');
-const day = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const day = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(String(d).slice(0, 4) !== String(new Date().getFullYear()) ? { year: 'numeric' } : {}) });
 const CAP = 12e9;
 
 async function load() {
