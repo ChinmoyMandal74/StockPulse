@@ -2885,6 +2885,33 @@ buy only where it must.
   signs of size, hiring and risk.
 - **h. State business registries and UCC filings**: existence, officers,
   secured lenders. Fifty states, fifty formats.
+  *Checked 2026-11-10 (no data bought or downloaded).* Each notice gives
+  borrower, lender, a collateral description and the filing date; no
+  amounts. The UCC itself (9-523) has each state offer its records in bulk,
+  but nearly always for a fee and under a licence; reading the states'
+  one-name search pages at scale is not an option (terms, and the same
+  care as with the SEC). What the states said:
+  - **Texas**: a full copy (Master Unload, JSON, refreshed monthly) $1,150
+    one-off through the SOSPortal; daily new filings $65 a day. Licence
+    terms not on the page.
+  - **Kentucky** (CITCO): full UCC file monthly and new filings daily or
+    weekly; $1,500 a month for commercial use, **no fee for
+    non-commercial users such as researchers** (subscriber agreement with
+    Kentucky.gov). The cheapest way to test whether this is worth having.
+  - **Minnesota**: full set $9,600, then $2,400 a quarter.
+  - **Connecticut** $5,000 a year; **Washington** $500 full plus $150 a
+    week (third-hand figures).
+  - **California** (Bremer Whyte): bulk orders through bizfile Online
+    ("BE & UCC Bulk Orders"); no price published.
+  - **Illinois** (Continental): by written request or contract, fees set
+    by contract; no price published.
+  - **New York**: only a $300 a month image service is published (TIFF,
+    new filings only); bulk data under 19 NYCRR 155, price not found.
+  - **Florida**: the registry is run by a private contractor as a
+    pay-per-search site; no bulk product found.
+  Next, if wanted: ask Kentucky whether this use counts as
+  non-commercial (the owner's call how to describe it), and ask
+  California and Illinois for a price.
 - **i. City building permits**: project volume for construction trades.
   Scattered and messy.
 
