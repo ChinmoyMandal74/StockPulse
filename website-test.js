@@ -21,6 +21,10 @@ eq(W.candidates('PUMP & PROCESS EQUIPMENT CO., INC.', null, '423830')[0], 'pumpp
 eq(W.candidates('CITCO WATER LLC', 'CITCO', '423720').slice(0, 2), ['citco.com', 'citcowater.com'], 'the trading name is tried first');
 eq(W.candidates('FAMILIES IN TRANSITION', null, '624200')[0], 'familiestransition.org', 'a charity tries .org first');
 ok(!W.candidates('THE GROUP INC', null, '').some((d) => /^(the|group|inc)\./.test(d)), 'no guess from generic words alone');
+const c4 = W.candidates('FOURGEN HOLDINGS INC.', null, '238210', ['CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', 'THE FOURGEN PROFIT SHARING PLAN']);
+ok(c4.indexOf('continentalelectrical.com') > 0 && c4.indexOf('continentalelectrical.com') < c4.indexOf('fourgen.net'), 'an earlier name on file is guessed too, every .com before any .net');
+ok(!c4.some((d) => /plan|profitsharing/.test(d)), 'a plan\'s own name is not guessed from');
+eq(W.verify('Continental Electrical Construction Company, Oak Brook', { name: 'FOURGEN HOLDINGS INC.', city: 'OAK BROOK', others: ['CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC'] }).verdict, 'confirmed', 'an earlier name on the pages confirms');
 
 // ---- robots.txt
 const R = W.robots('User-agent: *\nDisallow: /private/\nAllow: /private/ok\nDisallow: /*.php$\n\nUser-agent: BadBot\nDisallow: /');

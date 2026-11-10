@@ -98,6 +98,47 @@ The pilot draws employers of 100 to 2,000 people (filed 2023 or later), half
 with a telephone on file and half without, in a fixed hash order, so a rerun
 continues it. A company already tried is skipped.
 
+## The pilot (2026-11-10)
+
+198 employers of 100 to 2,000 people, half with a telephone on file:
+
+| Verdict | All | With a telephone | Without |
+|---|---|---|---|
+| Confirmed and read | 73 (37%) | 39 | 36 |
+| Name only | 60 (30%) | 31 | 29 |
+| None found | 65 (33%) | 30 | 35 |
+
+- **Cost:** reading cost $0.0016 a company ($0.12 for 73). The model said
+  "not the company's site" for 3 of them. 71 phrases were dropped by the
+  checks.
+- **What a confirmed site gave:**
+  - what it does: 68 of 76
+  - services: 73
+  - locations: 72
+  - a hiring line: 55
+  - dated history: 50
+  - people named: 46
+  - founding year: 41
+  - customers named: 23
+  - a staff statement: 14
+  - an open-jobs count: 3
+- **Name only is mixed.** In a sample of 15, about two-thirds were the right
+  company, the site simply not naming the city on file. Most often that city
+  is a registered office (QA Wolf in Dover, Delaware). The rest were a
+  different company with the same name (`horizon.com` for Horizon
+  Industries).
+
+The three companies briefed:
+- **Bremer Whyte:** confirmed (`bremerwhyte.com`).
+- **Continental Electrical:** its plan is now filed by FourGen Holdings.
+  Since this change every earlier name on file is guessed too, which found
+  `continentalelectrical.com`. That site answers **403** to automated
+  visitors, so it is left alone.
+- **CITCO Water:** files as The C. I. Thornburg Co. "CITCO" appears in no
+  file we hold, so `thornburg.com` (an unrelated investment firm) came out
+  name only and was not read. A brand that is not in any filing cannot be
+  guessed.
+
 ## The first trial
 
 Bremer Whyte Brown & O'Meara: found at the second guess (`bremerwhyte.com`)

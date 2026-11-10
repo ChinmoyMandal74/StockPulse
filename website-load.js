@@ -39,7 +39,7 @@ const Rel = require('./releases.js');
 const DIR = path.join(os.tmpdir(), 'tickrlab-web');
 const LOCK = path.join(DIR, 'website-load.lock');
 const MIN_GAP_S = 2;
-const MAX_TRIES = 4;                 // addresses visited a company (DNS lookups are free)
+const MAX_TRIES = 5;                 // addresses visited a company (DNS lookups are free)
 const MAX_BYTES = 2 * 1024 * 1024;
 const STOP_AFTER_DEAD = 10;          // companies in a row with no answer from any address
 const HAIKU = { in: 0.10 / 1e6, out: 0.50 / 1e6 };
@@ -82,15 +82,20 @@ function pilot(db, opts) {
   const tel = new Map();
   for (const r of db.prepare('select p.ein, c.phone from fd_profiles p join ct_companies c on c.cik = p.cik where p.ein is not null and c.phone is not null').all()) if (!tel.has(r.ein)) tel.set(r.ein, r.phone);
   const base = 'select l.ein, l.name, l.dba, l.city, l.state, l.business_code naics, l.staff from f5500_latest l';
+  // Every other name the employer has filed under (f5500_names), for the
+  // guesses and the match.
+  const hasNames = !!db.prepare("select 1 from sqlite_master where name = 'f5500_names'").get();
+  const othersOf = (ein, cur) => (hasNames ? db.prepare('select name from f5500_names where ein = ?').all(ein).map((x) => x.name).filter((n) => W.words(n).join(' ') !== W.words(cur).join(' ')) : []);
   const withTel = (rs) => rs.map((r) => ({ ...r, phone: tel.get(r.ein) || null }));
-  if (opts.ein) return withTel(db.prepare(base + ' where l.ein = ?').all(opts.ein));
+  const named = (rs) => rs.map((r) => ({ ...r, others: othersOf(r.ein, r.name) }));
+  if (opts.ein) return named(withTel(db.prepare(base + ' where l.ein = ?').all(opts.ein)));
   const rows = withTel(db.prepare(base + ' where l.staff between 100 and 2000 and l.year >= 2023').all());
   const h = (e) => crypto.createHash('sha1').update(String(e)).digest('hex');
   rows.sort((a, b) => (h(a.ein) < h(b.ein) ? -1 : 1));
   const half = Math.ceil(opts.max / 2);
   const withPhone = rows.filter((r) => r.phone).slice(0, half);
   const without = rows.filter((r) => !r.phone).slice(0, opts.max - withPhone.length);
-  return [...withPhone, ...without];
+  return named([...withPhone, ...without]);
 }
 
 // One page: GET, redirects followed, HTML only, MAX_BYTES at most. Returns
@@ -155,7 +160,7 @@ async function ask(body, deps) {
 async function findSite(co, get, deps) {
   const tried = [];
   let visits = 0;
-  for (const domain of W.candidates(co.name, co.dba, co.naics)) {
+  for (const domain of W.candidates(co.name, co.dba, co.naics, co.others)) {
     if (visits >= MAX_TRIES) break;
     // The bare name, else www. (some answer only there).
     let host = null;

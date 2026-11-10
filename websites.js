@@ -19,7 +19,7 @@ const MODEL = 'claude-haiku-5-5';
 const MAX_PAGES = 6;                 // pages read a site besides the home page
 const PAGE_CHARS = 15000;            // of each page's text, to the model
 const MAX_CHARS = 60000;             // all pages together, to the model
-const MAX_CANDIDATES = 10;           // addresses guessed a company
+const MAX_CANDIDATES = 16;           // addresses guessed a company
 const UA_TOKEN = 'TickrLabResearch'; // the name robots.txt is read for
 
 // Words that say nothing about which company it is.
@@ -36,18 +36,21 @@ function words(name) {
 const distinct = (name) => words(name).filter((w) => !GENERIC.has(w) && w.length >= 2);
 
 // The addresses to try, best guess first, at most MAX_CANDIDATES: for the
-// trading name (dba) and then the legal name, the distinctive words joined,
-// the first two, the first alone when it is long enough to be a brand, the
-// whole name joined, and the two first words hyphenated; .com, then .net, and
-// .org for a charity-shaped name or industry.
-function candidates(name, dba, naics) {
+// trading name (dba), the legal name, then every earlier name on file (a
+// holding company now files the plan Continental Electrical once filed), the
+// distinctive words joined, the first two, the first alone when it is long
+// enough to be a brand, the whole name joined, and the two first words
+// hyphenated; .com, then .net, and .org for a charity-shaped name or industry.
+// A plan's own name ("... PROFIT SHARING PLAN") is not a company name.
+const PLAN_NAME = /\b(PLAN|401 ?K|TRUST FUND|RETIREMENT|PENSION)\b/i;
+function candidates(name, dba, naics, others) {
   const out = [];
   const add = (s) => { s = String(s || '').toLowerCase(); if (s.length >= 4 && s.length <= 40 && !out.includes(s)) out.push(s); };
   const orgLike = /^(61|62|71|81|92)/.test(String(naics || '')) || /\b(FOUNDATION|ASSOCIATION|SOCIETY|CHURCH|HOSPITAL|SCHOOL|UNIVERSITY|COLLEGE|COUNCIL|MINISTRIES)\b/.test(String(name || '').toUpperCase());
   const tlds = orgLike ? ['org', 'com', 'net'] : ['com', 'net'];
   const stems = [];
-  for (const n of [dba, name]) {
-    if (!n) continue;
+  for (const n of [dba, name, ...(others || [])]) {
+    if (!n || PLAN_NAME.test(n)) continue;
     const d = distinct(n), w = words(n).filter((x) => !/^(INC|INCORPORATED|CORP|CORPORATION|CO|LLC|LLP|LP|LTD|PC|PA|PLLC|PLC|THE|DBA)$/.test(x));
     if (d.length) stems.push(d.join(''));
     if (d.length > 2) stems.push(d.slice(0, 2).join(''));
@@ -156,7 +159,7 @@ function verify(text, co) {
     const hit = d.filter((w) => t.includes(' ' + w + ' '));
     return d.length >= 3 ? hit.includes(d[0]) && hit.length >= d.length - 1 : hit.length === d.length;
   };
-  const name = !!((co.dba && nameOk(co.dba)) || nameOk(co.name));
+  const name = [co.dba, co.name, ...(co.others || [])].some((n) => n && !PLAN_NAME.test(n) && nameOk(n));
   const city = !!(co.city && t.includes(flat(co.city)));
   const want = String(co.phone || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
   let phone = false;
