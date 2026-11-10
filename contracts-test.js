@@ -43,7 +43,7 @@ eq([...y24.agencies.keys()], ['Department of Defense', 'Department of Energy'], 
     let t = 1e12;
     return { calls, log, deps: {
       log: () => {}, now: () => t, sleep: async (ms) => { t += ms; },
-      fetch: async (url) => { calls.push(url); return { status, body: { cancel: async () => {} }, json: async () => ({ monthly_files: [] }) }; },
+      fetch: async (url) => { calls.push(url); return { status, headers: new Map(), body: { cancel: async () => {} }, json: async () => ({ monthly_files: [] }) }; },
       onDisk: () => [], readLog: () => log, noteRequest: (u, s) => log.push({ at: t, url: u, status: s }), save: async () => 1000,
     } };
   }
@@ -60,6 +60,30 @@ eq([...y24.agencies.keys()], ['Department of Defense', 'Department of Energy'], 
   for (let i = 0; i < L.DAY_CAP; i++) h.log.push({ at: 1e12, url: 'u', status: 200 });
   const capped = await L.download({ commit: true, gapS: 60, years: [2024] }, h.deps);
   ok(!capped.ok && h.calls.length === 0, 'the 24-hour cap stops it before a request');
+
+  // A transfer that broke off resumes from the part on disk, and only from exactly there.
+  const FILE = 'FY2016_All_Contracts_Full_20261106.zip', URL = 'https://files.usaspending.gov/award_data_archive/' + FILE;
+  function resume(fileStatus, range) {
+    const calls = [], log = [], saved = [];
+    let t = 1e12;
+    return { calls, saved, deps: {
+      log: () => {}, now: () => t, sleep: async (ms) => { t += ms; },
+      fetch: async (url, init) => { calls.push({ url, range: init && init.headers && init.headers.Range });
+        if (/list_monthly_files/.test(url)) return { status: 200, headers: new Map(), json: async () => ({ monthly_files: [{ fiscal_year: 2016, file_name: FILE, url: URL }] }) };
+        return { status: fileStatus, headers: new Map(range ? [['content-range', range]] : [['content-length', '1000']]), body: { cancel: async () => {} } }; },
+      onDisk: () => [], readLog: () => log, noteRequest: (u, s) => log.push({ at: t, url: u, status: s }),
+      partSize: () => 600, save: async (res, f, append, expect) => { saved.push({ append, expect }); return 1000; },
+    } };
+  }
+  let rh = resume(206, 'bytes 600-999/1000');
+  const good = await L.download({ commit: true, gapS: 60, years: [2016] }, rh.deps);
+  eq([good.ok, rh.calls[1].range, rh.saved[0]], [true, 'bytes=600-', { append: true, expect: 1000 }], 'a part on disk: asks for the rest, appends, checks the whole size');
+  rh = resume(206, 'bytes 0-999/1000');
+  const off = await L.download({ commit: true, gapS: 60, years: [2016] }, rh.deps);
+  ok(!off.ok && rh.saved.length === 0, 'an answer not starting at the part\'s end stops, nothing written');
+  rh = resume(200, null);
+  const whole = await L.download({ commit: true, gapS: 60, years: [2016] }, rh.deps);
+  ok(!whole.ok && rh.saved.length === 0 && rh.calls.length === 2, 'a full 200 to a resume request stops; nothing retried');
   console.log(`contracts-test: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

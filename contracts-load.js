@@ -53,7 +53,7 @@ async function download(opts, deps) {
   if (!opts.commit) { log(`DRY RUN: would fetch ${todo.length} year(s), ${opts.gapS}s between requests. Add --commit.`); return { ok: true, todo: todo.length }; }
   if (!/@/.test(UA)) throw new Error('no contact address for the User-Agent: set USASPENDING_UA or REPORT_TO in .env');
   let made = 0, last = 0;
-  const request = async (url, init) => {
+  const request = async (url, init, okStatus = [200]) => {
     if (used + made >= DAY_CAP) { const e = new Error(`reached the ${DAY_CAP}-a-day cap; run again tomorrow`); e.stop = true; throw e; }
     const wait = last ? last + opts.gapS * 1000 - deps.now() : 0;
     if (wait > 0) await deps.sleep(wait);
@@ -62,12 +62,12 @@ async function download(opts, deps) {
     try { r = await deps.fetch(url, { ...init, headers: { 'User-Agent': UA, ...(init && init.headers) }, signal: AbortSignal.timeout(7200e3) }); }
     catch (e) { made++; last = deps.now(); deps.noteRequest(url, 0, 0, deps.now() - t0); const err = new Error(`could not reach usaspending.gov (${e.message}). Stopped; nothing retried.`); err.stop = true; throw err; }
     made++;
-    if (r.status !== 200) {
+    if (!okStatus.includes(r.status)) {
       try { await r.body?.cancel(); } catch (_) { /* nothing to drain */ }
       last = deps.now(); deps.noteRequest(url, r.status, 0, deps.now() - t0);
       const e = new Error(`usaspending.gov answered ${r.status}. Stopped; nothing retried.`); e.stop = true; throw e;
     }
-    return { r, t0, done: (bytes) => { last = deps.now(); deps.noteRequest(url, 200, bytes, deps.now() - t0); } };
+    return { r, t0, done: (bytes) => { last = deps.now(); deps.noteRequest(url, r.status, bytes, deps.now() - t0); } };
   };
   for (const fy of todo) {
     try {
@@ -75,10 +75,20 @@ async function download(opts, deps) {
       const j = await L.r.json(); L.done(0);
       const file = (j.monthly_files || []).find((x) => x.fiscal_year === fy && /_All_Contracts_Full_\d{8}\.zip$/.test(x.file_name));
       if (!file || !/^https:\/\/files\.usaspending\.gov\/award_data_archive\//.test(file.url)) { log(`FY${fy}: the listing names no full contracts file. Stopped.`); return { ok: false, stopped: 'no file' }; }
-      const F = await request(file.url);
-      const bytes = await deps.save(F.r, file.file_name);
+      // A transfer that broke off earlier left a .part of this same file: ask only for the rest
+      // (one request, counted like any other). The server must answer 206 from exactly that byte;
+      // anything else stops the run. A part of an older dated file is not resumed.
+      const had = deps.partSize ? deps.partSize(file.file_name) : 0;
+      const F = await request(file.url, had ? { headers: { Range: `bytes=${had}-` } } : undefined, had ? [206] : [200]);
+      if (had) {
+        const m = /^bytes (\d+)-\d+\/\d+$/.exec(F.r.headers.get('content-range') || '');
+        if (!m || Number(m[1]) !== had) { try { await F.r.body?.cancel(); } catch (_) { /* nothing to drain */ } F.done(0); log(`FY${fy}: the resumed answer does not start at byte ${had}. Stopped.`); return { ok: false, stopped: 'bad range' }; }
+      }
+      // The whole file's size, as the server states it: the total in Content-Range, else Content-Length.
+      const cr = /\/(\d+)$/.exec(F.r.headers.get('content-range') || ''), expect = cr ? Number(cr[1]) : Number(F.r.headers.get('content-length')) || null;
+      const bytes = await deps.save(F.r, file.file_name, had > 0, expect);
       F.done(bytes);
-      log(`FY${fy}: ${file.file_name}, ${(bytes / 1e9).toFixed(2)}GB in ${((deps.now() - F.t0) / 1000).toFixed(0)}s`);
+      log(`FY${fy}: ${file.file_name}, ${(bytes / 1e9).toFixed(2)}GB in ${((deps.now() - F.t0) / 1000).toFixed(0)}s${had ? `, resumed from ${(had / 1e6).toFixed(0)}MB` : ''}`);
     } catch (e) { log(`FY${fy}: ${e.message}`); return { ok: false, stopped: e.message }; }
   }
   log('all years on disk.');
@@ -92,13 +102,16 @@ function fileDeps() {
     fetch: (...a) => fetch(...a), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: () => Date.now(),
     pathOf, readLog, noteRequest,
     onDisk: () => fs.readdirSync(DIR).filter((n) => /^FY\d{4}_All_Contracts_Full_\d{8}\.zip$/.test(n) && fs.statSync(pathOf(n)).size > 1e6),
-    save: async (res, f) => {
+    partSize: (f) => { try { return fs.statSync(pathOf(f) + '.part').size; } catch (_) { return 0; } },
+    save: async (res, f, append, expect) => {
       const { Readable } = require('stream');
       const { pipeline } = require('stream/promises');
       const part = pathOf(f) + '.part';
-      await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(part));
+      await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(part, { flags: append ? 'a' : 'w' }));
       const head = Buffer.alloc(4); const fd = fs.openSync(part, 'r'); fs.readSync(fd, head, 0, 4, 0); fs.closeSync(fd);
       if (head.readUInt32LE(0) !== 0x04034b50) { fs.unlinkSync(part); throw Object.assign(new Error('the download is not a ZIP'), { stop: true }); }
+      const size = fs.statSync(part).size;   // short of the stated size: kept as .part, for the next run to resume
+      if (expect && size !== expect) throw Object.assign(new Error(`${size} of ${expect} bytes; kept to resume`), { stop: true });
       fs.renameSync(part, pathOf(f));
       return fs.statSync(pathOf(f)).size;
     },
