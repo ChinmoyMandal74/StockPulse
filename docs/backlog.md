@@ -3008,6 +3008,7 @@ request at a time, a daily cap, any refusal stops), kept in `formd.db`.
 *Size and activity for ordinary companies, joined by name or tax ID*
 - **E13. SBA 7(a) and 504 loans**, 1990s to today (SBA FOIA data): loan
   size, jobs supported, industry; like the PPP files but every year.
+  **Built 2026-11-09** (sba-load.js; docs/context/sba-loans.md).
 - **E14. Work-visa filings** (Labor Department LCA and PERM disclosure
   files, quarterly): employer **EIN**, job titles, wages, worksite; joins
   straight onto Form 5500.

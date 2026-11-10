@@ -175,7 +175,7 @@ function makeApi(db, opts = {}) {
   // so a name match, marked so). Every part is null when nothing is held.
   const NK = require('./pppload-read.js').nameKey;
   const hasTable = (t) => !!db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t);
-  const pppReady = hasTable('ppp_loans');
+  const pppReady = hasTable('ppp_loans'), sbaReady = hasTable('sba_loans');
   function facts({ ein, cik, names = [], state }) {
     const pr = cik ? db.prepare('select * from fd_profiles where cik = ? order by as_of desc limit 1').get(cik)
       : ein ? db.prepare('select * from fd_profiles where ein = ? order by as_of desc limit 1').get(ein) : null;
@@ -193,6 +193,14 @@ function makeApi(db, opts = {}) {
       const q = db.prepare('select loan, approved, draw, name, city, state, jobs, naics, amount, forgiven, business_type from ppp_loans where name_key = ? and state = ? order by approved');
       for (const k of keys) ppp.push(...q.all(k, st));
       ppp = ppp.filter((x, i, a) => a.findIndex((y) => y.loan === x.loan) === i);
+    }
+    // SBA 7(a) and 504 loans (E13), matched the same way as PPP: name and state.
+    let sba = [];
+    if (sbaReady && st) {
+      const keys = [...new Set(allNames.map(NK).filter(Boolean))];
+      const q = db.prepare('select loan, program, approved, fy, name, city, state, jobs, naics, amount, lender, status, charged_off from sba_loans where name_key = ? and state = ? order by approved');
+      for (const k of keys) sba.push(...q.all(k, st));
+      sba = sba.filter((x, i, a) => a.findIndex((y) => y.loan === x.loan) === i);
     }
     // Federal contracts (E7): the recipients matched by name and state, or by
     // the company's own filed telephone (a contract record carries the
@@ -235,6 +243,7 @@ function makeApi(db, opts = {}) {
       ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
       tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
       fed,
+      sba: sba.length ? { loans: sba, amount: sba.reduce((a, x) => a + (x.amount || 0), 0), jobs: Math.max(...sba.map((x) => x.jobs || 0)) || null, chargedOff: sba.filter((x) => x.status === 'CHGOFF').length } : null,
     };
   }
 

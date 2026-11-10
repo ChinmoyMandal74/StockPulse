@@ -49,9 +49,12 @@ const noteRequest = (url, status, bytes, ms) => { try { const l = readLog(); l.p
 
 async function download(opts, deps) {
   const log = deps.log || console.log;
-  const todo = FILES.filter((f) => !deps.onDisk(f));
+  // The file list, its address and the header a whole file starts with come in deps for
+  // another SBA data set (sba-load.js); PPP's own by default.
+  const files = deps.files || FILES, base = deps.base || BASE;
+  const todo = files.filter((f) => !deps.onDisk(f));
   const used = deps.readLog().filter((r) => r.at >= deps.now() - 86400e3).length;
-  log(`${FILES.length - todo.length} of ${FILES.length} files on disk; ${todo.length} to fetch; requests in the last 24 hours: ${used} of ${DAY_CAP}`);
+  log(`${files.length - todo.length} of ${files.length} files on disk; ${todo.length} to fetch; requests in the last 24 hours: ${used} of ${DAY_CAP}`);
   if (!opts.commit) { log(`DRY RUN: would fetch ${todo.length} file(s), ${opts.gapS}s apart. Add --commit.`); return { ok: true, todo: todo.length }; }
   if (!/@/.test(UA)) throw new Error('no contact address for the User-Agent: set SBA_UA or REPORT_TO in .env');
   let made = 0, last = 0;
@@ -59,7 +62,7 @@ async function download(opts, deps) {
     if (used + made >= DAY_CAP) { log(`reached the ${DAY_CAP}-a-day cap; run again tomorrow`); return { ok: false, stopped: 'cap' }; }
     const wait = last ? last + opts.gapS * 1000 - deps.now() : 0;
     if (wait > 0) await deps.sleep(wait);
-    const url = BASE + f, t0 = deps.now();
+    const url = base + f, t0 = deps.now();
     let r;
     try { r = await deps.fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3600e3) }); }
     catch (e) { made++; last = deps.now(); deps.noteRequest(url, 0, 0, deps.now() - t0); log(`${f}: could not reach data.sba.gov (${e.message}). Stopped; nothing retried.`); return { ok: false, stopped: e.message }; }
@@ -79,7 +82,7 @@ async function download(opts, deps) {
   return { ok: true, fetched: made };
 }
 
-function fileDeps() {
+function fileDeps(headerRx = /LoanNumber/i) {
   fs.mkdirSync(DIR, { recursive: true });
   const pathOf = (f) => path.join(DIR, f);
   return {
@@ -96,7 +99,7 @@ function fileDeps() {
       const part = pathOf(f) + '.part';
       await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(part));
       const head = Buffer.alloc(200); const fd = fs.openSync(part, 'r'); fs.readSync(fd, head, 0, 200, 0); fs.closeSync(fd);
-      if (!/LoanNumber/i.test(head.toString('utf8'))) { fs.unlinkSync(part); throw Object.assign(new Error('the download is not the expected CSV'), { stop: true }); }
+      if (!headerRx.test(head.toString('utf8'))) { fs.unlinkSync(part); throw Object.assign(new Error('the download is not the expected CSV'), { stop: true }); }
       fs.renameSync(part, pathOf(f));
       return fs.statSync(pathOf(f)).size;
     },
@@ -129,4 +132,4 @@ if (require.main === module) {
   })().catch((e) => { console.error(e.message); unlock(); process.exit(1); });
 }
 
-module.exports = { options, download, FILES, BASE, DAY_CAP, MIN_GAP_S, DIR };
+module.exports = { options, download, fileDeps, lock, FILES, BASE, DAY_CAP, MIN_GAP_S, DIR };

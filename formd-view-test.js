@@ -182,15 +182,20 @@ db.exec(`insert into ppp_loans (loan, approved, draw, name, name_key, city, stat
   ('L2', '2021-02-01', 2, 'Kavia AI Inc', 'KAVIA AI', 'San Francisco', 'CA', '94115', 11, '541511', 150000, null, 'Corporation', 0, 'f'),
   ('L3', '2020-05-01', 1, 'KAVIA AI LLC', 'KAVIA AI', 'Austin', 'TX', '78701', 2, '722511', 5000, 5000, 'Limited  Liability Company(LLC)', 0, 'f'),
   ('L4', '2020-05-01', 1, 'GONE ELECTRIC INC', 'GONE ELECTRIC', 'Peoria', 'IL', '61602', 38, '238210', 400000, 400000, 'Corporation', 0, 'f');`);
+db.exec(`insert into sba_loans (loan, program, name, name_key, city, state, approved, fy, amount, jobs, lender, status, file) values
+  ('S1', '7A', 'Kavia AI Inc', 'KAVIA AI', 'San Francisco', 'CA', '2019-06-01', 2019, 250000, 6, 'First Bank', 'PIF', 'f'),
+  ('S2', '504', 'KAVIA AI LLC', 'KAVIA AI', 'Austin', 'TX', '2018-01-01', 2018, 900000, 40, 'Texas CDC', 'CHGOFF', 'f');`);
 const api2 = V.makeApi(db, { tracked: new Set(['KAVI-A']), naics: NAICS_T });
 const FK = api2.filing('0000000001-26-000002').facts;
 eq([FK.ein, FK.cik, FK.incorporated, FK.state], ['123456789', '1', 'DE', 'CA'], 'from Form D: tax ID, CIK, incorporation, state');
 eq(FK.ppp.loans.map((x) => x.loan), ['L1', 'L2'], 'PPP loans by name and state: the Texas namesake left out');
 eq([FK.ppp.jobs, FK.ppp.amount, FK.ppp.forgiven], [11, 270000, 121000], 'PPP: most jobs reported, amounts summed');
+eq([FK.sba.loans.map((x) => x.loan), FK.sba.amount, FK.sba.jobs, FK.sba.chargedOff], [['S1'], 250000, 6, 0], 'SBA loans by name and state: the Texas namesake left out');
 eq([FK.staff.now, FK.staff.year], [15, 2024], 'staff from the plans, by tax ID');
 eq([FK.raised.n, FK.raised.sold], [1, 3050003], 'money raised: each offering once, at its latest filing');
 eq(FK.tracked, ['KAVI.A'], 'a ticker we track');
 const FE = api2.employer('010750002').facts;
+eq(FE.sba, null, 'no SBA loan, no SBA part');
 eq([FE.cik, FE.raised, FE.ppp, FE.staff.y2019], [null, null, null, 94], 'from the Employers side: nothing raised, no loan, 2019 staff for growth');
 eq(FE.names, ['CONTINENTAL ELECTRICAL CONSTRUCTION CO LLC', 'FOURGEN HOLDINGS INC.'], 'every name on file');
 const FG = api2.employer('555555555').facts;
@@ -198,6 +203,7 @@ eq([FG.ppp && FG.ppp.loans.length, FG.business.code], [1, '238210'], 'an old emp
 const FS = require('./factsheet.js');
 const card = FS.html(FK);
 ok(/Known facts/.test(card) && /PPP loans/.test(card) && /matched by name and state/.test(card), 'the card draws, and says how the loans were matched');
+ok(/SBA loans/.test(card) && /7\(a\)/.test(card) && /paid in full/.test(card) && /lender’s estimate/.test(card), 'the card draws the SBA loans, their status, and that jobs are the lender’s estimate');
 ok(!/SUTTER/.test(card), 'no street on the card');
 eq(FS.html(null), '', 'no facts, no card');
 

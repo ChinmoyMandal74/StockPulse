@@ -58,6 +58,8 @@ function open(file) {
   require('./f5500archive.js').ensureSchema(db);
   // And the PPP loans (E6), the same way (pppload-read.js owns them).
   require('./pppload-read.js').ensureSchema(db);
+  // And the SBA 7(a) and 504 loans (E13), the same way (sbaload-read.js owns them).
+  require('./sbaload-read.js').ensureSchema(db);
 
   // Superseded (2026-11-09, for the viewer): a filing a later amendment names
   // as its previous one. A D/A restates the offering's running totals, so
