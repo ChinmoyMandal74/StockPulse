@@ -49,6 +49,7 @@
     .ds-join { min-width: 120px; }
     .ds-foot { color: var(--muted); font-size: 12.5px; line-height: 1.55; display: grid; gap: 8px; max-width: 100ch; }
     .ds-foot b { color: var(--text); font-weight: 500; }
+    .ds-foot a { color: var(--accent); text-decoration: none; }
     @media (max-width: 860px) { .ds-page { padding: 16px 16px 0; } }
   </style>
 </head>
@@ -68,7 +69,8 @@
   </div>
   <div class="ds-foot">
     <div><b>Recommended next:</b> E14, work-visa filings: exact matches by tax ID onto the retirement-plan data, wages and job titles that no current source has, and from the Labor Department, so no risk to the SEC access. Then E8 bank call reports, the quickest full set of accounts.</div>
-    <div><b>Unfinished:</b> the federal contracts download for fiscal 2016–24 (half done, resumes run by run), then its load; the slow SEC reads (acquired-company accounts for Continental's peers, then Reg A).</div>
+    <div><b>Unfinished:</b> the nationwide website crawl (E17), night by night once its task is registered (<span class="ds-code">website-task.ps1</span>); the federal contracts download for fiscal 2016–24 (half done, resumes run by run), then its load; the slow SEC reads (acquired-company accounts for Continental's peers, then Reg A).</div>
+    <div><b>Built on these:</b> <a href="/targets">Targets</a> (private companies fitting a buyer's profile: an add-on for a private-equity-owned operator or a new platform for a GP, by industry codes, size, region, years filing, the staff pattern and what the company's own website says); <a href="/crowdfunding">Crowdfunding</a> (E3's companies and their figures by fiscal year); <a href="/crawl">Crawl</a> (the website crawl's progress); and the fact sheet in every side panel, which now carries a company's own Form C figures.</div>
     <div><b>The gap to be honest about:</b> most small private companies never raise registered money or get bought by a filer, so for them the free sources give headcount and government work at best. That is why the paid tools exist; the edge here is the free sources joined to the listed peers the app already covers well.</div>
     <div><b>Rules for every loader:</b> bulk files only, one request at a time with a long pause, a daily cap, any refusal stops the run and nothing is retried, nothing fetched twice. SEC files with the declared user agent (the address has had a 429 and a 403). People's names and roles kept, never their street addresses. The full notes are in <span class="ds-code">docs/backlog.md</span>, entry 61.</div>
   </div>
@@ -119,7 +121,7 @@ const GROUPS = [
     ['', 'Credit unions', 'NCUA call reports', 'idea', 'Quarterly accounts of every credit union.', 'Charter number', 'Free', 'Listed as possible.', ''],
   ]],
   ['From the companies themselves', [
-    ['E17', 'Companies’ own websites', 'The company’s site, found by guessing the address', 'part', 'What it does, founding year, size as stated, places, people named, customers, hiring.', 'Name plus city or telephone on the pages', 'Free; about $0.0016 of AI a company; robots.txt obeyed, 3s apart', 'Pilot of 200: 37% confirmed and read. Main limit: the brand differs from the filed name; an address can be given by hand.', 'website-load.js · company-websites.md'],
+    ['E17', 'Companies’ own websites', 'The company’s site, found by guessing the address', 'part', 'What it does, founding year, size as stated, places, people named, customers, hiring; and since 2026-11-10 up to 40 useful pages of each confirmed site kept whole (about 0.3 MB), earlier text kept when a page changes, all searchable for later AI questions.', 'Name plus city or telephone on the pages', 'Free; about $0.0015 of AI a confirmed site (about $60 for the list); robots.txt obeyed, 3s between a worker’s requests; 12 GB at most', 'Nationwide by a nightly laptop task: every employer with a plan and 100+ staff (116,523), four at a time, about 1,400 a night, so roughly 80 nights; a morning email on each night and a Crawl page here. About 30% of sites are confirmed. Main limit: the brand differs from the filed name; an address can be given by hand.', 'website-load.js · web-search.js · company-websites.md'],
     ['', 'The latest news', 'Web search, by hand in a session', 'built', 'Acquisitions, owners, size as reported, each item from its primary source.', 'Name, brand, owner', 'Free; by hand per brief', 'For briefs only; estimate and profile sites left out.', 'private-company-briefs.md'],
   ]],
   ['Considered and not pursued', [
