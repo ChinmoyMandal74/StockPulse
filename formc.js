@@ -24,19 +24,29 @@ function tableOf(entryName) {
   return m[1].toUpperCase().replace(/^FORM_?C_?/, '') || null;
 }
 
+// THE DATA SETS this loader reads, the same way: Form C (E3) and, since
+// 2026-11-10, Regulation A (E4: Forms 1-A, 1-K and 1-Z, quarterly since 2015 Q2,
+// `2026q3_rega.zip`). Each keeps its tables under its own prefix.
+const SETS = {
+  formc: { key: 'formc', name: 'Form C (crowdfunding)', suffix: 'cf', must: /crowdfunding/i, prefix: 'fc_',
+    page: 'https://www.sec.gov/data-research/sec-markets-data/crowdfunding-offerings-data-sets', pageFile: 'formc-data-sets.html' },
+  rega: { key: 'rega', name: 'Regulation A', suffix: 'rega', must: /regulation(-a)?-data-sets/i, prefix: 'ra_',
+    page: 'https://www.sec.gov/data-research/sec-markets-data/regulation-data-sets', pageFile: 'rega-data-sets.html' },
+};
+
 // The quarter a data-set address is for: '.../2026q2_cf.zip' -> '2026Q2'.
-function quarterOf(url) {
-  const m = /(\d{4})q([1-4])_cf(?:_\d+)?\.zip$/i.exec(String(url || ''));
+function quarterOf(url, set = SETS.formc) {
+  const m = new RegExp('(\\d{4})q([1-4])_' + set.suffix + '(?:_\\d+)?\\.zip$', 'i').exec(String(url || ''));
   return m ? `${m[1]}Q${m[2]}` : null;
 }
 
 // The data-set ZIPs linked from the SEC's page, newest quarter first.
-function zipLinks(html) {
+function zipLinks(html, set = SETS.formc) {
   const out = new Map();
   for (const m of String(html).matchAll(/href="([^"]+\.zip)"/gi)) {
     const url = m[1].startsWith('http') ? m[1] : 'https://www.sec.gov' + m[1];
-    const q = quarterOf(url);
-    if (q && /crowdfunding/i.test(url) && !out.has(q)) out.set(q, url);
+    const q = quarterOf(url, set);
+    if (q && set.must.test(url) && !out.has(q)) out.set(q, url);
   }
   return [...out].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([quarter, url]) => ({ quarter, url }));
 }
@@ -91,4 +101,4 @@ function summaryRow(accn, quarter, sub, iss, dis) {
   return r;
 }
 
-module.exports = { tableOf, quarterOf, zipLinks, accnCol, fcDate, summaryRow, SUMMARY_COLS, FIN, parseTsv: F.parseTsv, isoDate: F.isoDate, amount: F.amount, verdict: F.verdict };
+module.exports = { SETS, tableOf, quarterOf, zipLinks, accnCol, fcDate, summaryRow, SUMMARY_COLS, FIN, parseTsv: F.parseTsv, isoDate: F.isoDate, amount: F.amount, verdict: F.verdict };

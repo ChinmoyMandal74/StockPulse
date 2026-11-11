@@ -1,5 +1,6 @@
-// Form C: load the SEC's quarterly Crowdfunding Offerings data sets into the
-// local archive (formd.db, formcarchive.js). Backlog 61, E3; docs/context/form-c.md.
+// Form C and Regulation A: load the SEC's quarterly Crowdfunding Offerings data
+// sets (E3) or Regulation A data sets (E4, --set rega) into the local archive
+// (formd.db, formcarchive.js). Backlog 61; docs/context/form-c.md, reg-a.md.
 //
 // LOCAL, BY HAND, AND SLOW ON PURPOSE, with Form D's care (formd-load.js):
 //   - bulk files only: one ZIP a quarter since 2016 Q2; never a request a filing;
@@ -17,6 +18,7 @@
 //   node --use-system-ca formc-load.js --commit --only 2026Q2
 //   node --use-system-ca formc-load.js --stats
 //   node --use-system-ca formc-load.js --summarise [--commit]   # the formc summary from the stored tables; no requests
+//   node --use-system-ca formc-load.js --set rega [...]         # the Regulation A data sets, the same way
 'use strict';
 require('dotenv').config();
 const fs = require('fs');
@@ -26,9 +28,9 @@ const Zip = require('./zipread.js');
 const FC = require('./formc.js');
 const { makeGetter } = require('./formd-load.js');
 
-const PAGE_URL = 'https://www.sec.gov/data-research/sec-markets-data/crowdfunding-offerings-data-sets';
+const PAGE_URL = FC.SETS.formc.page;
 const DIR = path.join(__dirname, 'downloads', 'sec');
-const PAGE_FILE = path.join(DIR, 'formc-data-sets.html');
+// One run at a time across both data sets: the same address, the same pauses.
 const LOCK = path.join(DIR, 'formc-load.lock');
 const PAGE_MAX_AGE = 7 * 86400e3;
 const MIN_GAP_S = 15;
@@ -45,6 +47,7 @@ function options(argv) {
     only: arg('--only') ? String(arg('--only')).toUpperCase().split(',').filter(Boolean) : null,
     stats: argv.includes('--stats'),
     summarise: argv.includes('--summarise'),
+    set: FC.SETS[arg('--set') || 'formc'] || (() => { throw new Error('--set is formc or rega'); })(),
   };
 }
 
@@ -68,18 +71,20 @@ async function run(opts, deps) {
 
   const used = deps.secRequestsSince(deps.now() - 86400e3);
   const cap = Math.max(0, DAY_CAP - used);
-  log(`sec.gov requests in the last 24 hours (Form D, Form C and acquired companies together): ${used} of ${DAY_CAP}`);
+  log(`sec.gov requests in the last 24 hours (Form D, Form C, Reg A and acquired companies together): ${used} of ${DAY_CAP}`);
   const get = makeGetter(deps.archive, deps);
   const gapMs = opts.gapS * 1000;
 
-  let html = deps.readCache(PAGE_FILE, PAGE_MAX_AGE);
+  const SET = opts.set || FC.SETS.formc;
+  const pageFile = path.join(DIR, SET.pageFile);
+  let html = deps.readCache(pageFile, PAGE_MAX_AGE);
   if (!html) {
     if (cap < 1) throw new Error('the 24-hour request cap is used up; run again tomorrow');
-    html = (await get(PAGE_URL, gapMs, cap)).toString('utf8');
-    deps.writeCache(PAGE_FILE, html);
+    html = (await get(SET.page, gapMs, cap)).toString('utf8');
+    deps.writeCache(pageFile, html);
   }
-  let sets = FC.zipLinks(html);
-  if (!sets.length) throw new Error('found no crowdfunding data sets on the SEC page; its layout may have changed. Nothing downloaded.');
+  let sets = FC.zipLinks(html, SET);
+  if (!sets.length) throw new Error(`found no ${SET.name} data sets on the SEC page; its layout may have changed. Nothing downloaded.`);
   const done = C.loaded();
   if (opts.only) sets = sets.filter((s) => opts.only.includes(s.quarter));
   const todo = sets.filter((s) => !done.has(s.quarter));
@@ -154,9 +159,11 @@ if (require.main === module) {
   (async () => {
     if (opts.commit) unlock = lock();
     const archive = require('./formdarchive.js').open();
-    const formc = require('./formcarchive.js').open(archive.db);
+    const formc = require('./formcarchive.js').open(archive.db, opts.set);
+    // Each data set's own summary: formc's in formcarchive.js, Reg A's in rega.js.
+    const summarise = opts.set.key === 'rega' ? (o, d) => require('./rega.js').summarise(archive.db, o, d) : (o, d) => require('./formcarchive.js').summarise(archive.db, o, d);
     try {
-      const r = await run(opts, { ...fileDeps(archive), archive, formc, summarise: (o, d) => require('./formcarchive.js').summarise(archive.db, o, d) });
+      const r = await run(opts, { ...fileDeps(archive), archive, formc, summarise });
       if (!r.ok) process.exitCode = 1;
     } finally { archive.close(); unlock(); }
   })().catch((e) => { console.error(e.message); unlock(); process.exit(1); });

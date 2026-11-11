@@ -16,19 +16,21 @@ const FC = require('./formc.js');
 
 const ident = (s) => '"' + String(s).replace(/[^A-Za-z0-9_]/g, '_') + '"';
 const colOf = (h) => String(h).replace(/[^A-Za-z0-9_]/g, '_');
-const tableName = (name) => 'fc_' + String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+// Each data set's tables under its own prefix (formc.js SETS): fc_ for Form C, ra_ for Reg A.
+const tableName = (name, prefix = 'fc_') => prefix + String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
-function ensureSchema(db) {
-  db.exec(`create table if not exists fc_loads (
+function ensureSchema(db, prefix = 'fc_') {
+  db.exec(`create table if not exists ${prefix}loads (
       quarter text primary key, url text not null, bytes integer, filings integer, rows integer, bad integer, tables text, loaded_at integer not null
     );`);
 }
 
-function open(db) {
-  ensureSchema(db);
+function open(db, set = FC.SETS.formc) {
+  const P = set.prefix;
+  ensureSchema(db, P);
   const known = new Map();
   function ensureRaw(name, header) {
-    const t = tableName(name);
+    const t = tableName(name, P);
     let cols = known.get(t);
     if (!cols) {
       db.exec(`create table if not exists ${ident(t)} (quarter text not null)`);
@@ -46,7 +48,7 @@ function open(db) {
     return t;
   }
 
-  const loaded = () => new Set(db.prepare('select quarter from fc_loads').all().map((r) => r.quarter));
+  const loaded = () => new Set(db.prepare(`select quarter from ${P}loads`).all().map((r) => r.quarter));
 
   // One quarter, all or nothing. Returns the counts written.
   function loadQuarter(quarter, url, tables, bytes) {
@@ -69,7 +71,7 @@ function open(db) {
         counts.bad += t.bad || 0;
       }
       counts.filings = accns.size;
-      db.prepare('insert into fc_loads (quarter, url, bytes, filings, rows, bad, tables, loaded_at) values (?, ?, ?, ?, ?, ?, ?, ?)')
+      db.prepare(`insert into ${P}loads (quarter, url, bytes, filings, rows, bad, tables, loaded_at) values (?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(quarter, url, bytes || null, counts.filings, counts.rows, counts.bad, Object.keys(tables).join(','), Date.now());
       db.exec('commit');
     } catch (e) {
@@ -81,10 +83,10 @@ function open(db) {
   }
 
   const stats = () => ({
-    quarters: db.prepare('select count(*) n, min(quarter) a, max(quarter) b, sum(filings) filings, sum(rows) rows, sum(bad) bad from fc_loads').get(),
+    quarters: db.prepare(`select count(*) n, min(quarter) a, max(quarter) b, sum(filings) filings, sum(rows) rows, sum(bad) bad from ${P}loads`).get(),
   });
 
-  return { loaded, loadQuarter, stats, tableName };
+  return { loaded, loadQuarter, stats, tableName: (n) => tableName(n, P), set };
 }
 
 // The `formc` summary, one row a filing, built from the stored tables (no

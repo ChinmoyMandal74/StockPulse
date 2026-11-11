@@ -25,6 +25,22 @@ const page = '<a href="/files/dera/data/crowdfunding-offerings-data-sets/2026q1_
 const links = FC.zipLinks(page);
 eq(links.map((l) => l.quarter), ['2026Q2', '2026Q1'], 'zipLinks: newest first, de-duplicated, crowdfunding only');
 eq(links[0].url, 'https://www.sec.gov/files/dera/data/crowdfunding-offerings-data-sets/2026q2_cf.zip', 'zipLinks: absolute address');
+// Regulation A (E4): the same loader, its own links (two SEC folder names over the years).
+const RA = FC.SETS.rega;
+eq(FC.quarterOf('https://www.sec.gov/files/structureddata/data/regulation-data-sets/2026q1_rega.zip', RA), '2026Q1', 'a Reg A quarter');
+eq(FC.quarterOf('https://www.sec.gov/files/x/2026q1_cf.zip', RA), null, 'a Form C set is not a Reg A set');
+const raPage = '<a href="/files/datastandardsinnovation/data/regulation-data-sets/2026q3_rega.zip">a</a>'
+  + '<a href="/files/structureddata/data/regulation-a-data-sets/2023q4_rega.zip">b</a>'
+  + '<a href="/files/dera/data/crowdfunding-offerings-data-sets/2026q2_cf.zip">c</a>';
+eq(FC.zipLinks(raPage, RA).map((l) => l.quarter), ['2026Q3', '2023Q4'], 'Reg A links from both folders, not the Form C one');
+eq(FC.zipLinks(raPage).map((l) => l.quarter), ['2026Q2'], 'and Form C still only its own');
+{
+  const A0 = Archive.open(':memory:');
+  const R = CArchive.open(A0.db, RA);
+  R.loadQuarter('2026Q1', 'u', { SUBMISSION: FC.parseTsv('ACCESSION_NUMBER\tFORM\n0001-26-1\t1-A\n') }, 1);
+  ok(A0.db.prepare("select 1 from sqlite_master where name = 'ra_submission'").get() && A0.db.prepare("select 1 from sqlite_master where name = 'ra_loads'").get(), 'Reg A tables under ra_');
+  ok(!CArchive.open(A0.db).loaded().has('2026Q1'), 'a Reg A quarter is not a Form C quarter');
+}
 eq(FC.tableOf('2026q2_cf/FORM_C_DISCLOSURE.tsv'), 'DISCLOSURE', 'table name, prefix dropped');
 eq(FC.tableOf('FORM_C_ISSUER_INFORMATION.tsv'), 'ISSUER_INFORMATION', 'table name with underscores');
 eq(FC.tableOf('readme.htm'), null, 'not a table');
