@@ -123,6 +123,8 @@ ok(wb.map((s) => s.name).join() === 'Tech,Non-tech,AI watchlist,Bouncing off the
 const tsh = wb[0], hcol = (sh, h) => sh.cols.findIndex((c) => c[0] === h);
 ok(tsh.rows.length === 1 && tsh.rows[0].length === tsh.cols.length, 'tech: one row, a cell under every heading');
 ok(tsh.rows[0][hcol(tsh, 'Market cap ($B)')] === 2100 && tsh.rows[0][hcol(tsh, 'Reaction (%)')] === -12 && tsh.rows[0][hcol(tsh, 'RSI (14-day)')] === 31, 'figures are numbers: $B, percent, RSI', tsh.rows[0]);
+ok(S.fields({ symbol: 'H', healthScore: 64 }, null).health === 64 && S.fields({ symbol: 'H', healthScore: null }, null).health === null && S.fields({ symbol: 'H' }, null).health === null, 'Health carried off the served row; absent stays blank, never 0');
+ok(hcol(tsh, 'Health (0 to 100)') === 2 && tsh.cols[2][2] === true, 'Excel: Health the third column, a number');
 ok(tsh.cols[hcol(tsh, 'Reaction (%)')][2] === true && tsh.cols[hcol(tsh, 'Company')][2] === false, 'numeric columns are marked so');
 ok(tsh.rows[0][hcol(tsh, 'Guidance')] === 'Given', 'guidance in words');
 ok(wb[1].rows.length === 0, 'an empty screen is an empty sheet, headings kept');

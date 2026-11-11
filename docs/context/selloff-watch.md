@@ -187,3 +187,6 @@ The owner asked for column filters on `/ideas`. A second heading row holds a box
 - The Excel export ignores the filters and still carries every row.
 
 Verified in headless Chrome over a real `/api/selloff` answer: 18 checks, covering number, dollar, range, text and drop-down filters, focus, the count, sort under a filter, Clear, a tab-only column, and blanks. Proved by reverting: a full repaint on each keystroke fails the focus check.
+
+## Health column (2026-11-11, owner)
+Health (0 to 100, `health.js`) is the third column on every Ideas and Trending tab, after Company and, where a tab has one, Group or Sector, and the third column of every Excel sheet (`Health (0 to 100)`, after Symbol and Company). `pageRows` now runs `stampHealth` last, as the screener does, so the figure is the screener's own; `Selloff.fields` carries it as `health`. Uncoloured, the number only, a dash when there is none; sortable and filterable like any number. Display only, never the Signal.

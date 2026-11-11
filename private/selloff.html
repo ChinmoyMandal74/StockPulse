@@ -227,6 +227,9 @@
       // The group, and under it why the company is here: the published list, or the theme it came in by.
       { k: 'group', t: 'Group', only: 'watch', cell: (r) => '<td class="sw-grpname">' + we(r.group) + '<span class="sw-from" title="' + we(fromTitle(r)) + '">' + we(r.from === 'list' ? 'Published list' : r.from || '') + '</span></td>', sort: (r) => GROUPS.indexOf(r.group) },
       { k: 'sector', t: 'Sector', only: ['nontech', 'up', 'down', 'volume', 'cap'], cls: 'hide-sm', cell: (r) => '<td class="sw-grpname sw-wd hide-sm">' + we(r.sector || '—') + '</td>', sort: (r) => r.sector || '' },
+      // Health, as the screener shows it: the number only, uncoloured (green and red mean a price move).
+      { k: 'health', t: 'Health', r: true, title: 'Health, 0 to 100, as on the screener: how the stock reads on five topics at once (business, latest results, valuation, price, sentiment), each with a set weight. A description of where it stands today, not a rating, a forecast or a recommendation, and never an input to the Signal.',
+        cell: (r) => '<td class="sw-r sw-num">' + (isNum(r.health) ? Math.round(r.health) : '<span class="sw-faint">—</span>') + '</td>', num: true },
       { k: 'cap', t: 'Market cap', r: true, title: 'Market value at the latest price, as on the screener.',
         cell: (r) => '<td class="sw-r sw-num">' + we((isNum(r.cap) && window.RowCard && RowCard.fmtMktCap(Number(r.cap), r.currency)) || '—') + '</td>', num: true },
       // Trending's market cap tab: how many dollars of market value the period's move added or took away.

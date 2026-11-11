@@ -65,3 +65,5 @@ Revenue growth, profit margin, Reported and Guidance are left off Trending so ev
   - Every tab fits at 1300, 1440 and 1920px; nothing scrolls sideways at 390px; no script errors.
   - Ideas is unchanged: eight tabs, its columns, its window control.
   - The screener bar wraps, so the new button adds no width.
+
+Health (2026-11-11): the third column here too, from the same `pageRows`; see `selloff-watch.md`.

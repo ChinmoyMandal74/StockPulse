@@ -124,6 +124,8 @@ function fields(row, rel) {
     fromHigh: num(row.pctFromHigh), rsi: num(row.rsi), pe: pos(row.trailingPe), fpe: pos(row.forwardPe),
     valueVsIndustry: row.valueVsIndustry || null, revGrowth: num(row.revenueGrowthYoY), profitMargin: num(row.profitMargin),
     growthProfile: row.growthProfile || null,
+    // Health, 0 to 100, as the screener stamps it (stampHealth); display only.
+    health: num(row.healthScore),
     // Market value, the one money figure reliably in dollars; shown as the screener shows it.
     cap: num(row.marketCap), currency: row.currency || null,
     // The latest session's move, as the screener's Today column has it.
@@ -253,6 +255,7 @@ function workbookSheets(body) {
   const company = [
     ['Symbol', 9, false, (r) => r.symbol],
     ['Company', 30, false, (r) => txt(r.name)],
+    ['Health (0 to 100)', 10, true, (r) => num(r.health)],
   ];
   const where = [
     ['Sector', 20, false, (r) => txt(r.sector)],

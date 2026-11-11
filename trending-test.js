@@ -64,6 +64,7 @@ ok(sh.map((s) => s.name).join('|') === 'Trending up|Trending down|Volume, price 
 const up = sh[0], ci = (h) => up.cols.findIndex((c) => c[0] === h);
 ok(up.rows.length === 2 && up.rows[0][0] === 'BBB', 'up sheet rows in order');
 ok(up.rows[1][ci('Market cap ($B)')] === 500, 'market cap in $ billions');
+ok(ci('Health (0 to 100)') === 2, 'Health the third column');
 ok(up.rows[0][ci('Tone 7D (−1 to +1)')] === null, 'no tone is an empty cell');
 ok(sh[3].rows[1][ci('1 month (%)')] === null, 'a blank 1M stays empty, never 0');
 ok(!/\b(buy|sell|hold)\b/i.test(sh[6].rows.map((r) => r.join(' ')).join(' ')), 'no trade wording on About');

@@ -76,6 +76,7 @@ function workbookSheets(body) {
   const cols = [
     ['Symbol', 9, false, (r) => r.symbol],
     ['Company', 30, false, (r) => txt(r.name)],
+    ['Health (0 to 100)', 10, true, (r) => num(r.health)],
     ['Sector', 20, false, (r) => txt(r.sector)],
     ['Industry', 30, false, (r) => txt(r.industry)],
     ['Market cap ($B)', 12, true, (r) => bn(r.cap)],

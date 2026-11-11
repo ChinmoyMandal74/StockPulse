@@ -16956,6 +16956,8 @@ async function pageRows(snap, pf) {
   await serveStamps(rows);
   stampCapDerived(rows);
   stampPeerValue(rows);
+  // Health last: it reads the Signal, the folded figures and the peer ratios.
+  await stampHealth(rows).catch(() => {});
   if (pf) for (const r of rows) r.portfolios = membershipOf(r.symbol, pf);
   return rows;
 }
