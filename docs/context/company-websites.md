@@ -236,3 +236,9 @@ a daily email in the morning on the crwal previous night".
 | `crawl-report.js` | Counts the night on the laptop and posts it to `/api/cron/crawl-report` (CRON_SECRET), which mails the operator, kind `crawl-report`: last night, the whole list, and anything to look at (nothing tried, a run that ended other than by its minutes, under 15% confirmed, the archive past 80% of 12 GB). Counts only; no company or page reaches the server. `--dry` prints the body |
 | `website-task.ps1` | Runs it straight after the crawl in the same task, so the email comes about 06:45 |
 | `crawlstats-test.js` | The figures, the nights, the log lines, the body (no company in it) and the page's route; the list filter proven by reverting it |
+
+**Changed the same evening** (owner: "why don't you start at 11pm tonight and go
+on till 7am .. I am trying to get this data faster into the app"): **23:00 for
+465 minutes (to about 06:45), six workers, $3 a night**; the morning email
+follows the run. About 2,800 companies a night, so roughly 40 nights for the
+list. Re-registered with `website-task.ps1` (it replaces the task).

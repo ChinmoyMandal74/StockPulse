@@ -17,25 +17,27 @@
 #
 # CAREFUL BY DESIGN: robots.txt obeyed, 3 seconds between a worker's requests,
 # four workers (four companies at once, so each site still sees one request
-# every 3 seconds). Stops starting companies after 345 minutes, at $2 of
+# every 3 seconds). Stops starting companies after 465 minutes, at $3 of
 # reading, or when web-archive.db reaches 12 GB. Each run carries on where the
 # last stopped; a night the laptop is asleep is simply skipped.
 #
 # IT SPENDS MONEY: about $0.0015 a confirmed site read (a third of companies),
 # roughly $0.65 a night; about $60 for the whole list.
 #
-# 01:00 LOCAL, EVERY NIGHT, for about six hours; then the morning email.
+# 23:00 LOCAL, EVERY NIGHT, until about 06:45; then the morning email (owner,
+# 2026-11-10: "why don't you start at 11pm tonight and go on till 7am .. I am
+# trying to get this data faster into the app"). Six workers, not four.
 param([switch]$Remove, [switch]$WhatIf)
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'TickrLab websites'
 $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'website-load.js'
-$Times    = @('01:00')
-$Minutes  = '345'
-$MaxUsd   = '2'
+$Times    = @('23:00')
+$Minutes  = '465'
+$MaxUsd   = '3'
 $MaxGb    = '12'
-$Workers  = '4'
+$Workers  = '6'
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -68,7 +70,7 @@ $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -MultipleInstances IgnoreNew `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 380)
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 500)
 
 if ($WhatIf) {
   Write-Output "Would register '$TaskName'"
