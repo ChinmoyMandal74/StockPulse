@@ -85,6 +85,7 @@
       out += '<h4 style="margin:12px 0 4px!important">From its own website</h4>'
         + (r.what_they_do ? '<p class="fs-note">“' + esc(r.what_they_do) + '”</p>' : '')
         + line('Headquarters', r.headquarters ? esc(r.headquarters) + ' <span style="color:var(--faint)">(“' + esc(r.headquarters_quote || '') + '”)</span>' : '')
+        + line('Contact', [r.hq_address, r.main_phone, r.general_email].filter(Boolean).map(esc).join(' · '))
         + line('Services', joined(r.services)) + line('Serves', joined(r.markets))
         + line('Locations (' + (r.locations || []).length + ')', joined(r.locations))
         + line('Key people (' + (r.leaders || []).length + ')', (r.leaders || []).map((l) => esc(l.name) + ((l.role || l.location) ? ' <span style="color:var(--faint)">(' + [l.role, l.location].filter(Boolean).map(esc).join(', ') + ')</span>' : '')).join(' · '))

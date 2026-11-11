@@ -238,7 +238,7 @@ function verify(text, co) {
 const S = (d) => ({ type: 'string', description: d });
 const ARR = (d, items) => ({ type: 'array', description: d, items });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_company_site', 'what_they_do', 'founded_year', 'founded_quote', 'employees_quote', 'headquarters', 'headquarters_quote', 'services', 'markets', 'locations', 'leaders', 'clients', 'history', 'open_jobs', 'hiring_quote'],
+  required: ['is_company_site', 'what_they_do', 'founded_year', 'founded_quote', 'employees_quote', 'headquarters', 'headquarters_quote', 'services', 'markets', 'locations', 'leaders', 'clients', 'history', 'open_jobs', 'hiring_quote', 'hq_address', 'main_phone', 'general_email'],
   properties: {
     is_company_site: { type: 'boolean', description: 'True if these pages are the named company\'s own website (not a directory, a parked domain, or another business of a similar name).' },
     what_they_do: S('One or two sentences copied word for word from the pages that best say what the company does, at most 300 characters. Empty string if none.'),
@@ -263,12 +263,18 @@ const SCHEMA = { type: 'object', additionalProperties: false,
       properties: { year: S('Four-digit year'), quote: S('The words stating it, copied exactly, at most 200 characters') } }),
     open_jobs: S('The number of open positions if the pages print a count or list them (count the listed jobs only when they are listed one by one). Empty string if not shown.'),
     hiring_quote: S('Words copied exactly from the pages about hiring or open positions, at most 160 characters. Empty string if none.'),
+    // THE COMPANY'S OWN CONTACT DETAILS (2026-11-11, the owner: "Yes add the
+    // company level contact details"): what the company prints to be reached,
+    // never a person's. People stay a name, a title and an office.
+    hq_address: S('The street address of the headquarters or main office as printed on the pages (street, city, state, ZIP), at most 160 characters. Never a person\'s home address. Empty string if none.'),
+    main_phone: S('The company\'s main or office telephone number as printed (the general line, not a named person\'s direct line). Empty string if none.'),
+    general_email: S('The company\'s general email address as printed, only a shared mailbox such as info@, sales@ or contact@, never an address belonging to a named person. Empty string if none.'),
   } };
 const SYSTEM = [
   'You read pages from a company\'s website and fill the fields asked for.',
   'Copy every phrase, name and year exactly as it appears on the pages; never paraphrase, summarise, translate or infer. If something is not stated, give an empty string or an empty list.',
   'Report only what the pages state about this company; do not judge it.',
-  'Do not include anyone\'s email address, telephone number or home address.',
+  'Do not include any person\'s email address, telephone number or home address anywhere; the company\'s own address, main telephone and shared mailbox go only in their three fields.',
 ].join(' ');
 
 // The pages as one text for the model, each under its address.
@@ -292,6 +298,50 @@ function request(co, pages, model) {
 const loose = (s) => String(s || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+/;
 const PHONE = /\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}/;
+
+// The company's own contact details, each kept only when it is on the pages
+// and is the company's, not a person's: an address with a ZIP or a state, a
+// telephone with ten digits not printed beside a named person, and an email
+// address whose mailbox is a shared one (info@, sales@), by an exact list.
+const ROLE_BOX = new Set(['info', 'information', 'sales', 'contact', 'contactus', 'hello', 'office', 'mail', 'admin', 'inquiries', 'inquiry', 'enquiries', 'enquiry', 'service', 'services', 'support', 'customerservice', 'customercare', 'cs', 'orders', 'order', 'quotes', 'quote', 'rfq', 'marketing', 'help', 'general', 'reception', 'frontdesk', 'careers', 'jobs', 'hr', 'recruiting', 'billing', 'accounting', 'accounts', 'ar', 'ap', 'estimating', 'bids', 'media', 'press', 'pr', 'team', 'main', 'operations', 'dispatch', 'parts']);
+const ZIP_OR_STATE = /\b\d{5}(-\d{4})?\b|,\s*[A-Z]{2}\b|\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/i;
+function contact(A, text, leaders, problems) {
+  const low = loose(text);
+  const onPages = (s) => low.includes(loose(s));
+  const nameParts = new Set();
+  for (const l of leaders) for (const w of String(l.name).toLowerCase().split(/[^a-z]+/)) if (w.length >= 3) nameParts.add(w);
+  const out = { hq_address: null, main_phone: null, general_email: null };
+
+  const addr = String(A.hq_address || '').trim();
+  if (addr) {
+    if (addr.length > 200 || EMAIL.test(addr) || PHONE.test(addr)) problems.push('hq_address too long or holds other details');
+    else if (!onPages(addr)) problems.push(`hq_address "${addr.slice(0, 60)}" is not on the pages`);
+    else if (!/\d/.test(addr) || !ZIP_OR_STATE.test(addr)) problems.push(`hq_address "${addr.slice(0, 60)}" is not a street address`);
+    else out.hq_address = addr;
+  }
+
+  const tel = String(A.main_phone || '').trim();
+  if (tel) {
+    const d = tel.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    const at = low.indexOf(loose(tel));
+    const before = at >= 0 ? low.slice(Math.max(0, at - 60), at) : '';
+    if (d.length !== 10 || /^[01]/.test(d) || tel.length > 30) problems.push(`main_phone "${tel.slice(0, 30)}" is not a telephone number`);
+    else if (at < 0) problems.push(`main_phone "${tel.slice(0, 30)}" is not on the pages`);
+    else if ([...nameParts].some((w) => new RegExp('\\b' + w + '\\b').test(before))) problems.push('main_phone is printed beside a named person; dropped');
+    else out.main_phone = tel;
+  }
+
+  const em = String(A.general_email || '').trim().toLowerCase();
+  if (em) {
+    const m = /^([a-z0-9._%+-]+)@([a-z0-9-]+(\.[a-z0-9-]+)+)$/.exec(em);
+    const box = m ? m[1].replace(/[._-]/g, '') : '';
+    if (!m) problems.push(`general_email "${em.slice(0, 60)}" is not an email address`);
+    else if (!onPages(em)) problems.push(`general_email "${em.slice(0, 60)}" is not on the pages`);
+    else if (!ROLE_BOX.has(box)) problems.push('general_email is not a shared mailbox; dropped');
+    else out.general_email = em;
+  }
+  return out;
+}
 
 // The answer, checked, as { read, problems }: a phrase not on the pages is
 // dropped and named; a year must be four digits and stand in its own quote;
@@ -351,6 +401,7 @@ function check(ans, text) {
     history,
     open_jobs: /^\d{1,4}$/.test(jobsRaw) ? Number(jobsRaw) : null,
     hiring_quote: on('hiring_quote', A.hiring_quote, 200),
+    ...contact(A, text, leaders, problems),
   };
   return { read, problems };
 }

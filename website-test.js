@@ -90,7 +90,25 @@ eq(W.check({ ...hq, headquarters: 'Mobile, AL' }, page2).read.headquarters, null
 eq(W.check({ ...hq, headquarters_quote: 'Headquartered in Atlanta, GA.', headquarters: 'Atlanta, GA' }, page2).read.headquarters, null, 'a headquarters not on the pages is dropped');
 eq(W.check(ans, page).read.headquarters, null, 'no headquarters asked, none kept');
 ok(W.SCHEMA.required.includes('headquarters') && W.SCHEMA.properties.leaders.items.required.includes('location'), 'the model is asked for both');
-ok(!W.SCHEMA.required.some((k) => /email|phone|address/.test(k)), 'the model is never asked for contact details');
+
+// ---- the company's own contact details (2026-11-11)
+const page3 = page2 + ' Contact us: Acme Pumps, 1200 Industrial Pkwy, Birmingham, AL 35203. Main office (205) 555-0100. Email info@acmepumps.com or Sales@AcmePumps.com. Jane Roe, President, direct 205-555-0199, jane.roe@acmepumps.com.';
+const c3 = { ...hq, hq_address: '1200 Industrial Pkwy, Birmingham, AL 35203', main_phone: '(205) 555-0100', general_email: 'info@acmepumps.com' };
+const r3 = W.check(c3, page3).read;
+eq([r3.hq_address, r3.main_phone, r3.general_email], ['1200 Industrial Pkwy, Birmingham, AL 35203', '(205) 555-0100', 'info@acmepumps.com'], 'the company address, main line and shared mailbox are kept');
+eq(W.check({ ...c3, general_email: 'Sales@AcmePumps.com' }, page3).read.general_email, 'sales@acmepumps.com', 'a shared mailbox in capitals, kept lower case');
+eq(W.check({ ...c3, general_email: 'jane.roe@acmepumps.com' }, page3).read.general_email, null, 'a person\'s email is never kept');
+eq(W.check({ ...c3, general_email: 'bsmith@acmepumps.com' }, page3 + ' Questions: bsmith@acmepumps.com.').read.general_email, null, 'a personal mailbox is not shared, even one naming nobody on the team page');
+eq(W.check({ ...c3, general_email: 'office@acmepumps.com' }, page3).read.general_email, null, 'an email not on the pages is dropped');
+eq(W.check({ ...c3, main_phone: '205-555-0199' }, page3).read.main_phone, null, 'a line printed beside a named person is not the main line');
+eq(W.check({ ...c3, main_phone: '(205) 555-0177' }, page3).read.main_phone, null, 'a telephone not on the pages is dropped');
+eq(W.check({ ...c3, main_phone: '555-0100' }, page3).read.main_phone, null, 'seven digits are not a telephone number');
+eq(W.check({ ...c3, hq_address: 'Industrial Pkwy' }, page3).read.hq_address, null, 'a street without a number and a state or ZIP is not an address');
+eq(W.check({ ...c3, hq_address: '99 Elm St, Mobile, AL 36602' }, page3).read.hq_address, null, 'an address not on the pages is dropped');
+ok(!JSON.stringify(r3).includes('jane.roe@') && !JSON.stringify(r3).includes('0199'), 'no person\'s email or direct line anywhere in the read');
+eq(W.check(ans, page).read.general_email, null, 'none asked, none kept');
+eq(W.SCHEMA.required.filter((k) => /email|phone|address/.test(k)), ['hq_address', 'main_phone', 'general_email'], 'the model is asked for the company contact details only, and for no person');
+ok(!JSON.stringify(W.SCHEMA.properties.leaders).match(/email|phone|address/i), 'a person is a name, a title and an office, nothing more');
 
 // ---- the loader over a made-up web
 (async () => {

@@ -44,7 +44,7 @@ titles, the customers named, dated history and open jobs.
 - A "person" of one word is dropped.
 - What is dropped is named in `problems`.
 
-The model is never asked for contact details.
+The model is never asked for a person's contact details; since 2026-11-11 it is asked for the company's own (below).
 
 ## Care
 
@@ -277,3 +277,27 @@ the next run on:
 The sites read before this have neither; they can be read again from the
 pages already kept in `web-archive.db`, with no new requests to the sites
 (about $0.002 a site), when the owner wants it.
+
+## The company's own contact details (2026-11-11)
+
+The owner asked why leaders' emails and addresses are not kept. The answer
+given: the owner's own rule (people without addresses), US anti-spam law treating
+emails gathered by automated means from websites as an aggravating offence when
+mailed, the state privacy and data-broker laws on personal details, and the
+risk of holding such a list. The owner chose the alternative offered: "Yes add
+the company level contact details". Three fields, each checked ( in
+):
+
+- ****: the headquarters or main office street address as printed,
+  kept only when on the pages, with a number and a ZIP or a state.
+- ****: the general line as printed, ten digits, on the pages, and
+  not printed within 60 characters after a named person (a direct line).
+- ****: a shared mailbox only, its name on an exact list
+  (: info, sales, contact, office, service, orders, quotes, careers
+  and the like), on the pages, kept lower case. Any other address, a person's
+  or not, is dropped.
+
+People are still a name, a title and an office: no email, telephone or address
+(a test checks the schema asks for none). The fact sheet shows a Contact line.
+These are local, in ; if backlog 62 brings them to the site, they
+stay admin only.
