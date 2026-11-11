@@ -91,6 +91,7 @@
       { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
     let data = null;
+    let showLapsed = false;   // the never-confirmed rows, hidden until asked for
 
     async function api(method, url) {
       const r = await fetch(url, { method, cache: 'no-store' });
@@ -104,7 +105,8 @@
       const topicName = (id) => (data.topics.find((t) => t.id === id) || {}).name || id;
       $('cards').innerHTML = [
         ['n', s.active, 'Confirmed'],
-        ['n', s.pending, 'Awaiting confirmation'],
+        ['n', s.pending, 'Awaiting confirmation (this week)'],
+        ['n', s.lapsed || 0, 'Never confirmed (link expired)'],
         ['n', s.unsubscribed, 'Unsubscribed'],
       ].map(([, n, k]) => `<div class="scard"><span class="n">${n}</span><span class="k">${we(k)}</span></div>`).join('');
 
@@ -135,10 +137,11 @@
         $('postal').addEventListener('keydown', (e) => { if (e.key === 'Enter') savePostal(); });
       }
 
-      const rows = data.subscribers;
+      // Never-confirmed rows hidden unless asked for: most were typed in by a bot (2026-11).
+      const rows = data.subscribers.filter((x) => showLapsed || !x.lapsed);
       $('rows').innerHTML = rows.length ? rows.map((x) => {
         const pill = x.status === 'active' ? '<span class="pill on">confirmed</span>'
-          : x.status === 'pending' ? '<span class="pill pend">unconfirmed</span>'
+          : x.status === 'pending' ? (x.lapsed ? '<span class="pill off">never confirmed</span>' : '<span class="pill pend">unconfirmed</span>')
           : '<span class="pill off">unsubscribed</span>';
         const wants = x.topics.length ? x.topics.map(topicName).join(', ') : '—';
         const at = x.status === 'unsubscribed' ? x.unsubscribedAt : (x.confirmedAt || x.createdAt);
@@ -153,10 +156,12 @@
       $('rows').querySelectorAll('[data-del]').forEach((b) =>
         b.addEventListener('click', () => del(b.dataset.del)));
 
-      $('note').innerHTML = 'An <b>unsubscribed row stays on the list</b> on purpose — it is the record '
+      $('note').innerHTML = (s.lapsed ? `<b>${s.lapsed} never confirmed</b> (the link expired after a week) are ${showLapsed ? 'shown' : 'hidden'}. <button class="pbtn" id="lapsedBtn">${showLapsed ? 'Hide them' : 'Show them'}</button> Most were typed into the home page box by a bot from data-centre addresses between Oct 13 and Nov 10, 2026; none was ever sent anything but the one confirmation. Since Nov 10 the box refuses such posts.<br><br>` : '') + 'An <b>unsubscribed row stays on the list</b> on purpose — it is the record '
         + 'that the address asked to stop, and deleting it would lose both that and the reason a later '
         + 'import must not pick them up again. The × is for junk and for an erasure request, not for tidying. '
         + 'Subscribing again is allowed and goes back through confirmation.';
+      const lb = $('lapsedBtn');
+      if (lb) lb.addEventListener('click', () => { showLapsed = !showLapsed; paint(); });
     }
 
     async function savePostal() {

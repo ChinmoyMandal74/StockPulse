@@ -1625,6 +1625,10 @@ async function postalAddress() {
 // A plain HTML form on purpose: none of these pages loads any JavaScript, and a
 // subscribe box is no reason to start. `source` becomes the consent record's
 // note of where the address was typed.
+// The box carries two hidden fields against bots (subform.js): the signed time
+// the page was drawn, and a field people never see. Every page with the box is
+// rendered per request, so the time is the visit's own.
+const SubForm = require('./subform.js');
 const subscribeBox = (source) =>
   '<section class="subbox">'
   + '<h2>Get new posts by email</h2>'
@@ -1632,6 +1636,7 @@ const subscribeBox = (source) =>
   + 'sharing your address with anyone.</p>'
   + '<form method="post" action="/subscribe">'
   + `<input type="hidden" name="source" value="${htmlEsc(source)}" />`
+  + SubForm.fields(SubForm.token(Date.now(), authMac))
   + '<input type="email" name="email" required autocomplete="email" '
   + 'placeholder="you@example.com" aria-label="Your email address" />'
   + '<button type="submit">Subscribe</button>'
@@ -1797,7 +1802,10 @@ function subPage({ title, heading, body, base, prefs }) {
 //
 // It returns what happened rather than rendering anything, so a caller that
 // has its own page to serve, or no page at all, can use it.
-const SUBSCRIBE_PER_IP_DAY = Number(process.env.SUBSCRIBE_PER_IP_DAY || 10);
+// Per address 2 a day (was 10 until 2026-11-10: a script spread over 21 addresses
+// still sent about 210 confirmations in four weeks) and per network (/24 or /48) 4.
+const SUBSCRIBE_PER_IP_DAY = Number(process.env.SUBSCRIBE_PER_IP_DAY || 2);
+const SUBSCRIBE_NET_DAY = Number(process.env.SUBSCRIBE_NET_DAY || 4);
 const SUBSCRIBE_SITE_DAY = Number(process.env.SUBSCRIBE_SITE_DAY || 300);
 async function beginSubscription({ email, topics, source, ip, base }) {
   if (!isEmail(email) || email.length > 160) return { bad: true };
@@ -1812,11 +1820,12 @@ async function beginSubscription({ email, topics, source, ip, base }) {
   // stored or sent; the same counter the sign-up throttle uses. A refusal
   // answers like the per-address throttle, so the form says "try later".
   const from = String(ip || 'unknown').split(',')[0].trim();
-  const [mine, site] = await Promise.all([
+  const [mine, net, site] = await Promise.all([
     store.noteChatUse(`subscribe:${from}`, SUBSCRIBE_PER_IP_DAY),
+    store.noteChatUse(`subscribe-net:${SubForm.netOf(from)}`, SUBSCRIBE_NET_DAY),
     store.noteChatUse('subscribe:all', SUBSCRIBE_SITE_DAY),
   ]);
-  if (!mine.allowed || !site.allowed) return { throttled: true };
+  if (!mine.allowed || !net.allowed || !site.allowed) return { throttled: true };
   const want = cleanTopics(topics);
   const started = await store.startSubscribe({
     email, topics: want, source: String(source || 'blog').slice(0, 60), ip });
@@ -1916,6 +1925,12 @@ async function doSubscribe(req, res, wantsJson) {
     : page('Almost there', 'Check your email',
       '<p>There is a link on its way to confirm the address. It expires in a week, and nothing '
       + 'is sent until you click it.</p>'));
+
+  // THE BOX'S OWN CHECKS FIRST (subform.js): a post that never drew the page,
+  // came back too fast, or filled the hidden field gets the same answer as any
+  // other, and nothing is stored or sent. The reason goes to the activity log.
+  const why = SubForm.check(req.body, Date.now(), authMac);
+  if (why) { logAct(req, 'account', 'subscribe refused: ' + why); return email && isEmail(email) ? fine() : bad('We could not read that as an address.'); }
 
   const r = await beginSubscription({
     email,
@@ -12250,10 +12265,14 @@ app.get('/api/admin/subscribers', requireAdmin, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const all = await store.listSubscribers();
   const count = (s) => all.filter((x) => x.status === s).length;
+  // A pending row whose week-long link has run out was never confirmed: kept (a
+  // record, and the reason a later sign-up must confirm again) but counted apart,
+  // so the list's real size is plain (2026-11-10, after a bot filled the box).
+  const lapsed = (x) => x.status === 'pending' && Number(x.createdAt) < Date.now() - 7 * 86400000;
   res.json({
-    subscribers: all,
+    subscribers: all.map((x) => ({ ...x, lapsed: lapsed(x) })),
     topics: SUB_TOPICS,
-    stats: { active: count('active'), pending: count('pending'), unsubscribed: count('unsubscribed'), total: all.length,
+    stats: { active: count('active'), pending: all.filter((x) => x.status === 'pending' && !lapsed(x)).length, lapsed: all.filter(lapsed).length, unsubscribed: count('unsubscribed'), total: all.length,
       byTopic: Object.fromEntries(SUB_TOPICS.map((t) => [t.id, all.filter((x) => x.status === 'active' && x.topics.includes(t.id)).length])) },
     // Surfaced rather than enforced: the list works without it, and a
     // fabricated postal address would be worse than an absent one.

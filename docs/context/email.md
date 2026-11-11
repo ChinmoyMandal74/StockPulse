@@ -91,3 +91,32 @@ The owner: "I want to make this earning results email into an automated email pr
 - **No side margin at all** (2026-10-23, the owner, on the 04:41 refresh report in the Gmail app: "Can't we get rid of this border from all emails"): the Gmail app applied the phone block's inner padding but not `.em-wrap{padding:0}`, so the grey 12px strip stayed beside the card. It only ever showed on screens narrower than the 600px card, so the shell's surround is now `padding:28px 0` inline for every client.
 - **The first mailing, 2026-10-23 09:19:** one subscriber (the owner), 146 companies filed 2026-10-16 to 10-22. With no mark it took three days of readings, which held the first month's fill (read on 2026-10-22). The mark is now set; and a mailing with no mark now takes the last day's readings only, and any mailing only releases filed in the last four days. The owner also gets the per-run owner copy, so two emails on a morning the list goes out.
 - **Largest first** (2026-10-23, the owner: "sort the email by market cap"): the cards and the one-line rows run by market cap, the one money figure reliably in dollars (`digestCaps`, from the cached snapshot), a company with none last, then by symbol. Both the owner copy and the list copy. Checked in the email suite (16).
+
+## Bots in the subscribe box (2026-11-10)
+
+From 2026-10-13 a script posted about 210 strangers' real addresses into the
+home page's subscribe box (`source` `home`), from **21 network addresses in a
+few data-centre and proxy ranges** (155.103.x, 192.210.150.x, 198.12.69.x,
+198.46.x, 107.173.x), a few to nineteen a day. Each got one confirmation mail
+(Resend accepted all 215); **none confirmed**, so nobody was sent anything
+else. The risk was the domain's sending reputation, which password resets
+share. Found by the owner on `/subscribers` ("none of them are confirmed").
+
+What changed (owner: "yes"):
+
+- **`subform.js`**: the box (`subscribeBox`, every page that carries it is
+  rendered per request) gets two hidden fields: `ft`, the time the page was
+  drawn signed with `authMac`, and `website`, a field hidden from people and
+  screen readers. `doSubscribe` checks them first (`SubForm.check`): a post
+  with no token, a bad one, back within 3 seconds or after a day, or with the
+  hidden field filled is **refused with the same "check your email" answer**,
+  nothing stored or sent, and `subscribe refused: <why>` in the activity log.
+  `/api/subscribe` goes through the same check (nothing on the site calls it).
+  The sign-up form's tick (`subscribeOnSignup`) is not this box and is not
+  checked this way; it has the invite code and its own throttles.
+- **Limits**: 2 a day per address (was 10), and a new 4 a day per network
+  (/24 or /48, `subscribe-net:` in `chat_usage`); the site-wide 300 stays.
+- **`/subscribers`**: a pending row older than a week (its link expired) is
+  counted as **never confirmed** and hidden until "Show them"; the rows are
+  kept, nothing deleted.
+- `subform-test.js`: 17 checks, no server and no mail.
