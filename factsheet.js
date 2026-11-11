@@ -84,9 +84,10 @@
       const joined = (a) => (a && a.length ? a.map(esc).join(' · ') : '');
       out += '<h4 style="margin:12px 0 4px!important">From its own website</h4>'
         + (r.what_they_do ? '<p class="fs-note">“' + esc(r.what_they_do) + '”</p>' : '')
+        + line('Headquarters', r.headquarters ? esc(r.headquarters) + ' <span style="color:var(--faint)">(“' + esc(r.headquarters_quote || '') + '”)</span>' : '')
         + line('Services', joined(r.services)) + line('Serves', joined(r.markets))
         + line('Locations (' + (r.locations || []).length + ')', joined(r.locations))
-        + line('People named', (r.leaders || []).map((l) => esc(l.name) + (l.role ? ' <span style="color:var(--faint)">(' + esc(l.role) + ')</span>' : '')).join(' · '))
+        + line('Key people (' + (r.leaders || []).length + ')', (r.leaders || []).map((l) => esc(l.name) + ((l.role || l.location) ? ' <span style="color:var(--faint)">(' + [l.role, l.location].filter(Boolean).map(esc).join(', ') + ')</span>' : '')).join(' · '))
         + line('Customers named', joined(r.clients))
         + line('Staff', r.employees_quote ? '“' + esc(r.employees_quote) + '”' : '')
         + line('History', (r.history || []).map((h) => esc(h.year) + ': “' + esc(h.quote) + '”').join(' · '))

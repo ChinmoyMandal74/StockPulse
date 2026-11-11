@@ -77,6 +77,19 @@ eq(W.check({ ...ans, founded_year: '1988' }, page).read.founded, null, 'a year n
 eq(W.check({ ...ans, what_they_do: 'Acme is a leading provider of pumps.' }, page).read.what_they_do, null, 'a paraphrase is not a quote');
 eq(W.check({ ...ans, what_they_do: 'We  sell industrial pumps,   process valves and field service to municipal water and mining customers.' }, page).read.what_they_do !== null, true, 'spacing does not matter');
 ok(!JSON.stringify(W.check(ans, page).read).includes('jane@acme.com'), 'no email address kept anywhere');
+
+// ---- headquarters and key people (2026-11-11)
+const page2 = page + ' Headquartered in Birmingham, AL, with branches across the South. Our team: Mary Major, Branch Manager, Mobile, AL. Tom Tall, Operations Manager.';
+const hq = { ...ans, headquarters: 'Birmingham, AL', headquarters_quote: 'Headquartered in Birmingham, AL, with branches across the South.',
+  leaders: [...ans.leaders, { name: 'Mary Major', role: 'Branch Manager', location: 'Mobile, AL' }, { name: 'Tom Tall', role: 'Operations Manager', location: 'Dothan, AL' }, { name: 'Mary Major', role: 'Branch Manager', location: '' }] };
+const h2 = W.check(hq, page2).read;
+eq([h2.headquarters, h2.headquarters_quote], ['Birmingham, AL', 'Headquartered in Birmingham, AL, with branches across the South.'], 'a headquarters stated as such is kept with its quote');
+eq(h2.leaders.slice(2), [{ name: 'Mary Major', role: 'Branch Manager', location: 'Mobile, AL' }, { name: 'Tom Tall', role: 'Operations Manager' }], 'a manager kept with the office the page gives, an office not on the page dropped, a name once');
+eq(W.check({ ...hq, headquarters: 'Mobile, AL', headquarters_quote: 'Offices in Birmingham, AL and Mobile, AL.' }, page2).read.headquarters, null, 'an office not called the head office is not the headquarters');
+eq(W.check({ ...hq, headquarters: 'Mobile, AL' }, page2).read.headquarters, null, 'the place must stand in its own quote');
+eq(W.check({ ...hq, headquarters_quote: 'Headquartered in Atlanta, GA.', headquarters: 'Atlanta, GA' }, page2).read.headquarters, null, 'a headquarters not on the pages is dropped');
+eq(W.check(ans, page).read.headquarters, null, 'no headquarters asked, none kept');
+ok(W.SCHEMA.required.includes('headquarters') && W.SCHEMA.properties.leaders.items.required.includes('location'), 'the model is asked for both');
 ok(!W.SCHEMA.required.some((k) => /email|phone|address/.test(k)), 'the model is never asked for contact details');
 
 // ---- the loader over a made-up web

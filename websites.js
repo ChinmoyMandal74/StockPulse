@@ -238,7 +238,7 @@ function verify(text, co) {
 const S = (d) => ({ type: 'string', description: d });
 const ARR = (d, items) => ({ type: 'array', description: d, items });
 const SCHEMA = { type: 'object', additionalProperties: false,
-  required: ['is_company_site', 'what_they_do', 'founded_year', 'founded_quote', 'employees_quote', 'services', 'markets', 'locations', 'leaders', 'clients', 'history', 'open_jobs', 'hiring_quote'],
+  required: ['is_company_site', 'what_they_do', 'founded_year', 'founded_quote', 'employees_quote', 'headquarters', 'headquarters_quote', 'services', 'markets', 'locations', 'leaders', 'clients', 'history', 'open_jobs', 'hiring_quote'],
   properties: {
     is_company_site: { type: 'boolean', description: 'True if these pages are the named company\'s own website (not a directory, a parked domain, or another business of a similar name).' },
     what_they_do: S('One or two sentences copied word for word from the pages that best say what the company does, at most 300 characters. Empty string if none.'),
@@ -248,8 +248,16 @@ const SCHEMA = { type: 'object', additionalProperties: false,
     services: ARR('The services or products the company offers, each a short phrase copied exactly from the pages (at most 60 characters), at most 12.', S('A phrase as printed')),
     markets: ARR('Industries, sectors or kinds of customer it serves, each copied exactly as printed (at most 60 characters), at most 10.', S('A phrase as printed')),
     locations: ARR('Each office, branch or facility location named, as printed (e.g. "Newport Beach, CA"), at most 30.', S('A place as printed')),
-    leaders: ARR('The company\'s owners, executives or partners named on the pages, at most 20.', { type: 'object', additionalProperties: false, required: ['name', 'role'],
-      properties: { name: S('The person\'s name as printed'), role: S('Their title as printed, or empty string') } }),
+    // HEADQUARTERS AND KEY PEOPLE (2026-11-11, the owner: "also capture head
+    // quarter and key employees details"). The headquarters only where the
+    // pages call a place that (headquarters, head office, main office, based
+    // in), the place inside its own quote; key people widened from the top
+    // team to the managers a buyer would meet, each with their own office
+    // where the page gives one. The key stays `leaders`.
+    headquarters: S('The city and state (or country) the pages name as the company\'s headquarters, head office, main office or home base, as printed (e.g. "Huntington, WV"). Empty string if the pages do not say which place that is.'),
+    headquarters_quote: S('The words on the pages stating where the headquarters is, copied exactly, at most 200 characters. Empty string if none.'),
+    leaders: ARR('The company\'s key people named on the pages: owners, executives, directors, partners, and managers with a stated role (branch, regional, plant, sales, operations or department heads), at most 40.', { type: 'object', additionalProperties: false, required: ['name', 'role', 'location'],
+      properties: { name: S('The person\'s name as printed'), role: S('Their title as printed, or empty string'), location: S('The office, branch or city the page ties them to, as printed, or empty string') } }),
     clients: ARR('Customers or clients the pages name, as printed, at most 15.', S('A name as printed')),
     history: ARR('Dated events the pages state (founded, acquired, merged, opened, renamed), at most 10.', { type: 'object', additionalProperties: false, required: ['year', 'quote'],
       properties: { year: S('Four-digit year'), quote: S('The words stating it, copied exactly, at most 200 characters') } }),
@@ -275,7 +283,7 @@ function pagesText(pages) {
 }
 
 function request(co, pages, model) {
-  return { model: model || MODEL, max_tokens: 3000, system: SYSTEM,
+  return { model: model || MODEL, max_tokens: 4000, system: SYSTEM,
     output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content: `<company>${co.name}${co.dba ? ' (trading as ' + co.dba + ')' : ''}, ${[co.city, co.state].filter(Boolean).join(', ')}</company>\n<pages>\n${pagesText(pages)}</pages>` }] };
 }
@@ -306,11 +314,22 @@ function check(ans, text) {
   const founded = year(A.founded_year, foundedQuote);
   if (String(A.founded_year || '').trim() && founded == null) problems.push(`founded_year "${A.founded_year}" is not in its quote`);
   const leaders = [];
-  for (const l of (Array.isArray(A.leaders) ? A.leaders : []).slice(0, 20)) {
+  for (const l of (Array.isArray(A.leaders) ? A.leaders : []).slice(0, 40)) {
     const name = on('leader', l && l.name, 80);
-    if (!name || words(name).length < 2) continue;
-    leaders.push({ name, role: on('role', l.role, 120) });
+    if (!name || words(name).length < 2 || leaders.some((x) => x.name === name)) continue;
+    const p = { name, role: on('role', l.role, 120) };
+    const where = on('leader location', l.location, 80);
+    if (where) p.location = where;
+    leaders.push(p);
   }
+  // The headquarters must sit inside the quote that states it, and the quote
+  // must say head office in some form, or neither is kept.
+  const hqQuote = on('headquarters_quote', A.headquarters_quote, 240);
+  const hqRaw = on('headquarters', A.headquarters, 80);
+  const HQ_WORDS = /head ?quarter|\bhq\b|head office|main office|corporate office|home office|based in|home base/i;
+  let headquarters = null;
+  if (hqRaw && hqQuote && loose(hqQuote).includes(loose(hqRaw)) && HQ_WORDS.test(hqQuote)) headquarters = hqRaw;
+  else if (hqRaw) problems.push(`headquarters "${hqRaw.slice(0, 60)}" is not stated as the head office`);
   const history = [];
   for (const h of (Array.isArray(A.history) ? A.history : []).slice(0, 10)) {
     const q = on('history', h && h.quote, 240);
@@ -323,6 +342,7 @@ function check(ans, text) {
     what_they_do: on('what_they_do', A.what_they_do, 400),
     founded, founded_quote: founded ? foundedQuote : null,
     employees_quote: on('employees_quote', A.employees_quote, 200),
+    headquarters, headquarters_quote: headquarters ? hqQuote : null,
     services: list('service', A.services, 80, 12),
     markets: list('market', A.markets, 80, 10),
     locations: list('location', A.locations, 80, 30),

@@ -253,3 +253,27 @@ seconds), **$5 a night**. `pageScore` puts about, services, locations and team
 pages first, so the cut falls on news posts and minor pages. Expected about four
 times the pace, roughly a month for the list, about $3 a night of reading.
 Sites already kept at 40 pages keep them.
+
+## Headquarters and key people (2026-11-11)
+
+The owner: "Can I recommend that we also capture head quarter and key employees
+details". Two changes to the read (`SCHEMA` and `check` in `websites.js`), from
+the next run on:
+
+- **`headquarters`** and **`headquarters_quote`**: the place the pages name as
+  the headquarters, head office, main office, corporate office or home base,
+  kept only when the place stands inside its own quote, the quote is on the
+  pages, and the quote says head office in some form (`HQ_WORDS`). An office
+  merely listed among others is not taken as the headquarters.
+- **Key people**: `leaders` (the key is unchanged) widened from owners,
+  executives and partners to the managers a buyer would meet (branch,
+  regional, plant, sales, operations and department heads), up to 40 instead
+  of 20, each with a `location` when the page ties them to an office. A name is
+  kept once. Still a name and a title only: no email, telephone or address.
+- `max_tokens` 4,000 (was 3,000) for the longer list.
+- The fact sheet shows a Headquarters line with its quote and "Key people (n)"
+  with role and office.
+
+The sites read before this have neither; they can be read again from the
+pages already kept in `web-archive.db`, with no new requests to the sites
+(about $0.002 a site), when the owner wants it.
