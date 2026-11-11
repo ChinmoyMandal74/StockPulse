@@ -16,6 +16,9 @@ const ET = (s) => new Date(s + '-05:00').getTime();   // Eastern standard time i
 eq(CS.nightOf(ET('2026-11-11T01:05:00')), '2026-11-10', 'a run at 01:05 on the 11th is the night of the 10th');
 eq(CS.nightOf(ET('2026-11-11T06:40:00')), '2026-11-10', 'and so is its end at 06:40');
 eq(CS.nightOf(ET('2026-11-11T13:00:00')), '2026-11-11', 'an afternoon run is that day\'s');
+eq(CS.nightOf(ET('2026-11-11T09:05:00')), '2026-11-11', 'the day run\'s start at 09:05 is that day\'s');
+eq(CS.nightOf(ET('2026-11-11T08:55:00')), '2026-11-10', 'and 08:55 still the day before');
+eq(CS.nightOf(ET('2026-11-11T23:10:00')), '2026-11-11', 'the night run after the day run is the same day');
 
 // ---- the figures ----
 const db = new DatabaseSync(':memory:');

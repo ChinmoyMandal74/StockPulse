@@ -115,6 +115,16 @@ const JOBS = [
     log: '/schedule',
   },
   {
+    // THE DAYTIME RUN (2026-11-11, the owner: "Yes create a day crawl too"):
+    // the same list and work on four workers, done by about 20:30 so it never
+    // meets the night run's lock; the morning email counts both.
+    id: 'websites-day', name: 'Company websites, day run', task: 'TickrLab websites day', host: 'laptop', script: 'website-load.js', taskScript: 'website-day-task.ps1',
+    days: ALL_DAYS, times: ['09:00'], minutes: 690,
+    spends: { kind: 'anthropic', text: 'Claude Haiku, about $0.003 a company, capped at $2 a run' },
+    what: 'The daytime run of the website crawl: the same nationwide list as the night run, four at a time so the laptop stays usable, robots.txt obeyed, up to 20 useful pages a confirmed site kept in web-archive.db. Runs 09:00 to about 20:30 (690 minutes) and carries on where the last run stopped. No email of its own: the morning email after the night run counts the whole day.',
+    log: '/schedule',
+  },
+  {
     // NEW STOCKS FINISHED BY THEMSELVES (2026-11-04, the owner: "This should
     // all be one one click of a button somehow"). On the laptop because the
     // local copy and the release text archive are.

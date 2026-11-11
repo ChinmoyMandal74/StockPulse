@@ -310,3 +310,8 @@ lock, so it cannot run beside the nightly crawl. First run: the morning of
 
 These are local, in `formd.db`; if backlog 62 brings them to the site, they
 stay admin only.
+
+## A day run too (2026-11-11)
+The owner: "Yes create a day crawl too". A second laptop task, **TickrLab websites day** (`website-day-task.ps1`, `schedule.js` id `websites-day`), runs the same command as the night run on **four workers** (so the laptop stays usable), **09:00 for 690 minutes** (to about 20:30), **$2 a run**, 20 pages a site, 12 GB cap. It finishes well before 23:00 because the two runs share `website-load.lock` and the second to start would refuse; it is registered without `-StartWhenAvailable` so a late wake never starts it into the evening. It sends no email of its own.
+
+**A crawl day now runs 09:00 to 09:00** (`crawlstats.nightOf`, was noon to noon): the day run and the night after it are one day, named by the date they start, so the morning email after the night run counts both. The email and the Crawl page say "the last day", "companies a day" and "days to go". `crawlstats-test.js` holds the 09:00 line (proven by putting it back at noon). The command lives in `websites-day.run.cmd` (gitignored like the others). Register with `powershell -ExecutionPolicy Bypass -File .\website-day-task.ps1`; until then `/schedule` shows it as missing.

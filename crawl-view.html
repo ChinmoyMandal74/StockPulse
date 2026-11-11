@@ -58,7 +58,7 @@
   <div class="cr-box cr-progress" id="cr-progress"><div class="cr-line">Reading…</div></div>
   <div class="cr-tiles" id="cr-tiles"></div>
   <div class="cr-box cr-sec">
-    <h2>Night by night</h2>
+    <h2>Day by day</h2>
     <div class="cr-tablebox"><table class="cr-table"><thead><tr>
       <th>Night of</th><th>Ran</th><th class="cr-n">Tried</th><th class="cr-n">Confirmed</th><th class="cr-n">Name only</th><th class="cr-n">None</th><th class="cr-n">Kept whole</th><th class="cr-n">Pages</th><th class="cr-n">Text</th><th class="cr-n">Reading</th><th class="cr-n">Requests</th>
     </tr></thead><tbody id="cr-nights"></tbody></table></div>
@@ -69,7 +69,7 @@
       <th>Company</th><th>Place</th><th class="cr-n">Staff</th><th>Result</th><th class="cr-n">Kept</th><th>When</th>
     </tr></thead><tbody id="cr-recent"></tbody></table></div>
   </div>
-  <p class="cr-note">The list: every employer with its own retirement plan, 100 or more staff, filing 2023 or later. The nightly task (TickrLab websites, 01:00) tries four at a time with robots.txt obeyed, reads each confirmed site and keeps up to 40 pages of it, stopping after 345 minutes, $2 of reading or 12 GB. A night is named by the evening it starts. Search what is kept: <code>node web-search.js "phrase"</code>. Refreshes every minute. Local archive, this machine only.</p>
+  <p class="cr-note">The list: every employer with its own retirement plan, 100 or more staff, filing 2023 or later. Two tasks: the day run (TickrLab websites day, 09:00 to about 20:30, four at a time, $2) and the night run (TickrLab websites, 23:00 to about 06:45, twelve at a time, $5), robots.txt obeyed, each confirmed site read and up to 20 of its pages kept, 12 GB at most. A day runs 09:00 to 09:00 and holds both runs. Search what is kept: <code>node web-search.js "phrase"</code>. Refreshes every minute. Local archive, this machine only.</p>
 </div>
 
 <script>
@@ -94,7 +94,7 @@ async function load() {
   const lr = d.lastRun;
   $('cr-progress').innerHTML = '<div class="cr-big">' + num(d.triedInList) + ' <span>of ' + num(d.target) + ' companies tried (' + pct.toFixed(pct < 1 ? 2 : 1) + '%)</span></div>'
     + '<div class="cr-bar"><i style="width:' + Math.min(100, pct).toFixed(2) + '%"></i></div>'
-    + '<div class="cr-line">' + (d.pace ? 'Recent pace ' + num(d.pace) + ' companies a night: about ' + num(d.nightsLeft) + ' nights to go, done around ' + esc(day(d.finish)) + '.' : 'No pace yet: it shows once nightly runs have worked.') + '</div>'
+    + '<div class="cr-line">' + (d.pace ? 'Recent pace ' + num(d.pace) + ' companies a day: about ' + num(d.nightsLeft) + ' days to go, done around ' + esc(day(d.finish)) + '.' : 'No pace yet: it shows once nightly runs have worked.') + '</div>'
     + (disk != null ? '<div class="cr-line">Page archive ' + size(d.archiveBytes) + ' of the 12 GB limit</div><div class="cr-bar cr-disk"><i style="width:' + Math.min(100, disk).toFixed(2) + '%"></i></div>' : '')
     + (lr ? '<div class="cr-line"><b style="color:var(--strong);font-weight:500">Last run:</b> ' + esc(lr.done) + (lr.stop ? '<br><span class="' + (/minutes up/.test(lr.stop) ? '' : 'cr-warn') + '">' + esc(lr.stop) + '</span>' : '') + '</div>' : '');
   $('cr-tiles').innerHTML = [[num(d.confirmed), 'sites confirmed (' + (d.tried ? Math.round(d.confirmed / d.tried * 100) : 0) + '% of tried)'], [num(d.kept), 'sites kept whole'], [num(d.pages), 'pages kept'],

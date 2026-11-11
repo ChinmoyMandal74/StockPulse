@@ -21583,15 +21583,15 @@ function crawlReportEmail(r) {
   const look = [];
   if (r.error) look.push('The crawl figures could not be counted: ' + r.error);
   if (n && t) {
-    if (!n.tried) look.push('Nothing was tried last night. The laptop may have been asleep or off, or the task is not registered (website-task.ps1).');
+    if (!n.tried) look.push('Nothing was tried in the last day. The laptop may have been asleep or off, or the tasks are not registered (website-task.ps1, website-day-task.ps1).');
     if (r.run && r.run.stop && !/minutes up/.test(r.run.stop)) look.push('The run ended early: ' + r.run.stop);
     if (n.tried >= 50 && n.confirmed / n.tried < 0.15) look.push(`Only ${Math.round(n.confirmed / n.tried * 100)}% of sites were confirmed (about 30% is usual).`);
     if (t.archiveBytes != null && t.archiveBytes >= 0.8 * t.capBytes) look.push(`The page archive is at ${gb(t.archiveBytes)} of its ${gb(t.capBytes)} limit.`);
   }
   const subject = r.error ? 'Website crawl: could not be counted'
-    : `Website crawl: ${fmtN(n.tried)} companies last night, ${fmtN(t.tried)} of ${fmtN(t.target)} done`;
+    : `Website crawl: ${fmtN(n.tried)} companies in the last day, ${fmtN(t.tried)} of ${fmtN(t.target)} done`;
   const intro = r.error ? 'The morning count of the website crawl could not be made.'
-    : `Last night the crawl tried ${fmtN(n.tried)} companies, confirmed ${fmtN(n.confirmed)} websites and kept ${fmtN(n.pages)} pages. ${(t.tried / Math.max(1, t.target) * 100).toFixed(2)}% of the list is done.`;
+    : `In the last day (the day run and the night run) the crawl tried ${fmtN(n.tried)} companies, confirmed ${fmtN(n.confirmed)} websites and kept ${fmtN(n.pages)} pages. ${(t.tried / Math.max(1, t.target) * 100).toFixed(2)}% of the list is done.`;
   const th = (x, right) => `<th${st(`padding:6px 8px;font-size:10.5px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:${MC.faint};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</th>`;
   const td = (x, right) => `<td${st(`padding:7px 8px;font-size:13.5px;color:${MC.body};text-align:${right ? 'right' : 'left'};border-bottom:1px solid ${MC.line}`)}>${x}</td>`;
   const table = (rows) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"${st('border-collapse:collapse;margin:6px 0 18px')}><tr>${th('')}${th('', true)}</tr>${rows.map(([k, v]) => `<tr>${td(mailEsc(k))}${td(mailEsc(v), true)}</tr>`).join('')}</table>`;
@@ -21617,18 +21617,18 @@ function crawlReportEmail(r) {
       ['Earlier versions kept', fmtN(t.earlier)],
       ['Page archive', t.archiveBytes != null ? gb(t.archiveBytes) + ' of ' + gb(t.capBytes) : '—'],
       ['Spent on reading', '$' + t.usd.toFixed(2)],
-      ['Pace', t.pace ? fmtN(t.pace) + ' companies a night' : '—'],
-      ['Done at that pace', t.finish ? 'around ' + dayLabel(t.finish) + ', ' + t.finish.slice(0, 4) + ' (' + fmtN(t.nightsLeft) + ' nights)' : '—'],
+      ['Pace', t.pace ? fmtN(t.pace) + ' companies a day' : '—'],
+      ['Done at that pace', t.finish ? 'around ' + dayLabel(t.finish) + ', ' + t.finish.slice(0, 4) + ' (' + fmtN(t.nightsLeft) + ' days)' : '—'],
     ];
-    body += h2('Last night') + table(rowsNight)
+    body += h2('The last day') + table(rowsNight)
       + (r.run && r.run.done ? `<p${st(`margin:-8px 0 12px;font-size:12.5px;color:${MC.mute}`)}>${mailEsc(r.run.stop ? r.run.stop + ' ' : '')}${mailEsc(r.run.done)}</p>` : '')
       + h2('The whole list') + table(rowsAll)
       + `<p${st(`margin:4px 0 0;font-size:12.5px;color:${MC.mute}`)}>The list is every employer with its own retirement plan, 100 or more staff, filing 2023 or later. Progress and the companies themselves are on the laptop's Crawl page (localhost:4100/crawl); the archive is on ${mailEsc(r.host || 'the laptop')} only.</p>`;
-    lines.push('Last night:', ...rowsNight.map(([k, v]) => '  ' + k + ': ' + v), '');
+    lines.push('The last day:', ...rowsNight.map(([k, v]) => '  ' + k + ': ' + v), '');
     if (r.run && r.run.done) lines.push('  ' + (r.run.stop ? r.run.stop + ' ' : '') + r.run.done, '');
     lines.push('The whole list:', ...rowsAll.map(([k, v]) => '  ' + k + ': ' + v));
   }
-  const heading = 'Website crawl, night of ' + (n && n.night ? dayLabel(n.night) : 'last night');
+  const heading = 'Website crawl, ' + (n && n.night ? dayLabel(n.night) + ' and the night after' : 'the last day');
   const note = 'Sent to the site’s operator each morning by the laptop (crawl-report.js), after the nightly websites task.';
   return { subject, html: emailShell({ heading, intro, body, note }), text: textShell({ heading, intro, lines, note }) };
 }

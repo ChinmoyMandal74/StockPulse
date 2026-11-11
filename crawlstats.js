@@ -7,10 +7,13 @@
 
 const HOUR = 3600e3;
 const DAY = 24 * HOUR;
-// A night is named by the evening it starts: a run from 01:00 to 06:45 on the
-// 11th is the night of the 10th (Eastern, the laptop's clock).
+// A crawl day runs 09:00 to 09:00 (Eastern, the laptop's clock), named by the
+// date it starts: the day run (09:00 to about 20:30, website-day-task.ps1) and
+// the night run after it (23:00 to about 06:45) are one day, so the morning
+// email counts both. A run from 01:00 to 06:45 on the 11th is the 10th's.
+// (Until 2026-11-11, with the night run alone, the line was at noon.)
 const etDate = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(t));
-const nightOf = (t) => etDate(t - 12 * HOUR);
+const nightOf = (t) => etDate(t - 9 * HOUR);
 
 // The list the nightly task works through (website-task.ps1): employers with
 // their own plan, 100 or more staff, filing 2023 or later.
