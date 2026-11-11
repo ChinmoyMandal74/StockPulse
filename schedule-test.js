@@ -105,6 +105,8 @@ const good = () => ({ at: Date.now(), tasks: [
   { name: 'TickrLab onboard', state: 'Ready', triggers: [tr('Daily', '07:05', null, 'PT30M', 'PT15H')] },
   // Registered by the owner 2026-11-10 (website-task.ps1): every night at 23:00 (01:00 the first evening).
   { name: 'TickrLab websites', state: 'Ready', triggers: [tr('Daily', '23:00')] },
+  // Registered by the owner 2026-11-11 (website-day-task.ps1): every day at 09:00.
+  { name: 'TickrLab websites day', state: 'Ready', triggers: [tr('Daily', '09:00')] },
 ] });
 // The same jobs as if every one ran on the laptop, with every task enabled:
 // the matching rules, and the fly jobs' task scripts still the way back.
