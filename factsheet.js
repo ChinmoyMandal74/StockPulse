@@ -38,6 +38,13 @@
       add('Own figures (Form C)', (parts.join(' · ') || 'no figures filed') + ' <span style="color:var(--faint)">(' + (c.period ? 'year to ' + esc(c.period) : 'filed ' + esc(c.filed || '')) + ')</span>'
         + (f.crowdLink === false ? '' : ' <a href="/crowdfunding?q=' + encodeURIComponent(c.cik) + '&open=' + encodeURIComponent(c.cik) + '" target="_blank" rel="noopener">by year</a>'));
     }
+    if (f.rega) {
+      const r = f.rega, parts = [];
+      if (r.revenue != null) parts.push('revenue ' + money(r.revenue));
+      if (r.net_income != null) parts.push('net income ' + money(r.net_income));
+      if (r.employees_ft != null) parts.push(num(r.employees_ft) + ' full-time staff');
+      add('Own figures (Reg A)', (parts.join(' · ') || 'no figures filed') + ' <span style="color:var(--faint)">(offering statement filed ' + esc(r.filed || '') + (r.auditor ? ', audited by ' + esc(r.auditor) : '') + (r.offering_total ? '; seeking up to ' + money(r.offering_total) : '') + ')</span>');
+    }
     if (f.ppp) add('PPP loans, 2020–21', money(f.ppp.amount) + (f.ppp.jobs ? ' <span style="color:var(--faint)">· ' + num(f.ppp.jobs) + ' jobs reported</span>' : ''));
     if (f.sba) {
       const ys = f.sba.loans.map((x) => x.fy).filter(Boolean), a = Math.min(...ys), b = Math.max(...ys);

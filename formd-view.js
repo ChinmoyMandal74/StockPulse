@@ -250,6 +250,10 @@ function makeApi(db, opts = {}) {
     const crowd = issuer && hasTable('formc_companies')
       ? db.prepare('select cik, name, filed, form, period, employees, revenue, net_income, assets, filings, reports from formc_companies where cik = ?').get(issuer) || null
       : null;
+    // Regulation A (E4): its newest offering statement's figures, by the same CIK.
+    const rega = issuer && hasTable('rega_companies')
+      ? db.prepare('select cik, name, filed, form, employees_ft, employees_pt, revenue, net_income, assets, auditor, tier, offering_total, filings, reports from rega_companies where cik = ?').get(issuer) || null
+      : null;
     const last = yrs.length ? yrs[yrs.length - 1] : null;
     const y2019 = yrs.find((y) => y.year === 2019);
     const code = (yrs.slice().reverse().find((y) => y.business_code) || {}).business_code || (ppp.find((x) => x.naics) || {}).naics || null;
@@ -264,7 +268,7 @@ function makeApi(db, opts = {}) {
       raised: raised && raised.n ? raised : null,
       ppp: ppp.length ? { loans: ppp, jobs: Math.max(...ppp.map((x) => x.jobs || 0)) || null, amount: ppp.reduce((a, x) => a + (x.amount || 0), 0), forgiven: ppp.reduce((a, x) => a + (x.forgiven || 0), 0) } : null,
       tickers, tracked: tickers.filter((t) => tracked.has(String(t).toUpperCase().replace(/\./g, '-'))),
-      fed, web, crowd,
+      fed, web, crowd, rega,
       sba: sba.length ? { loans: sba, amount: sba.reduce((a, x) => a + (x.amount || 0), 0), jobs: Math.max(...sba.map((x) => x.jobs || 0)) || null, chargedOff: sba.filter((x) => x.status === 'CHGOFF').length } : null,
     };
   }

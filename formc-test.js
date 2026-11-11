@@ -41,6 +41,32 @@ eq(FC.zipLinks(raPage).map((l) => l.quarter), ['2026Q2'], 'and Form C still only
   ok(A0.db.prepare("select 1 from sqlite_master where name = 'ra_submission'").get() && A0.db.prepare("select 1 from sqlite_master where name = 'ra_loads'").get(), 'Reg A tables under ra_');
   ok(!CArchive.open(A0.db).loaded().has('2026Q1'), 'a Reg A quarter is not a Form C quarter');
 }
+// ---- the Reg A summary (rega.js) ----
+{
+  const RG = require('./rega.js');
+  eq([RG.raDate('30-SEP-2026'), RG.raDate('18-NOV-25'), RG.raDate('2026-01-05'), RG.raDate('')], ['2026-09-30', '2025-11-18', '2026-01-05', null], 'Reg A dates, a two-digit year read as 20xx');
+  const A1 = Archive.open(':memory:');
+  const R1 = CArchive.open(A1.db, RA);
+  const tsv2 = (h, rows) => FC.parseTsv([h, ...rows].join('\n') + '\n');
+  R1.loadQuarter('2026Q3', 'u', {
+    REG_A_SUBMISSION: tsv2('ACCESSION_NUMBER\tSUBMISSIONTYPE\tISSUERCIK\tFILING_DATE\tFILE_NUMBER', ['A1\t1-A\t0001959002\t30-SEP-2026\t024-1', 'A2\t1-K\t0001959002\t15-OCT-2026\t024-1', 'A3\t1-A/A\t0001959002\t01-AUG-2026\t024-1']),
+    REG_A_EMPLOYEES_INFO: tsv2('ACCESSION_NUMBER\tISSUERNAME\tCIK\tSICCODE\tFULLTIMEEMPLOYEES\tPARTTIMEEMPLOYEES\tYEARINCORPORATION', ['A1\tQnetic Corp\t0001959002\t3690\t17\t0\t2022', 'A3\tQnetic Corp\t0001959002\t3690\t12\t1\t2022']),
+    REG_A_ISSUER_INFO: tsv2('ACCESSION_NUMBER\tSTREET1\tZIPCODE\tPHONENUMBER\tCITY\tSTATEORCOUNTRY\tTOTALASSETS\tTOTALREVENUES\tNETINCOME\tCASHEQUIVALENTS\tNAMEAUDITOR', ['A1\t1 Wall St\t10005\t212-555-0100\tNew York\tNY\t4322940.0\t0.0\t-3793103.0\t3790836.0\tAlice.CPA LLC', 'A3\t1 Wall St\t10005\t212-555-0100\tNew York\tNY\t3000000.0\t0.0\t-2000000.0\t2900000.0\tAlice.CPA LLC']),
+    REG_A_SUMMARY_INFO: tsv2('ACCESSION_NUMBER\tINDICATETIER1TIER2OFFERING\tFINANCIALSTATEMENTAUDITSTATUS\tTOTALAGGREGATEOFFERING\tPRICEPERSECURITY', ['A1\tTier2\tAudited\t43050000.0\t4.15']),
+    REG_A_SUMMARY_INFO_KZ: tsv2('ACCESSION_NUMBER\tSINFO_ID\tOFFERINGSECURITIESSOLD\tISSUERNETPROCEEDS', ['A2\t1\t100\t400.0', 'A2\t2\t50\t200.0']),
+  }, 1);
+  RG.summarise(A1.db, { commit: true }, { log: () => {} });
+  const a1 = A1.db.prepare("select * from rega where accn = 'A1'").get();
+  eq([a1.form, a1.filed, a1.cik, a1.name, a1.city, a1.employees_ft, a1.assets, a1.revenue, a1.net_income, a1.tier, a1.audited, a1.offering_total],
+    ['1-A', '2026-09-30', '1959002', 'Qnetic Corp', 'New York', 17, 4322940, 0, -3793103, 'Tier2', 1, 43050000], 'a 1-A: the company, its figures as filed (a 0 stays 0, a loss negative), the offering');
+  const a2 = A1.db.prepare("select * from rega where accn = 'A2'").get();
+  eq([a2.form, a2.assets, a2.sold_securities, a2.net_proceeds], ['1-K', null, 150, 600], 'a 1-K: no figures, what it sold across its offerings summed');
+  ok(!A1.db.prepare('pragma table_info(rega)').all().some((c) => /street|zip|phone/i.test(c.name)) && !A1.db.prepare('pragma table_info(rega_companies)').all().some((c) => /street|zip|phone/i.test(c.name)), 'no street, zip or telephone in the summaries');
+  const co = A1.db.prepare("select * from rega_companies where cik = '1959002'").get();
+  eq([co.accn, co.employees_ft, co.filings, co.offerings, co.reports, co.first_filed, co.last_filed], ['A1', 17, 3, 1, 1, '2026-08-01', '2026-10-15'], 'the company: its newest filing with figures (not the newer 1-K), and its counts');
+  RG.summarise(A1.db, { commit: true }, { log: () => {} });
+  eq(A1.db.prepare('select count(*) n from rega').get().n, 3, 'a rebuild refreshes, never doubles');
+}
 eq(FC.tableOf('2026q2_cf/FORM_C_DISCLOSURE.tsv'), 'DISCLOSURE', 'table name, prefix dropped');
 eq(FC.tableOf('FORM_C_ISSUER_INFORMATION.tsv'), 'ISSUER_INFORMATION', 'table name with underscores');
 eq(FC.tableOf('readme.htm'), null, 'not a table');

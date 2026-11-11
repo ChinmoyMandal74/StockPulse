@@ -345,6 +345,17 @@ eq(CF.where(CF.filters(sp('q=0001639406'))).params, ['1639406'], 'digits search 
   ok(/Own figures \(Form C\)/.test(require('./factsheet.js').html(FKC)) && /by year<\/a>/.test(require('./factsheet.js').html(FKC)), 'the card draws them, with a link to the year by year');
   ok(!/by year<\/a>/.test(require('./factsheet.js').html({ ...FKC, crowdLink: false })), 'no link back on the Crowdfunding page itself');
   eq(api3.employer('010750002').facts.crowd, null, 'no Form C, no line');
+  // Reg A (E4) on the same fact sheet, by CIK.
+  db.exec(`create table if not exists rega_companies (cik text primary key, name text, city text, state text, sic text, industry_group text, year_inc real,
+      accn text, filed text, form text, employees_ft real, employees_pt real, cash real, assets real, liabilities real, equity real, revenue real,
+      costs real, net_income real, auditor text, tier text, offering_total real, first_filed text, last_filed text, filings integer, offerings integer, reports integer);
+    insert into rega_companies (cik, name, filed, form, employees_ft, revenue, net_income, assets, auditor, tier, offering_total, filings, reports)
+      values ('1', 'Kavia AI, Inc.', '2026-06-01', '1-A', 14, 900000, -250000, 1200000, 'Alice.CPA LLC', 'Tier2', 20000000, 2, 0)`);
+  const api4 = V.makeApi(db, { naics: NAICS_T });
+  const FR = api4.filing('0000000001-26-000002').facts;
+  eq([FR.rega && FR.rega.revenue, FR.rega && FR.rega.employees_ft], [900000, 14], 'the fact sheet carries the Reg A figures by CIK');
+  ok(/Own figures \(Reg A\)/.test(require('./factsheet.js').html(FR)) && /audited by Alice/.test(require('./factsheet.js').html(FR)), 'and draws them with the auditor');
+  eq(api4.employer('010750002').facts.rega, null, 'no Reg A, no line');
   const call3 = (url) => { const out = { status: 0 }; V.handler(api3)({ method: 'GET', url, headers: { authorization: 'Basic ' + Buffer.from('a:pw-test').toString('base64') } }, { writeHead(s) { out.status = s; }, end() {} }); return out.status; };
   eq([call3('/api/crowd'), call3('/api/crowd-company?cik=1'), call3('/api/crowd-company?cik=abc'), call3('/crowdfunding')], [200, 200, 404, 200], 'the routes and the page');
 }
