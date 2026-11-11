@@ -3086,6 +3086,67 @@ twice; nothing scheduled, run by hand.
 with their addresses' city and state. Kept locally; showing any of it on
 a page is an owner decision and a `/privacy` line.
 
+## 62. Private company data on the site, admin only (Turso) — 2026-11-10
+
+*Area: Data · Status: Open · Note: step 1 (measure) done 2026-11-10, see below; steps 2 to 5 wait on the owner's move list and a Turso plan check*
+
+The owner, 2026-11-10: "Right now all private data is only for admin, I
+think only the deep crawl data should be kept locally nothing else". So:
+everything backlog 61 has built goes to Turso and the site, **admin only**,
+except the companies' website text (`web-archive.db`: the deep crawl, up to
+12 GB, other companies' own words), which stays on the laptop. The facts read
+from those sites (`web_sites`, `web_reads`: what a company does, founding,
+places, checked against the pages) move like everything else.
+
+How (agreed in principle, not yet built):
+
+1. **The laptop stays the working copy; Turso is a served copy.** The loaders
+   keep running locally (SEC care, `downloads/`, history); a nightly one-way
+   sync pushes new and changed rows. Vercel cannot run the loaders (300s,
+   SEC pacing, 16 GB of downloads) and nothing on the site writes this data.
+   It also ends the laptop being the only copy.
+2. **Move what the pages read, not every raw table.** The raw quarterly tables
+   (`fd_*`, `fc_*`, `ra_*`) and the request logs stay local unless a page
+   needs them; the summaries (`formd`, `formc`, `rega`, the employer tables,
+   loans, contracts, contacts, website facts) move. Decided from measured
+   sizes, not guesses.
+3. **Pages rebuilt for Turso's billing.** It bills rows read: the local
+   viewer's totals scan hundreds of thousands of rows a view. Totals are
+   worked out in the sync and stored; searches go through indexes; no
+   `count(*)`, `group by` or unindexed scans on the big tables (the rule the
+   price tables already follow; `query-plan-test.js`).
+4. **Cost first.** The first load writes tens of millions of rows; check the
+   Turso plan's write and storage allowance before moving anything.
+5. **Admin only, enforced in every route** (`requireAdmin`), page files 404 to
+   others (`ADMIN_ONLY_ASSET`), sources may be named (admin), and a `/privacy`
+   line in the same commit, because this data names people.
+
+Steps: (1) measure each table's size and rows, and what the pages actually
+read; (2) choose the move list with the owner; (3) check the Turso plan
+against the first-load writes and storage; (4) build the summary tables and
+the nightly sync; (5) move the admin pages one at a time, the fact sheet and
+search first.
+
+**Step 1, measured 2026-11-10** (`dbstat`, read only): 7.0 GB in 75 tables
+(`web-archive.db` only 39 MB so far; the deep crawl is what grows to 12 GB and
+stays local). The viewer's pages read 25 tables, **about 6.5 GB and 34 million
+rows moved as they are**: `ppp_loans` 6.25M rows 1.77 GB; `f5500_employers`
+12.3M 1.31 GB; `f5500_latest`, `f5500_names`, `f5500_plans` 4.1M 0.54 GB;
+`fd_persons` 3.0M 0.64 GB; `formd`, `fd_offering`, `fd_issuers`,
+`fd_signatures`, `fd_recipients`, `fd_profiles` 3.9M 1.18 GB; `sba_loans`
+1.8M 0.61 GB; `ct_*` 2.4M 0.39 GB; `fed_contracts` 0.2M 0.07 GB; the Form C,
+Reg A and website-fact summaries 60K rows, about 20 MB. Not needed on the
+site: the raw `fc_*`, `ra_*`, `fd_submissions` and request logs (about
+0.4 GB). Three savings that lose nothing a page shows: send only the loans
+the laptop has matched to a company (most of the 2.4 GB of PPP and SBA stays
+home); drop the street-address columns the pages never show (`fd_persons`,
+`fd_issuers`), so no address leaves the laptop; pack each employer's staff
+years into one row (12.3M rows to 1.6M). **Estimate with those: 3 to 4 GB,
+15 to 20 million rows** for the first load. Two more findings: Targets reads
+the website text for its keyword check, so on the site those hits are worked
+out locally and sent up; and every page's totals scan, so each needs storing
+ahead of time.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
