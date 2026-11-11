@@ -53,6 +53,7 @@ function options(argv) {
     commit: argv.includes('--commit'),
     read: !argv.includes('--no-read'),
     retry: argv.includes('--retry'),
+    reread: argv.includes('--reread'),   // the sites read before a change to the read, again from the pages kept
     stats: argv.includes('--stats'),
     max: Math.max(1, Number(arg('--max')) || 200),
     maxUsd: Math.max(0, Number(arg('--max-usd')) || 3),
@@ -85,6 +86,10 @@ function ensureSchema(db) {
       ein text primary key, domain text, model text, read text, problems text, in_tok integer, out_tok integer, usd real, at integer not null
     );
     create table if not exists web_requests (at integer not null, url text not null, status integer, bytes integer, ms integer);
+    create table if not exists web_reads_history (
+      ein text not null, domain text, model text, read text, problems text, in_tok integer, out_tok integer, usd real, at integer not null, replaced_at integer not null
+    );
+    create index if not exists idx_web_reads_history_ein on web_reads_history (ein);
   `);
 }
 
@@ -291,6 +296,61 @@ async function deepCrawl(site, get, maxPages) {
   return { pages, stopped: null, requests };
 }
 
+// THE RE-READ (2026-11-11, the owner: "Yes fill after crawl finishes"): every
+// site read before the headquarters, key people and the company's contact
+// details were asked for (its read has no `headquarters` key), read again by the
+// model from the pages already kept in web-archive.db: the home page and the
+// first page kept of each kind, as the first read chose them. No request to any
+// site. The earlier read is kept in web_reads_history, never overwritten.
+const REREAD_KINDS = ['about', 'contact', 'services', 'careers', 'team', 'news'];
+async function runReread(opts, deps) {
+  const log = deps.log || console.log;
+  const db = deps.db, adb = deps.archive.db;
+  const todo = db.prepare(`select r.ein, s.name, s.dba, s.city, s.state, r.domain from web_reads r join web_sites s on s.ein = r.ein
+    where r.read not like '%"headquarters"%' order by r.at`).all().slice(0, opts.max);
+  const pagesQ = adb.prepare('select url, kind, text from pages where ein = ? order by fetched_at, rowid');
+  log(`${todo.length} sites read before the new fields; reading again from the pages kept, capped at $${opts.maxUsd}`);
+  if (!opts.commit) { log('DRY RUN: nothing read. Add --commit.'); return { ok: true, todo: todo.length }; }
+  if (!deps.post) throw new Error('no ANTHROPIC_API_KEY');
+  const keepQ = db.prepare('insert into web_reads_history (ein, domain, model, read, problems, in_tok, out_tok, usd, at, replaced_at) select ein, domain, model, read, problems, in_tok, out_tok, usd, at, ? from web_reads where ein = ?');
+  const setQ = db.prepare('update web_reads set model = ?, read = ?, problems = ?, in_tok = ?, out_tok = ?, usd = ?, at = ? where ein = ?');
+  const sum = { read: 0, usd: 0, noPages: 0, failed: 0, hq: 0, address: 0, phone: 0, email: 0, people: 0 };
+  let next = 0, stop = null;
+  async function worker() {
+    while (!stop && next < todo.length) {
+      if (sum.usd >= opts.maxUsd) { stop = `reached the $${opts.maxUsd} cap`; break; }
+      const co = todo[next++];
+      const all = pagesQ.all(co.ein);
+      const home = all.find((p) => p.kind === 'home');
+      const pages = (home ? [home] : []).concat(REREAD_KINDS.map((k) => all.find((p) => p.kind === k)).filter(Boolean)).slice(0, W.MAX_PAGES + 1).filter((p) => p.text);
+      if (!pages.length) { sum.noPages++; continue; }
+      try {
+        const a = await ask(W.request(co, pages), deps);
+        sum.usd += a.usd;
+        const c = W.check(a.ans, W.pagesText(pages));
+        db.exec('begin');
+        try { keepQ.run(deps.now(), co.ein); setQ.run(W.MODEL, JSON.stringify(c.read), JSON.stringify(c.problems), a.in_tok, a.out_tok, a.usd, deps.now(), co.ein); db.exec('commit'); } catch (e) { try { db.exec('rollback'); } catch (_) { /* gone */ } throw e; }
+        sum.read++;
+        const r = c.read;
+        if (r.headquarters) sum.hq++;
+        if (r.hq_address) sum.address++;
+        if (r.main_phone) sum.phone++;
+        if (r.general_email) sum.email++;
+        sum.people += r.leaders.length;
+        if (sum.read % 50 === 0) log(`${sum.read} read again, $${sum.usd.toFixed(3)}`);
+      } catch (e) {
+        if (e.usd) sum.usd += e.usd;
+        sum.failed++;
+        log(`${co.name}: ${e.message}`);
+        if (e.stop) { stop = e.message; break; }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(opts.workers, 4)) }, worker));
+  log(`done: ${JSON.stringify({ ...sum, usd: Number(sum.usd.toFixed(4)) })}${stop ? ' · stopped: ' + stop : ''}`);
+  return { ok: !stop || /cap/.test(stop), ...sum, left: todo.length - next };
+}
+
 async function runDeep(opts, deps) {
   const log = deps.log || console.log;
   const db = deps.db;
@@ -332,6 +392,7 @@ async function run(opts, deps) {
     const list = String(deps.readFile(opts.eins)).split(/\s+/).map((e) => e.replace(/\D/g, '')).filter((e) => /^\d{9}$/.test(e));
     opts = { ...opts, einList: [...new Set(list)] };
   }
+  if (opts.reread) return runReread(opts, deps);
   if (opts.deep) return runDeep(opts, deps);
   if (opts.stats) {
     log(JSON.stringify(db.prepare('select verdict, count(*) n from web_sites group by verdict order by n desc').all()));

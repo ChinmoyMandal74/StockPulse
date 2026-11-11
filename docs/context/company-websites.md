@@ -299,5 +299,14 @@ the company level contact details". Three fields, each checked (`contact` in
 
 People are still a name, a title and an office: no email, telephone or address
 (a test checks the schema asks for none). The fact sheet shows a Contact line.
+**The re-read** (owner: "Yes fill after crawl finishes"): `website-load.js
+--reread --commit --max 5000 --max-usd 5 --workers 4` reads again every site whose
+read has no `headquarters` key, from the pages already kept in `web-archive.db`
+(the home page and the first page kept of each kind, as the first read chose
+them), with no request to any site. The earlier read goes to
+`web_reads_history` first, in the same transaction. It takes the loader's
+lock, so it cannot run beside the nightly crawl. First run: the morning of
+2026-11-11, after the crawl.
+
 These are local, in `formd.db`; if backlog 62 brings them to the site, they
 stay admin only.

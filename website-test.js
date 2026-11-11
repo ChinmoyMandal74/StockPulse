@@ -158,6 +158,20 @@ ok(!JSON.stringify(W.SCHEMA.properties.leaders).match(/email|phone|address/i), '
   eq(archive.db.prepare("select count(*) n from pages where ein = '111'").get().n, 3, 'the page text goes to the local archive');
   const again = await L.run({ commit: true, read: true, max: 10, maxUsd: 1, gapS: 2 }, deps);
   eq(again.companies, 0, 'a company tried is not tried again');
+
+  // ---- the re-read: a read from before the new fields, again from the pages kept
+  const oldRead = { ...rd }; delete oldRead.headquarters; delete oldRead.headquarters_quote; delete oldRead.hq_address; delete oldRead.main_phone; delete oldRead.general_email;
+  db.prepare("update web_reads set read = ?, usd = 0.001 where ein = '111'").run(JSON.stringify(oldRead));
+  const f0 = fetched.length, p0 = posts.length;
+  eq((await L.run({ commit: false, reread: true, max: 100, maxUsd: 1, workers: 2 }, deps)).todo, 1, 'a re-read dry run: the one old read');
+  eq(posts.length, p0, 'a dry run asks nothing');
+  const rr = await L.run({ commit: true, reread: true, max: 100, maxUsd: 1, workers: 2 }, deps);
+  eq([rr.read, rr.failed, fetched.length - f0, posts.length - p0], [1, 0, 0, 1], 'read again by the model, with no request to the site');
+  ok(posts[posts.length - 1].messages[0].content.includes('Jane Roe, President') && posts[posts.length - 1].messages[0].content.includes('acmepumps.com/about'), 'from the pages kept: the home, about and team pages');
+  ok('headquarters' in JSON.parse(db.prepare("select read from web_reads where ein = '111'").get().read), 'the read now has the new fields');
+  const hist = db.prepare("select read, usd from web_reads_history where ein = '111'").all();
+  eq([hist.length, hist[0] && hist[0].usd, hist[0] && !('headquarters' in JSON.parse(hist[0].read))], [1, 0.001, true], 'the earlier read is kept in the history, not overwritten');
+  eq((await L.run({ commit: true, reread: true, max: 100, maxUsd: 1, workers: 2 }, deps)).read, 0, 'a site read again is not read a third time');
   // --retry after a change to how sites are found: only "none found" again.
   // Ghost answers only at www (its robots.txt now allowing), Secret only over
   // plain HTTP.
