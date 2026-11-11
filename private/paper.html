@@ -129,14 +129,15 @@
       </span>
       <span class="divider"></span>
       <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+      <a class="btn" href="/compete">Competitions</a>
     </nav>
   </div>
 
   <main class="page">
     <header class="masthead">
-      <span class="eyebrow"><span class="pip"></span>Simulation</span>
-      <h1>Paper positions</h1>
-      <p class="lede">Practise with pretend money: $100,000 to start, or an amount you choose. Open a position in any
+      <span class="eyebrow"><span class="pip"></span><span id="eyebrowText">Simulation</span></span>
+      <h1 id="title">Paper positions</h1>
+      <p class="lede" id="lede">Practise with pretend money: $100,000 to start, or an amount you choose. Open a position in any
         stock the site tracks and close it when you choose; a fill today is the latest price the site holds, which
         refreshes every half hour while the market is open. You can also date a position in the past, up to about four
         years back, at the price you paid on that day, to record positions you already hold. Only you can see this
@@ -215,13 +216,31 @@
     const when = (ms) => (ms ? new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
     const dayOf = (ms) => (ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
+    // A COMPETITION TEAM'S ACCOUNT (2026-11-11): /paper?team=<id> is the same page
+    // on the team's shared ledger, at the latest price only (no dated entries,
+    // no starting again), open while the competition runs.
+    const TEAM = (/^\d{1,9}$/.exec(new URLSearchParams(location.search).get('team') || '') || [null])[0];
+    const API = TEAM ? '/api/compete/team/' + TEAM : '/api/paper';
+    function teamMode(d) {
+      document.title = d.team.name + ' — ' + d.comp.name + ' — Tickr Lab';
+      $('eyebrowText').textContent = 'Competition';
+      $('title').textContent = d.team.name;
+      const span = fmtDay(d.comp.start) + ' to ' + fmtDay(d.comp.end);
+      $('lede').innerHTML = 'Your team’s shared paper account in <b>' + we(d.comp.name) + '</b> (' + we(span) + '), with '
+        + we(d.team.members.join(', ')) + '. Every member can open and close positions here, at the latest price the site holds. '
+        + (d.comp.status === 'running' ? 'Trading is open until the close on ' + we(fmtDay(d.comp.end)) + '.' : d.comp.status === 'upcoming' ? 'Trading opens on ' + we(fmtDay(d.comp.start)) + '.' : 'The competition has ended; this is the account as it stood at the close on its last day.')
+        + ' <a href="/compete">The standings</a>. A simulation with pretend money, not advice.';
+      for (const id of ['day', 'paid', 'dayHint', 'resetBtn']) $(id).style.display = 'none';
+      $('openBtn').disabled = !d.tradingOpen; $('sym').disabled = !d.tradingOpen; $('amt').disabled = !d.tradingOpen;
+      if (!d.tradingOpen) { $('openMsg').textContent = d.comp.status === 'upcoming' ? 'Trading opens on ' + fmtDay(d.comp.start) + '.' : 'The competition has ended.'; }
+    }
     let data = null;
     let closing = null;          // the symbol whose close row is open
     const bySym = {};
 
     async function load() {
       try {
-        const r = await fetch('/api/paper', { cache: 'no-store' });
+        const r = await fetch(API, { cache: 'no-store' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Could not read the account.');
         data = d;
@@ -230,6 +249,7 @@
         return;
       }
       for (const u of data.universe) bySym[u.s] = u;
+      if (TEAM) teamMode(data);
       if (!$('symList').children.length) {
         $('symList').innerHTML = data.universe.map((u) => `<option value="${we(u.s)}">${we(u.n)}</option>`).join('');
       }
@@ -279,12 +299,12 @@
             + `<td class="num mono ${cls(p.gainPct)}">${we(pct(p.gainPct))}</td>`
             + `<td class="hide-sm">${p.dated && !p.signal ? '<span class="na" title="Not recorded for past dates">—</span>' : we(p.signal || '—')}</td>`
             + `<td class="hide-sm">${we(dayOf(p.openedAt))}${p.splitAdjusted ? '<span class="pp-tag" title="Entered from before a split; shares and price are on today\u2019s basis">split-adjusted</span>' : ''}</td>`
-            + `<td><button class="btn" data-close="${we(p.symbol)}" type="button">Close</button></td></tr>`
+            + `<td><button class="btn" data-close="${we(p.symbol)}" type="button"${TEAM && !d.tradingOpen ? ' disabled' : ''}>Close</button></td></tr>`
             + (closing === p.symbol ? `<tr class="pp-close-row"><td colspan="11"><div class="pp-inline">`
               + `<span>Close how many of ${we(shares(p.shares))} shares?</span>`
               + `<input id="closeAmt" type="number" min="0" step="any" value="${we(shares(p.shares))}" aria-label="Shares to close" />`
-              + `<input id="closeDay" type="date" aria-label="Date: leave as today, or a past trading day" min="${we(d.limits ? d.limits.earliest : '')}" max="${we(d.limits ? d.limits.today : '')}" />`
-              + `<input id="closePaid" type="number" min="0" step="any" placeholder="Price received" aria-label="Price per share, for a past date" disabled />`
+              + (TEAM ? '' : `<input id="closeDay" type="date" aria-label="Date: leave as today, or a past trading day" min="${we(d.limits ? d.limits.earliest : '')}" max="${we(d.limits ? d.limits.today : '')}" />`
+              + `<input id="closePaid" type="number" min="0" step="any" placeholder="Price received" aria-label="Price per share, for a past date" disabled />`)
               + `<button class="btn" id="closeGo" type="button">Close at ${we(usd(p.price))}</button>`
               + `<button class="btn" id="closeCancel" type="button">Cancel</button>`
               + `<span class="pp-msg" id="closeMsg" role="status"></span></div></td></tr>` : '')).join('')
@@ -336,8 +356,8 @@
       const btn = $('closeGo'); btn.disabled = true;
       try {
         const day = $('closeDay') ? $('closeDay').value : '';
-        const dated = isPast(day) ? { date: day, price: $('closePaid').value } : {};
-        await post('/api/paper/close', Object.assign(all ? { symbol: p.symbol, all: true } : { symbol: p.symbol, shares: n }, dated));
+        const dated = !TEAM && isPast(day) ? { date: day, price: $('closePaid').value } : {};
+        await post(API + '/close', Object.assign(all ? { symbol: p.symbol, all: true } : { symbol: p.symbol, shares: n }, dated));
         closing = null;
         await load();
       } catch (e) {
@@ -373,8 +393,8 @@
       msg.textContent = 'Opening…'; msg.className = 'pp-msg';
       try {
         const day = $('day').value;
-        const dated = isPast(day) ? { date: day, price: $('paid').value } : {};
-        const d = await post('/api/paper/open', Object.assign($('mode').value === 'dollars' ? { symbol: sym, dollars: amt } : { symbol: sym, shares: amt }, dated));
+        const dated = !TEAM && isPast(day) ? { date: day, price: $('paid').value } : {};
+        const d = await post(API + '/open', Object.assign($('mode').value === 'dollars' ? { symbol: sym, dollars: amt } : { symbol: sym, shares: amt }, dated));
         msg.textContent = d.date
           ? `Opened ${shares(d.shares)} shares of ${d.symbol} dated ${fmtDay(d.date)} at ${usd(d.price)}`
             + (d.splitFactor && d.splitFactor !== 1 ? ` (entered as ${shares(d.enteredShares)} at ${usd(d.enteredPrice)}, before the stock split since; shown on today\u2019s basis).` : '.')

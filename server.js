@@ -56,6 +56,8 @@ const ListingTypes = require('./listingtypes.js');
 const Glance = require('./private/glance.js');
 // Paper positions: the ledger arithmetic (paper.js) behind /paper.
 const Paper = require('./paper.js');
+// Paper competitions: teams, the standings and the winner (compete.js), on the paper ledger.
+const Compete = require('./compete.js');
 // The next report date when the provider gives none (fetchProfile, earndate-load.js).
 const EarnDate = require('./earndate.js');
 const EarnCal = require('./earncal.js');
@@ -906,7 +908,7 @@ app.get('/login', (req, res) => {
 const GATED_PAGES = { '/chat.html': '/chat', '/analysis.html': '/analysis', '/visitors.html': '/visitors',
                       '/activity.html': '/activity', '/blog-visitors.html': '/blog-visitors', '/promo.html': '/promo',
                       '/admin.html': '/admin', '/refreshes.html': '/refreshes', '/database.html': '/database',
-                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/ideas', '/research.html': '/research', '/paper.html': '/paper',
+                      '/backlog.html': '/backlog', '/reelmaker.html': '/reelmaker', '/tour.html': '/tour', '/news.html': '/news', '/filings.html': '/filings', '/ipos.html': '/ipos', '/selloff.html': '/ideas', '/research.html': '/research', '/paper.html': '/paper', '/compete.html': '/compete',
                       '/backtest.html': '/backtest', '/quality.html': '/quality', '/sources.html': '/sources',
                       '/trend-backtest.html': '/trend-backtest',
                       '/adjusted.html': '/adjusted',
@@ -2281,6 +2283,13 @@ app.get('/paper', route(async (req, res) => {
   if (await isGuest(req)) return res.redirect('/');
   logAct(req, 'page', 'paper');
   res.sendFile(path.join(__dirname, 'private', 'paper.html'));
+}));
+// Members: paper competitions (2026-11-11), the teams' standings and accounts.
+app.get('/compete', route(async (req, res) => {
+  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (await isGuest(req)) return res.redirect('/');
+  logAct(req, 'page', 'compete');
+  res.sendFile(path.join(__dirname, 'private', 'compete.html'));
 }));
 app.get('/research', route(async (req, res) => {
   if (!(await isSignedIn(req))) return res.redirect('/login');
@@ -7968,18 +7977,40 @@ app.post('/api/paper/open', requireMember, route(async (req, res) => {
     logAct(req, 'paper', 'open:' + symbol + ':dated');
     return res.json(out);
   }
+  const out = await paperLiveOpen(key, body, account, trades, prices, symbol);
+  if (out.error) return res.status(out.status).json({ error: out.error });
+  logAct(req, 'paper', 'open:' + symbol);
+  res.json(out);
+}));
+// AT THE LATEST PRICE, for /paper and the competition accounts: sized against
+// the cash the ledger leaves, written only if no other trade landed since the
+// ledger was read (backlog 45f).
+async function paperLiveOpen(key, body, account, trades, prices, symbol) {
+  const now = prices[symbol];
+  if (!now) return { status: 400, error: symbol + ' is not one of the stocks the site tracks.' };
   const sum = Paper.summarise(account, trades, prices);
   const size = Paper.sizeOpen(body, now.price, sum.cash);
-  if (size.error) return res.status(400).json({ error: size.error });
-  // Only if no other trade landed since the ledger was read (backlog 45f).
+  if (size.error) return { status: 400, error: size.error };
   const lastId = trades.length ? trades[trades.length - 1].id : 0;
   if (!(await store.addPaperTrade(key, { ts: Date.now(), kind: 'open', symbol, shares: size.shares, price: now.price,
     priced_at: now.pricedAt, signal: now.action }, lastId))) {
-    return res.status(409).json({ error: 'Another trade went through at the same moment. Please try again.' });
+    return { status: 409, error: 'Another trade went through at the same moment. Please try again.' };
   }
-  logAct(req, 'paper', 'open:' + symbol);
-  res.json({ ok: true, symbol, shares: size.shares, price: now.price, pricedAt: now.pricedAt });
-}));
+  return { ok: true, symbol, shares: size.shares, price: now.price, pricedAt: now.pricedAt };
+}
+// A stock no longer tracked closes at its last traded price, and says so.
+async function paperLiveClose(key, body, account, trades, prices, symbol) {
+  const sum = Paper.summarise(account, trades, prices);
+  const pos = sum.positions.find((p) => p.symbol === symbol);
+  const size = Paper.sizeClose(body || {}, pos ? pos.shares : 0);
+  if (size.error) return { status: 400, error: size.error };
+  const lastId = trades.length ? trades[trades.length - 1].id : 0;
+  if (!(await store.addPaperTrade(key, { ts: Date.now(), kind: 'close', symbol, shares: size.shares, price: pos.price,
+    priced_at: pos.pricedAt, note: pos.tracked ? null : 'no longer tracked: closed at its last traded price' }, lastId))) {
+    return { status: 409, error: 'Another trade went through at the same moment. Please try again.' };
+  }
+  return { ok: true, symbol, shares: size.shares, price: pos.price };
+}
 
 app.post('/api/paper/close', requireMember, route(async (req, res) => {
   const key = await prefsKey(req);
@@ -7994,18 +8025,10 @@ app.post('/api/paper/close', requireMember, route(async (req, res) => {
     logAct(req, 'paper', 'close:' + symbol + ':dated');
     return res.json(out);
   }
-  const sum = Paper.summarise(account, trades, prices);
-  const pos = sum.positions.find((p) => p.symbol === symbol);
-  const size = Paper.sizeClose(req.body || {}, pos ? pos.shares : 0);
-  if (size.error) return res.status(400).json({ error: size.error });
-  // A stock no longer tracked closes at its last traded price, and says so.
-  const lastId = trades.length ? trades[trades.length - 1].id : 0;
-  if (!(await store.addPaperTrade(key, { ts: Date.now(), kind: 'close', symbol, shares: size.shares, price: pos.price,
-    priced_at: pos.pricedAt, note: pos.tracked ? null : 'no longer tracked: closed at its last traded price' }, lastId))) {
-    return res.status(409).json({ error: 'Another trade went through at the same moment. Please try again.' });
-  }
+  const out = await paperLiveClose(key, body, account, trades, prices, symbol);
+  if (out.error) return res.status(out.status).json({ error: out.error });
   logAct(req, 'paper', 'close:' + symbol);
-  res.json({ ok: true, symbol, shares: size.shares, price: pos.price });
+  res.json(out);
 }));
 
 app.post('/api/paper/reset', requireMember, route(async (req, res) => {
@@ -8015,6 +8038,249 @@ app.post('/api/paper/reset', requireMember, route(async (req, res) => {
   await store.resetPaper(await prefsKey(req), sc.cash);
   logAct(req, 'paper', 'reset');
   res.json({ ok: true });
+}));
+
+// ---- paper competitions (compete.js) -----------------------------------------
+//
+// THE OWNER (2026-11-11): "add a concept of paper position teams and
+// competition .. ranking .. winners", with the calls: rankings and a winner
+// for members' pretend accounts inside a competition only (never of stocks,
+// never buy or sell wording); the admin runs each competition; members enter
+// on their own or as a team; a team chooses whether others see its positions,
+// shown by default; no prizes. Members only, never guests.
+//
+// A team trades one shared paper ledger ('team:<id>') at the latest price,
+// from the first day to the last; no dated entries. Other members see a
+// team's name, its members' chosen names, its value and return, and its
+// positions if it shows them; never an email. The invite code is shown only
+// to the team's own members.
+const COMP_ID = /^\d{1,9}$/;
+// The final standings of an ended competition do not change, so they are
+// worked out once per instance (the teams' ledgers and the closes on the
+// last day); a member deleting their account changes the team count and so
+// the key.
+const compFinalHeld = new Map();
+
+// Each held stock's close on or before the last day, as a price map
+// summarise reads, and SPY's from the close before the first day to it.
+async function compEndPrices(c, ledgers) {
+  const syms = new Set(['SPY']);
+  for (const l of Object.values(ledgers)) for (const t of l.trades) syms.add(t.symbol);
+  const after = SecDaily.addDays(c.end_d, 1);
+  const [atEnd, atStart] = await store.closesBefore([after, c.start_d], [...syms]);
+  const prices = {};
+  for (const [s, x] of Object.entries(atEnd || {})) prices[s] = { price: x.close, pricedAt: Date.parse(x.d + 'T21:00:00Z'), name: null };
+  const spy0 = atStart && atStart.SPY ? atStart.SPY.close : null, spy1 = atEnd && atEnd.SPY ? atEnd.SPY.close : null;
+  return { prices, bench: spy0 > 0 && spy1 > 0 ? spy1 / spy0 - 1 : null };
+}
+
+// Every competition with its standings, for one viewer.
+async function compPayload(viewerKey) {
+  const today = Paper.nyDay(Date.now());
+  const comps = await store.listComps();
+  const { teams, members } = await store.compTeams(comps.map((c) => c.id));
+  const live = comps.filter((c) => Compete.status(c, today) !== 'ended');
+  const [ledgers, prices, starts] = await Promise.all([
+    store.readTeamLedgers(teams.filter((t) => live.some((c) => c.id === t.comp_id)).map((t) => t.id)),
+    paperPrices(),
+    store.closesBefore(live.map((c) => c.start_d), ['SPY']).catch(() => live.map(() => ({}))),
+  ]);
+  const out = [];
+  for (const c of comps) {
+    const st = Compete.status(c, today);
+    const tt = teams.filter((t) => t.comp_id === c.id);
+    const mm = members.filter((m) => m.comp_id === c.id);
+    const mine = mm.find((m) => m.user_key === viewerKey) || null;
+    let rows, bench = null;
+    if (st === 'ended') {
+      const key = c.id + '|' + tt.length + '|' + mm.length + '|' + c.end_d;
+      let held = compFinalHeld.get(c.id);
+      if (!held || held.key !== key) {
+        const led = await store.readTeamLedgers(tt.map((t) => t.id));
+        const end = await compEndPrices(c, led);
+        // Names from the live list where it has them.
+        for (const [s, p] of Object.entries(end.prices)) if (prices[s]) p.name = prices[s].name;
+        const sums = {};
+        for (const t of tt) { const l = led[Compete.teamKey(t.id)] || { account: null, trades: [] }; sums[t.id] = { summary: Paper.summarise(l.account || { start_cash: c.start_cash, started_at: 0 }, l.trades, end.prices), trades: l.trades.length }; }
+        held = { key, sums, bench: end.bench };
+        compFinalHeld.set(c.id, held);
+      }
+      bench = held.bench;
+      rows = Compete.standings(tt.map((t) => ({ team: t, members: mm.filter((m) => m.team_id === t.id), summary: held.sums[t.id].summary, trades: held.sums[t.id].trades })), mine && mine.team_id, true);
+    } else {
+      const i = live.indexOf(c);
+      const spy0 = starts[i] && starts[i].SPY ? starts[i].SPY.close : null, spyNow = prices.SPY ? prices.SPY.price : null;
+      bench = st === 'running' && spy0 > 0 && spyNow > 0 ? spyNow / spy0 - 1 : null;
+      rows = Compete.standings(tt.map((t) => {
+        const l = ledgers[Compete.teamKey(t.id)] || { account: null, trades: [] };
+        return { team: t, members: mm.filter((m) => m.team_id === t.id), summary: Paper.summarise(l.account || { start_cash: c.start_cash, started_at: 0 }, l.trades, prices), trades: l.trades.length };
+      }), mine && mine.team_id, false);
+    }
+    const myTeam = mine ? tt.find((t) => t.id === mine.team_id) : null;
+    out.push({ id: c.id, name: c.name, start: c.start_d, end: c.end_d, startCash: c.start_cash, status: st, bench, standings: rows,
+      teams: tt.length,
+      mine: myTeam ? { teamId: myTeam.id, team: myTeam.name, code: myTeam.code, captain: myTeam.captain === viewerKey, show: !!myTeam.show_positions,
+        me: mine.display_name, members: mm.filter((m) => m.team_id === myTeam.id).map((m) => m.display_name) } : null });
+  }
+  // Running first, then those to come (soonest first), then the ended (latest first).
+  const ord = { running: 0, upcoming: 1, ended: 2 };
+  out.sort((a, b) => ord[a.status] - ord[b.status] || (a.status === 'upcoming' ? (a.start < b.start ? -1 : 1) : (a.end > b.end ? -1 : 1)));
+  return { today, comps: out, maxTeam: Compete.MAX_TEAM };
+}
+
+app.get('/api/compete', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const key = await prefsKey(req);
+  const body = await compPayload(key);
+  const who = await currentUser(req).catch(() => null);
+  body.admin = await isAdmin(req);
+  // The name offered when entering: the first word of the account's name, never the email.
+  body.suggest = who && who.name ? String(who.name).trim().split(/\s+/)[0].slice(0, 24) : '';
+  res.json(body);
+}));
+
+// The admin sets one up, or changes its name and days (never once it has ended).
+app.post('/api/compete', requireAdmin, route(async (req, res) => {
+  const today = Paper.nyDay(Date.now());
+  const c = Compete.checkComp(req.body || {}, today);
+  if (c.error) return res.status(400).json({ error: c.error });
+  const id = await store.createComp(c);
+  logAct(req, 'compete', 'create:' + id);
+  res.json({ ok: true, id });
+}));
+app.post('/api/compete/:id/edit', requireAdmin, route(async (req, res) => {
+  if (!COMP_ID.test(req.params.id)) return res.status(400).json({ error: 'No such competition.' });
+  const today = Paper.nyDay(Date.now());
+  const was = await store.readComp(req.params.id);
+  if (!was) return res.status(404).json({ error: 'No such competition.' });
+  if (Compete.status(was, today) === 'ended') return res.status(400).json({ error: 'It has ended; its standings are final.' });
+  const c = Compete.checkComp(req.body || {}, today);
+  if (c.error) return res.status(400).json({ error: c.error });
+  // Once running, the first day stays: the accounts and the S&P comparison start there.
+  if (Compete.status(was, today) === 'running' && c.start_d !== was.start_d) return res.status(400).json({ error: 'It has started; the first day stays ' + was.start_d + '.' });
+  await store.updateComp(was.id, c);
+  logAct(req, 'compete', 'edit:' + was.id);
+  res.json({ ok: true });
+}));
+
+// Enter: on your own (a team of one, named as you are shown), a new team, or
+// a team's invite code. Until the last day; one team a competition.
+app.post('/api/compete/:id/enter', requireMember, route(async (req, res) => {
+  if (!COMP_ID.test(req.params.id)) return res.status(400).json({ error: 'No such competition.' });
+  const key = await prefsKey(req);
+  const today = Paper.nyDay(Date.now());
+  const c = await store.readComp(req.params.id);
+  if (!c) return res.status(404).json({ error: 'No such competition.' });
+  if (Compete.status(c, today) === 'ended') return res.status(400).json({ error: 'This competition has ended.' });
+  const b = req.body || {};
+  const shown = Compete.shownName(b.name);
+  if (shown.error) return res.status(400).json({ error: 'Your name: ' + shown.error });
+  const mine = (await store.myCompEntries(key)).find((e) => e.comp_id === c.id);
+  if (mine) return res.status(400).json({ error: 'You have already entered this competition.' });
+  if (b.how === 'code') {
+    const t = await store.readTeamByCode(Compete.normCode(b.code));
+    if (!t || t.comp_id !== c.id) return res.status(400).json({ error: 'That code does not match a team in this competition.' });
+    const r = await store.joinTeam(c.id, t.id, key, shown.name, Compete.MAX_TEAM);
+    if (r === 'full') return res.status(400).json({ error: 'That team is full (' + Compete.MAX_TEAM + ' members).' });
+    if (r === 'entered') return res.status(400).json({ error: 'You have already entered this competition.' });
+    logAct(req, 'compete', 'join:' + c.id);
+    return res.json({ ok: true, teamId: t.id });
+  }
+  const tn = b.how === 'team' ? Compete.teamName(b.team) : { name: shown.name };
+  if (tn.error) return res.status(400).json({ error: 'Team name: ' + tn.error });
+  const { teams } = await store.compTeams([c.id]);
+  if (teams.length >= Compete.MAX_TEAMS) return res.status(400).json({ error: 'This competition is full.' });
+  if (teams.some((t) => t.name.toLowerCase() === tn.name.toLowerCase())) return res.status(400).json({ error: 'A team in this competition already has that name. Choose another.' });
+  const code = Compete.codeFrom(crypto.randomBytes(8));
+  const id = await store.createTeam({ comp_id: c.id, name: tn.name, code, user_key: key, display_name: shown.name,
+    start_cash: c.start_cash, started_at: Date.parse(c.start_d + 'T12:00:00Z') });
+  if (!id) return res.status(409).json({ error: 'That name was taken a moment ago, or you have already entered. Please try again.' });
+  logAct(req, 'compete', 'enter:' + c.id);
+  res.json({ ok: true, teamId: id });
+}));
+
+// Leave, before the first day only (no trade can exist yet).
+app.post('/api/compete/:id/leave', requireMember, route(async (req, res) => {
+  if (!COMP_ID.test(req.params.id)) return res.status(400).json({ error: 'No such competition.' });
+  const key = await prefsKey(req);
+  const c = await store.readComp(req.params.id);
+  if (!c) return res.status(404).json({ error: 'No such competition.' });
+  if (Compete.status(c, Paper.nyDay(Date.now())) !== 'upcoming') return res.status(400).json({ error: 'It has started; entrants stay to the end.' });
+  const mine = (await store.myCompEntries(key)).find((e) => e.comp_id === c.id);
+  if (!mine) return res.status(400).json({ error: 'You have not entered this competition.' });
+  await store.leaveTeam(c.id, mine.team_id, key);
+  logAct(req, 'compete', 'leave:' + c.id);
+  res.json({ ok: true });
+}));
+
+// The team's own account: its members only.
+async function compTeamFor(req, res) {
+  if (!COMP_ID.test(req.params.tid)) { res.status(400).json({ error: 'No such team.' }); return null; }
+  const key = await prefsKey(req);
+  const t = await store.readTeam(req.params.tid);
+  const mine = t ? (await store.myCompEntries(key)).find((e) => e.team_id === t.id) : null;
+  if (!t || !mine) { res.status(403).json({ error: 'This is not your team.' }); return null; }
+  const c = await store.readComp(t.comp_id);
+  return { key, team: t, comp: c, me: mine, status: Compete.status(c, Paper.nyDay(Date.now())) };
+}
+
+// The captain chooses whether other members see the team's positions.
+app.post('/api/compete/team/:tid/show', requireMember, route(async (req, res) => {
+  const x = await compTeamFor(req, res); if (!x) return;
+  if (x.team.captain !== x.key) return res.status(403).json({ error: 'Only the team captain can change this.' });
+  await store.setTeamShow(x.team.id, !!(req.body && req.body.show));
+  res.json({ ok: true, show: !!(req.body && req.body.show) });
+}));
+
+app.get('/api/compete/team/:tid', requireMember, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const x = await compTeamFor(req, res); if (!x) return;
+  const tk = Compete.teamKey(x.team.id);
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(tk, x.comp.start_cash), paperPrices()]);
+  let sum;
+  if (x.status === 'ended') {
+    const end = await compEndPrices(x.comp, { [tk]: { trades } });
+    for (const [s, p] of Object.entries(end.prices)) if (prices[s]) p.name = prices[s].name;
+    sum = Paper.summarise(account, trades, end.prices);
+  } else sum = Paper.summarise(account, trades, prices);
+  let hist = [];
+  try { hist = (await paperHistory(account, trades)).filter((p) => p.d <= x.comp.end_d); } catch (e) { hist = []; }
+  const universe = Object.entries(prices).map(([s, p]) => ({ s, n: p.name || '' })).sort((a, b) => a.s.localeCompare(b.s));
+  const { members } = await store.compTeams([x.comp.id]);
+  res.json({ ...sum, history: hist, universe,
+    comp: { id: x.comp.id, name: x.comp.name, start: x.comp.start_d, end: x.comp.end_d, status: x.status },
+    team: { id: x.team.id, name: x.team.name, captain: x.team.captain === x.key, show: !!x.team.show_positions,
+      members: members.filter((m) => m.team_id === x.team.id).map((m) => m.display_name) },
+    tradingOpen: x.status === 'running' });
+}));
+
+app.post('/api/compete/team/:tid/open', requireMember, route(async (req, res) => {
+  const x = await compTeamFor(req, res); if (!x) return;
+  if (x.status !== 'running') return res.status(400).json({ error: x.status === 'upcoming' ? 'Trading opens on ' + x.comp.start_d + '.' : 'The competition has ended.' });
+  const symbol = String((req.body && req.body.symbol) || '').trim().toUpperCase();
+  if (!PAPER_SYM.test(symbol)) return res.status(400).json({ error: 'Choose a stock.' });
+  if (req.body && req.body.date && String(req.body.date) !== Paper.nyDay(Date.now())) return res.status(400).json({ error: 'In a competition every position is opened at the latest price.' });
+  const tk = Compete.teamKey(x.team.id);
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(tk, x.comp.start_cash), paperPrices()]);
+  if (trades.length >= PAPER_MAX_TRADES) return res.status(400).json({ error: 'This account has reached its limit of trades.' });
+  const out = await paperLiveOpen(tk, req.body || {}, account, trades, prices, symbol);
+  if (out.error) return res.status(out.status).json({ error: out.error });
+  logAct(req, 'compete', 'open:' + symbol);
+  res.json(out);
+}));
+
+app.post('/api/compete/team/:tid/close', requireMember, route(async (req, res) => {
+  const x = await compTeamFor(req, res); if (!x) return;
+  if (x.status !== 'running') return res.status(400).json({ error: x.status === 'upcoming' ? 'Trading opens on ' + x.comp.start_d + '.' : 'The competition has ended.' });
+  const symbol = String((req.body && req.body.symbol) || '').trim().toUpperCase();
+  if (!PAPER_SYM.test(symbol)) return res.status(400).json({ error: 'Choose a position.' });
+  if (req.body && req.body.date && String(req.body.date) !== Paper.nyDay(Date.now())) return res.status(400).json({ error: 'In a competition every position is closed at the latest price.' });
+  const tk = Compete.teamKey(x.team.id);
+  const [{ account, trades }, prices] = await Promise.all([store.readPaper(tk, x.comp.start_cash), paperPrices()]);
+  const out = await paperLiveClose(tk, req.body || {}, account, trades, prices, symbol);
+  if (out.error) return res.status(out.status).json({ error: out.error });
+  logAct(req, 'compete', 'close:' + symbol);
+  res.json(out);
 }));
 
 app.get('/api/my/portfolios', requireMember, route(async (req, res) => {

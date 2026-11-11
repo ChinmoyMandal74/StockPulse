@@ -1279,6 +1279,11 @@
            title="Paper positions — a pretend account to open and close positions in">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Paper positions
         </a>
+        <!-- Members: paper competitions, teams placed by return (2026-11-11). Hidden for guests with the research link. -->
+        <a class="btn" id="competeLink" href="/compete" target="_blank" rel="noopener"
+           title="Competitions — paper positions as a team competition, placed by return">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chart" /></svg>Competitions
+        </a>
         <!-- Members: companies whose shares fell, in three views (2026-11-03); in the ... menu until the owner moved it here the same day. Hidden for guests with the research link. -->
         <a class="btn" id="selloffLink" href="/ideas" target="_blank" rel="noopener"
            title="Ideas — the AI watchlist, strong results that fell, Bouncing off the lows, quality compounders on a pullback, dividend growers near their lows, insider buying clusters, and strong three years, quiet this year, with the screener's readings">
@@ -5986,7 +5991,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink', 'filingsLink', 'iposLink', 'selloffLink', 'trendingLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'competeLink', 'filingsLink', 'iposLink', 'selloffLink', 'trendingLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }

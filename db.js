@@ -640,6 +640,40 @@ const SCHEMA = [
      note      text
    )`,
   `create index if not exists idx_paper_trades_user on paper_trades (user_key, id)`,
+  // Paper competitions (2026-11-11, the owner: teams, a ranking and winners,
+  // for members' pretend accounts only; compete.js). The admin sets one up;
+  // members enter on their own or as a team, and each team trades ONE shared
+  // paper ledger, keyed 'team:<id>' in paper_accounts and paper_trades. Small
+  // tables: a few competitions, hundreds of teams at most.
+  `create table if not exists paper_comps (
+     id         integer primary key autoincrement,
+     name       text not null,
+     start_d    text not null,
+     end_d      text not null,
+     start_cash real not null,
+     created_at integer not null
+   )`,
+  `create table if not exists paper_teams (
+     id             integer primary key autoincrement,
+     comp_id        integer not null,
+     name           text not null,
+     code           text not null,
+     show_positions integer not null default 1,
+     captain        text not null,
+     created_at     integer not null
+   )`,
+  `create unique index if not exists idx_paper_teams_name on paper_teams (comp_id, name collate nocase)`,
+  `create unique index if not exists idx_paper_teams_code on paper_teams (code)`,
+  `create table if not exists paper_team_members (
+     comp_id      integer not null,
+     team_id      integer not null,
+     user_key     text not null,
+     display_name text not null,
+     joined_at    integer not null,
+     primary key (comp_id, user_key)
+   )`,
+  `create index if not exists idx_paper_team_members_team on paper_team_members (team_id)`,
+  `create index if not exists idx_paper_team_members_user on paper_team_members (user_key)`,
   // Each company's quarterly series for the group Lines cards (2026-10-20,
   // grouplines.js): trailing-year revenue, gross profit, operating income,
   // net income and free cash flow, market value and the quarter-end close,
@@ -7793,6 +7827,132 @@ async function listAllPaper() {
   return out;
 }
 
+// ---- paper competitions (compete.js) ----------------------------------------
+const compRow = (r) => ({ id: Number(r.id), name: r.name, start_d: r.start_d, end_d: r.end_d, start_cash: Number(r.start_cash), created_at: Number(r.created_at) });
+const teamRow = (r) => ({ id: Number(r.id), comp_id: Number(r.comp_id), name: r.name, code: r.code, show_positions: Number(r.show_positions) ? 1 : 0, captain: r.captain, created_at: Number(r.created_at) });
+async function listComps() {
+  await init();
+  const r = await db.execute('select id, name, start_d, end_d, start_cash, created_at from paper_comps order by start_d desc, id desc');
+  return r.rows.map(compRow);
+}
+async function readComp(id) {
+  await init();
+  const r = await db.execute({ sql: 'select id, name, start_d, end_d, start_cash, created_at from paper_comps where id = ?', args: [Number(id)] });
+  return r.rows[0] ? compRow(r.rows[0]) : null;
+}
+async function createComp(c) {
+  await init();
+  const r = await db.execute({ sql: 'insert into paper_comps (name, start_d, end_d, start_cash, created_at) values (?, ?, ?, ?, ?)',
+    args: [c.name, c.start_d, c.end_d, c.start_cash, Date.now()] });
+  return Number(r.lastInsertRowid);
+}
+// The name and the days; the starting amount only while no team has entered
+// (an account already holds it).
+async function updateComp(id, c) {
+  await init();
+  await db.batch([
+    { sql: 'update paper_comps set name = ?, start_d = ?, end_d = ? where id = ?', args: [c.name, c.start_d, c.end_d, Number(id)] },
+    { sql: 'update paper_comps set start_cash = ? where id = ? and not exists (select 1 from paper_teams where comp_id = ?)', args: [c.start_cash, Number(id), Number(id)] },
+  ], 'write');
+}
+// Every team of the given competitions and their members.
+async function compTeams(compIds) {
+  await init();
+  const ids = (compIds || []).map(Number).filter((x) => x > 0);
+  if (!ids.length) return { teams: [], members: [] };
+  const q = ids.map(() => '?').join(',');
+  const [t, m] = await Promise.all([
+    db.execute({ sql: 'select id, comp_id, name, code, show_positions, captain, created_at from paper_teams where comp_id in (' + q + ') order by id', args: ids }),
+    db.execute({ sql: 'select comp_id, team_id, user_key, display_name, joined_at from paper_team_members where comp_id in (' + q + ') order by joined_at', args: ids }),
+  ]);
+  return { teams: t.rows.map(teamRow),
+    members: m.rows.map((r) => ({ comp_id: Number(r.comp_id), team_id: Number(r.team_id), user_key: r.user_key, display_name: r.display_name, joined_at: Number(r.joined_at) })) };
+}
+async function readTeam(id) {
+  await init();
+  const r = await db.execute({ sql: 'select id, comp_id, name, code, show_positions, captain, created_at from paper_teams where id = ?', args: [Number(id)] });
+  return r.rows[0] ? teamRow(r.rows[0]) : null;
+}
+async function readTeamByCode(code) {
+  await init();
+  const r = await db.execute({ sql: 'select id, comp_id, name, code, show_positions, captain, created_at from paper_teams where code = ?', args: [String(code)] });
+  return r.rows[0] ? teamRow(r.rows[0]) : null;
+}
+// The ledgers of many teams in one indexed read: { 'team:<id>': { account, trades } }.
+async function readTeamLedgers(teamIds) {
+  await init();
+  const keys = (teamIds || []).map((x) => 'team:' + Number(x));
+  if (!keys.length) return {};
+  const q = keys.map(() => '?').join(',');
+  const [a, t] = await Promise.all([
+    db.execute({ sql: 'select user_key, start_cash, started_at from paper_accounts where user_key in (' + q + ')', args: keys }),
+    db.execute({ sql: 'select id, user_key, ts, kind, symbol, shares, price, priced_at, signal, note, d from paper_trades where user_key in (' + q + ') order by id', args: keys }),
+  ]);
+  const out = {};
+  for (const k of keys) out[k] = { account: null, trades: [] };
+  for (const r of a.rows) out[r.user_key].account = { start_cash: Number(r.start_cash), started_at: Number(r.started_at) };
+  for (const r of t.rows) out[r.user_key].trades.push({ id: Number(r.id), ts: Number(r.ts), kind: r.kind, symbol: r.symbol,
+    shares: Number(r.shares), price: Number(r.price), priced_at: r.priced_at == null ? null : Number(r.priced_at),
+    signal: r.signal || null, note: r.note || null, d: r.d || null });
+  return out;
+}
+// A new team with its first member (the captain) and its account, in one
+// batch. False when the name or the code is taken, or the member already
+// entered this competition (the unique indexes and the primary key refuse it).
+async function createTeam(t) {
+  await init();
+  const sel = '(select id from paper_teams where code = ?)';
+  try {
+    await db.batch([
+      { sql: 'insert into paper_teams (comp_id, name, code, show_positions, captain, created_at) values (?, ?, ?, 1, ?, ?)', args: [t.comp_id, t.name, t.code, t.user_key, Date.now()] },
+      { sql: 'insert into paper_team_members (comp_id, team_id, user_key, display_name, joined_at) values (?, ' + sel + ', ?, ?, ?)', args: [t.comp_id, t.code, t.user_key, t.display_name, Date.now()] },
+      { sql: "insert into paper_accounts (user_key, start_cash, started_at) values ('team:' || " + sel + ', ?, ?)', args: [t.code, t.start_cash, t.started_at] },
+    ], 'write');
+  } catch (e) {
+    if (/UNIQUE|constraint/i.test(String(e && e.message))) return false;
+    throw e;
+  }
+  const r = await readTeamByCode(t.code);
+  return r ? r.id : false;
+}
+// A member joins a team while it has room: 'ok', 'full' or 'entered' (already
+// in a team in this competition).
+async function joinTeam(compId, teamId, userKey, displayName, max) {
+  await init();
+  try {
+    const r = await db.execute({
+      sql: 'insert into paper_team_members (comp_id, team_id, user_key, display_name, joined_at) select ?, ?, ?, ?, ? where (select count(*) from paper_team_members where team_id = ?) < ?',
+      args: [Number(compId), Number(teamId), userKey, displayName, Date.now(), Number(teamId), Number(max)] });
+    return Number(r.rowsAffected) > 0 ? 'ok' : 'full';
+  } catch (e) {
+    if (/UNIQUE|constraint/i.test(String(e && e.message))) return 'entered';
+    throw e;
+  }
+}
+// A member leaves before the competition starts, when no trade can exist yet.
+// The captaincy passes to the earliest member left; a team left empty goes,
+// with its account (never one with a trade).
+async function leaveTeam(compId, teamId, userKey) {
+  await init();
+  const k = 'team:' + Number(teamId);
+  await db.batch([
+    { sql: 'delete from paper_team_members where comp_id = ? and team_id = ? and user_key = ?', args: [Number(compId), Number(teamId), userKey] },
+    { sql: 'update paper_teams set captain = (select user_key from paper_team_members where team_id = ? order by joined_at limit 1) where id = ? and captain = ? and exists (select 1 from paper_team_members where team_id = ?)', args: [Number(teamId), Number(teamId), userKey, Number(teamId)] },
+    { sql: 'delete from paper_accounts where user_key = ? and not exists (select 1 from paper_team_members where team_id = ?) and not exists (select 1 from paper_trades where user_key = ?)', args: [k, Number(teamId), k] },
+    { sql: 'delete from paper_teams where id = ? and not exists (select 1 from paper_team_members where team_id = ?) and not exists (select 1 from paper_trades where user_key = ?)', args: [Number(teamId), Number(teamId), k] },
+  ], 'write');
+}
+async function setTeamShow(teamId, show) {
+  await init();
+  await db.execute({ sql: 'update paper_teams set show_positions = ? where id = ?', args: [show ? 1 : 0, Number(teamId)] });
+}
+// The competitions a member has entered: [{ comp_id, team_id, display_name }].
+async function myCompEntries(userKey) {
+  await init();
+  const r = await db.execute({ sql: 'select comp_id, team_id, display_name from paper_team_members where user_key = ?', args: [userKey] });
+  return r.rows.map((x) => ({ comp_id: Number(x.comp_id), team_id: Number(x.team_id), display_name: x.display_name }));
+}
+
 // The admin review read: every account's portfolios in one query, attached to
 // /api/users by email so /users can show them beside the delete button.
 async function listAllUserPortfolios() {
@@ -8032,6 +8192,16 @@ async function deleteUser(id) {
     stmts.push({ sql: 'delete from user_themes where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from paper_trades where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from paper_accounts where user_key = ?', args: [email] });
+    // Paper competitions: a team the member was alone in is theirs and goes
+    // with its ledger; a team with others keeps its ledger, and the captaincy
+    // passes to the earliest other member. Before the membership rows go,
+    // which these read.
+    const alone = "select 'team:' || m.team_id from paper_team_members m where m.user_key = ? and (select count(*) from paper_team_members x where x.team_id = m.team_id) = 1";
+    stmts.push({ sql: 'delete from paper_trades where user_key in (' + alone + ')', args: [email] });
+    stmts.push({ sql: 'delete from paper_accounts where user_key in (' + alone + ')', args: [email] });
+    stmts.push({ sql: 'delete from paper_teams where id in (select m.team_id from paper_team_members m where m.user_key = ? and (select count(*) from paper_team_members x where x.team_id = m.team_id) = 1)', args: [email] });
+    stmts.push({ sql: 'update paper_teams set captain = (select x.user_key from paper_team_members x where x.team_id = paper_teams.id and x.user_key <> ? order by x.joined_at limit 1) where captain = ?', args: [email, email] });
+    stmts.push({ sql: 'delete from paper_team_members where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from column_views where scope = ?', args: [email] });
     // Alerts and their notifications are ARCHIVED, not deleted (see
     // alerts_archive): copied out without the email, then removed from the
@@ -8884,6 +9054,8 @@ module.exports = {
   addPaperTrade,
   resetPaper,
   listAllPaper,
+  listComps, readComp, createComp, updateComp, compTeams, readTeam, readTeamByCode, readTeamLedgers,
+  createTeam, joinTeam, leaveTeam, setTeamShow, myCompEntries,
   removeSymbolFromUserPortfolios,
   hashPassword,
   newSalt,

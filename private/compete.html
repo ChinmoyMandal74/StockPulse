@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en" data-themeable>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Competitions — Tickr Lab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#050505" />
+  <script src="/theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The paper page's shell. Everything this page adds is prefixed cp- .
+       Green and red are an account's value going up or down, as on /paper. */
+    body { min-height: 100dvh; padding: 0 0 80px; overflow-x: clip; }
+    .page { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+    .page > * { min-width: 0; }
+    .aura {
+      background:
+        radial-gradient(46vw 40vw at 4% -8%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%),
+        radial-gradient(50vw 42vw at 98% 4%, color-mix(in srgb, var(--green) 6%, transparent), transparent 64%); }
+    .bezel { border-radius: 26px; }
+    .bezel > .core { border-radius: 20px; }
+    .island-wrap { position: sticky; top: 0; z-index: 40; display: flex; justify-content: center; padding: 18px 20px 0; pointer-events: none; }
+    .island {
+      pointer-events: auto; display: flex; align-items: center; gap: 8px;
+      width: max-content; max-width: 100%; padding: 6px 7px 6px 16px; border-radius: 999px;
+      background: color-mix(in srgb, var(--glass) 72%, transparent);
+      backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+      border: 1px solid var(--hair); box-shadow: 0 28px 70px -26px color-mix(in srgb, var(--shade) 90%, transparent), var(--inset);
+    }
+    .mark .glyph {
+      width: 26px; height: 26px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--green);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--green) 20%, transparent), color-mix(in srgb, var(--green) 4%, transparent));
+      border: 1px solid color-mix(in srgb, var(--green) 24%, transparent);
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 8px;
+      border-radius: 999px; border: 1px solid var(--hair); background: color-mix(in srgb, var(--wash) 3.5%, transparent);
+      font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.2em; color: var(--muted);
+    }
+    .eyebrow .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    h1 { margin: 20px 0 0; font-size: clamp(38px, 5vw, 58px); font-weight: 600; line-height: 0.94; letter-spacing: -0.045em; }
+    .lede { margin: 16px 0 0; max-width: 76ch; font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .masthead { margin: 34px 0 22px; }
+    .pos { color: var(--green); } .neg { color: var(--red); } .na { color: var(--faint); }
+
+    .cp-card { margin-bottom: 16px; }
+    .cp-card > .core { padding: 18px 20px; }
+    .cp-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .cp-head h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+    .cp-chip { font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; padding: 3px 9px; border-radius: 999px;
+      border: 1px solid var(--hair); color: var(--muted); }
+    .cp-chip.cp-run { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+    .cp-facts { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0 14px; font-size: 12.5px; color: var(--faint); }
+    .cp-facts b { color: var(--muted); font-weight: 500; }
+    .cp-k { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); margin: 0 0 8px; }
+
+    .cp-mine, .cp-join { border: 1px solid var(--hair); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+      background: color-mix(in srgb, var(--wash) 2.5%, transparent); }
+    .cp-mine p { margin: 0 0 6px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .cp-mine p b { color: var(--text); font-weight: 600; }
+    .cp-code { font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em; color: var(--text); padding: 2px 8px;
+      border: 1px solid var(--hair); border-radius: 6px; user-select: all; }
+    .cp-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .cp-row input, .cp-row select {
+      padding: 9px 12px; border-radius: 10px; border: 1px solid var(--hair);
+      background: color-mix(in srgb, var(--wash) 4%, transparent); color: var(--text); font: 500 13px var(--sans); min-width: 0; }
+    .cp-row input:focus-visible, .cp-row select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .cp-row .cp-nm { flex: 0 1 200px; }
+    .cp-row .cp-tm { flex: 0 1 240px; }
+    .cp-row label.cp-chk { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+    .cp-msg { margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
+    .cp-msg.err { color: var(--red); }
+
+    .cp-tw { overflow-x: auto; }
+    table.cp { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.cp th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+    table.cp td { padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--wash) 4.5%, transparent); vertical-align: top;
+      font-variant-numeric: tabular-nums; }
+    table.cp td.num, table.cp th.num { text-align: right; white-space: nowrap; }
+    table.cp td.mono { font-family: var(--mono); }
+    table.cp tr.cp-me td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+    .cp-place { font-family: var(--mono); font-weight: 600; }
+    .cp-team { font-weight: 600; color: var(--text); }
+    .cp-you { margin-left: 6px; font-size: 10.5px; color: var(--accent); }
+    .cp-win { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 999px; padding: 2px 8px; }
+    .cp-who { display: block; margin-top: 3px; font-size: 11.5px; color: var(--faint); }
+    .cp-pos { display: flex; gap: 6px; flex-wrap: wrap; max-width: 520px; }
+    .cp-pos a { font-size: 11.5px; color: var(--muted); text-decoration: none; border: 1px solid var(--hair); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+    .cp-pos a:hover { color: var(--text); }
+    .cp-pos .cp-w { font-family: var(--mono); color: var(--faint); margin-left: 4px; }
+    .cp-empty { padding: 14px 2px; font-size: 13px; color: var(--muted); }
+    .cp-foot { margin: 18px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.6; max-width: 92ch; }
+
+    @media (max-width: 760px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="aura" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <svg id="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5.6"/><path d="M10.6 6.6 5.2 12l5.4 5.4"/></symbol>
+  </svg>
+
+  <div class="island-wrap">
+    <nav class="island">
+      <span class="mark">
+        <span class="glyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-logo" /></svg></span>
+        <span class="wordmark hide-sm">Tickr Lab</span>
+      </span>
+      <span class="divider"></span>
+      <a class="btn" href="/"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-arrow-left" /></svg>Screener</a>
+      <a class="btn" href="/paper">Paper positions</a>
+    </nav>
+  </div>
+
+  <main class="page">
+    <header class="masthead">
+      <span class="eyebrow"><span class="pip"></span>Paper competitions</span>
+      <h1>Competitions</h1>
+      <p class="lede">Paper positions as a competition. Each team gets one shared pretend account, with the same starting
+        amount and the same days as every other team. Enter on your own, start a team and share its code with up to four
+        others, or join a team with its code. Teams open and close positions at the latest price the site holds while
+        the competition runs, and are placed by return. When the last day closes, the standings are final and the
+        highest return wins. Other members see each team's name, its members' chosen names and its return. They also
+        see its positions, unless the team chooses to hide them. A simulation with pretend money: not advice, and no
+        prizes.</p>
+    </header>
+
+    <section class="bezel cp-card" id="adminCard" hidden><div class="core">
+      <div class="cp-k" id="adminTitle">New competition (admin)</div>
+      <form class="cp-row" id="adminForm" autocomplete="off">
+        <input id="aName" class="cp-tm" placeholder="Name" aria-label="Competition name" />
+        <label class="cp-chk">First day <input id="aStart" type="date" aria-label="First day" /></label>
+        <label class="cp-chk">Last day <input id="aEnd" type="date" aria-label="Last day" /></label>
+        <input id="aCash" class="cp-nm" value="100,000" inputmode="numeric" aria-label="Starting amount in dollars" />
+        <button class="btn" id="aGo" type="submit">Create</button>
+        <button class="btn" id="aCancel" type="button" hidden>Cancel</button>
+      </form>
+      <div class="cp-msg" id="aMsg" role="status"></div>
+    </div></section>
+
+    <div id="list"><div class="cp-empty">Reading the competitions…</div></div>
+
+    <p class="cp-foot">A simulation with pretend money, not investment advice; past results say nothing about future ones.
+      Fills use the latest stored price, so they can be up to half an hour old in market hours and are the last close
+      outside them. Returns are price only: no dividends, fees or tax. After the last day each account is valued at that
+      day's close. Only an entrant that opened at least one position can win.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const we = (t) => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const usd = (v) => (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const pct = (v) => { const r = r2(v * 100); return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(2) + '%'; };
+    const cls = (v) => { const r = r2(v * 100); return r > 0 ? 'pos' : r < 0 ? 'neg' : 'na'; };
+    const fmtDay = (v) => new Date(v + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    let data = null;
+    let editing = null;      // the competition the admin form is changing
+
+    async function load() {
+      try {
+        const r = await fetch('/api/compete', { cache: 'no-store' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Could not read the competitions.');
+        data = d;
+      } catch (e) { $('list').innerHTML = `<div class="cp-empty neg">${we(e.message)}</div>`; return; }
+      $('adminCard').hidden = !data.admin;
+      paint();
+    }
+
+    function standingsTable(c) {
+      if (!c.standings.length) return '<div class="cp-empty">No one has entered yet.</div>';
+      const done = c.status === 'ended';
+      return '<div class="cp-tw"><table class="cp"><thead><tr><th>Place</th><th>Team</th><th class="num">Value</th><th class="num">Return</th>'
+        + '<th class="num hide-sm">Positions</th><th class="hide-sm">Held</th></tr></thead><tbody>'
+        + c.standings.map((s) => {
+          const held = s.positions == null ? '<span class="na">Not shown by the team</span>'
+            : !s.positions.length ? '<span class="na">' + (s.trades ? 'All in cash' : 'Nothing opened yet') + '</span>'
+            : '<div class="cp-pos">' + s.positions.map((p) => `<a href="/stock/${encodeURIComponent(p.symbol)}" target="_blank" rel="noopener" title="${we(p.name || p.symbol)}">${we(p.symbol)}<span class="cp-w">${p.weight == null ? '' : Math.round(p.weight * 100) + '%'}</span></a>`).join('') + '</div>';
+          return `<tr${s.mine ? ' class="cp-me"' : ''}><td class="cp-place">${s.rank == null ? '—' : s.rank}</td>`
+            + `<td><span class="cp-team">${we(s.team)}</span>${s.mine ? '<span class="cp-you">your team</span>' : ''}${s.winner ? '<span class="cp-win">Winner</span>' : ''}`
+            + `<span class="cp-who">${we(s.members.join(', '))}</span></td>`
+            + `<td class="num mono">${s.value == null ? '—' : we(usd(s.value))}</td>`
+            + `<td class="num mono ${s.ret == null ? 'na' : cls(s.ret)}">${s.ret == null ? '—' : we(pct(s.ret))}</td>`
+            + `<td class="num mono hide-sm">${s.count}</td><td class="hide-sm">${held}</td></tr>`;
+        }).join('') + '</tbody></table></div>'
+        + (done ? '' : '<div class="cp-msg">Placed by return at the latest prices; final when the last day closes.</div>');
+    }
+
+    function mineBox(c) {
+      const m = c.mine;
+      const solo = m.members.length === 1 && m.team === m.me;
+      return `<div class="cp-mine"><p>${solo ? `You entered on your own as <b>${we(m.me)}</b>.` : `Your team <b>${we(m.team)}</b>: ${we(m.members.join(', '))}. You are shown as <b>${we(m.me)}</b>.`}</p>`
+        + (c.status !== 'ended' && m.members.length < data.maxTeam ? `<p>Invite code <span class="cp-code">${we(m.code)}</span>: anyone with it can join this team (${data.maxTeam} members at most). Share it only with people you want on the team.</p>` : '')
+        + '<div class="cp-row">'
+        + `<a class="btn" href="/paper?team=${m.teamId}">${c.status === 'running' ? 'Open the team account' : 'See the team account'}</a>`
+        + (m.captain ? `<label class="cp-chk"><input type="checkbox" data-show="${m.teamId}"${m.show ? ' checked' : ''} /> Show our positions to other members</label>`
+          : `<span class="cp-msg" style="margin:0">${m.show ? 'Your team shows its positions to other members.' : 'Your team hides its positions from other members.'} The captain can change this.</span>`)
+        + (c.status === 'upcoming' ? `<button class="btn" type="button" data-leave="${c.id}">Leave</button>` : '')
+        + `</div><div class="cp-msg" id="mMsg${c.id}" role="status"></div></div>`;
+    }
+
+    function joinBox(c) {
+      return `<form class="cp-join" data-enter="${c.id}" autocomplete="off"><div class="cp-k">Enter</div><div class="cp-row">`
+        + `<select data-how aria-label="How to enter"><option value="solo">On my own</option><option value="team">Start a team</option><option value="code">Join a team with its code</option></select>`
+        + `<input class="cp-nm" data-name maxlength="24" placeholder="Your name as shown" value="${we(data.suggest || '')}" aria-label="Your name as shown to other members" />`
+        + `<input class="cp-tm" data-team maxlength="30" placeholder="Team name" aria-label="Team name" hidden />`
+        + `<input class="cp-nm" data-code maxlength="12" placeholder="Invite code" aria-label="Invite code" hidden spellcheck="false" />`
+        + `<button class="btn" type="submit">Enter</button></div>`
+        + `<div class="cp-msg" role="status">Other members see the name you give here, never your email.</div></form>`;
+    }
+
+    function paint() {
+      const L = data.comps;
+      if (!L.length) { $('list').innerHTML = '<div class="cp-empty">No competitions yet.' + (data.admin ? ' Set one up above.' : ' Check back soon.') + '</div>'; return; }
+      $('list').innerHTML = L.map((c) => {
+        const chip = c.status === 'running' ? '<span class="cp-chip cp-run">Running</span>' : c.status === 'upcoming' ? '<span class="cp-chip">Starts ' + we(fmtDay(c.start)) + '</span>' : '<span class="cp-chip">Ended</span>';
+        const facts = [
+          ['Days', fmtDay(c.start) + ' to ' + fmtDay(c.end)],
+          ['Starting amount', usd(c.startCash)],
+          ['Teams', String(c.teams)],
+        ];
+        if (c.bench != null) facts.push(['S&P 500 over the same days', pct(c.bench)]);
+        return `<section class="bezel cp-card"><div class="core"><div class="cp-head"><h2>${we(c.name)}</h2>${chip}`
+          + (data.admin && c.status !== 'ended' ? `<button class="btn" type="button" data-edit="${c.id}">Edit</button>` : '') + '</div>'
+          + '<div class="cp-facts">' + facts.map(([k, v]) => `<span>${we(k)} <b>${we(v)}</b></span>`).join('') + '</div>'
+          + (c.mine ? mineBox(c) : c.status !== 'ended' ? joinBox(c) : '')
+          + '<div class="cp-k">Standings</div>' + standingsTable(c) + '</div></section>';
+      }).join('');
+
+      document.querySelectorAll('form[data-enter]').forEach((f) => {
+        const how = f.querySelector('[data-how]');
+        const sync = () => { f.querySelector('[data-team]').hidden = how.value !== 'team'; f.querySelector('[data-code]').hidden = how.value !== 'code'; };
+        how.addEventListener('change', sync); sync();
+        f.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const msg = f.querySelector('.cp-msg'), btn = f.querySelector('button');
+          btn.disabled = true; msg.textContent = 'Entering…'; msg.className = 'cp-msg';
+          try {
+            await post('/api/compete/' + f.dataset.enter + '/enter', { how: how.value, name: f.querySelector('[data-name]').value,
+              team: f.querySelector('[data-team]').value, code: f.querySelector('[data-code]').value });
+            await load();
+          } catch (err) { msg.textContent = err.message; msg.className = 'cp-msg err'; btn.disabled = false; }
+        });
+      });
+      document.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('change', async () => {
+        const c = L.find((x) => x.mine && String(x.mine.teamId) === b.dataset.show);
+        try { await post('/api/compete/team/' + b.dataset.show + '/show', { show: b.checked }); await load(); }
+        catch (err) { b.checked = !b.checked; if (c) { $('mMsg' + c.id).textContent = err.message; $('mMsg' + c.id).className = 'cp-msg err'; } }
+      }));
+      document.querySelectorAll('[data-leave]').forEach((b) => b.addEventListener('click', async () => {
+        if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Leave: are you sure?'; return; }
+        try { await post('/api/compete/' + b.dataset.leave + '/leave', {}); await load(); }
+        catch (err) { $('mMsg' + b.dataset.leave).textContent = err.message; $('mMsg' + b.dataset.leave).className = 'cp-msg err'; }
+      }));
+      document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+        const c = L.find((x) => String(x.id) === b.dataset.edit);
+        editing = c.id;
+        $('adminTitle').textContent = 'Change ' + c.name + ' (admin)';
+        $('aName').value = c.name; $('aStart').value = c.start; $('aEnd').value = c.end; $('aCash').value = Math.round(c.startCash).toLocaleString('en-US');
+        $('aGo').textContent = 'Save changes'; $('aCancel').hidden = false; $('aMsg').textContent = c.teams ? 'The starting amount stays as it is once a team has entered.' : '';
+        $('adminCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+    }
+
+    async function post(url, body) {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      let d = {};
+      try { d = await r.json(); } catch (e) { /* an HTML error page */ }
+      if (!r.ok) throw new Error(d.error || 'The server answered ' + r.status + '.');
+      return d;
+    }
+
+    function resetAdmin() {
+      editing = null; $('adminTitle').textContent = 'New competition (admin)'; $('aGo').textContent = 'Create'; $('aCancel').hidden = true;
+      $('aName').value = ''; $('aStart').value = ''; $('aEnd').value = ''; $('aCash').value = '100,000';
+    }
+    $('aCancel').addEventListener('click', () => { resetAdmin(); $('aMsg').textContent = ''; });
+    $('adminForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = $('aGo'); btn.disabled = true;
+      try {
+        const body = { name: $('aName').value, start: $('aStart').value, end: $('aEnd').value, startCash: $('aCash').value };
+        await post(editing ? '/api/compete/' + editing + '/edit' : '/api/compete', body);
+        $('aMsg').textContent = editing ? 'Saved.' : 'Created.'; $('aMsg').className = 'cp-msg';
+        resetAdmin();
+        await load();
+      } catch (err) { $('aMsg').textContent = err.message; $('aMsg').className = 'cp-msg err'; }
+      finally { btn.disabled = false; }
+    });
+
+    load();
+  </script>
+</body>
+</html>
