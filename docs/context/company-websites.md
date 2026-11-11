@@ -285,19 +285,19 @@ given: the owner's own rule (people without addresses), US anti-spam law treatin
 emails gathered by automated means from websites as an aggravating offence when
 mailed, the state privacy and data-broker laws on personal details, and the
 risk of holding such a list. The owner chose the alternative offered: "Yes add
-the company level contact details". Three fields, each checked ( in
-):
+the company level contact details". Three fields, each checked (`contact` in
+`websites.js`):
 
-- ****: the headquarters or main office street address as printed,
+- **`hq_address`**: the headquarters or main office street address as printed,
   kept only when on the pages, with a number and a ZIP or a state.
-- ****: the general line as printed, ten digits, on the pages, and
+- **`main_phone`**: the general line as printed, ten digits, on the pages, and
   not printed within 60 characters after a named person (a direct line).
-- ****: a shared mailbox only, its name on an exact list
-  (: info, sales, contact, office, service, orders, quotes, careers
+- **`general_email`**: a shared mailbox only, its name on an exact list
+  (`ROLE_BOX`: info, sales, contact, office, service, orders, quotes, careers
   and the like), on the pages, kept lower case. Any other address, a person's
   or not, is dropped.
 
 People are still a name, a title and an office: no email, telephone or address
 (a test checks the schema asks for none). The fact sheet shows a Contact line.
-These are local, in ; if backlog 62 brings them to the site, they
+These are local, in `formd.db`; if backlog 62 brings them to the site, they
 stay admin only.
