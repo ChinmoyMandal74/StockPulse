@@ -2840,7 +2840,7 @@ same commit.
 
 ## 61. Private company data: what is public, what is paid, and a first build — 2026-11-08
 
-*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), every employer, E6 (PPP loans) and the phase 5 fact sheet in the local viewer, E3 (Form C, formc-load.js, 2026-11-10, with the viewer's Crowdfunding page), E4 and E5 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
+*Area: Data · Status: Partly done · Note: phase 1 built 2026-11-08 (Form D from the SEC's quarterly data sets, kept locally: formd-load.js, docs/context/form-d.md), with a local admin viewer 2026-11-09 (formd-view.js, on this machine only) and enrichment E1 (the SEC profile, formd-load.js --profiles) and E2 (Form 5500: business code and headcount, f5500-load.js), every employer, E6 (PPP loans) and the phase 5 fact sheet in the local viewer, E3 (Form C, formc-load.js, 2026-11-10, with the viewer's Crowdfunding page), E4 (Reg A, formc-load.js --set rega, 2026-11-10), E5 open; phase 2 built 2026-11-09 (acquired companies' accounts from 8-K/As, kept locally: acq-load.js, docs/context/acquired-companies.md), our companies' filings being read slowly; phases 3 to 6 open*
 
 The owner, after the Continental buyer brief described a private company
 only through its public peers: "Our app has public company data .. how to
@@ -2970,7 +2970,9 @@ buy only where it must.
      summary in formd.db; docs/context/form-c.md), with the local viewer's
      Crowdfunding page and a line on the fact sheet.
    - **E4. Reg A (1-A, 1-K) data sets**: annual financial statements; 662
-     issuers.
+     issuers. **Loaded 2026-11-10** (formc-load.js --set rega; 13,244 filings
+     by 1,842 companies, 629 also Form D issuers; `rega` and
+     `rega_companies` in formd.db; on the fact sheet; docs/context/reg-a.md).
    - **E5. Companies that file 10-K/10-Q** (5,979): full financials through
      the existing SEC facts reader, one request a company, slowly.
    - **E6. PPP loans (SBA)**: jobs reported, NAICS code, loan size,
