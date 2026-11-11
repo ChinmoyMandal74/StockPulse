@@ -110,8 +110,8 @@ const JOBS = [
     // web-archive.db are. Carries on night after night until the list is done.
     id: 'websites', name: 'Company websites', task: 'TickrLab websites', host: 'laptop', script: 'website-load.js', taskScript: 'website-task.ps1',
     days: ALL_DAYS, times: ['23:00'], minutes: 465,
-    spends: { kind: 'anthropic', text: 'Claude Haiku, about $0.0015 a confirmed site, capped at $3 a run (about $1.30 a night)' },
-    what: 'Finds the own website of every employer with a retirement plan and 100 or more staff (about 117,000), six at a time, robots.txt obeyed; reads each confirmed site and keeps up to 40 useful pages of it in web-archive.db on the laptop, searchable. Runs 23:00 to about 06:45 (465 minutes) or until 12 GB and carries on the next night, then emails the owner the night\'s figures (crawl-report.js). Progress: the laptop\'s Crawl page, localhost:4100/crawl.',
+    spends: { kind: 'anthropic', text: 'Claude Haiku, about $0.0015 a confirmed site, capped at $5 a run (about $3 a night)' },
+    what: 'Finds the own website of every employer with a retirement plan and 100 or more staff (about 117,000), twelve at a time, robots.txt obeyed; reads each confirmed site and keeps up to 20 useful pages of it in web-archive.db on the laptop, searchable. Runs 23:00 to about 06:45 (465 minutes) or until 12 GB and carries on the next night, then emails the owner the night\'s figures (crawl-report.js). Progress: the laptop\'s Crawl page, localhost:4100/crawl.',
     log: '/schedule',
   },
   {

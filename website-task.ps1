@@ -27,6 +27,12 @@
 # 23:00 LOCAL, EVERY NIGHT, until about 06:45; then the morning email (owner,
 # 2026-11-10: "why don't you start at 11pm tonight and go on till 7am .. I am
 # trying to get this data faster into the app"). Six workers, not four.
+#
+# 2026-11-11: the first such night reached about 1,000 companies, not 2,800;
+# reading 40 pages of every confirmed site took the night. Now 20 pages a site
+# (the most useful score first, so the about, services and locations pages
+# stay) and 12 workers (still one request every 3 seconds to any one site),
+# capped at $5. The owner: "Ok let's do it after the run finishes".
 param([switch]$Remove, [switch]$WhatIf)
 
 $ErrorActionPreference = 'Stop'
@@ -35,9 +41,10 @@ $Root     = $PSScriptRoot
 $Script   = Join-Path $Root 'website-load.js'
 $Times    = @('23:00')
 $Minutes  = '465'
-$MaxUsd   = '3'
+$MaxUsd   = '5'
 $MaxGb    = '12'
-$Workers  = '6'
+$Workers  = '12'
+$Pages    = '20'
 
 if ($Remove) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -52,7 +59,7 @@ if (-not $node) { throw 'node is not on PATH for this shell.' }
 # NO WINDOW, as the other tasks: the command goes in websites.run.cmd beside
 # this script (it holds this machine's node path, so it is not in git), and
 # run-hidden.vbs starts it hidden. The report goes to website-load.log.
-$cmdLine = "`"$node`" --use-system-ca --disable-warning=ExperimentalWarning website-load.js --commit --min-staff 100 --max-staff 0 --max 200000 --workers $Workers --then-deep --minutes $Minutes --max-usd $MaxUsd --max-gb $MaxGb >> website-load.log 2>&1"
+$cmdLine = "`"$node`" --use-system-ca --disable-warning=ExperimentalWarning website-load.js --commit --min-staff 100 --max-staff 0 --max 200000 --workers $Workers --pages $Pages --then-deep --minutes $Minutes --max-usd $MaxUsd --max-gb $MaxGb >> website-load.log 2>&1"
 # THE MORNING EMAIL (2026-11-10, the owner: "send me a daily email in the
 # morning on the crwal previous night"): crawl-report.js counts the night and
 # the app mails it, straight after the crawl ends (about 06:45).

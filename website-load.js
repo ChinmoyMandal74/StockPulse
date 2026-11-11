@@ -62,7 +62,7 @@ function options(argv) {
     deep: argv.includes('--deep'),   // the rest of each confirmed site, kept whole (no model)
     pages: Math.min(100, Math.max(1, Number(arg('--pages')) || W.MAX_DEEP)),
     thenDeep: argv.includes('--then-deep'),   // each site confirmed, kept whole straight away
-    workers: Math.min(6, Math.max(1, Number(arg('--workers')) || 1)),
+    workers: Math.min(12, Math.max(1, Number(arg('--workers')) || 1)),
     minutes: Math.max(0, Number(arg('--minutes')) || 0),   // stop starting companies after this long (0: no limit)
     maxGb: Math.max(0, Number(arg('--max-gb')) || 0),      // stop when web-archive.db reaches this size (0: no limit)
     // The companies: retirement-plan employers filing 2023 or later, between

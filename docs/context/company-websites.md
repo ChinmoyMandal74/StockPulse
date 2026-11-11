@@ -242,3 +242,14 @@ on till 7am .. I am trying to get this data faster into the app"): **23:00 for
 465 minutes (to about 06:45), six workers, $3 a night**; the morning email
 follows the run. About 2,800 companies a night, so roughly 40 nights for the
 list. Re-registered with `website-task.ps1` (it replaces the task).
+
+**Changed 2026-11-11** (owner: "Ok let's do it after the run finishes"). The
+first 23:00 night reached about 1,000 companies, not 2,800: 41,000 requests in
+six hours, nearly all of them the 40-page crawl of each confirmed site, at 3
+seconds a worker. At that pace the list would take about 116 nights. Now
+**`--pages 20` and 12 workers** (the loader's cap raised from 6 to 12; each
+worker is a different company, so any one site still sees one request every 3
+seconds), **$5 a night**. `pageScore` puts about, services, locations and team
+pages first, so the cut falls on news posts and minor pages. Expected about four
+times the pace, roughly a month for the list, about $3 a night of reading.
+Sites already kept at 40 pages keep them.
