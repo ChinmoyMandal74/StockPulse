@@ -3007,19 +3007,23 @@ async function writeNewsBrief(day, kind, at, data) {
   await init();
   await db.execute({ sql: 'insert or ignore into news_briefs (day, kind, at, data) values (?, ?, ?, ?)', args: [String(day), String(kind), Number(at), JSON.stringify(data)] });
 }
-// One day's newest build of each kind: a seek on the primary key.
-async function readNewsBrief(day) {
+// One day's newest build of each kind: a seek on the primary key. `keep(at)`:
+// which builds may be shown (the page shows evening builds only).
+async function readNewsBrief(day, keep) {
   await init();
   const r = await db.execute({ sql: 'select kind, at, data from news_briefs where day = ? order by at desc limit 20', args: [String(day)] });
   const out = {};
-  for (const x of r.rows) { const k = String(x.kind); if (out[k]) continue; try { out[k] = Object.assign(JSON.parse(String(x.data)), { at: Number(x.at) }); } catch { /* a row that does not parse is skipped */ } }
+  for (const x of r.rows) { const k = String(x.kind); if (out[k] || (keep && !keep(String(day), Number(x.at)))) continue; try { out[k] = Object.assign(JSON.parse(String(x.data)), { at: Number(x.at) }); } catch { /* a row that does not parse is skipped */ } }
   return out;
 }
 // The days on file, newest first (a small table: one or two rows a day).
-async function readNewsBriefDays(limit) {
+async function readNewsBriefDays(limit, keep) {
   await init();
-  const r = await db.execute({ sql: "select distinct day from news_briefs where kind = 'today' order by day desc limit ?", args: [Math.min(400, Number(limit) || 30)] });
-  return r.rows.map((x) => String(x.day));
+  const n = Math.min(400, Number(limit) || 30);
+  const r = await db.execute({ sql: 'select day, at from news_briefs order by day desc, at desc limit ?', args: [n * 6] });
+  const out = [];
+  for (const x of r.rows) { const d = String(x.day); if (out.includes(d) || (keep && !keep(d, Number(x.at)))) continue; out.push(d); if (out.length >= n) break; }
+  return out;
 }
 const writeNewsBriefMark = (v) => writeMetaJson('news_brief', v);
 const writeDataCheck = (v) => writeMetaJson('data_check', v);

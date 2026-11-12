@@ -128,5 +128,20 @@ check('the next-session note drops one too', one('Alpha reported results, Reuter
 check('an intro naming an outlet is dropped', T([{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm.' }], 'Per CNBC, a busy day.').dropped, ['intro']);
 check('both prompts say never to name an outlet', /never name a newspaper, website or other news outlet/.test(NB.SYSTEM) && /never name a newspaper, website or other news outlet/.test(NB.SYSTEM_TODAY), true);
 
+// ---- the evening edition only ------------------------------------------------------
+check('a build at 17:40 Eastern is the evening edition', NB.eveningBuild('2026-11-12', Date.parse('2026-11-12T22:40:00Z')), true);
+check('a build that morning is not shown', NB.eveningBuild('2026-11-12', Date.parse('2026-11-12T12:40:00Z')), false);
+check('16:59 is not, 17:00 is', [NB.eveningBuild('2026-11-12', Date.parse('2026-11-12T21:59:00Z')), NB.eveningBuild('2026-11-12', Date.parse('2026-11-12T22:00:00Z'))], [false, true]);
+check('17:40 in summer time and in winter', [new Date(NB.eveningOf('2026-07-01')).toISOString(), new Date(NB.eveningOf('2026-11-11')).toISOString()], ['2026-07-01T21:40:00.000Z', '2026-11-11T22:40:00.000Z']);
+check('an edition made later as of an evening counts as that evening', NB.eveningBuild('2026-11-11', NB.eveningOf('2026-11-11')), true);
+// The daytime updates (08:40, 11:40, 14:40 and the evening), up to 20 minutes late.
+const at2 = (hm) => Date.parse('2026-11-12T' + hm + ':00-05:00');
+check('shown: a build at each update time, a late one, the evening', ['08:40', '08:55', '11:41', '14:40', '17:40', '21:00'].map((x) => NB.shownBuild('2026-11-12', at2(x))), [true, true, true, true, true, true]);
+check('not shown: a test at 07:40, between updates, too late', ['07:40', '10:00', '12:10', '16:30'].map((x) => NB.shownBuild('2026-11-12', at2(x))), [false, false, false, false]);
+check('not shown: a build on another day', NB.shownBuild('2026-11-11', at2('08:40')), false);
+check('the session ahead: before the open that day\'s, after it the next trading day', [NB.nextSession('2026-11-12', at2('08:40')), NB.nextSession('2026-11-12', at2('09:31')), NB.nextSession('2026-11-12', at2('17:40')), NB.nextSession('2026-11-14', at2('08:40')), NB.nextSession('2026-11-26', at2('08:40'))],
+  ['2026-11-12', '2026-11-13', '2026-11-13', '2026-11-16', '2026-11-27']);
+check('both prompts name days, never today or tomorrow', /never today, tonight or tomorrow/.test(NB.SYSTEM) && /never today, tonight or tomorrow/.test(NB.SYSTEM_TODAY), true);
+
 console.log(`\nnewsbrief-test: ${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -8,5 +8,6 @@
 !news-ping.js
 !digest-ping.js
 !news-brief-ping.js
+!news-brief-update.js
 !fly/cron.js
 !fly/Dockerfile

@@ -1598,10 +1598,13 @@ function briefsHtml(base, day, b, days, view) {
   const when = day ? NewsBriefPage.dayName(day) : '';
   const esc = htmlEsc;
   const tick = (list) => (list || []).map((s) => `<span class="nb-t">${esc(s)}</span>`).join('');
+  const builtAt = Math.max((t && t.at) || 0, (n && n.at) || 0);
+  const upd = builtAt ? new Date(builtAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '';
+  const wd = day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) : '';
   const today = t && t.items && t.items.length ? (() => {
     const hi = t.items.filter((x) => x.importance === 'high'), med = t.items.filter((x) => x.importance === 'medium');
     const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${esc(x.line)}</p></li>`).join('') + '</ul>' : '');
-    return `<section class="nb-s"><h2>What happened today</h2>${t.intro ? `<p class="nb-in">${esc(t.intro)}</p>` : ''}`
+    return `<section class="nb-s"><h2>What happened on ${esc(wd)}</h2>${t.intro ? `<p class="nb-in">${esc(t.intro)}</p>` : ''}`
       + `<p class="nb-m">${t.items.length} stories, written by AI from ${Number(t.read || 0).toLocaleString('en-US')} articles, each piece of news once.</p>`
       + list('High importance', hi) + list('Medium importance', med) + '</section>';
   })() : '';
@@ -1622,7 +1625,7 @@ function briefsHtml(base, day, b, days, view) {
   const i = days.indexOf(day), older = i >= 0 ? days[i + 1] : null, newer = i > 0 ? days[i - 1] : null;
   const short = (x) => new Date(x + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
   const tab = (k, label, has) => (has ? `<a class="nb-tab${v === k ? ' on' : ''}" href="/briefs/${day}${q(k)}"${v === k ? ' aria-current="page"' : ''}>${label}</a>` : '');
-  const bar = day ? '<nav class="nb-bar" aria-label="Brief"><div class="nb-tabs">' + tab('today', 'What happened today', !!today)
+  const bar = day ? '<nav class="nb-bar" aria-label="Brief"><div class="nb-tabs">' + tab('today', esc(wd) + '’s news', !!today)
       + tab('next', 'Next session' + (n && n.next ? ': ' + esc(short(n.next)) : ''), !!next) + '</div>'
     + '<div class="nb-days">' + (older ? `<a class="nb-step" href="/briefs/${older}${q(v)}" aria-label="Earlier day">‹</a>` : '<span class="nb-step off">‹</span>')
     + `<select class="nb-pick" aria-label="Day" onchange="location.href='/briefs/'+this.value+'${q(v)}'">`
@@ -1659,7 +1662,7 @@ function briefsHtml(base, day, b, days, view) {
     + '.nb-cta{margin-top:34px;padding:16px 18px;border:1px solid var(--hair);border-radius:14px;font-size:14px;line-height:1.55;color:var(--muted)}'
     + '.nb-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.nb-b{display:inline-block;padding:9px 15px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
     + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
-    + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}</p>`
+    + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}${upd ? ' · updated ' + esc(upd) + ' New York time' : ''}</p>`
     + bar + empty + (v === 'next' ? next : today)
     + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
     + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
@@ -1671,9 +1674,9 @@ app.get(['/briefs', '/briefs/:day'], route(async (req, res, next) => {
   if (asked && !/^\d{4}-\d\d-\d\d$/.test(asked)) return next();
   if (anonLogOk(req)) logAct(req, 'page', 'briefs');
   const base = APP_URL || `https://${req.headers.host}`;
-  const days = await store.readNewsBriefDays(60).catch(() => []);
+  const days = await store.readNewsBriefDays(60, NewsBriefPage.shownBuild).catch(() => []);
   const day = asked || days[0] || null;
-  const b = day ? await store.readNewsBrief(day).catch(() => ({})) : {};
+  const b = day ? await store.readNewsBrief(day, NewsBriefPage.shownBuild).catch(() => ({})) : {};
   const view = req.query.v === 'next' ? 'next' : 'today';
   if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days, view).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
   res.set('Cache-Control', 'public, max-age=0, s-maxage=300');
@@ -2322,7 +2325,7 @@ app.get('/robots.txt', route(async (req, res) => {
 app.get('/sitemap.xml', route(async (req, res) => {
   const base = APP_URL || `https://${req.headers.host}`;
   const posts = await store.readPosts({ publishedOnly: true });
-  const briefDays = await store.readNewsBriefDays(60).catch(() => []);
+  const briefDays = await store.readNewsBriefDays(60, NewsBrief.shownBuild).catch(() => []);
   const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
@@ -22402,7 +22405,7 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
 const NewsBrief = require('./newsbrief.js');
 const NB_HTML_BUDGET = 85000;   // Gmail clips a message past about 102 KB
 async function newsBriefData(now, prevAt) {
-  const today = NewsBrief.etDay(now), next = NewsBrief.nextTradingDay(today);
+  const today = NewsBrief.etDay(now), next = NewsBrief.nextSession(today, now);
   const snap = await snapshotCached().catch(() => null);
   const by = new Map(((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error).map((x) => [x.symbol, x]));
   const info = (s) => { const x = by.get(s); return x ? { name: x.shortName || x.name || s, cap: Number(x.marketCap) > 0 ? Number(x.marketCap) : null } : null; };
@@ -22549,8 +22552,14 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const dry = req.query.dry === '1', useAi = req.query.noai !== '1';
   const force = !!(req.body && req.body.force === true);
-  const now = Date.now();
-  const mark = await store.readNewsBriefMark().catch(() => ({}));
+  // body.asOf 'YYYY-MM-DD' with publish: that day's edition as it would have
+  // been built at 17:40 Eastern (articles published by then, its next trading
+  // day), for a day the evening run did not publish. The last seven days only.
+  const asOfDay = req.body && /^\d{4}-\d\d-\d\d$/.test(String(req.body.asOf || '')) ? String(req.body.asOf) : null;
+  const asOf = asOfDay ? NewsBrief.eveningOf(asOfDay) : null;
+  if (asOfDay && !(req.body.publish === true && asOf && asOf < Date.now() && Date.now() - asOf < 7 * 864e5)) return res.status(400).json({ error: 'asOf is for publishing one of the last seven evenings.' });
+  const now = asOf || Date.now();
+  const mark = asOf ? {} : await store.readNewsBriefMark().catch(() => ({}));
   const today = NewsBrief.etDay(now);
   // body.sample: both sent now marked [Sample], under their own mail kind (so
   // the jobs email does not count them as the run), the mark left alone so

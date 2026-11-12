@@ -114,6 +114,38 @@ function line(summary) {
   return s.length > 260 ? s.slice(0, 257).replace(/\s+\S*$/, '') + '…' : s;
 }
 
+// ---- which builds the public page shows ------------------------------------------
+// THE EVENING EDITION ONLY (2026-11-12, the owner, of a page built that morning:
+// "This is fine to show yesterday evening not today morning"): a day's brief
+// is shown once a build made at 17:00 Eastern or later on that day exists (the
+// 17:40 send, or an edition made as of 17:40, which carries that time). Earlier
+// builds, a sample's or a test's, stay stored and are not shown, so in the
+// morning the page shows last evening's edition.
+const EVENING_MIN = 17 * 60;
+const eveningBuild = (day, at) => Number.isFinite(at) && etDay(at) === day && etMinute(new Date(at).toISOString()) >= EVENING_MIN;
+// UPDATES THROUGH THE DAY (same day, the owner: "May be refresh the news 3 or
+// 4 times a day"): the page is also published at these Eastern times on
+// weekdays, each covering the news since the last evening brief. A build at
+// one of them (up to 20 minutes late, as a slow run may be) is shown as well;
+// one at any other time (a sample, a test) is not.
+const PAGE_SLOTS = ['08:40', '11:40', '14:40', '17:40'].map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
+function shownBuild(day, at) {
+  if (eveningBuild(day, at)) return true;
+  if (!Number.isFinite(at) || etDay(at) !== day) return false;
+  const m = etMinute(new Date(at).toISOString());
+  return PAGE_SLOTS.some((s) => m >= s - 2 && m <= s + 20);
+}
+// The session a build looks ahead to: on a trading day before the 9:30 open,
+// that day's own; otherwise the next trading day.
+function nextSession(today, now) {
+  return isTradingDay(today) && etMinute(new Date(now).toISOString()) < 9 * 60 + 30 ? today : nextTradingDay(today);
+}
+// 17:40 Eastern on a day, for an edition made afterwards as of that evening.
+function eveningOf(day) {
+  for (const off of ['-05:00', '-04:00']) { const t = Date.parse(day + 'T17:40:00' + off); if (etDay(t) === day && etMinute(new Date(t).toISOString()) === 17 * 60 + 40) return t; }
+  return null;
+}
+
 // ---- the next trading day ------------------------------------------------------
 const AFTER_CLOSE_MIN = 16 * 60;
 const etMinute = (iso) => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso)); return Number(p.find((x) => x.type === 'hour').value) * 60 + Number(p.find((x) => x.type === 'minute').value); };
@@ -155,7 +187,7 @@ const SYSTEM = [
   'You are given numbered inputs: stories (each one a company\'s news today, with its kind, how many outlets carried it, when it was published, and a summary) and the results calendar (companies reporting before the next open, and companies listed to report after today\'s close).',
   'Pick at most ten things, most important first. Weigh results and guidance released after today\'s close or due before the next open, large companies, deals, legal or regulatory decisions, leadership changes, and stories many outlets carried. Join related inputs into one item (several companies in one industry reporting, one deal touching two companies).',
   'Each item is one or two plain sentences, under 240 characters, and cites the ids of every input it uses. Use only facts in the inputs: no figure, company or date that is not in them, and no outside knowledge.',
-  'Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; never name a newspaper, website or other news outlet (say "a report"); write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks, and never rank stocks as picks.',
+  'Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; name days by their weekday (Thursday, the Friday open), never today, tonight or tomorrow, since the note is read the next morning too; never name a newspaper, website or other news outlet (say "a report"); write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks, and never rank stocks as picks.',
   'The intro is one sentence on what the next session has in store, under 300 characters, from the inputs only.',
 ].join(' ');
 const SCHEMA = {
@@ -274,7 +306,7 @@ const SYSTEM_TODAY = [
   'Read them all, then write the day\'s news as separate lines. Many articles tell the same story: every article about one event goes into one line, never two. Never repeat a piece of news in a second line, even in other words; a company with two different events gets two lines.',
   'Put each line in "high" (results, guidance, deals, legal or regulatory decisions, leadership changes, and other events that change a company\'s position) or "medium" (analyst actions, products and customers, dividends and buybacks, insider trades, notable moves with a stated reason). Leave out opinion pieces, price recaps with no reason and passing mentions unless they carry news found nowhere else.',
   'At most 25 high lines and 35 medium lines, most important first within each: weigh the event, the size of the company, and how many outlets carried it. Each line is one or two plain sentences, under 240 characters, naming the company, and cites the ids of every article it uses.',
-  'Use only facts in the summaries: no figure, company or date that is not in the articles a line cites, and no outside knowledge. Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; never name a newspaper, website or other news outlet (say "a report"); write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks.',
+  'Use only facts in the summaries: no figure, company or date that is not in the articles a line cites, and no outside knowledge. Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; name days by their weekday (Thursday, the Friday open), never today, tonight or tomorrow, since the note is read the next morning too; never name a newspaper, website or other news outlet (say "a report"); write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks.',
   'The intro is one sentence on the day as a whole, under 300 characters, from the articles only.',
 ].join(' ');
 const SCHEMA_TODAY = {
@@ -333,7 +365,7 @@ const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in +
 
 module.exports = {
   isTradingDay, nextTradingDay, holidays, easter, addDays, dayName, etDay,
-  inWindow, stories, line, calendar, outletIn, OUTLETS, candidates, request, userPrompt, check, spend, capText,
+  inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, candidates, request, userPrompt, check, spend, capText,
   dayInputs, todayRequest, todayPrompt, checkToday, sameStory,
   SYSTEM, SCHEMA, SYSTEM_TODAY, SCHEMA_TODAY, MODEL, MAX_ITEMS, MAX_TODAY, RANK,
 };
