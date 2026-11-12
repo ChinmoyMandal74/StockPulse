@@ -187,3 +187,9 @@ The blog markdown (`renderMarkdown`) reads **pipe tables**: a header row, then a
   - in a one-column post it breaks out of the 720px measure up to 1100px, as a wide picture does.
 - **Tests:** `markdown-test.js`, the pipe tables section.
 - **First used:** by the data post `ai-watchlist-2026-11-03`.
+
+## Shared links and the Instagram bio link (2026-11-11)
+The owner asked how to get more people reading the blog. Two changes:
+- **Every post carries a picture for shared links** (`shareImage`, `shareImageTags` in server.js; `%SHAREIMG%` in `private/post.html`): `og:image` is the post's first picture on the page (one of our stored `/blog/img/` images, made absolute), else the cover of its Instagram set; with it `og:image:alt`, `twitter:card` `summary_large_image` and `twitter:image`. A post with no picture gets the small `summary` card. Also `og:url` and `og:site_name`. `%CANONICAL%` is now replaced everywhere it appears.
+- **`/links`**, public, for the one clickable link Instagram allows (the profile): the eight newest published posts with their first picture, the blog, the screener, Instagram, and the subscribe box (source `links`). Each visit is logged as page `links`, so Instagram traffic can be counted. Open through the terms gate like the blog.
+- Verified on the real server with an in-memory database (13 checks): the image chosen, absolute, escaped alt, the fallback to the Instagram cover, no picture giving the small card, no placeholder left; /links public, drafts left out, thumbnails, escaping, the subscribe box's source.

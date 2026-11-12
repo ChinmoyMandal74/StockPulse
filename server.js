@@ -404,7 +404,7 @@ app.use('/api/', (req, res, next) => {
 // WHAT STAYS OPEN: the pages somebody needs in order to read the terms and
 // agree or leave, the public pages, and static files that carry no data.
 const TERMS_OPEN_PAGES = new Set(['/accept-terms', '/terms', '/privacy', '/login', '/join', '/reset',
-  '/about', '/landing', '/unsubscribe', '/subscribe', '/robots.txt', '/sitemap.xml']);
+  '/about', '/landing', '/unsubscribe', '/subscribe', '/robots.txt', '/sitemap.xml', '/links']);
 const TERMS_OPEN_API = /^\/api\/(me|terms\/accept|logout|login|register|forgot|reset|password|health|public-stats|guest|auth\/|cron\/|subscribe|unsubscribe)(\/|$)/;
 const TERMS_STATIC = /\.(css|js|svg|png|jpg|jpeg|webp|ico|woff2?|map|txt|xml)$/i;
 app.use(route(async (req, res, next) => {
@@ -1271,6 +1271,29 @@ function oneColumnPost(md) {
   return pics.every((m) => /"\s*wide\s*"\)\s*$/i.test(m[0].replace(/^!\[[^\]]*\]/, '')));
 }
 
+// THE PICTURE A SHARED LINK SHOWS (2026-11-11, the owner asked how to get
+// more people reading): without og:image a post pasted into WhatsApp,
+// iMessage, X, LinkedIn or Reddit arrived as a line of text. The post's first
+// picture on the page, else the cover of its Instagram set; one of our own
+// stored images, made absolute. X's large card when there is a picture.
+function shareImage(md) {
+  const OURS = /^\/blog\/img\/[a-f0-9]{8,64}$/;
+  const f = firstImage(md);
+  if (f && OURS.test(f.src)) return f;
+  const ig = igPictures(md);
+  return ig && ig.cover ? { src: ig.cover, alt: '' } : null;
+}
+function shareImageTags(p, base) {
+  const pic = shareImage(p.body);
+  if (!pic) return '<meta name="twitter:card" content="summary" />';
+  const url = htmlEsc(base + pic.src), alt = htmlEsc(pic.alt || p.title || '');
+  return '<meta property="og:image" content="' + url + '" />'
+    + '<meta property="og:image:alt" content="' + alt + '" />'
+    + '<meta name="twitter:card" content="summary_large_image" />'
+    + '<meta name="twitter:image" content="' + url + '" />'
+    + '<meta name="twitter:image:alt" content="' + alt + '" />';
+}
+
 const firstImage = (md) => {
   const re = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
   md = splitIgFence(md).blog;
@@ -1553,6 +1576,47 @@ app.get('/blog', route(async (req, res) => {
     .replace('%SUBSCRIBE%', () => subscribeBox('blog')));
 }));
 
+// THE LINK IN THE INSTAGRAM BIO (2026-11-11): Instagram allows one clickable
+// link, on the profile, so this page is where it lands: the newest posts with
+// their pictures, the subscribe box, the blog and the screener. Public, like
+// the blog; each visit is logged as a page view ('links') so the Instagram
+// traffic can be counted. Navy, like the blog.
+app.get('/links', route(async (req, res) => {
+  if (anonLogOk(req)) logAct(req, 'page', 'links');
+  const base = APP_URL || `https://${req.headers.host}`;
+  const posts = (await store.readPosts({ publishedOnly: true, withBody: true }).catch(() => [])).slice(0, 8);
+  const items = posts.map((p) => {
+    const pic = firstImage(p.body);
+    return `<a class="lk-post" href="/blog/${encodeURIComponent(p.slug)}">`
+      + (pic ? `<span class="lk-th"><img src="${htmlEsc(pic.src)}" alt="" loading="lazy" decoding="async" /></span>` : '')
+      + `<span class="lk-tx"><span class="lk-dt">${postDate(p.publishedAt)}</span><b>${htmlEsc(p.title)}</b></span></a>`;
+  }).join('');
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=300');
+  res.type('html').send(`<!doctype html><html lang="en" data-theme="navy"><head><meta charset="utf-8">`
+    + `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#071120">`
+    + `<title>${BRAND}: latest posts</title><meta name="description" content="The latest posts from ${BRAND}, a stock screener that explains itself.">`
+    + `<link rel="canonical" href="${htmlEsc(base)}/links"><link rel="stylesheet" href="/app.css"><link rel="icon" href="/favicon.svg">`
+    + '<style>body{margin:0;background:var(--void);color:var(--text);font-family:var(--sans)}'
+    + '.lk{max-width:560px;margin:0 auto;padding:44px max(18px,env(safe-area-inset-left)) 70px}'
+    + '.lk h1{margin:0;font-size:30px;letter-spacing:-.03em}.lk h1 span{color:var(--muted)}'
+    + '.lk-lede{margin:8px 0 26px;color:var(--muted);font-size:14.5px;line-height:1.55}'
+    + '.lk-k{margin:0 0 10px;font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}'
+    + '.lk-post{display:flex;gap:14px;align-items:center;padding:10px;margin:0 0 10px;border:1px solid var(--hair);border-radius:14px;color:var(--text);text-decoration:none;background:color-mix(in srgb,var(--wash) 3%,transparent)}'
+    + '.lk-post:hover{border-color:color-mix(in srgb,var(--accent) 50%,transparent)}'
+    + '.lk-th{flex:0 0 96px;height:66px;border-radius:9px;overflow:hidden;background:var(--surface-2)}.lk-th img{width:100%;height:100%;object-fit:cover;display:block}'
+    + '.lk-tx{min-width:0}.lk-tx b{display:block;font-size:15px;line-height:1.3;font-weight:600}.lk-dt{display:block;font-size:11.5px;color:var(--faint);margin-bottom:3px}'
+    + '.lk-row{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 0}'
+    + '.lk-b{display:inline-block;padding:10px 16px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
+    + '.lk-foot{margin-top:28px;font-size:12px;color:var(--faint)}</style></head>'
+    + `<body><main class="lk"><h1>Tickr <span>Lab</span></h1>`
+    + '<p class="lk-lede">Every stock measured the same way after every close. The latest deep dives and notes:</p>'
+    + '<p class="lk-k">Latest posts</p>' + (items || '<p class="lk-lede">The first post is being written.</p>')
+    + '<div class="lk-row"><a class="lk-b" href="/blog">All posts</a><a class="lk-b" href="/">The screener</a>'
+    + `<a class="lk-b" href="${htmlEsc(BRAND_IG_URL)}">Instagram</a></div>`
+    + subscribeBox('links')
+    + '<p class="lk-foot">Descriptive, not advice. tickrlab.com</p></main></body></html>');
+}));
+
 // Public, because the blog is. The id is a content hash, so these bytes can
 // never change under this URL -- hence `immutable` and a year, which keeps the
 // function out of the path on every page view after the first.
@@ -1731,7 +1795,8 @@ app.get('/blog/:slug', route(async (req, res, next) => {
   const html = pageTemplate('post.html')
     .split('%TITLE%').join(htmlEsc(p.title))
     .split('%DESC%').join(htmlEsc(summary || p.title))
-    .replace('%CANONICAL%', () => htmlEsc(`${base}/blog/${p.slug}`))
+    .split('%CANONICAL%').join(htmlEsc(`${base}/blog/${p.slug}`))
+    .replace('%SHAREIMG%', () => shareImageTags(p, base))
     .replace('%META%', () => meta)
     .replace('%SUMMARY%', () => htmlEsc(summary))
     // ?guides=1 draws the column boundaries over the real page at the real
