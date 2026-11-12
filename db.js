@@ -324,6 +324,16 @@ const SCHEMA = [
   // our estimate): each company's announced report day as the nightly read it
   // from Alpha Vantage or Nasdaq, one row per (symbol, report day), kept. A
   // moved date is a new row; last_seen says which one the calendar still lists.
+  // The evening news briefs as published on /briefs (newsbrief.js, 2026-11-12):
+  // one row a build, kind 'today' or 'next', the checked lines as JSON. A later
+  // build of the same day adds a row; the page shows the newest.
+  `create table if not exists news_briefs (
+     day  text not null,
+     kind text not null,
+     at   integer not null,
+     data text not null,
+     primary key (day, kind, at)
+   )`,
   `create table if not exists earnings_calendar (
      symbol     text not null,
      d          text not null,
@@ -2993,6 +3003,24 @@ const writeTdUnserved = (v) => writeMetaJson('td_unserved', v);
 const readDataCheck = () => readMetaJson('data_check');
 // The evening news briefs (newsbrief.js): { day, at, today, next }, at the cutoff of the last sent.
 const readNewsBriefMark = () => readMetaJson('news_brief');
+async function writeNewsBrief(day, kind, at, data) {
+  await init();
+  await db.execute({ sql: 'insert or ignore into news_briefs (day, kind, at, data) values (?, ?, ?, ?)', args: [String(day), String(kind), Number(at), JSON.stringify(data)] });
+}
+// One day's newest build of each kind: a seek on the primary key.
+async function readNewsBrief(day) {
+  await init();
+  const r = await db.execute({ sql: 'select kind, at, data from news_briefs where day = ? order by at desc limit 20', args: [String(day)] });
+  const out = {};
+  for (const x of r.rows) { const k = String(x.kind); if (out[k]) continue; try { out[k] = Object.assign(JSON.parse(String(x.data)), { at: Number(x.at) }); } catch { /* a row that does not parse is skipped */ } }
+  return out;
+}
+// The days on file, newest first (a small table: one or two rows a day).
+async function readNewsBriefDays(limit) {
+  await init();
+  const r = await db.execute({ sql: "select distinct day from news_briefs where kind = 'today' order by day desc limit ?", args: [Math.min(400, Number(limit) || 30)] });
+  return r.rows.map((x) => String(x.day));
+}
 const writeNewsBriefMark = (v) => writeMetaJson('news_brief', v);
 const writeDataCheck = (v) => writeMetaJson('data_check', v);
 // The nightly's refresh email, held until its later steps are on file
@@ -9204,7 +9232,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved, readDataCheck, writeDataCheck, readNewsBriefMark, writeNewsBriefMark,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved, readDataCheck, writeDataCheck, readNewsBriefMark, writeNewsBriefMark, writeNewsBrief, readNewsBrief, readNewsBriefDays,
   listSubscribers,
   deleteSubscriber,
   readSentFor,

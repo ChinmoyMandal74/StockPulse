@@ -5,6 +5,7 @@
 //
 //   node news-brief-ping.js        send today's two briefs (once a day; a second call sends nothing)
 //   node news-brief-ping.js --sample  mail both now, marked [Sample]; tonight's still go
+//   node news-brief-ping.js --publish  publish both to /briefs now, mail nothing
 //   node news-brief-ping.js --dry  print both, send nothing (still calls the model twice, about $0.33)
 //   node news-brief-ping.js --base URL  point it somewhere else (a local server)
 //
@@ -18,6 +19,7 @@ const path = require('path');
 const ARGV = process.argv.slice(2);
 const DRY = ARGV.includes('--dry');
 const SAMPLE = ARGV.includes('--sample');
+const PUBLISH = ARGV.includes('--publish');
 const i = ARGV.indexOf('--base');
 const BASE_ARG = i >= 0 && ARGV[i + 1] ? String(ARGV[i + 1]) : '';
 
@@ -39,7 +41,7 @@ function fromEnvFile(key) {
   try {
     res = await fetch(base + '/api/cron/news-brief' + (DRY ? '?dry=1' : ''), {
       method: 'POST', signal: AbortSignal.timeout(280000),
-      headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' }, body: SAMPLE ? '{"sample":true}' : '{}',
+      headers: { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' }, body: SAMPLE ? '{"sample":true}' : PUBLISH ? '{"publish":true}' : '{}',
     });
     body = await res.text();
   } catch (e) { console.log('FAILED  could not reach ' + base + ' -- ' + e.message); process.exitCode = 1; return; }
@@ -48,6 +50,7 @@ function fromEnvFile(key) {
   if (!res.ok || !j) { console.log('FAILED  HTTP ' + res.status + ' -- ' + String(body).slice(0, 160)); process.exitCode = 1; return; }
   if (DRY) { console.log(j.today.subject + '\n\n' + j.today.text + '\n\n\n' + j.next.subject + '\n\n' + j.next.text); return; }
   const c = j.counts || {};
+  if (PUBLISH) { console.log(j.published ? 'published: ' + j.counts.todayItems + ' lines today, ' + j.counts.items + ' for the next session' : 'not published'); if (!j.published) process.exitCode = 1; return; }
   if (j.sample) { console.log(j.sent ? 'sample sent' : 'sample not sent'); if (!j.sent) process.exitCode = 1; return; }
   console.log(j.already ? 'already sent today (' + j.already + ')'
     : (j.sent ? 'sent: ' : 'not all sent (today ' + j.today + ', next ' + j.next + '): ')

@@ -119,5 +119,14 @@ check('sixty kept of more', (() => { const many = Array.from({ length: 70 }, (_,
   return NB.checkToday({ intro: '', items: many.map((m, i) => ({ importance: 'high', ids: [m.id], line: 'w' + i + 'aaaa w' + i + 'bbbb w' + i + 'cccc' })) }, many, syms).items.length; })(), 60);
 check('the count of articles read', ok1.read, 5);
 
+// ---- no news outlet named (the briefs are public) ----------------------------------
+check('a well-known outlet in a line: dropped', T([{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm, Bloomberg reported.' }]).dropped, ['names a news outlet (Bloomberg)']);
+check('the day\'s own outlet names too', NB.checkToday({ intro: '', items: [{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm, per Daily Widget News.' }] }, day, syms, '', ['Daily Widget News', 'example.com']).dropped, ['names a news outlet (Daily Widget News)']);
+check('a web address among the sources is not matched as a name', NB.outletIn('Beta grew at example.com scale', ['example.com']), null);
+check('matched as written: "proactive" the word passes, Proactive the outlet does not', [NB.outletIn('Beta took a proactive step.'), NB.outletIn('Beta said, Proactive reported.')], [null, 'Proactive']);
+check('the next-session note drops one too', one('Alpha reported results, Reuters said.', ['n1']).dropped, ['names a news outlet (Reuters)']);
+check('an intro naming an outlet is dropped', T([{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm.' }], 'Per CNBC, a busy day.').dropped, ['intro']);
+check('both prompts say never to name an outlet', /never name a newspaper, website or other news outlet/.test(NB.SYSTEM) && /never name a newspaper, website or other news outlet/.test(NB.SYSTEM_TODAY), true);
+
 console.log(`\nnewsbrief-test: ${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

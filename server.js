@@ -411,7 +411,7 @@ app.use(route(async (req, res, next) => {
   if (!REQUIRE_TERMS || !AUTH_REQUIRED) return next();
   const p = req.path;
   const api = p.startsWith('/api/');
-  if (api ? TERMS_OPEN_API.test(p) : (TERMS_OPEN_PAGES.has(p) || p.startsWith('/blog') || TERMS_STATIC.test(p))) return next();
+  if (api ? TERMS_OPEN_API.test(p) : (TERMS_OPEN_PAGES.has(p) || p.startsWith('/blog') || p === '/briefs' || p.startsWith('/briefs/') || TERMS_STATIC.test(p))) return next();
   const u = await currentUser(req);
   if (!u || isAdminRole(u.role) || u.termsVersion === TERMS_VERSION) return next();
   if (api || req.method !== 'GET' || /\.json$/i.test(p)) {
@@ -1583,6 +1583,82 @@ app.get('/blog', route(async (req, res) => {
 // their pictures, the subscribe box, the blog and the screener. Public, like
 // the blog; each visit is logged as a page view ('links') so the Instagram
 // traffic can be counted. Navy, like the blog.
+// THE DAILY NEWS BRIEF, PUBLIC (2026-11-12, the owner: "publish these on a
+// page and make it available to everyone .. no signup required"). /briefs is
+// the newest day, /briefs/YYYY-MM-DD any day on file: the two evening briefs
+// as stored by /api/cron/news-brief (news_briefs), drawn on the server so the
+// page needs no script and shares with a title. Only the checked AI lines are
+// published (never the fallback list), and no line names a news outlet
+// (NewsBrief.outletIn), since the site names no source to anyone but the admin.
+// Tickers are plain text: their stock pages are for members.
+const NewsBriefPage = require('./newsbrief.js');
+function briefsHtml(base, day, b, days) {
+  const t = b.today, n = b.next;
+  const when = day ? NewsBriefPage.dayName(day) : '';
+  const esc = htmlEsc;
+  const tick = (list) => (list || []).map((s) => `<span class="nb-t">${esc(s)}</span>`).join('');
+  const today = t && t.items && t.items.length ? (() => {
+    const hi = t.items.filter((x) => x.importance === 'high'), med = t.items.filter((x) => x.importance === 'medium');
+    const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${esc(x.line)}</p></li>`).join('') + '</ul>' : '');
+    return `<section class="nb-s"><h2>What happened today</h2>${t.intro ? `<p class="nb-in">${esc(t.intro)}</p>` : ''}`
+      + `<p class="nb-m">${t.items.length} stories, written by AI from ${Number(t.read || 0).toLocaleString('en-US')} articles, each piece of news once.</p>`
+      + list('High importance', hi) + list('Medium importance', med) + '</section>';
+  })() : '';
+  const next = n && n.next ? (() => {
+    const cal = (label, arr) => (arr && arr.length ? `<h3 class="nb-k">${label} (${arr.length})</h3><p class="nb-cal">`
+      + arr.slice(0, 80).map((r) => `<span><b>${esc(r.symbol)}</b> ${esc(r.name)}</span>`).join('') + '</p>' : '');
+    return `<section class="nb-s"><h2>Next session: ${esc(NewsBriefPage.dayName(n.next))}</h2>${n.intro ? `<p class="nb-in">${esc(n.intro)}</p>` : ''}`
+      + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${esc(x.line)}</p><div class="nb-ts">${tick(x.symbols)}</div></li>`).join('') + '</ol>' : '')
+      + cal('Reporting before the open', n.before) + cal('Listed to report after the close', n.after) + '</section>';
+  })() : '';
+  const empty = !today && !next ? '<p class="nb-in">The first brief is published at 5:40 PM New York time.</p>' : '';
+  const archive = days.length > 1 ? '<h3 class="nb-k">Earlier briefs</h3><p class="nb-ar">' + days.filter((x) => x !== day).slice(0, 30)
+    .map((x) => `<a href="/briefs/${x}">${esc(NewsBriefPage.dayName(x))}</a>`).join('') + '</p>' : '';
+  const desc = (t && t.intro) || 'What happened today at the companies Tickr Lab covers, and what the next trading session holds, every evening at 5:40 PM New York time.';
+  const title = `${BRAND} news brief${when ? ': ' + when : ''}`;
+  const url = base + '/briefs' + (day ? '/' + day : '');
+  return `<!doctype html><html lang="en" data-theme="navy"><head><meta charset="utf-8">`
+    + `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#071120">`
+    + `<title>${esc(title)}</title><meta name="description" content="${esc(desc)}">`
+    + `<meta property="og:type" content="article"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}">`
+    + `<meta property="og:url" content="${esc(url)}"><meta property="og:site_name" content="${esc(BRAND)}"><meta name="twitter:card" content="summary">`
+    + `<link rel="canonical" href="${esc(url)}"><link rel="stylesheet" href="/app.css"><link rel="icon" href="/favicon.svg">`
+    + '<style>body{margin:0;background:var(--void);color:var(--text);font-family:var(--sans)}'
+    + '.nb{max-width:720px;margin:0 auto;padding:40px max(18px,env(safe-area-inset-left)) 70px max(18px,env(safe-area-inset-right))}'
+    + '.nb-br{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none}.nb-br span{color:var(--faint)}'
+    + '.nb h1{margin:14px 0 4px;font-size:32px;letter-spacing:-.03em;line-height:1.1;text-wrap:balance}.nb-dt{margin:0;color:var(--muted);font-size:15px}'
+    + '.nb-s{margin-top:34px;padding-top:6px;border-top:1px solid var(--hair)}.nb h2{margin:22px 0 8px;font-size:21px;letter-spacing:-.02em}'
+    + '.nb-in{margin:0 0 8px;font-size:16px;line-height:1.6;color:var(--text)}.nb-m{margin:0 0 6px;font-size:13px;color:var(--faint)}'
+    + '.nb-k{margin:22px 0 8px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}'
+    + '.nb-l,.nb-o{margin:0;padding:0;list-style:none}.nb-l li,.nb-o li{padding:12px 0;border-bottom:1px solid color-mix(in srgb,var(--hair) 70%,transparent)}'
+    + '.nb-l p,.nb-o p{margin:5px 0 0;font-size:15px;line-height:1.55;color:var(--text)}.nb-o{counter-reset:nb}.nb-o li{counter-increment:nb;position:relative;padding-left:30px}'
+    + '.nb-o li::before{content:counter(nb);position:absolute;left:0;top:13px;font-size:13px;font-weight:700;color:var(--accent)}.nb-o p{margin:0 0 5px}'
+    + '.nb-ts{display:flex;gap:6px;flex-wrap:wrap}.nb-t{font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;border:1px solid var(--hair-2);color:var(--muted)}'
+    + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}'
+    + '.nb-ar{display:flex;flex-wrap:wrap;gap:8px;margin:0}.nb-ar a{font-size:13px;padding:6px 10px;border:1px solid var(--hair);border-radius:8px;color:var(--text);text-decoration:none}'
+    + '.nb-cta{margin-top:34px;padding:16px 18px;border:1px solid var(--hair);border-radius:14px;font-size:14px;line-height:1.55;color:var(--muted)}'
+    + '.nb-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.nb-b{display:inline-block;padding:9px 15px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
+    + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
+    + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}</p>`
+    + empty + today + next
+    + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
+    + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
+    + `<div style="margin-top:26px">${archive}</div>`
+    + '<p class="nb-foot">Written by AI each evening from the day’s news coverage of the companies Tickr Lab follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice: nothing here is a recommendation to trade any security.</p>'
+    + '</main></body></html>';
+}
+app.get(['/briefs', '/briefs/:day'], route(async (req, res, next) => {
+  const asked = req.params.day;
+  if (asked && !/^\d{4}-\d\d-\d\d$/.test(asked)) return next();
+  if (anonLogOk(req)) logAct(req, 'page', 'briefs');
+  const base = APP_URL || `https://${req.headers.host}`;
+  const days = await store.readNewsBriefDays(60).catch(() => []);
+  const day = asked || days[0] || null;
+  const b = day ? await store.readNewsBrief(day).catch(() => ({})) : {};
+  if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=300');
+  res.type('html').send(briefsHtml(base, day, b, days));
+}));
 app.get('/links', route(async (req, res) => {
   if (anonLogOk(req)) logAct(req, 'page', 'links');
   const base = APP_URL || `https://${req.headers.host}`;
@@ -1613,7 +1689,7 @@ app.get('/links', route(async (req, res) => {
     + `<body><main class="lk"><h1>Tickr <span>Lab</span></h1>`
     + '<p class="lk-lede">Every stock measured the same way after every close. The latest deep dives and notes:</p>'
     + '<p class="lk-k">Latest posts</p>' + (items || '<p class="lk-lede">The first post is being written.</p>')
-    + '<div class="lk-row"><a class="lk-b" href="/blog">All posts</a><a class="lk-b" href="/">The screener</a><a class="lk-b" href="/app">Get the app</a>'
+    + '<div class="lk-row"><a class="lk-b" href="/briefs">Daily news brief</a><a class="lk-b" href="/blog">All posts</a><a class="lk-b" href="/">The screener</a><a class="lk-b" href="/app">Get the app</a>'
     + `<a class="lk-b" href="${htmlEsc(BRAND_IG_URL)}">Instagram</a></div>`
     + subscribeBox('links')
     + '<p class="lk-foot">Descriptive, not advice. tickrlab.com</p></main></body></html>');
@@ -2226,12 +2302,14 @@ app.get('/robots.txt', route(async (req, res) => {
 app.get('/sitemap.xml', route(async (req, res) => {
   const base = APP_URL || `https://${req.headers.host}`;
   const posts = await store.readPosts({ publishedOnly: true });
+  const briefDays = await store.readNewsBriefDays(60).catch(() => []);
   const url = (loc, when) => `  <url><loc>${loc}</loc>${when ? `<lastmod>${String(when).slice(0, 10)}</lastmod>` : ''}</url>`;
   res.type('application/xml').send(
     '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     [url(base + '/'), url(base + '/blog'), url(base + '/results'),
       url(base + '/privacy'), url(base + '/terms'),
-      ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt))
+      ...posts.map((p) => url(`${base}/blog/${p.slug}`, p.updatedAt ? new Date(p.updatedAt).toISOString() : p.publishedAt)),
+      url(base + '/briefs', briefDays[0]), ...briefDays.map((d) => url(`${base}/briefs/${d}`, d)),
     ].join('\n') + '\n</urlset>\n');
 }));
 
@@ -22312,7 +22390,9 @@ async function newsBriefData(now, prevAt) {
   const list = NewsBrief.stories(rows, info, prevAt, now);
   const calRaw = await store.readEarningsCalendarSeen(today, NewsBrief.addDays(today, -7)).catch(() => ({}));
   const cal = NewsBrief.calendar(calRaw, info, today, next);
-  return { today, next, list, cal, rows, info, prevAt, now, symbols: new Set(by.keys()) };
+  // The day's outlet names, so no line naming one is kept (the page is public).
+  const outlets = [...new Set(rows.map((r) => String(r.source || '')).filter(Boolean))];
+  return { today, next, list, cal, rows, info, prevAt, now, outlets, symbols: new Set(by.keys()) };
 }
 // One call to the model with a JSON answer; checked by `checkFn(ans)`. Never
 // throws: a failure is `error`, and the email says so.
@@ -22343,12 +22423,12 @@ async function newsBriefCall(body, useAi, checkFn) {
 function newsBriefNext(d, useAi) {
   const cands = NewsBrief.candidates(d.list, d.cal, d.today);
   return newsBriefCall(cands.length ? NewsBrief.request(cands, d.next) : null, useAi,
-    (ans) => NewsBrief.check(ans, cands, d.symbols, NewsBrief.dayName(d.next) + ' ' + d.next + ' ' + NewsBrief.dayName(d.today)));
+    (ans) => NewsBrief.check(ans, cands, d.symbols, NewsBrief.dayName(d.next) + ' ' + d.next + ' ' + NewsBrief.dayName(d.today), d.outlets));
 }
 function newsBriefTodayAi(d, useAi) {
   const inputs = NewsBrief.dayInputs(d.rows, d.info, d.prevAt, d.now);
   return newsBriefCall(inputs.length ? NewsBrief.todayRequest(inputs, d.today) : null, useAi,
-    (ans) => NewsBrief.checkToday(ans, inputs, d.symbols, NewsBrief.dayName(d.today) + ' ' + d.today));
+    (ans) => NewsBrief.checkToday(ans, inputs, d.symbols, NewsBrief.dayName(d.today) + ' ' + d.today, d.outlets));
 }
 // The AI's summary: high then medium, a line an event, its companies and how
 // many articles it was drawn from.
@@ -22456,7 +22536,9 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   // the jobs email does not count them as the run), the mark left alone so
   // the evening's briefs still go.
   const sample = !!(req.body && req.body.sample === true);
-  if (!dry && !force && !sample && mark.day === today && mark.today && mark.next) return res.json({ sent: false, already: today });
+  // body.publish: build and publish to /briefs, mail nothing, the mark untouched.
+  const publish = !!(req.body && req.body.publish === true);
+  if (!dry && !force && !sample && !publish && mark.day === today && mark.today && mark.next) return res.json({ sent: false, already: today });
   // The window starts where the last sent brief stopped; a resend of today's
   // keeps the same start.
   const prevAt = mark.day === today ? (mark.prevAt || null) : (mark.at && now - mark.at < 4 * 864e5 ? mark.at : null);
@@ -22468,6 +22550,17 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
     shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error,
     todayRead: tai.read || 0, todayItems: tai.items.length, todayDropped: tai.dropped, todayError: tai.error, spent: Math.round((ai.spent + tai.spent) * 1e4) / 1e4 };
   if (dry) return res.json({ dry: true, counts, today: { subject: a.subject, text: a.text, bytes: a.html.length }, next: { subject: b.subject, text: b.text, bytes: b.html.length } });
+  // Published on /briefs: the checked AI lines only (never the fallback list),
+  // a row a build, so the day's history is kept. Bookkeeping: never fails the send.
+  const store1 = async () => {
+    try {
+      if (tai.items.length) await store.writeNewsBrief(d.today, 'today', now, { day: d.today, intro: tai.intro, read: tai.read || 0, items: tai.items.map((x) => ({ importance: x.importance, line: x.line, symbols: x.symbols, articles: x.articles })) });
+      await store.writeNewsBrief(d.today, 'next', now, { day: d.today, next: d.next, intro: ai.intro, items: ai.items.map((x) => ({ line: x.line, symbols: x.symbols })),
+        before: d.cal.before.map((r) => ({ symbol: r.symbol, name: r.name, time: r.time })), after: d.cal.after.map((r) => ({ symbol: r.symbol, name: r.name })) });
+      return true;
+    } catch (err) { console.warn('news brief: not published:', err && err.message); return false; }
+  };
+  if (publish) return res.json({ published: await store1(), counts });
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
@@ -22479,6 +22572,7 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   const sentA = (mark.day === today && mark.today && !force) ? true : !!(await sendMail({ kind: 'news-brief-today', to, subject: a.subject, text: a.text, html: a.html }));
   const sentB = (mark.day === today && mark.next && !force) ? true : !!(await sendMail({ kind: 'news-brief-next', to, subject: b.subject, text: b.text, html: b.html }));
   try { await store.writeNewsBriefMark({ day: today, at: sentA ? now : mark.at || null, prevAt, today: sentA, next: sentB }); } catch { /* bookkeeping never fails the send */ }
+  await store1();
   res.json({ sent: sentA && sentB, today: sentA, next: sentB, counts });
 }));
 
