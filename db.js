@@ -640,6 +640,13 @@ const SCHEMA = [
      note      text
    )`,
   `create index if not exists idx_paper_trades_user on paper_trades (user_key, id)`,
+  // The addresses an admin has used (2026-11-11): the admin is no longer
+  // written to the activity log, and /blog-visitors leaves these out.
+  `create table if not exists admin_ips (
+     ip         text primary key,
+     first_seen integer not null,
+     last_seen  integer not null
+   )`,
   // Paper competitions (2026-11-11, the owner: teams, a ranking and winners,
   // for members' pretend accounts only; compete.js). The admin sets one up;
   // members enter on their own or as a team, and each team trades ONE shared
@@ -7574,13 +7581,23 @@ async function readBlogVisitLog() {
     db.execute("select ts, user, detail, ip from activity where kind = 'page' and (detail = 'blog' or detail like 'post:%')"),
     db.execute("select email from users where role = 'admin'"),
     db.execute(`select distinct ip from activity
-                where ip is not null and (user in ('admin', 'open') or user in (select email from users where role = 'admin'))`),
+                where ip is not null and (user in ('admin', 'open') or user in (select email from users where role = 'admin'))
+                union select ip from admin_ips`),
   ]);
   return {
     views: views.rows.map((r) => ({ ts: r.ts, user: r.user == null ? null : String(r.user), detail: r.detail == null ? null : String(r.detail), ip: r.ip == null ? null : String(r.ip) })),
     adminUsers: admins.rows.map((r) => String(r.email)),
     adminIps: ips.rows.map((r) => String(r.ip)),
   };
+}
+
+// An address an admin used, for /blog-visitors to leave out (the admin is not
+// in the activity log any more). One upsert; the caller throttles.
+async function noteAdminIp(ip) {
+  await init();
+  const now = Date.now();
+  await db.execute({ sql: 'insert into admin_ips (ip, first_seen, last_seen) values (?, ?, ?) on conflict(ip) do update set last_seen = excluded.last_seen',
+    args: [String(ip).slice(0, 60), now, now] });
 }
 
 // Wipes the log, like clearVisitors — the autoincrement resets too.
@@ -9054,6 +9071,7 @@ module.exports = {
   addPaperTrade,
   resetPaper,
   listAllPaper,
+  noteAdminIp,
   listComps, readComp, createComp, updateComp, compTeams, readTeam, readTeamByCode, readTeamLedgers,
   createTeam, joinTeam, leaveTeam, setTeamShow, myCompEntries,
   removeSymbolFromUserPortfolios,

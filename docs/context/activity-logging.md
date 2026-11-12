@@ -19,3 +19,12 @@
 - **It exposed one pre-existing layout bug**: `.island` is a single non-wrapping flex pill whose buttons already overran it by ~10px at 390px, invisible until the new panel made the page tall enough for a scrollbar to claim that width. The Clear log label takes `hide-sm` like its neighbours.
 - **Unrelated and pre-existing, found while regressing this**: `views-test.js` and `screens-test.js` in the scratchpad both die with `window is not defined` — confirmed identical at HEAD with these changes reverted. `filter-test.js` was broken the same way and is fixed here: `visibleStocks` was split into `scopedStocks` / `prefilterStocks` / `activeColFilters` by the filter-row commit (2bc163a) and the harness was never told.
 
+
+## The admin is not logged (2026-11-11)
+The owner: "In the activity log, can you stop logging admin". Nothing an admin does is written to `activity` any more, by any of its three writers: `logAct`, the page beacon (`POST /api/activity`, which answers `accepted: 0, admin: true`) and the portfolio diff. One gate, `skipAdminActivity(req, userKey)`: the request is an admin (`isAdmin`), or the line is written against `'admin'` (the password sign-in) or an account whose role is admin (a sign-in, before the session cookie exists). Open mode (no password) still logs, as local development always has. A failed admin password attempt is not an admin request and is still logged.
+
+**The address is kept** in `admin_ips` (ip, first and last seen), upserted at most once an hour an address per instance: `/blog-visitors` leaves out every address an admin has used and learned them from this log, so `readBlogVisitLog` now takes them from both. The admin rows already in the log were left to age out with the 60-day prune.
+
+What this gives up: the admin's operations (refreshes, adds, edits) no longer appear on `/activity` or in its timing percentiles.
+
+Verified on the real server with an in-memory database (5 checks): an admin and a member doing the same pages, beacon events, portfolio save and sign-ins; nothing against the admin, everything against the member, a signed-out blog view still logged, the admin's address kept and read by the blog count. The gate proven by switching it off (2 failures).

@@ -2805,10 +2805,41 @@ function anonLogOk(req) {
   return e.n <= ANON_LOG_MAX;
 }
 
+// THE ADMIN IS NOT LOGGED (the owner, 2026-11-11: "In the activity log, can
+// you stop logging admin"). Nothing an admin does is written to the activity
+// log, by any of its three writers (logAct, the page beacon, the portfolio
+// diff). The one thing kept is the ADDRESS, in admin_ips, throttled to once an
+// hour an address per instance: /blog-visitors leaves out every address an
+// admin has used, and learned them from the log, so without this the owner's
+// phone on a new network would start counting as a reader. Open mode (no
+// password, everyone admin) still logs, as local development always has.
+const adminIpSeen = new Map();
+function noteAdminIp(req) {
+  const ip = req && req.ip ? String(req.ip).slice(0, 60) : '';
+  if (!ip) return;
+  const t = adminIpSeen.get(ip);
+  if (t && Date.now() - t < 3600e3) return;
+  adminIpSeen.set(ip, Date.now());
+  store.noteAdminIp(ip).catch(() => { adminIpSeen.delete(ip); });
+}
+// `userKey` is the account a line is written against when the caller names it
+// (a sign-in, before the session cookie exists): the password sign-in's
+// 'admin', or an account whose role is admin.
+async function skipAdminActivity(req, userKey) {
+  if (!req || !AUTH_REQUIRED) return false;
+  let admin = userKey === 'admin';
+  if (!admin && typeof userKey === 'string' && userKey.includes('@')) {
+    const u = await store.findUserByEmail(userKey).catch(() => null);
+    admin = !!u && isAdminRole(u.role);
+  }
+  if (!admin && !(await isAdmin(req))) return false;
+  noteAdminIp(req);
+  return true;
+}
 function logAct(req, kind, detail, userKey) {
   const k = String(kind).slice(0, 16);
   const ms = UNTIMED_ACT_KINDS.has(k) || !req || !req._t0 ? null : Date.now() - req._t0;
-  Promise.resolve(userKey !== undefined ? userKey : actKey(req))
+  skipAdminActivity(req, userKey).then((skip) => (skip ? null : Promise.resolve(userKey !== undefined ? userKey : actKey(req))
     .then((user) => store.logActivity([{
       ts: new Date().toISOString(),
       user,
@@ -2816,7 +2847,7 @@ function logAct(req, kind, detail, userKey) {
       detail: detail == null ? null : String(detail).slice(0, 80),
       ip: req.ip || null,
       ms,
-    }]))
+    }]))))
     .catch(() => { /* never blocks the action */ });
 }
 
@@ -8383,7 +8414,7 @@ app.put('/api/my/portfolios', requireMember, route(async (req, res) => {
     }
   }
   for (const name of Object.keys(prev)) if (!(name in next)) push(('delete:' + name).slice(0, 80));
-  if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
+  if (rows.length && !(await skipAdminActivity(req))) store.logActivity(rows).catch(() => { /* fire and forget */ });
 
   res.json({ ok: true, portfolios: next, max: MY_PORTFOLIOS_MAX });
 }));
@@ -22923,6 +22954,7 @@ app.post('/api/activity', requireAuth, route(async (req, res) => {
       : Math.min(ACT_MS_MAX, Math.max(0, Math.round(Number(raw))));
     rows.push({ ts, user, kind, detail: detail || null, ip: req.ip || null, ms });
   }
+  if (rows.length && await skipAdminActivity(req)) return res.json({ ok: true, accepted: 0, admin: true });
   if (rows.length) store.logActivity(rows).catch(() => { /* fire and forget */ });
   res.json({ ok: true, accepted: rows.length });
 }));
