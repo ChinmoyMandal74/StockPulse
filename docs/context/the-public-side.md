@@ -196,3 +196,4 @@ The owner asked how to get more people reading the blog. Two changes:
 
 ## The daily news brief, `/briefs` (2026-11-12)
 Public, no sign-in, past the terms gate: the evening news briefs as published by `/api/cron/news-brief` (`news_briefs`), the newest day at `/briefs` and any day at `/briefs/YYYY-MM-DD`, server-drawn with share tags, in the sitemap and linked from `/links`. No outlet named and no stock page linked. See `news-tone.md`.
+The landing page links to it from the top (same day, the owner: "Give a link on home page .. somewhere on top about this new news summary feature"): a "New" pill above the hero's eyebrow, "The daily news brief: today's stock news in one page, free", and News brief in the header's section links (`.lp-news` in `private/landing.html`).

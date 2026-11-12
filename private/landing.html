@@ -35,6 +35,14 @@
     .lp .h2 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1.08; font-weight: 600; letter-spacing: -0.03em; text-wrap: balance; }
     .lp .h3 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
     .lp p { margin: 0; }
+    /* The daily news brief, above the headline (2026-11-12, the owner: "Give a
+       link on home page .. somewhere on top about this new news summary feature"). */
+    .lp .lp-news { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; margin: 0 0 22px; padding: 7px 14px 7px 7px; border-radius: 999px;
+                   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent);
+                   color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.35; }
+    .lp .lp-news:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    .lp .lp-news-tag { flex: none; padding: 3px 9px; border-radius: 999px; background: var(--accent); color: var(--void); font: 600 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+    .lp .lp-news-go { flex: none; color: var(--accent); }
     .lp .eyebrow { display: block; margin-bottom: 12px; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); }
     .lp .lede { color: var(--muted); font-size: 18px; max-width: 62ch; margin-top: 14px; }
     .lp .note { margin-top: 12px; font: 12px var(--mono); color: var(--faint); }
@@ -325,7 +333,7 @@
   <div class="w">
     <a class="mark" href="/home"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a>
     <span class="beta">BETA</span>
-    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/blog">Blog</a></nav>
+    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/briefs">News brief</a><a href="/blog">Blog</a></nav>
     <span class="sp"></span>
     <a class="b signin" href="/login">Sign in</a>
     <a class="b guest" href="/login?guest=1">Guest preview</a>
@@ -337,6 +345,7 @@
   <section class="lp-hero">
     <div class="w">
       <div>
+        <a class="lp-news" href="/briefs"><span class="lp-news-tag">New</span><span>The daily news brief: today’s stock news in one page, free</span><span class="lp-news-go" aria-hidden="true">→</span></a>
         <span class="eyebrow">Public beta · free while in beta</span>
         <h1>Every US stock, measured <em>the same way</em> after every close.</h1>
         <p class="lede">A screener, a page for every company and post-ready visuals, for people who follow US stocks and for the people who write about them. Returns, trend, company filings, who owns it, and a plain reading of where each stock stands, all in one place.</p>
