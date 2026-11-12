@@ -3,7 +3,8 @@
 // scheduler on Fly.io at 17:40 Eastern. One HTTP call, NOT `node server.js`:
 // the work lives behind POST /api/cron/news-brief on the deployed app.
 //
-//   node news-brief-ping.js        send today's two briefs (once a day; a second call sends nothing)
+//   node news-brief-ping.js        send today's two briefs (once a day; a second call sends nothing),
+//                                  then the evening mailing to the `briefs` list
 //   node news-brief-ping.js --sample  mail both now, marked [Sample]; tonight's still go
 //   node news-brief-ping.js --publish  publish both to /briefs now, mail nothing
 //   node news-brief-ping.js --dry  print both, send nothing (still calls the model twice, about $0.33)
@@ -23,7 +24,9 @@ const PUBLISH = ARGV.includes('--publish');
 // --list (with --publish): then the morning mailing to the `briefs` list,
 // a batch a call while any are left. The server decides whether it is the
 // morning send (08:30 to 13:30 Eastern, today's edition on file) and keeps a
-// ledger, so later runs of the day send nothing.
+// ledger, so later runs of the day send nothing. The plain evening run mails
+// the list too, after the owner's two (the evening edition, 17:30 to 22:00;
+// the owner, 2026-11-12: "once in morning and once post market close").
 const LIST = ARGV.includes('--list');
 const i = ARGV.indexOf('--base');
 const BASE_ARG = i >= 0 && ARGV[i + 1] ? String(ARGV[i + 1]) : '';
@@ -83,4 +86,6 @@ async function mailList(base, secret) {
       + c.todayItems + ' lines from ' + c.todayRead + ' articles' + (c.todayError ? ' (AI: ' + c.todayError + '; ' + c.shown + ' stories listed instead)' : '') + ', ' + c.items + ' next-session lines'
       + (c.aiError ? ' (AI: ' + c.aiError + ')' : '') + ', $' + c.spent);
   if (!j.sent && !j.already) process.exitCode = 1;
+  // The edition is published by now (the send route stores it whatever the mail did).
+  await mailList(base, secret);
 })();

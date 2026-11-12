@@ -1796,7 +1796,7 @@ const SUB_TOPICS = [
   // email provided people opt for it". Anyone may ask; each weekday morning.
   { id: 'results', name: 'Earnings results', note: 'Each weekday morning: the quarterly results US companies filed since the last one, read from each press release by AI. None on a day with no results.' },
   // 2026-11-12, the owner: a daily news briefing "in the morning" (/briefs).
-  { id: 'briefs', name: 'Daily news brief', note: 'Every morning: what to watch at the open and the news since the evening before, written by AI (at midday at the weekend).' },
+  { id: 'briefs', name: 'Daily news brief', note: 'Twice a day: in the morning, what to watch at the open and the news since the evening before (at midday at the weekend); and after the close, the day’s news and what the next session holds. Written by AI.' },
 ];
 const SUB_TOPIC_IDS = new Set(SUB_TOPICS.map((t) => t.id));
 const subTopicName = (id) => (SUB_TOPICS.find((t) => t.id === id) || {}).name || id;
@@ -1867,7 +1867,7 @@ const subscribeBox = (source) =>
 const briefsSubscribeBox = () =>
   '<section class="subbox">'
   + '<h2>Get the news brief by email</h2>'
-  + '<p>One email every morning before the open: what to watch and the news since the evening before. At the weekend, at midday. No sharing your address with anyone.</p>'
+  + '<p>Two emails a day: in the morning before the open, what to watch and the news since the evening before (at the weekend, at midday); and after the close, the day’s news and what comes next. No sharing your address with anyone.</p>'
   + '<form method="post" action="/subscribe">'
   + '<input type="hidden" name="source" value="briefs" /><input type="hidden" name="topics" value="briefs" />'
   + SubForm.fields(SubForm.token(Date.now(), authMac))
@@ -22823,7 +22823,8 @@ function briefsMailEmail(base, day, b, opts) {
     if (short && !firsts.includes(short)) firsts.push(short);
     if (firsts.length >= 3) break pick;
   }
-  const subject = `${wd}’s news brief` + (firsts.length ? ': ' + firsts.join(', ') + ' and more' : '');
+  const pm = !!(opts && opts.evening);
+  const subject = (pm ? `${wd} evening news brief` : `${wd}’s news brief`) + (firsts.length ? ': ' + firsts.join(', ') + ' and more' : '');
   const intro = n.intro || t.intro || `The news at the companies ${BRAND} follows, and what the next session holds.`;
   const html = [], text = [];
   if (nItems.length) {
@@ -22835,7 +22836,7 @@ function briefsMailEmail(base, day, b, opts) {
     });
   }
   if (news.length) {
-    const label = 'The news since ' + (soon ? new Date(Date.parse(day + 'T12:00:00Z') - 864e5).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) + ' evening' : wd);
+    const label = pm ? 'Today’s news' : 'The news since ' + (soon ? new Date(Date.parse(day + 'T12:00:00Z') - 864e5).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) + ' evening' : wd);
     html.push(head(label));
     text.push('', label.toUpperCase());
     for (const x of news) {
@@ -22851,12 +22852,21 @@ function briefsMailEmail(base, day, b, opts) {
     html.push(`<div${st(`font-size:13px;line-height:1.7;color:${MC.body}`)}>` + before.map((r) => `<a href="${mailEsc(link(r.symbol))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(r.symbol)}</a> ${mailEsc(r.name)}`).join(' · ') + '</div>');
     text.push('', label.toUpperCase(), before.map((r) => r.symbol + ' ' + r.name).join(', '));
   }
+  // The evening's: who reported after today's close, beneath who reports before the next open.
+  const after = pm ? (n.after || []).slice(0, 12) : [];
+  if (after.length) {
+    const label = 'Reported after today’s close';
+    html.push(head(label + ' (' + (n.after || []).length + ')'));
+    html.push(`<div${st(`font-size:13px;line-height:1.7;color:${MC.body}`)}>` + after.map((r) => `<a href="${mailEsc(link(r.symbol))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(r.symbol)}</a> ${mailEsc(r.name)}`).join(' · ') + '</div>');
+    text.push('', label.toUpperCase(), after.map((r) => r.symbol + ' ' + r.name).join(', '));
+  }
   const full = `${base}/briefs/${day}`;
   html.push(`<div${st('margin-top:20px')}>${mailButton(full, 'Read the full brief')}</div>`);
   text.push('', 'The full brief: ' + full);
   const note = (opts && opts.note ? opts.note + ' ' : '') + 'Written by AI from the day’s news coverage of the companies ' + BRAND + ' follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice.';
   const noteText = (opts && opts.noteText ? opts.noteText + ' ' : '') + 'Written by AI from the day’s news coverage; checked against the articles, but it can still contain mistakes. Descriptive, not advice.';
-  return { subject, html: emailShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, body: html.join(''), note }), text: textShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, lines: text, note: noteText }) };
+  const heading = (pm ? 'Evening news brief: ' : 'News brief: ') + NewsBrief.dayName(day);
+  return { subject, html: emailShell({ heading, intro, body: html.join(''), note }), text: textShell({ heading, intro, lines: text, note: noteText }) };
 }
 // Price and today's move for the tickers under each line, read once a batch.
 async function briefsMailPerf() {
@@ -22886,17 +22896,22 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
     if (!sb.today && !sb.next) return res.status(404).json({ error: 'No edition on file yet.' });
     const to = await operatorEmail();
     if (!to) return res.status(400).json({ error: 'No address to send to.' });
-    const note = 'A sample of the Daily news brief mailing, sent to the site’s operator; subscribers get it each morning with their own unsubscribe link here.';
+    const note = 'A sample of the Daily news brief mailing, sent to the site’s operator; subscribers get it each morning and evening with their own unsubscribe link here.';
     const d = briefsMailEmail(base, sd, sb, { perf: await briefsMailPerf(), note, noteText: note });
     const sent = await sendMail({ kind: 'newsbrief-sample', to, subject: '[Sample] ' + d.subject, text: d.text, html: d.html });
     return res.json({ sample: true, sent: !!sent, day: sd });
   }
   const m = (() => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now)); return Number(p.find((x) => x.type === 'hour').value) * 60 + Number(p.find((x) => x.type === 'minute').value); })();
   const nothing = (why) => res.json({ list: true, skipped: why, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
-  if (m < 8 * 60 + 30 || m > 13 * 60 + 30) return nothing('not the morning');
-  const b = await store.readNewsBrief(day, NewsBrief.shownBuild).catch(() => ({}));
-  if (!b.today && !b.next) return nothing('no edition of today yet');
-  const key = 'briefs:' + day;
+  // TWO EDITIONS A DAY (the owner, 2026-11-12: "the email should go out
+  // twice, Once in morning and once post market close"): the morning's from
+  // 08:30 to 13:30, and the evening's from 17:30 to 22:00, only from the
+  // evening build itself (17:40), each with its own ledger.
+  const evening = m >= 17 * 60 + 30 && m <= 22 * 60;
+  if (!evening && (m < 8 * 60 + 30 || m > 13 * 60 + 30)) return nothing('not the morning or the evening');
+  const b = await store.readNewsBrief(day, evening ? NewsBrief.eveningBuild : NewsBrief.shownBuild).catch(() => ({}));
+  if (!b.today && !b.next) return nothing(evening ? 'no evening edition of today yet' : 'no edition of today yet');
+  const key = 'briefs:' + day + (evening ? ':pm' : '');
   const perfMail = await briefsMailPerf();
   const [subs, already, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), postalAddress()]);
   const due = subs.filter((s) => !already.has(s.email));
@@ -22906,7 +22921,7 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
     first = false;
-    const d = briefsMailEmail(base, day, b, { perf: perfMail, note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
+    const d = briefsMailEmail(base, day, b, { evening, perf: perfMail, note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
     const out = await sendMailResult({ kind: 'briefs-list', to: sub.email, subject: d.subject, html: d.html, text: d.text,
       bulk: true, replyTo: process.env.MAIL_REPLY_TO || undefined, headers: listHeaders(base, sub, topic) });
     if (out.retryable) { await store.releaseSend(key, sub.email); deferred++; continue; }
