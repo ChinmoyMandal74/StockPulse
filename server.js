@@ -22858,26 +22858,46 @@ function briefsMailEmail(base, day, b, opts) {
   const noteText = (opts && opts.noteText ? opts.noteText + ' ' : '') + 'Written by AI from the day’s news coverage; checked against the articles, but it can still contain mistakes. Descriptive, not advice.';
   return { subject, html: emailShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, body: html.join(''), note }), text: textShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, lines: text, note: noteText }) };
 }
+// Price and today's move for the tickers under each line, read once a batch.
+async function briefsMailPerf() {
+  const out = {};
+  try {
+    const snap = await snapshotCached();
+    const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    for (const r of (snap && snap.stocks) || []) if (r && r.symbol && !r.error) out[r.symbol] = { price: num(r.price), d: num(r.todayPct) };
+  } catch { /* the email goes without the figures */ }
+  return out;
+}
 app.post('/api/cron/news-brief-list', route(async (req, res) => {
-  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const topic = 'briefs';
   const base = subBase(req);
   const now = Date.now();
   const day = NewsBrief.etDay(now);
+  // body.sample: the newest edition the page shows, as a subscriber gets it,
+  // to the operator now, "[Sample]" on the subject (the owner, same day: "Can
+  // you send admin a sample"). Any time of day, no ledger and no list: the
+  // morning's send still goes.
+  if (req.body && req.body.sample === true) {
+    const days = await store.readNewsBriefDays(1, NewsBrief.shownBuild).catch(() => []);
+    const sd = days[0];
+    const sb = sd ? await store.readNewsBrief(sd, NewsBrief.shownBuild).catch(() => ({})) : {};
+    if (!sb.today && !sb.next) return res.status(404).json({ error: 'No edition on file yet.' });
+    const to = await operatorEmail();
+    if (!to) return res.status(400).json({ error: 'No address to send to.' });
+    const note = 'A sample of the Daily news brief mailing, sent to the site’s operator; subscribers get it each morning with their own unsubscribe link here.';
+    const d = briefsMailEmail(base, sd, sb, { perf: await briefsMailPerf(), note, noteText: note });
+    const sent = await sendMail({ kind: 'newsbrief-sample', to, subject: '[Sample] ' + d.subject, text: d.text, html: d.html });
+    return res.json({ sample: true, sent: !!sent, day: sd });
+  }
   const m = (() => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now)); return Number(p.find((x) => x.type === 'hour').value) * 60 + Number(p.find((x) => x.type === 'minute').value); })();
   const nothing = (why) => res.json({ list: true, skipped: why, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
   if (m < 8 * 60 + 30 || m > 13 * 60 + 30) return nothing('not the morning');
   const b = await store.readNewsBrief(day, NewsBrief.shownBuild).catch(() => ({}));
   if (!b.today && !b.next) return nothing('no edition of today yet');
   const key = 'briefs:' + day;
-  // Price and today's move for the tickers under each line, read once a batch.
-  const perfMail = {};
-  try {
-    const snap = await snapshotCached();
-    const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-    for (const r of (snap && snap.stocks) || []) if (r && r.symbol && !r.error) perfMail[r.symbol] = { price: num(r.price), d: num(r.todayPct) };
-  } catch { /* the email goes without the figures */ }
+  const perfMail = await briefsMailPerf();
   const [subs, already, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), postalAddress()]);
   const due = subs.filter((s) => !already.has(s.email));
   const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
