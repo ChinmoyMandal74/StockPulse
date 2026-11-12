@@ -60,6 +60,12 @@
                 border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
     .lp-nav { display: flex; gap: 16px; white-space: nowrap; font-size: 14px; color: var(--muted); }
     .lp-nav a { text-decoration: none; } .lp-nav a:hover { color: var(--text); }
+    /* News brief stands out in the menu (2026-11-12, the owner: "Can you make this more prominent"). */
+    .lp-nav { align-items: center; }
+    .lp-nav a.lp-nav-hot { display: inline-flex; align-items: center; gap: 7px; margin: -6px 0; padding: 5px 11px 5px 6px; border-radius: 999px; font-weight: 600; color: var(--text);
+                           border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .lp-nav a.lp-nav-hot:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+    .lp-nav-hot i { font-style: normal; padding: 2px 7px; border-radius: 999px; background: var(--accent); color: var(--void); font: 600 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
     .lp-bar .sp { flex: 1; }
     .lp .b { display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--sans); text-decoration: none; padding: 10px 16px; border-radius: 10px;
              border: 1px solid var(--hair-2); color: var(--text); background: transparent; cursor: pointer; white-space: nowrap; }
@@ -333,7 +339,7 @@
   <div class="w">
     <a class="mark" href="/home"><span class="glyph"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.4 8.6 12l3.6 2.7L20 6.4"/><path d="M14.6 6.4H20v5.4"/></svg></span>Tickr Lab</a>
     <span class="beta">BETA</span>
-    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a href="/briefs">News brief</a><a href="/blog">Blog</a></nav>
+    <nav class="lp-nav" aria-label="Sections"><a href="#tour">Product</a><a href="#stockpage">Stock pages</a><a href="#earnings">Earnings</a><a href="#themes">Themes</a><a href="#data">Data</a><a href="#creators">Creators</a><a href="#plans">Plans</a><a href="/results">Results</a><a class="lp-nav-hot" href="/briefs"><i>New</i>News brief</a><a href="/blog">Blog</a></nav>
     <span class="sp"></span>
     <a class="b signin" href="/login">Sign in</a>
     <a class="b guest" href="/login?guest=1">Guest preview</a>
