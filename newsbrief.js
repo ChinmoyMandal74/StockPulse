@@ -128,7 +128,8 @@ const eveningBuild = (day, at) => Number.isFinite(at) && etDay(at) === day && et
 // weekdays, each covering the news since the last evening brief. A build at
 // one of them (up to 20 minutes late, as a slow run may be) is shown as well;
 // one at any other time (a sample, a test) is not.
-const PAGE_SLOTS = ['08:40', '11:40', '14:40', '17:40'].map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
+// 09:45 added (same day, the owner: "during weekdays, Can we do another update at 9:45AM"): the news with the open in it.
+const PAGE_SLOTS = ['08:40', '09:45', '11:40', '14:40', '17:40'].map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
 function shownBuild(day, at) {
   if (eveningBuild(day, at)) return true;
   if (!Number.isFinite(at) || etDay(at) !== day) return false;
@@ -138,7 +139,7 @@ function shownBuild(day, at) {
 // THE PAGE BY THE CLOCK (same day, the owner: "Include weekend too .. but may
 // be do 2 refresh instead of 4 .. make the whole page smart depending on when
 // it is accessed"). The update times: four on weekdays, two at the weekend.
-const UPDATES = { weekday: ['08:40', '11:40', '14:40', '17:40'], weekend: ['11:40', '17:40'] };
+const UPDATES = { weekday: ['08:40', '09:45', '11:40', '14:40', '17:40'], weekend: ['11:40', '17:40'] };
 const hm = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const clock = (t) => { const h = Math.floor(hm(t) / 60), m = t.slice(3); return (h % 12 || 12) + ':' + m + (h < 12 ? ' AM' : ' PM'); };
 // The next update after `now`: { day, time } ('8:40 AM'), today or a later day.

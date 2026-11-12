@@ -168,9 +168,9 @@ const JOBS = [
     // but may be do 2 refresh instead of 4"), the evening run the second.
     // Keep in step with NewsBrief.UPDATES, which the page reads.
     id: 'newsbrief-update', name: 'News brief updates', task: null, host: 'fly', script: 'news-brief-update.js',
-    days: WEEKDAYS, times: ['08:40', '11:40', '14:40'], minutes: 2, limit: 20,
+    days: WEEKDAYS, times: ['08:40', '09:45', '11:40', '14:40'], minutes: 2, limit: 20,
     extra: [{ days: ['Sat', 'Sun'], times: ['11:40'] }],
-    spends: { kind: 'anthropic', text: 'Two Claude Sonnet calls a run, about $0.33; three runs a weekday, one a weekend day (about $1 and $0.33)' },
+    spends: { kind: 'anthropic', text: 'Two Claude Sonnet calls a run, about $0.33; four runs a weekday, one a weekend day (about $1.30 and $0.33)' },
     what: 'Publishes the news brief on /briefs through the day: the news since the last evening brief, re-read by AI, and the next session (at 08:40, the session about to open). No email; the page shows these and the evening edition only.',
     log: '/briefs',
   },
