@@ -1670,7 +1670,7 @@ function briefsHtml(base, day, b, days, view, now) {
     + '.nb-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.nb-b{display:inline-block;padding:9px 15px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
     + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
     + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}${upd ? ' · updated ' + esc(upd) + ' New York time' : ''}</p>${lead}`
-    + bar + empty + (v === 'next' ? next : today)
+    + bar + empty + (v === 'next' ? (soon ? next.replace('<h2>Next session: ', '<h2>Today’s session: ') : next) : today)
     + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
     + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
     + '<p class="nb-foot">Written by AI each evening from the day’s news coverage of the companies Tickr Lab follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice: nothing here is a recommendation to trade any security.</p>'
