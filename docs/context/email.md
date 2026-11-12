@@ -123,3 +123,4 @@ What changed (owner: "yes"):
 
 ## The Daily news brief mailing (2026-11-12)
 Topic `briefs`, the third mailing: each morning's first edition of `/briefs` (weekdays after the 08:40 update, weekends after the 11:40 one), kind `briefs-list`, sent by `POST /api/cron/news-brief-list` from `news-brief-update.js`. Sign-up from the box on `/briefs`. Confirming a request from an active address now adds the mailing rather than replacing the reader's others. See `news-tone.md`.
+**Who is on it** (same day, the owner: "How do I know who has subscribed to news email"): `/subscribers` now has a By mailing row, each mailing with its confirmed readers (the `byTopic` counts the route already sent), and a click lists that mailing's people, confirmed and still to confirm; Everyone shows all again. Drawn and checked in a browser (`subs-draw.js` in the session scratchpad, 3 checks).

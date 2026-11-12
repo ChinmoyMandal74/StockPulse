@@ -60,6 +60,12 @@
     .note { margin-top: 20px; font-size: 12.5px; color: var(--faint); line-height: 1.7; max-width: 76ch; }
     .note b { color: var(--muted); font-weight: 600; }
     .empty { padding: 26px 10px; color: var(--faint); font-size: 13px; }
+    /* By mailing (2026-11-12, the owner: "How do I know who has subscribed to news email"). */
+    .bymail { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 16px; }
+    .bymail .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--faint); margin-right: 4px; }
+    .bymail button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--hair-2); background: transparent; color: var(--muted); font-family: inherit; font-size: 13px; cursor: pointer; }
+    .bymail button b { color: var(--text); font-family: var(--mono); margin-left: 6px; }
+    .bymail button.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, transparent); }
     @media (max-width: 560px) { .hide-sm { display: none; } }
   </style>
 </head>
@@ -75,6 +81,7 @@
 
     <div class="cards" id="cards"></div>
     <div id="warn"></div>
+    <div class="bymail" id="bymail"></div>
     <table>
       <thead><tr><th>Address</th><th>Status</th><th class="hide-sm">Wants</th>
         <th class="hide-sm">Came from</th><th class="hide-sm">When</th><th></th></tr></thead>
@@ -92,6 +99,7 @@
 
     let data = null;
     let showLapsed = false;   // the never-confirmed rows, hidden until asked for
+    let onlyTopic = '';        // one mailing's readers (asked for or confirmed), or everyone
 
     async function api(method, url) {
       const r = await fetch(url, { method, cache: 'no-store' });
@@ -138,7 +146,14 @@
       }
 
       // Never-confirmed rows hidden unless asked for: most were typed in by a bot (2026-11).
-      const rows = data.subscribers.filter((x) => showLapsed || !x.lapsed);
+      // Each mailing with its confirmed readers; a click lists that mailing's people
+      // (confirmed, and those still to confirm it).
+      const wantsTopic = (x, id) => (x.topics || []).includes(id) || (x.pendingTopics || []).includes(id);
+      $('bymail').innerHTML = '<span class="k">By mailing</span>'
+        + `<button data-topic=""${onlyTopic ? '' : ' class="on"'}>Everyone</button>`
+        + data.topics.map((t) => `<button data-topic="${we(t.id)}"${onlyTopic === t.id ? ' class="on"' : ''} title="Confirmed readers of ${we(t.name)}">${we(t.name)}<b>${s.byTopic ? (s.byTopic[t.id] || 0) : 0}</b></button>`).join('');
+      $('bymail').querySelectorAll('[data-topic]').forEach((b) => b.addEventListener('click', () => { onlyTopic = b.dataset.topic; paint(); }));
+      const rows = data.subscribers.filter((x) => (showLapsed || !x.lapsed) && (!onlyTopic || wantsTopic(x, onlyTopic)));
       $('rows').innerHTML = rows.length ? rows.map((x) => {
         const pill = x.status === 'active' ? '<span class="pill on">confirmed</span>'
           : x.status === 'pending' ? (x.lapsed ? '<span class="pill off">never confirmed</span>' : '<span class="pill pend">unconfirmed</span>')
