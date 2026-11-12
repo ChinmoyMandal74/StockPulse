@@ -1543,7 +1543,9 @@ const htmlEsc = (t) => String(t == null ? '' : t)
 const postDate = (iso) => {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    // New York's day: the server runs on UTC, so a post published after 7pm
+    // Eastern read as the next day (CoreWeave, 2026-11-11, showed the 12th).
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/New_York' });
   } catch { return String(iso).slice(0, 10); }
 };
 
