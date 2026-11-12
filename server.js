@@ -1592,7 +1592,8 @@ app.get('/blog', route(async (req, res) => {
 // (NewsBrief.outletIn), since the site names no source to anyone but the admin.
 // Tickers are plain text: their stock pages are for members.
 const NewsBriefPage = require('./newsbrief.js');
-function briefsHtml(base, day, b, days) {
+// view 'today' or 'next': the tab shown (?v=next); days: the days on file, newest first.
+function briefsHtml(base, day, b, days, view) {
   const t = b.today, n = b.next;
   const when = day ? NewsBriefPage.dayName(day) : '';
   const esc = htmlEsc;
@@ -1612,8 +1613,21 @@ function briefsHtml(base, day, b, days) {
       + cal('Reporting before the open', n.before) + cal('Listed to report after the close', n.after) + '</section>';
   })() : '';
   const empty = !today && !next ? '<p class="nb-in">The first brief is published at 5:40 PM New York time.</p>' : '';
-  const archive = days.length > 1 ? '<h3 class="nb-k">Earlier briefs</h3><p class="nb-ar">' + days.filter((x) => x !== day).slice(0, 30)
-    .map((x) => `<a href="/briefs/${x}">${esc(NewsBriefPage.dayName(x))}</a>`).join('') + '</p>' : '';
+  // THE BAR ON TOP (the owner: "Give option on top for next session .. and also
+  // option to change dates going forward basis only"): the two tabs, and the
+  // days on file (from the first published brief on; nothing earlier is made),
+  // older and newer a step, any day from the list. Links work without script.
+  const v = view === 'next' && next ? 'next' : today ? 'today' : 'next';
+  const q = (x) => (x === 'next' ? '?v=next' : '');
+  const i = days.indexOf(day), older = i >= 0 ? days[i + 1] : null, newer = i > 0 ? days[i - 1] : null;
+  const short = (x) => new Date(x + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+  const tab = (k, label, has) => (has ? `<a class="nb-tab${v === k ? ' on' : ''}" href="/briefs/${day}${q(k)}"${v === k ? ' aria-current="page"' : ''}>${label}</a>` : '');
+  const bar = day ? '<nav class="nb-bar" aria-label="Brief"><div class="nb-tabs">' + tab('today', 'What happened today', !!today)
+      + tab('next', 'Next session' + (n && n.next ? ': ' + esc(short(n.next)) : ''), !!next) + '</div>'
+    + '<div class="nb-days">' + (older ? `<a class="nb-step" href="/briefs/${older}${q(v)}" aria-label="Earlier day">‹</a>` : '<span class="nb-step off">‹</span>')
+    + `<select class="nb-pick" aria-label="Day" onchange="location.href='/briefs/'+this.value+'${q(v)}'">`
+    + days.map((x) => `<option value="${x}"${x === day ? ' selected' : ''}>${esc(short(x))}</option>`).join('') + '</select>'
+    + (newer ? `<a class="nb-step" href="/briefs/${newer}${q(v)}" aria-label="Later day">›</a>` : '<span class="nb-step off">›</span>') + '</div></nav>' : '';
   const desc = (t && t.intro) || 'What happened today at the companies Tickr Lab covers, and what the next trading session holds, every evening at 5:40 PM New York time.';
   const title = `${BRAND} news brief${when ? ': ' + when : ''}`;
   const url = base + '/briefs' + (day ? '/' + day : '');
@@ -1635,15 +1649,20 @@ function briefsHtml(base, day, b, days) {
     + '.nb-o li::before{content:counter(nb);position:absolute;left:0;top:13px;font-size:13px;font-weight:700;color:var(--accent)}.nb-o p{margin:0 0 5px}'
     + '.nb-ts{display:flex;gap:6px;flex-wrap:wrap}.nb-t{font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;border:1px solid var(--hair-2);color:var(--muted)}'
     + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}'
+    + '.nb-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:22px;padding:10px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}'
+    + '.nb-tabs{display:flex;gap:6px;flex-wrap:wrap}.nb-tab{padding:8px 13px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;border:1px solid transparent}'
+    + '.nb-tab.on{color:var(--text);border-color:var(--hair-2);background:color-mix(in srgb,var(--wash) 6%,transparent)}.nb-tab:hover{color:var(--text)}'
+    + '.nb-days{display:flex;gap:6px;align-items:center}.nb-step{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:18px}'
+    + '.nb-step.off{opacity:.35}.nb-pick{height:34px;padding:0 10px;border-radius:9px;border:1px solid var(--hair-2);background:var(--surface-2);color:var(--text);font:inherit;font-size:14px}'
+    + '.nb-bar+.nb-s{margin-top:4px;border-top:0}'
     + '.nb-ar{display:flex;flex-wrap:wrap;gap:8px;margin:0}.nb-ar a{font-size:13px;padding:6px 10px;border:1px solid var(--hair);border-radius:8px;color:var(--text);text-decoration:none}'
     + '.nb-cta{margin-top:34px;padding:16px 18px;border:1px solid var(--hair);border-radius:14px;font-size:14px;line-height:1.55;color:var(--muted)}'
     + '.nb-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.nb-b{display:inline-block;padding:9px 15px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
     + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
     + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}</p>`
-    + empty + today + next
+    + bar + empty + (v === 'next' ? next : today)
     + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
     + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
-    + `<div style="margin-top:26px">${archive}</div>`
     + '<p class="nb-foot">Written by AI each evening from the day’s news coverage of the companies Tickr Lab follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice: nothing here is a recommendation to trade any security.</p>'
     + '</main></body></html>';
 }
@@ -1655,9 +1674,10 @@ app.get(['/briefs', '/briefs/:day'], route(async (req, res, next) => {
   const days = await store.readNewsBriefDays(60).catch(() => []);
   const day = asked || days[0] || null;
   const b = day ? await store.readNewsBrief(day).catch(() => ({})) : {};
-  if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
+  const view = req.query.v === 'next' ? 'next' : 'today';
+  if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days, view).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
   res.set('Cache-Control', 'public, max-age=0, s-maxage=300');
-  res.type('html').send(briefsHtml(base, day, b, days));
+  res.type('html').send(briefsHtml(base, day, b, days, view));
 }));
 app.get('/links', route(async (req, res) => {
   if (anonLogOk(req)) logAct(req, 'page', 'links');
