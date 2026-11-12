@@ -323,7 +323,7 @@ function todayPrompt(inputs, today) {
     `${c.id} | ${c.symbol} ${c.name} | value ${capText(c.cap)} | ${c.kind}, ${c.importance}, ${c.coverage} outlet${c.coverage === 1 ? '' : 's'}, ${t(c.publishedAt)} | ${c.text}`).join('\n');
 }
 function todayRequest(inputs, today) {
-  return { model: MODEL, max_tokens: 9000, system: SYSTEM_TODAY, output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_TODAY } },
+  return { model: MODEL, max_tokens: 16000, system: SYSTEM_TODAY, output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_TODAY } },
     messages: [{ role: 'user', content: todayPrompt(inputs, today) }] };
 }
 // The same story twice: a later line about the same companies sharing most of
