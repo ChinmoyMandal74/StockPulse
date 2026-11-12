@@ -4223,6 +4223,9 @@ const MAIL_DARK_RULES = (D) => [
   // The guidance change label keeps its white ink on its own fill.
   [['.em-card .em-pill'], 'color:#ffffff'],
   [['.em-card .em-warn'], 'color:#f0a83a'],
+  // A price up or down (the news brief's tickers): green and red kept in dark.
+  [['.em-card .em-up'], 'color:#34d399'],
+  [['.em-card .em-dn'], 'color:#fb7185'],
   [['.em-card .em-box', '.em-card .em-row td'], `border-color:${D.line}`],
   // Scoped under .em-card deliberately: a bare .em-quiet is one class against
   // .em-card p's class-plus-element and loses, so the kicker and the captions
@@ -22777,18 +22780,48 @@ function briefsMailEmail(base, day, b, opts) {
   const soon = n.next === day;
   const sessionName = n.next ? (soon ? 'Today’s session' : 'Next session: ' + NewsBrief.dayName(n.next)) : '';
   const link = (sym) => `${base}/stock/${encodeURIComponent(sym)}`;
-  const linked = (x) => NewsBrief.linkNames(x.line, x.names || {}).map((p) => (p.symbol
-    ? `<a href="${mailEsc(link(p.symbol))}"${st(`color:${MC.ink};text-decoration:underline`)}>${mailEsc(p.text)}</a>` : mailEsc(p.text))).join('');
-  const head = (txt) => `<div${st(`margin:22px 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(txt)}</div>`;
-  const nItems = (n.items || []).slice(0, 10);
-  const hi = (t.items || []).filter((x) => x.importance === 'high');
-  const news = hi.slice(0, 15), more = (t.items || []).length - news.length;
+  // A CALMER EMAIL (the owner, of the first one: "Email does not look good"):
+  // six session lines and eight other stories at most, no story twice (one
+  // whose companies the session lines already cover is left to the full
+  // brief), company names in bold rather than links, and under each line its
+  // tickers with the price and today's move (opts.perf), the tickers linked.
+  const head = (txt) => `<div${st(`margin:26px 0 12px;padding-bottom:6px;border-bottom:1px solid ${MC.line};font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(txt)}</div>`;
+  const bolded = (x) => NewsBrief.linkNames(x.line, x.names || {}).map((p) => (p.symbol ? `<b${st(`color:${MC.ink}`)}>${mailEsc(p.text)}</b>` : mailEsc(p.text))).join('');
+  const perfMap = (opts && opts.perf) || {};
+  // Rounded first, so a move under 0.05% reads 0.0% with no sign and no colour.
+  const pct = (v) => {
+    if (v == null || !Number.isFinite(Number(v))) return '';
+    const r = Math.round(Number(v) * 10) / 10;
+    const cls = r > 0 ? ' class="em-up"' : r < 0 ? ' class="em-dn"' : '';
+    return `<span${cls}${st(`color:${r > 0 ? MC.accent : r < 0 ? MC.bad : MC.mute}`)}>${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(1)}%</span>`;
+  };
+  const tickers = (syms) => (syms || []).slice(0, 4).map((s) => {
+    const p = perfMap[s];
+    const px = p && Number(p.price) > 0 ? ` <span${st(`color:${MC.mute}`)}>$${Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> ${pct(p.d)}` : '';
+    return `<a href="${mailEsc(link(s))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(s)}</a>${px}`;
+  }).join(' &nbsp; &nbsp; ');
+  const item = (lead, x) => `<div${st(`margin:0 0 16px`)}>`
+    + `<div${st(`font-size:14.5px;line-height:1.55;color:${MC.body}`)}>${lead}${bolded(x)}</div>`
+    + (x.symbols && x.symbols.length ? `<div${st(`margin-top:5px;font-size:12px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace`)}>${tickers(x.symbols)}</div>` : '')
+    + '</div>';
+  const nItems = (n.items || []).slice(0, 6);
+  const covered = new Set(nItems.flatMap((x) => x.symbols || []));
+  const hi = (t.items || []).filter((x) => x.importance === 'high' && !(x.symbols || []).every((s) => covered.has(s)));
+  const news = hi.slice(0, 8), more = (t.items || []).length - news.length - (t.items || []).filter((x) => x.importance === 'high' && (x.symbols || []).every((s) => covered.has(s))).length;
   // The subject names the first companies in the session lines, then the news.
+  // Three at most (the first send, 2026-11-12, named twenty: the break left only
+  // the inner loop), each in the words a reader uses: Inc., Systems, .com and
+  // the like dropped ("Cisco", "Amazon", "Meta").
   const firsts = [];
-  for (const x of nItems.concat(news)) for (const nm of Object.values(x.names || {})) {
-    const short = String(nm).replace(/[,\s]+(inc\.?|corp\.?|corporation|holdings?|group|ltd\.?|plc|company|co\.?)$/i, '').trim();
+  const plainName = (nm) => {
+    let s = String(nm).replace(/\.com\b/i, '').replace(/^the\s+/i, '').trim();
+    for (let i = 0; i < 4; i++) s = s.replace(/[,\s]+(inc\.?|corp\.?|corporation|holdings?|group|ltd\.?|limited|plc|company|co\.?|systems|technologies|financial|platforms)$/i, '').trim();
+    return s;
+  };
+  pick: for (const x of nItems.concat(news)) for (const nm of Object.values(x.names || {})) {
+    const short = plainName(nm);
     if (short && !firsts.includes(short)) firsts.push(short);
-    if (firsts.length >= 3) break;
+    if (firsts.length >= 3) break pick;
   }
   const subject = `${wd}’s news brief` + (firsts.length ? ': ' + firsts.join(', ') + ' and more' : '');
   const intro = n.intro || t.intro || `The news at the companies ${BRAND} follows, and what the next session holds.`;
@@ -22797,7 +22830,7 @@ function briefsMailEmail(base, day, b, opts) {
     html.push(head(sessionName));
     text.push('', sessionName.toUpperCase());
     nItems.forEach((x, i) => {
-      html.push(`<div${st(`margin:0 0 12px;font-size:14px;line-height:1.55;color:${MC.body}`)}><b${st(`color:${MC.ink}`)}>${i + 1}.</b> ${linked(x)}</div>`);
+      html.push(item(`<b${st(`color:${MC.accent}`)}>${i + 1}</b>&nbsp; `, x));
       text.push(`${i + 1}. ${x.line}`);
     });
   }
@@ -22806,13 +22839,12 @@ function briefsMailEmail(base, day, b, opts) {
     html.push(head(label));
     text.push('', label.toUpperCase());
     for (const x of news) {
-      const ticks = (x.symbols || []).map((s) => `<a href="${mailEsc(link(s))}"${st(`color:${MC.mute};font-size:11.5px;font-weight:700;text-decoration:none`)}>${mailEsc(s)}</a>`).join(' ');
-      html.push(`<div${st(`margin:0 0 11px;font-size:13.5px;line-height:1.5;color:${MC.body}`)}>${ticks}<br>${linked(x)}</div>`);
+      html.push(item('', x));
       text.push(`${(x.symbols || []).join(' ')}: ${x.line}`);
     }
     if (more > 0) { html.push(`<div${st(`font-size:13px;color:${MC.mute}`)}>${JobsDigest.plural(more, 'more story', 'more stories')} in the full brief.</div>`); text.push('', JobsDigest.plural(more, 'more story', 'more stories') + ' in the full brief.'); }
   }
-  const before = (n.before || []).slice(0, 25);
+  const before = (n.before || []).slice(0, 12);
   if (before.length) {
     const label = soon ? 'Reporting before today’s open' : 'Reporting before the open';
     html.push(head(label + ' (' + (n.before || []).length + ')'));
@@ -22839,6 +22871,13 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
   const b = await store.readNewsBrief(day, NewsBrief.shownBuild).catch(() => ({}));
   if (!b.today && !b.next) return nothing('no edition of today yet');
   const key = 'briefs:' + day;
+  // Price and today's move for the tickers under each line, read once a batch.
+  const perfMail = {};
+  try {
+    const snap = await snapshotCached();
+    const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    for (const r of (snap && snap.stocks) || []) if (r && r.symbol && !r.error) perfMail[r.symbol] = { price: num(r.price), d: num(r.todayPct) };
+  } catch { /* the email goes without the figures */ }
   const [subs, already, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), postalAddress()]);
   const due = subs.filter((s) => !already.has(s.email));
   const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
@@ -22847,7 +22886,7 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
   for (const sub of batch) {
     if (!first) await pause(MAIL_RATE_MS);
     first = false;
-    const d = briefsMailEmail(base, day, b, { note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
+    const d = briefsMailEmail(base, day, b, { perf: perfMail, note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
     const out = await sendMailResult({ kind: 'briefs-list', to: sub.email, subject: d.subject, html: d.html, text: d.text,
       bulk: true, replyTo: process.env.MAIL_REPLY_TO || undefined, headers: listHeaders(base, sub, topic) });
     if (out.retryable) { await store.releaseSend(key, sub.email); deferred++; continue; }
