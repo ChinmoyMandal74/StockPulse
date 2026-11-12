@@ -22925,6 +22925,24 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
   const key = 'briefs:' + day + (evening ? ':pm' : '');
   const perfMail = await briefsMailPerf();
   const [subs, already, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), postalAddress()]);
+  // THE OPERATOR'S COPY (the owner, 2026-11-12: "Send the news brief to admin
+  // twice a day along with other subscribers"): each edition, morning and
+  // evening, once, by the one-to-one path (not the bulk sender), its own
+  // ledger beside the list's; none when the operator is on the list already.
+  let operator = false;
+  const op = await operatorEmail().catch(() => null);
+  if (op && !subs.some((s) => s.email.toLowerCase() === String(op).toLowerCase())) {
+    const opKey = key + ':op';
+    const mine = await store.claimSends(opKey, [op]).catch(() => []);
+    if (mine.includes(op)) {
+      const note = 'Sent to the site’s operator with each edition of the Daily news brief mailing.';
+      const d = briefsMailEmail(base, day, b, { evening, perf: perfMail, note, noteText: note });
+      const out = await sendMailResult({ kind: 'briefs-operator', to: op, subject: d.subject, html: d.html, text: d.text });
+      if (out.retryable) await store.releaseSend(opKey, op).catch(() => {});
+      else await store.noteSendResult(opKey, op, out.ok, out.id).catch(() => {});
+      operator = !!out.ok;
+    }
+  }
   const due = subs.filter((s) => !already.has(s.email));
   const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
   const batch = due.slice(0, MAIL_LIST_BATCH).filter((s) => claimed.has(s.email));
@@ -22942,7 +22960,7 @@ app.post('/api/cron/news-brief-list', route(async (req, res) => {
   const done = await store.readSentFor(key);
   const remaining = subs.filter((s) => !done.has(s.email)).length;
   if (batch.length) logAct(req, 'post', `list:${key} ${sent}/${batch.length} left ${remaining}`.slice(0, 80));
-  res.json({ list: true, day, sent, failed, deferred, remaining, total: subs.length });
+  res.json({ list: true, day, sent, failed, deferred, remaining, total: subs.length, operator });
 }));
 
 app.get('/api/cron/watchdog', route(async (req, res) => {
