@@ -141,6 +141,20 @@ check('not shown: a test at 07:40, between updates, too late', ['07:40', '10:00'
 check('not shown: a build on another day', NB.shownBuild('2026-11-11', at2('08:40')), false);
 check('the session ahead: before the open that day\'s, after it the next trading day', [NB.nextSession('2026-11-12', at2('08:40')), NB.nextSession('2026-11-12', at2('09:31')), NB.nextSession('2026-11-12', at2('17:40')), NB.nextSession('2026-11-14', at2('08:40')), NB.nextSession('2026-11-26', at2('08:40'))],
   ['2026-11-12', '2026-11-13', '2026-11-13', '2026-11-16', '2026-11-27']);
+// ---- the page by the clock -------------------------------------------------------
+const MO = (iso, shown, has) => NB.moment(Date.parse(iso), shown || iso.slice(0, 10), has || { today: true, next: true });
+check('a trading day before the open: the session ahead leads', [MO('2026-11-12T08:00:00-05:00').phase, MO('2026-11-12T08:00:00-05:00').view], ['pre', 'next']);
+check('market hours and after the close: the day\'s news leads', [MO('2026-11-12T12:00:00-05:00').view, MO('2026-11-12T19:00:00-05:00').view, MO('2026-11-12T09:30:00-05:00').phase, MO('2026-11-12T16:00:00-05:00').phase], ['today', 'today', 'open', 'after']);
+check('Saturday looks back, Sunday ahead, the day before a holiday ahead, the holiday itself ahead (Friday trades)', [MO('2026-11-14T10:00:00-05:00').view, MO('2026-11-15T10:00:00-05:00').view, MO('2026-11-26T10:00:00-05:00').view, MO('2026-11-26T10:00:00-05:00').phase],
+  ['today', 'next', 'next', 'closed']);
+check('the lead line: where things stand and the next update', [MO('2026-11-12T12:00:00-05:00').line, MO('2026-11-14T19:00:00-05:00').line],
+  ['The market is open: the news so far today, and what comes next. Next update 2:40 PM.', 'The market is closed for the weekend: the latest news and what the next session holds. Next update tomorrow at 11:40 AM.']);
+check('an earlier day\'s edition says so', MO('2026-11-12T08:00:00-05:00', '2026-11-11').line.startsWith('This is Wednesday’s edition. Before the open'), true);
+check('a part missing: the other leads', [MO('2026-11-12T08:00:00-05:00', null, { today: true, next: false }).view, MO('2026-11-12T12:00:00-05:00', null, { today: false, next: true }).view], ['today', 'next']);
+check('next update: Friday evening to Saturday 11:40, Sunday evening to Monday 8:40', [NB.nextUpdate(Date.parse('2026-11-13T18:00:00-05:00')), NB.nextUpdate(Date.parse('2026-11-15T18:00:00-05:00'))],
+  [{ day: '2026-11-14', time: '11:40 AM', today: false }, { day: '2026-11-16', time: '8:40 AM', today: false }]);
+{ const S = require('./schedule.js'); const j = S.JOBS.find((x) => x.id === 'newsbrief-update'), e = S.JOBS.find((x) => x.id === 'newsbrief');
+  check('the page\'s update times are the scheduled runs, weekday and weekend', ['Wed', 'Sat', 'Sun'].map((d) => [...S.runsOn(j, d), ...S.runsOn(e, d)].map(S.fmt).sort().join()), [NB.UPDATES.weekday.join(), NB.UPDATES.weekend.join(), NB.UPDATES.weekend.join()]); }
 check('both prompts name days, never today or tomorrow', /never today, tonight or tomorrow/.test(NB.SYSTEM) && /never today, tonight or tomorrow/.test(NB.SYSTEM_TODAY), true);
 
 console.log(`\nnewsbrief-test: ${ran} checks, ${failed} failed`);

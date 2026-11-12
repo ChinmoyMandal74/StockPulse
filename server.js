@@ -1592,8 +1592,10 @@ app.get('/blog', route(async (req, res) => {
 // (NewsBrief.outletIn), since the site names no source to anyone but the admin.
 // Tickers are plain text: their stock pages are for members.
 const NewsBriefPage = require('./newsbrief.js');
-// view 'today' or 'next': the tab shown (?v=next); days: the days on file, newest first.
-function briefsHtml(base, day, b, days, view) {
+// view 'today' or 'next': the tab asked for (?v=), else null and the clock
+// decides (NewsBrief.moment); days: the days on file, newest first; now: when
+// the page is opened (the lead line shows only on the newest day).
+function briefsHtml(base, day, b, days, view, now) {
   const t = b.today, n = b.next;
   const when = day ? NewsBriefPage.dayName(day) : '';
   const esc = htmlEsc;
@@ -1620,13 +1622,17 @@ function briefsHtml(base, day, b, days, view) {
   // option to change dates going forward basis only"): the two tabs, and the
   // days on file (from the first published brief on; nothing earlier is made),
   // older and newer a step, any day from the list. Links work without script.
-  const v = view === 'next' && next ? 'next' : today ? 'today' : 'next';
-  const q = (x) => (x === 'next' ? '?v=next' : '');
+  const mo = day ? NewsBriefPage.moment(now || Date.now(), day, { today: !!today, next: !!next }) : null;
+  const want = view || (mo && mo.view) || 'today';
+  const v = want === 'next' && next ? 'next' : today ? 'today' : 'next';
+  const q = (x) => '?v=' + x;
+  const lead = mo && day === days[0] ? `<p class="nb-now">${esc(mo.line)}</p>` : '';
+  const soon = n && n.next && mo && n.next === mo.today && mo.phase === 'pre';
   const i = days.indexOf(day), older = i >= 0 ? days[i + 1] : null, newer = i > 0 ? days[i - 1] : null;
   const short = (x) => new Date(x + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
   const tab = (k, label, has) => (has ? `<a class="nb-tab${v === k ? ' on' : ''}" href="/briefs/${day}${q(k)}"${v === k ? ' aria-current="page"' : ''}>${label}</a>` : '');
   const bar = day ? '<nav class="nb-bar" aria-label="Brief"><div class="nb-tabs">' + tab('today', esc(wd) + '’s news', !!today)
-      + tab('next', 'Next session' + (n && n.next ? ': ' + esc(short(n.next)) : ''), !!next) + '</div>'
+      + tab('next', (soon ? 'Today’s session' : 'Next session') + (n && n.next ? ': ' + esc(short(n.next)) : ''), !!next) + '</div>'
     + '<div class="nb-days">' + (older ? `<a class="nb-step" href="/briefs/${older}${q(v)}" aria-label="Earlier day">‹</a>` : '<span class="nb-step off">‹</span>')
     + `<select class="nb-pick" aria-label="Day" onchange="location.href='/briefs/'+this.value+'${q(v)}'">`
     + days.map((x) => `<option value="${x}"${x === day ? ' selected' : ''}>${esc(short(x))}</option>`).join('') + '</select>'
@@ -1652,6 +1658,7 @@ function briefsHtml(base, day, b, days, view) {
     + '.nb-o li::before{content:counter(nb);position:absolute;left:0;top:13px;font-size:13px;font-weight:700;color:var(--accent)}.nb-o p{margin:0 0 5px}'
     + '.nb-ts{display:flex;gap:6px;flex-wrap:wrap}.nb-t{font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;border:1px solid var(--hair-2);color:var(--muted)}'
     + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}'
+    + '.nb-now{margin:12px 0 0;padding:10px 14px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:0 10px 10px 0;font-size:14px;line-height:1.5;color:var(--text)}'
     + '.nb-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:22px;padding:10px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}'
     + '.nb-tabs{display:flex;gap:6px;flex-wrap:wrap}.nb-tab{padding:8px 13px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;border:1px solid transparent}'
     + '.nb-tab.on{color:var(--text);border-color:var(--hair-2);background:color-mix(in srgb,var(--wash) 6%,transparent)}.nb-tab:hover{color:var(--text)}'
@@ -1662,7 +1669,7 @@ function briefsHtml(base, day, b, days, view) {
     + '.nb-cta{margin-top:34px;padding:16px 18px;border:1px solid var(--hair);border-radius:14px;font-size:14px;line-height:1.55;color:var(--muted)}'
     + '.nb-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.nb-b{display:inline-block;padding:9px 15px;border-radius:10px;border:1px solid var(--hair-2);color:var(--text);text-decoration:none;font-size:14px}'
     + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
-    + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}${upd ? ' · updated ' + esc(upd) + ' New York time' : ''}</p>`
+    + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}${upd ? ' · updated ' + esc(upd) + ' New York time' : ''}</p>${lead}`
     + bar + empty + (v === 'next' ? next : today)
     + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
     + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
@@ -1677,10 +1684,10 @@ app.get(['/briefs', '/briefs/:day'], route(async (req, res, next) => {
   const days = await store.readNewsBriefDays(60, NewsBriefPage.shownBuild).catch(() => []);
   const day = asked || days[0] || null;
   const b = day ? await store.readNewsBrief(day, NewsBriefPage.shownBuild).catch(() => ({})) : {};
-  const view = req.query.v === 'next' ? 'next' : 'today';
+  const view = req.query.v === 'next' ? 'next' : req.query.v === 'today' ? 'today' : null;
   if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days, view).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=300');
-  res.type('html').send(briefsHtml(base, day, b, days, view));
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=60');
+  res.type('html').send(briefsHtml(base, day, b, days, view, Date.now()));
 }));
 app.get('/links', route(async (req, res) => {
   if (anonLogOk(req)) logAct(req, 'page', 'links');

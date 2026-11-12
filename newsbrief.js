@@ -135,6 +135,45 @@ function shownBuild(day, at) {
   const m = etMinute(new Date(at).toISOString());
   return PAGE_SLOTS.some((s) => m >= s - 2 && m <= s + 20);
 }
+// THE PAGE BY THE CLOCK (same day, the owner: "Include weekend too .. but may
+// be do 2 refresh instead of 4 .. make the whole page smart depending on when
+// it is accessed"). The update times: four on weekdays, two at the weekend.
+const UPDATES = { weekday: ['08:40', '11:40', '14:40', '17:40'], weekend: ['11:40', '17:40'] };
+const hm = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+const clock = (t) => { const h = Math.floor(hm(t) / 60), m = t.slice(3); return (h % 12 || 12) + ':' + m + (h < 12 ? ' AM' : ' PM'); };
+// The next update after `now`: { day, time } ('8:40 AM'), today or a later day.
+function nextUpdate(now) {
+  const today = etDay(now), m = etMinute(new Date(now).toISOString());
+  for (let i = 0; i < 8; i++) {
+    const d = addDays(today, i), w = dow(d);
+    const slots = UPDATES[w === 0 || w === 6 ? 'weekend' : 'weekday'];
+    const t = slots.find((x) => i > 0 || hm(x) > m);
+    if (t) return { day: d, time: clock(t), today: i === 0 };
+  }
+  return null;
+}
+// Where the market stands when the page is opened, which tab leads, and the
+// line that says so. `shown`: the day of the edition on screen; `has`: which
+// parts it has. Wording describes the clock, never the market's direction.
+function moment(now, shown, has) {
+  const today = etDay(now), m = etMinute(new Date(now).toISOString());
+  const trading = isTradingDay(today), w = dow(today);
+  const phase = !trading ? 'closed' : m < 9 * 60 + 30 ? 'pre' : m < 16 * 60 ? 'open' : 'after';
+  // Closed: the day before a session looks ahead; another closed day looks back.
+  let view = phase === 'pre' ? 'next' : phase === 'closed' ? (nextTradingDay(today) === addDays(today, 1) ? 'next' : 'today') : 'today';
+  if (view === 'next' && has && !has.next) view = 'today';
+  if (view === 'today' && has && !has.today) view = 'next';
+  const nu = nextUpdate(now);
+  const when = nu ? (nu.today ? nu.time : (nu.day === addDays(today, 1) ? 'tomorrow' : new Date(at(nu.day)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })) + ' at ' + nu.time) : '';
+  const lead = {
+    pre: 'Before the open: what to watch when the market opens at 9:30, and the news since yesterday evening.',
+    open: 'The market is open: the news so far today, and what comes next.',
+    after: 'After the close: the day’s news and what the next session holds.',
+    closed: w === 0 || w === 6 ? 'The market is closed for the weekend: the latest news and what the next session holds.' : 'The market is closed today for a holiday: the latest news and what the next session holds.',
+  }[phase];
+  const stale = shown && shown !== today ? `This is ${new Date(at(shown)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })}’s edition. ` : '';
+  return { phase, view, line: stale + lead + (when ? ' Next update ' + when + '.' : ''), today };
+}
 // The session a build looks ahead to: on a trading day before the 9:30 open,
 // that day's own; otherwise the next trading day.
 function nextSession(today, now) {
@@ -365,7 +404,7 @@ const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in +
 
 module.exports = {
   isTradingDay, nextTradingDay, holidays, easter, addDays, dayName, etDay,
-  inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, candidates, request, userPrompt, check, spend, capText,
+  inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, moment, nextUpdate, UPDATES, candidates, request, userPrompt, check, spend, capText,
   dayInputs, todayRequest, todayPrompt, checkToday, sameStory,
   SYSTEM, SCHEMA, SYSTEM_TODAY, SCHEMA_TODAY, MODEL, MAX_ITEMS, MAX_TODAY, RANK,
 };
