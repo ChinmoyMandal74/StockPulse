@@ -151,6 +151,11 @@ check('the lead line: where things stand and the next update', [MO('2026-11-12T1
   ['The market is open: the news so far today, and what comes next. Next update 2:40 PM.', 'The market is closed for the weekend: the latest news and what the next session holds. Next update tomorrow at 11:40 AM.']);
 check('an earlier day\'s edition says so', MO('2026-11-12T08:00:00-05:00', '2026-11-11').line.startsWith('This is Wednesday’s edition. Before the open'), true);
 check('a part missing: the other leads', [MO('2026-11-12T08:00:00-05:00', null, { today: true, next: false }).view, MO('2026-11-12T12:00:00-05:00', null, { today: false, next: true }).view], ['today', 'next']);
+const T2 = (x) => Date.parse('2026-11-12T' + x + ':00-05:00');
+check('an update time passed and its build not in yet: the line says it is coming', NB.moment(T2('11:41'), '2026-11-12', { today: true, next: true }, T2('08:40')).line, 'The market is open. The 11:40 AM update is being written and appears here within a few minutes.');
+check('its build in: the next update after it', NB.moment(T2('11:41'), '2026-11-12', { today: true, next: true }, T2('11:40') + 23e3).line, 'The market is open: the news so far today, and what comes next. Next update 2:40 PM.');
+check('more than fifteen minutes on with no build: no promise, the next update', NB.moment(T2('11:56'), '2026-11-12', { today: true, next: true }, T2('08:40')).line.endsWith('Next update 2:40 PM.'), true);
+check('the morning\'s first update, last evening\'s edition on screen', NB.moment(T2('08:41'), '2026-11-11', { today: true, next: true }, Date.parse('2026-11-11T17:40:00-05:00')).line, 'This is Wednesday’s edition. Before the open. The 8:40 AM update is being written and appears here within a few minutes.');
 check('next update: Friday evening to Saturday 11:40, Sunday evening to Monday 8:40', [NB.nextUpdate(Date.parse('2026-11-13T18:00:00-05:00')), NB.nextUpdate(Date.parse('2026-11-15T18:00:00-05:00'))],
   [{ day: '2026-11-14', time: '11:40 AM', today: false }, { day: '2026-11-16', time: '8:40 AM', today: false }]);
 { const S = require('./schedule.js'); const j = S.JOBS.find((x) => x.id === 'newsbrief-update'), e = S.JOBS.find((x) => x.id === 'newsbrief');

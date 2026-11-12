@@ -1646,7 +1646,7 @@ function briefsHtml(base, day, b, days, view, now) {
   // option to change dates going forward basis only"): the two tabs, and the
   // days on file (from the first published brief on; nothing earlier is made),
   // older and newer a step, any day from the list. Links work without script.
-  const mo = day ? NewsBriefPage.moment(now || Date.now(), day, { today: !!today, next: !!next }) : null;
+  const mo = day ? NewsBriefPage.moment(now || Date.now(), day, { today: !!today, next: !!next }, Math.max((t && t.at) || 0, (n && n.at) || 0)) : null;
   const want = view || (mo && mo.view) || 'today';
   const v = want === 'next' && next ? 'next' : today ? 'today' : 'next';
   const q = (x) => '?v=' + x;

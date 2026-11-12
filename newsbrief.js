@@ -156,7 +156,12 @@ function nextUpdate(now) {
 // Where the market stands when the page is opened, which tab leads, and the
 // line that says so. `shown`: the day of the edition on screen; `has`: which
 // parts it has. Wording describes the clock, never the market's direction.
-function moment(now, shown, has) {
+// builtAt: when the edition on screen was built. In the minutes after an
+// update time whose build has not landed yet (it takes about half a minute,
+// and the page is cached a minute), the line says it is coming rather than
+// pointing past it (the owner, 11:40 that day: "Does not saying anything
+// about 11:40 refresh").
+function moment(now, shown, has, builtAt) {
   const today = etDay(now), m = etMinute(new Date(now).toISOString());
   const trading = isTradingDay(today), w = dow(today);
   const phase = !trading ? 'closed' : m < 9 * 60 + 30 ? 'pre' : m < 16 * 60 ? 'open' : 'after';
@@ -164,7 +169,17 @@ function moment(now, shown, has) {
   let view = phase === 'pre' ? 'next' : phase === 'closed' ? (nextTradingDay(today) === addDays(today, 1) ? 'next' : 'today') : 'today';
   if (view === 'next' && has && !has.next) view = 'today';
   if (view === 'today' && has && !has.today) view = 'next';
+  const w2 = dow(today), slotsToday = UPDATES[w2 === 0 || w2 === 6 ? 'weekend' : 'weekday'].map(hm);
+  const lastSlot = slotsToday.filter((s) => s <= m).pop();
+  const slotAt = lastSlot == null ? null : now - (m - lastSlot) * 60e3;
+  const coming = lastSlot != null && m - lastSlot <= 15 && !(Number(builtAt) >= slotAt - 2 * 60e3);
   const nu = nextUpdate(now);
+  if (coming) {
+    const tm = String(Math.floor(lastSlot / 60)).padStart(2, '0') + ':' + String(lastSlot % 60).padStart(2, '0');
+    const lead0 = { pre: 'Before the open', open: 'The market is open', after: 'After the close', closed: 'The market is closed' }[phase];
+    const stale0 = shown && shown !== today ? `This is ${new Date(at(shown)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })}’s edition. ` : '';
+    return { phase, view, line: stale0 + lead0 + `. The ${clock(tm)} update is being written and appears here within a few minutes.`, today, coming: true };
+  }
   const when = nu ? (nu.today ? nu.time : (nu.day === addDays(today, 1) ? 'tomorrow' : new Date(at(nu.day)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })) + ' at ' + nu.time) : '';
   const lead = {
     pre: 'Before the open: what to watch when the market opens at 9:30, and the news since yesterday evening.',
