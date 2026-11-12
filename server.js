@@ -2820,7 +2820,23 @@ function noteAdminIp(req) {
   const t = adminIpSeen.get(ip);
   if (t && Date.now() - t < 3600e3) return;
   adminIpSeen.set(ip, Date.now());
+  adminIpCache.set.add(ip);
   store.noteAdminIp(ip).catch(() => { adminIpSeen.delete(ip); });
+}
+// SIGNED OUT, FROM THE ADMIN'S ADDRESS (the owner, 2026-11-11: "apply the same
+// on blog visitor"): the owner reading the blog on a phone, not signed in. Such
+// a view was written, then left out of /blog-visitors' counts by its address;
+// now it is not written. The addresses in admin_ips, read at most every ten
+// minutes per instance. A signed-in member on the same address is still logged.
+const adminIpCache = { at: 0, set: new Set() };
+async function adminAddress(req) {
+  const ip = req && req.ip ? String(req.ip).slice(0, 60) : '';
+  if (!ip) return false;
+  if (Date.now() - adminIpCache.at > 600e3) {
+    try { const ips = await store.readAdminIps(); adminIpCache.set = new Set(ips.concat([...adminIpCache.set])); adminIpCache.at = Date.now(); }
+    catch (e) { adminIpCache.at = Date.now() - 540e3; }   // try again in a minute
+  }
+  return adminIpCache.set.has(ip);
 }
 // `userKey` is the account a line is written against when the caller names it
 // (a sign-in, before the session cookie exists): the password sign-in's
@@ -2832,7 +2848,14 @@ async function skipAdminActivity(req, userKey) {
     const u = await store.findUserByEmail(userKey).catch(() => null);
     admin = !!u && isAdminRole(u.role);
   }
-  if (!admin && !(await isAdmin(req))) return false;
+  if (!admin && !(await isAdmin(req))) {
+    // Not an admin request: skipped only when nobody is signed in and the
+    // address is one an admin has used.
+    if (userKey !== undefined && userKey !== null) return false;
+    if (await currentUser(req)) return false;
+    if (await isGuest(req)) return false;
+    return adminAddress(req);
+  }
   noteAdminIp(req);
   return true;
 }

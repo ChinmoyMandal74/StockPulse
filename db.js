@@ -7600,6 +7600,22 @@ async function noteAdminIp(ip) {
     args: [String(ip).slice(0, 60), now, now] });
 }
 
+async function readAdminIps() {
+  await init();
+  const r = await db.execute('select ip from admin_ips');
+  return r.rows.map((x) => String(x.ip));
+}
+// Once, when the table is new: every address already in the activity log
+// against an admin, so none is lost as those rows age out.
+async function seedAdminIps() {
+  await init();
+  const now = Date.now();
+  const r = await db.execute({ sql: `insert or ignore into admin_ips (ip, first_seen, last_seen)
+    select distinct ip, ?, ? from activity where ip is not null
+      and (user in ('admin', 'open') or user in (select email from users where role in ('admin', 'owner')))`, args: [now, now] });
+  return Number(r.rowsAffected) || 0;
+}
+
 // Wipes the log, like clearVisitors — the autoincrement resets too.
 async function clearActivity() {
   await init();
@@ -9071,7 +9087,7 @@ module.exports = {
   addPaperTrade,
   resetPaper,
   listAllPaper,
-  noteAdminIp,
+  noteAdminIp, readAdminIps, seedAdminIps,
   listComps, readComp, createComp, updateComp, compTeams, readTeam, readTeamByCode, readTeamLedgers,
   createTeam, joinTeam, leaveTeam, setTeamShow, myCompEntries,
   removeSymbolFromUserPortfolios,

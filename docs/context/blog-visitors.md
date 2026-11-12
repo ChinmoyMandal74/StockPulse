@@ -43,3 +43,8 @@ A visitor is an IP address.
 
 ## Ideas not done
 - Store a bot flag and the referring host on blog views. That would show where readers come from and drop other crawlers. It would need a `/privacy` line.
+
+## Signed-out views from the admin's address are not written (2026-11-11)
+The owner: "apply the same on blog visitor", after the admin stopped being written to the activity log. A view with nobody signed in, from an address in `admin_ips`, is now not written at all (it used to be written and then left out of the counts as "yours, signed out"). `skipAdminActivity` asks `adminAddress(req)`, which holds `admin_ips` per instance and re-reads it every ten minutes; an address the admin uses is added to it at once. A member signed in from the same address, and a guest, are still logged. `seedAdminIps` copies every admin address already in the activity log into `admin_ips`; run on production the same evening, it found the log empty (cleared), so the list starts from the admin's next signed-in visit. Until then a signed-out view from a new address of the owner's is counted, as before.
+
+Verified on the real server with an in-memory database (7 checks, with `noadmin-test.js` in the session scratchpad): the owner's address signed out (blog, /links) not written, a stranger's view written, a member signed in from the owner's address written. The address check proven by switching it off (1 failure).
