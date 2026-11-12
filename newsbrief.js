@@ -174,6 +174,49 @@ function moment(now, shown, has) {
   const stale = shown && shown !== today ? `This is ${new Date(at(shown)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })}’s edition. ` : '';
   return { phase, view, line: stale + lead + (when ? ' Next update ' + when + '.' : ''), today };
 }
+// COMPANY NAMES AS LINKS (same day, the owner: "make the stock name and
+// tickers clickable point to the individual page"). A line split into pieces,
+// each { text, symbol? }: the first mention of each of its companies, by its
+// name as the screener gives it (suffixes like Inc. or Corporation left off),
+// else the name's first word when that word is distinctive, else its ticker.
+// names: { SYM: 'NVIDIA', ... } for the companies the line cites.
+const SUFFIX = /[,\s]+(inc\.?|incorporated|corp\.?|corporation|holdings?|group|ltd\.?|limited|plc|company|co\.?|n\.v\.|s\.a\.|ag|se|lp|l\.p\.|class [a-c]|common stock|ordinary shares|ads|the)$/i;
+const PLAIN = new Set(['american', 'general', 'united', 'first', 'national', 'international', 'applied', 'advanced', 'global', 'southern', 'northern', 'western', 'eastern', 'pacific', 'atlantic', 'royal', 'capital', 'energy', 'digital', 'public', 'service', 'health', 'financial', 'bank', 'trust', 'texas', 'new', 'old', 'great', 'central', 'standard', 'universal', 'federal', 'liberty', 'pioneer', 'premier', 'select', 'smart', 'super', 'real', 'home', 'life', 'one', 'world', 'interactive', 'semiconductor', 'micro', 'meta']);
+function nameForms(name, symbol) {
+  let n = String(name || '').replace(/^the\s+/i, '').trim();
+  for (let i = 0; i < 4 && SUFFIX.test(n); i++) n = n.replace(SUFFIX, '').trim();
+  const forms = [];
+  const word = (t, flags) => new RegExp('(?<![A-Za-z0-9])' + escRe(t) + '(?![A-Za-z0-9])', flags);
+  // The whole name, then its leading words, longest first ("Mitsubishi UFJ"
+  // of Mitsubishi UFJ Financial Group); a short name only as written ("Nu").
+  const ws = n.split(/\s+/).filter(Boolean);
+  for (let k = ws.length; k >= 2; k--) forms.push({ re: word(ws.slice(0, k).join(' '), 'i') });
+  if (ws.length === 1 && n.length >= 2) forms.push({ re: word(n, n.length >= 4 ? 'i' : '') });
+  const first = ws[0] || '';
+  if (ws.length > 1 && first.length >= 5 && !PLAIN.has(first.toLowerCase())) forms.push({ re: word(first, 'i') });
+  if (symbol && symbol.length >= 2) forms.push({ re: new RegExp('(?<![A-Za-z0-9.])' + escRe(symbol) + '(?![A-Za-z0-9])'), len: symbol.length });
+  return forms;
+}
+function linkNames(line, names) {
+  const text = String(line || '');
+  const hits = [];
+  for (const [sym, name] of Object.entries(names || {})) {
+    for (const f of nameForms(name, sym)) {
+      const m = f.re.exec(text);
+      if (m) { hits.push({ at: m.index, end: m.index + m[0].length, symbol: sym }); break; }
+    }
+  }
+  hits.sort((a, b) => a.at - b.at || b.end - a.end);
+  const out = []; let pos = 0;
+  for (const h of hits) {
+    if (h.at < pos) continue;                         // overlaps an earlier link
+    if (h.at > pos) out.push({ text: text.slice(pos, h.at) });
+    out.push({ text: text.slice(h.at, h.end), symbol: h.symbol });
+    pos = h.end;
+  }
+  if (pos < text.length) out.push({ text: text.slice(pos) });
+  return out;
+}
 // The session a build looks ahead to: on a trading day before the 9:30 open,
 // that day's own; otherwise the next trading day.
 function nextSession(today, now) {
@@ -404,7 +447,7 @@ const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in +
 
 module.exports = {
   isTradingDay, nextTradingDay, holidays, easter, addDays, dayName, etDay,
-  inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, moment, nextUpdate, UPDATES, candidates, request, userPrompt, check, spend, capText,
+  inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, moment, nextUpdate, UPDATES, linkNames, candidates, request, userPrompt, check, spend, capText,
   dayInputs, todayRequest, todayPrompt, checkToday, sameStory,
   SYSTEM, SCHEMA, SYSTEM_TODAY, SCHEMA_TODAY, MODEL, MAX_ITEMS, MAX_TODAY, RANK,
 };

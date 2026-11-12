@@ -155,6 +155,16 @@ check('next update: Friday evening to Saturday 11:40, Sunday evening to Monday 8
   [{ day: '2026-11-14', time: '11:40 AM', today: false }, { day: '2026-11-16', time: '8:40 AM', today: false }]);
 { const S = require('./schedule.js'); const j = S.JOBS.find((x) => x.id === 'newsbrief-update'), e = S.JOBS.find((x) => x.id === 'newsbrief');
   check('the page\'s update times are the scheduled runs, weekday and weekend', ['Wed', 'Sat', 'Sun'].map((d) => [...S.runsOn(j, d), ...S.runsOn(e, d)].map(S.fmt).sort().join()), [NB.UPDATES.weekday.join(), NB.UPDATES.weekend.join(), NB.UPDATES.weekend.join()]); }
+// ---- company names as links ---------------------------------------------------------
+const LN = (l, n) => NB.linkNames(l, n).map((p) => (p.symbol ? '[' + p.text + '>' + p.symbol + ']' : p.text)).join('');
+check('a name as the screener gives it, any case, the first mention only', LN('Nvidia fell; Nvidia says no.', { NVDA: 'NVIDIA Corporation' }), '[Nvidia>NVDA] fell; Nvidia says no.');
+check('suffixes left off, several companies, a short name as written', LN('Cisco, Applied Materials, Nu and Cerebras Systems report.', { CSCO: 'Cisco Systems, Inc.', AMAT: 'Applied Materials, Inc.', NU: 'Nu Holdings Ltd.', CBRS: 'Cerebras Systems Inc.' }),
+  '[Cisco>CSCO], [Applied Materials>AMAT], [Nu>NU] and [Cerebras Systems>CBRS] report.');
+check('the longest run of leading words', LN('Mitsubishi UFJ and Sumitomo Mitsui report.', { MUFG: 'Mitsubishi UFJ Financial Group, Inc.', SMFG: 'Sumitomo Mitsui Financial Group, Inc.' }), '[Mitsubishi UFJ>MUFG] and [Sumitomo Mitsui>SMFG] report.');
+check('not inside another word, not a plain first word alone', [LN('apples and Applebee rose.', { AAPL: 'Apple Inc.' }), LN('American Express and American Airlines.', { AXP: 'American Express Company' })], ['apples and Applebee rose.', '[American Express>AXP] and American Airlines.']);
+check('a short name in another case is not linked', LN('the nu metal band', { NU: 'Nu Holdings Ltd.' }), 'the nu metal band');
+check('its ticker when the name is absent', LN('TSM shares rose.', { TSM: 'Taiwan Semiconductor Manufacturing Company Limited' }), '[TSM>TSM] shares rose.');
+check('no names: the line as it is', LN('Alpha did a thing.', {}), 'Alpha did a thing.');
 check('both prompts name days, never today or tomorrow', /never today, tonight or tomorrow/.test(NB.SYSTEM) && /never today, tonight or tomorrow/.test(NB.SYSTEM_TODAY), true);
 
 console.log(`\nnewsbrief-test: ${ran} checks, ${failed} failed`);

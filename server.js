@@ -478,7 +478,10 @@ app.get('/analysis', (req, res) => res.redirect('/'));
 // One stock, in full. The symbol is read client-side from the path, so every
 // ticker serves the same file.
 app.get('/stock/:symbol', route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
+  // Signed out (often from the public news brief): sign in, then back here.
+  // The sign-in page takes letters, digits and dashes in its return address,
+  // so a ticker with a dot (BRK.B) signs in to the usual page.
+  if (!(await isSignedIn(req))) { const sym = String(req.params.symbol || '').toUpperCase(); return res.redirect(/^[A-Z0-9-]{1,12}$/.test(sym) ? '/login?next=/stock/' + sym : '/login'); }
   if ((await isGuest(req)) && !guestSet.has(String(req.params.symbol || '').toUpperCase())) {
     return res.redirect('/');
   }
@@ -1599,22 +1602,26 @@ function briefsHtml(base, day, b, days, view, now) {
   const t = b.today, n = b.next;
   const when = day ? NewsBriefPage.dayName(day) : '';
   const esc = htmlEsc;
-  const tick = (list) => (list || []).map((s) => `<span class="nb-t">${esc(s)}</span>`).join('');
+  // Tickers and company names link to their stock pages (the owner, same day);
+  // a visitor not signed in is asked to sign in and comes back to the stock.
+  const sp = (sym) => '/stock/' + encodeURIComponent(sym);
+  const tick = (list) => (list || []).map((s) => `<a class="nb-t" href="${sp(s)}">${esc(s)}</a>`).join('');
+  const said = (x) => NewsBriefPage.linkNames(x.line, x.names || {}).map((p) => (p.symbol ? `<a class="nb-co" href="${sp(p.symbol)}">${esc(p.text)}</a>` : esc(p.text))).join('');
   const builtAt = Math.max((t && t.at) || 0, (n && n.at) || 0);
   const upd = builtAt ? new Date(builtAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '';
   const wd = day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) : '';
   const today = t && t.items && t.items.length ? (() => {
     const hi = t.items.filter((x) => x.importance === 'high'), med = t.items.filter((x) => x.importance === 'medium');
-    const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${esc(x.line)}</p></li>`).join('') + '</ul>' : '');
+    const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${said(x)}</p></li>`).join('') + '</ul>' : '');
     return `<section class="nb-s"><h2>What happened on ${esc(wd)}</h2>${t.intro ? `<p class="nb-in">${esc(t.intro)}</p>` : ''}`
       + `<p class="nb-m">${t.items.length} stories, written by AI from ${Number(t.read || 0).toLocaleString('en-US')} articles, each piece of news once.</p>`
       + list('High importance', hi) + list('Medium importance', med) + '</section>';
   })() : '';
   const next = n && n.next ? (() => {
     const cal = (label, arr) => (arr && arr.length ? `<h3 class="nb-k">${label} (${arr.length})</h3><p class="nb-cal">`
-      + arr.slice(0, 80).map((r) => `<span><b>${esc(r.symbol)}</b> ${esc(r.name)}</span>`).join('') + '</p>' : '');
+      + arr.slice(0, 80).map((r) => `<a class="nb-ce" href="${sp(r.symbol)}"><b>${esc(r.symbol)}</b> ${esc(r.name)}</a>`).join('') + '</p>' : '');
     return `<section class="nb-s"><h2>Next session: ${esc(NewsBriefPage.dayName(n.next))}</h2>${n.intro ? `<p class="nb-in">${esc(n.intro)}</p>` : ''}`
-      + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${esc(x.line)}</p><div class="nb-ts">${tick(x.symbols)}</div></li>`).join('') + '</ol>' : '')
+      + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${said(x)}</p><div class="nb-ts">${tick(x.symbols)}</div></li>`).join('') + '</ol>' : '')
       + cal('Reporting before the open', n.before) + cal('Listed to report after the close', n.after) + '</section>';
   })() : '';
   const empty = !today && !next ? '<p class="nb-in">The first brief is published at 5:40 PM New York time.</p>' : '';
@@ -1657,7 +1664,9 @@ function briefsHtml(base, day, b, days, view, now) {
     + '.nb-l p,.nb-o p{margin:5px 0 0;font-size:15px;line-height:1.55;color:var(--text)}.nb-o{counter-reset:nb}.nb-o li{counter-increment:nb;position:relative;padding-left:30px}'
     + '.nb-o li::before{content:counter(nb);position:absolute;left:0;top:13px;font-size:13px;font-weight:700;color:var(--accent)}.nb-o p{margin:0 0 5px}'
     + '.nb-ts{display:flex;gap:6px;flex-wrap:wrap}.nb-t{font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;border:1px solid var(--hair-2);color:var(--muted)}'
-    + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}'
+    + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}.nb-ce{color:var(--muted);text-decoration:none}.nb-ce:hover b{color:var(--accent)}'
+    + 'a.nb-t{text-decoration:none}a.nb-t:hover{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}'
+    + '.nb-co{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--accent) 55%,transparent);text-underline-offset:3px}.nb-co:hover{color:var(--accent)}'
     + '.nb-now{margin:12px 0 0;padding:10px 14px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:0 10px 10px 0;font-size:14px;line-height:1.5;color:var(--text)}'
     + '.nb-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:22px;padding:10px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}'
     + '.nb-tabs{display:flex;gap:6px;flex-wrap:wrap}.nb-tab{padding:8px 13px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;border:1px solid transparent}'
@@ -22586,12 +22595,14 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
     shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error,
     todayRead: tai.read || 0, todayItems: tai.items.length, todayDropped: tai.dropped, todayError: tai.error, spent: Math.round((ai.spent + tai.spent) * 1e4) / 1e4 };
   if (dry) return res.json({ dry: true, counts, today: { subject: a.subject, text: a.text, bytes: a.html.length }, next: { subject: b.subject, text: b.text, bytes: b.html.length } });
+  // Each line keeps its companies' names, so the page can link them where they appear.
+  const briefNames = (dd, syms) => Object.fromEntries((syms || []).map((x) => [x, ((dd.info(x) || {}).name) || x]));
   // Published on /briefs: the checked AI lines only (never the fallback list),
   // a row a build, so the day's history is kept. Bookkeeping: never fails the send.
   const store1 = async () => {
     try {
-      if (tai.items.length) await store.writeNewsBrief(d.today, 'today', now, { day: d.today, intro: tai.intro, read: tai.read || 0, items: tai.items.map((x) => ({ importance: x.importance, line: x.line, symbols: x.symbols, articles: x.articles })) });
-      await store.writeNewsBrief(d.today, 'next', now, { day: d.today, next: d.next, intro: ai.intro, items: ai.items.map((x) => ({ line: x.line, symbols: x.symbols })),
+      if (tai.items.length) await store.writeNewsBrief(d.today, 'today', now, { day: d.today, intro: tai.intro, read: tai.read || 0, items: tai.items.map((x) => ({ importance: x.importance, line: x.line, symbols: x.symbols, names: briefNames(d, x.symbols), articles: x.articles })) });
+      await store.writeNewsBrief(d.today, 'next', now, { day: d.today, next: d.next, intro: ai.intro, items: ai.items.map((x) => ({ line: x.line, symbols: x.symbols, names: briefNames(d, x.symbols) })),
         before: d.cal.before.map((r) => ({ symbol: r.symbol, name: r.name, time: r.time })), after: d.cal.after.map((r) => ({ symbol: r.symbol, name: r.name })) });
       return true;
     } catch (err) { console.warn('news brief: not published:', err && err.message); return false; }
