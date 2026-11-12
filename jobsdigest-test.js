@@ -55,11 +55,13 @@ ok(job(d, 'nightly').what === '40,000 Twelve Data credits; 26 of 26 steps OK', '
 ok(job(d, 'nightly').steps.length === 2 && job(d, 'nightly').steps[1].slot === '16:00' && job(d, 'nightly').steps[0].steps[3].name === 'SEC filings rotation', 'every step of each run, named for the email', job(d, 'nightly').steps);
 ok(realIssues(d).length === 0 && d.jobs.every((j) => j.status === 'ok'), 'a clean day: nothing to look at', d.issues);
 ok(d.mail.sent === 3 && d.mail.failed === 0, 'the day’s mail counted', d.mail);
-ok(job(d, 'newsbrief').runs === '1 of 1 ran' && job(d, 'newsbrief').what === '2 briefs sent', 'the news briefs: their two emails are the run', job(d, 'newsbrief'));
+ok(job(d, 'newsbrief').runs === '1 of 1 ran' && job(d, 'newsbrief').what === '2 briefs sent or published', 'the news briefs: their two emails are the run', job(d, 'newsbrief'));
 { const s2 = clean(); s2.mail = s2.mail.map((m) => (m.kind === 'news-brief-next' ? Object.assign({}, m, { ok: false }) : m)); const d2 = J.build(s2, NOW);
   ok(d2.issues.some((x) => /Evening news briefs: 17:40 the next brief was refused/.test(x)), 'a refused brief is to look at', d2.issues); }
 { const s3 = clean(); s3.mail = s3.mail.filter((m) => !/^news-brief/.test(m.kind)); const d3 = J.build(s3, NOW);
-  ok(d3.issues.includes('Evening news briefs: the 17:40 run did not start'), 'no brief sent: a missed run', d3.issues); }
+  ok(d3.issues.includes('Evening news briefs: the 17:40 run did not start'), 'no brief sent: a missed run', d3.issues);
+  const s4 = Object.assign({}, s3, { briefs: [{ at: at('17:41') }, { at: at('17:41') }] }); const d4 = J.build(s4, NOW);
+  ok(job(d4, 'newsbrief').runs === '1 of 1 ran' && !d4.issues.some((x) => /news briefs/.test(x)), 'no owner email, the evening edition published: the run', [job(d4, 'newsbrief'), d4.issues]); }
 ok(!d.jobs.some((j) => j.id === 'digest' || j.id === 'schedule' || j.id === 'watchdog'), 'only jobs with run records get a row');
 
 // 2. A missed slot.

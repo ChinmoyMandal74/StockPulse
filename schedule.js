@@ -158,7 +158,7 @@ const JOBS = [
     id: 'newsbrief', name: 'Evening news briefs', task: null, host: 'fly', script: 'news-brief-ping.js',
     days: ALL_DAYS, times: ['17:40'], minutes: 1, limit: 6,
     spends: { kind: 'anthropic', text: 'Two Claude Sonnet calls a day: the day re-read (about $0.29, 110,000 tokens) and the next session (about $0.04)' },
-    what: 'Emails the owner two briefs, and publishes them on /briefs, from the stored article readings (newsbrief.js): today\'s news re-read by AI from every article about a company, each piece of news once, high then medium; and the next session: up to ten AI lines, each checked against what it cites, and who reports before the next open or reported after today\'s close. Then the evening edition of the Daily news brief mailing to its subscribers.',
+    what: 'Builds the evening briefs and publishes them on /briefs (the owner's two emails off since 2026-11-12; NEWS_BRIEF_OWNER_MAIL=1 sends them), from the stored article readings (newsbrief.js): today\'s news re-read by AI from every article about a company, each piece of news once, high then medium; and the next session: up to ten AI lines, each checked against what it cites, and who reports before the next open or reported after today\'s close. Then the evening edition of the Daily news brief mailing to its subscribers.',
     log: '/schedule',
   },
   {

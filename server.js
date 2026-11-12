@@ -22439,7 +22439,9 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
     store.readRuns(since).catch(() => []), store.readNewsRuns(since).catch(() => []), store.readToneRuns(since).catch(() => []),
     store.readReleaseRuns(since).catch(() => []), store.readScheduleReport().catch(() => null), store.readMailLog(since, 500).catch(() => []),
   ]);
-  const d = JobsDigest.build({ refresh, news, tone, releases, report, mail }, now);
+  const eve = await store.readNewsBrief(today, NewsBrief.eveningBuild).catch(() => ({}));
+  const briefs = [eve.today, eve.next].filter((x) => x && x.at <= now).map((x) => ({ at: x.at }));
+  const d = JobsDigest.build({ refresh, news, tone, releases, report, mail, briefs }, now);
   // The data check rides on this email. A failure is a line in it, never a
   // missed email; a sample day does not run it (it reads today's archive).
   let dc = null;
@@ -22659,6 +22661,15 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
     } catch (err) { console.warn('news brief: not published:', err && err.message); return false; }
   };
   if (publish) return res.json({ published: await store1(), counts });
+  // NO OWNER EMAILS (the owner, 2026-11-12: "I don't need the 17:40 everyday"):
+  // the evening run still builds, publishes and moves the mark (the daytime
+  // updates read the news since it), and the subscriber mailing follows; the
+  // two emails to the operator go only with NEWS_BRIEF_OWNER_MAIL=1.
+  if (!sample && process.env.NEWS_BRIEF_OWNER_MAIL !== '1') {
+    if (!(mark.day === today && mark.today && !force)) { try { await store.writeNewsBriefMark({ day: today, at: now, prevAt, today: true, next: true, quiet: true }); } catch { /* bookkeeping */ } }
+    const published = await store1();
+    return res.json({ sent: published, quiet: true, published, counts });
+  }
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
