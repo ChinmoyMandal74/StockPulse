@@ -3147,6 +3147,51 @@ the website text for its keyword check, so on the site those hits are worked
 out locally and sent up; and every page's totals scan, so each needs storing
 ahead of time.
 
+## 63. An iPhone app: installable first, the App Store only if it earns it — 2026-11-11
+
+*Area: Pages · Status: Open · Note: step 1 (an installable web app from the phone page) is a few days and free; step 2 (an App Store app) only if step 1's installs and alert use show demand*
+
+The owner, 2026-11-11: "How should I go about creating an iphone app", then
+"add this to backlog". Where it starts: the phone page `/m` exists, but the
+site has no web app manifest, no home-screen icon and no service worker, and
+the owner's machine is Windows (an App Store build needs Xcode on a Mac).
+
+**Step 1: an installable web app (a few days, free, no review).**
+- A manifest (name, colours, start URL `/m`, standalone display), icons from
+  the logo glyph including the 180px `apple-touch-icon`, and a small service
+  worker for the app shell (never the data; prices must not be served stale
+  without saying so).
+- "Add to Home Screen" in Safari then gives a full-screen app with its own
+  icon. A small "Install the app" prompt on `/m` and `/links`, because iPhone
+  users do not find that menu by themselves.
+- Web push, which iOS has allowed for home-screen apps since 16.4: price
+  alerts and new posts on the lock screen. Needs VAPID keys, a
+  subscriptions table (listed on `/privacy`, deleted with the account), and a
+  send path beside `sendMail`. The "no email in the alerts feature" rule
+  stays; push is its own channel and needs the owner's say on what is sent.
+- Updates ship with every push to `main`, like the site. Count installs
+  (the manifest's start URL with a marker) and push opt-ins, to decide on
+  step 2.
+
+**Step 2: an App Store app (a few weeks, about $99 a year).**
+- Wrap `/m` with Capacitor (fits the vanilla JS, no build step on the
+  site itself) rather than a native Swift rewrite, which would be a second
+  copy of every page.
+- Built without a Mac through a cloud build service (Codemagic or similar,
+  to TestFlight), or a second-hand Mac mini.
+- Apple's review, planned for from the start:
+  - A wrapped website alone is refused (minimum functionality), so the app
+    needs native value: push alerts, a watchlist home-screen widget, Face ID
+    sign-in.
+  - Google sign-in is offered, so Sign in with Apple is required too.
+  - Account deletion inside the app (Close my account exists).
+  - The privacy questionnaire, from what `/privacy` already lists.
+  - A stock information app without trading is fine for an individual
+    developer; the no buy/sell wording rule and "not advice" stay.
+
+**Not decided:** whether guests get the app or it is members only; what push
+sends (alerts only, or new posts too); the app's name in the store.
+
 ## What is deliberately NOT on this list
 
 - **Rebuilding the momentum score.** Removed 2026-09-23 at the owner's
