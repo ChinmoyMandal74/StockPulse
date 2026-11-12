@@ -404,7 +404,7 @@ app.use('/api/', (req, res, next) => {
 // WHAT STAYS OPEN: the pages somebody needs in order to read the terms and
 // agree or leave, the public pages, and static files that carry no data.
 const TERMS_OPEN_PAGES = new Set(['/accept-terms', '/terms', '/privacy', '/login', '/join', '/reset',
-  '/about', '/landing', '/unsubscribe', '/subscribe', '/robots.txt', '/sitemap.xml', '/links']);
+  '/about', '/landing', '/unsubscribe', '/subscribe', '/robots.txt', '/sitemap.xml', '/links', '/app']);
 const TERMS_OPEN_API = /^\/api\/(me|terms\/accept|logout|login|register|forgot|reset|password|health|public-stats|guest|auth\/|cron\/|subscribe|unsubscribe)(\/|$)/;
 const TERMS_STATIC = /\.(css|js|svg|png|jpg|jpeg|webp|ico|woff2?|map|txt|xml)$/i;
 app.use(route(async (req, res, next) => {
@@ -1613,7 +1613,7 @@ app.get('/links', route(async (req, res) => {
     + `<body><main class="lk"><h1>Tickr <span>Lab</span></h1>`
     + '<p class="lk-lede">Every stock measured the same way after every close. The latest deep dives and notes:</p>'
     + '<p class="lk-k">Latest posts</p>' + (items || '<p class="lk-lede">The first post is being written.</p>')
-    + '<div class="lk-row"><a class="lk-b" href="/blog">All posts</a><a class="lk-b" href="/">The screener</a>'
+    + '<div class="lk-row"><a class="lk-b" href="/blog">All posts</a><a class="lk-b" href="/">The screener</a><a class="lk-b" href="/app">Get the app</a>'
     + `<a class="lk-b" href="${htmlEsc(BRAND_IG_URL)}">Instagram</a></div>`
     + subscribeBox('links')
     + '<p class="lk-foot">Descriptive, not advice. tickrlab.com</p></main></body></html>');
@@ -2238,7 +2238,7 @@ app.get('/sitemap.xml', route(async (req, res) => {
 // The phone. Any signed-in user, guests included — the owner's call: it is the
 // friendliest surface the site has.
 app.get('/m', route(async (req, res) => {
-  if (!(await isSignedIn(req))) return res.redirect('/login');
+  if (!(await isSignedIn(req))) return res.redirect('/login?next=/m');
   logAct(req, 'page', 'mobile');
   res.sendFile(path.join(__dirname, 'private', 'mobile.html'));
 }));
@@ -8404,6 +8404,96 @@ app.post('/api/compete/team/:tid/close', requireMember, route(async (req, res) =
   res.json(out);
 }));
 
+// THE APP (backlog 63, step 1; the owner, 2026-11-11: "build step 1", members
+// only, push for "alerts and new posts", named Tickr Lab). The phone page /m
+// made installable: public/manifest.webmanifest, public/sw.js, public/pwa.js.
+// /app explains how to install it (public, so /links can point to it).
+// PUSH: a member turns it on per phone from the bell on /m; the phone's
+// subscription is kept in push_subs with the topics chosen, and the server
+// sends through Web Push (the web-push library, VAPID keys in the
+// environment). A price alert that fires goes to its owner's phones; a post's
+// first publish goes to every phone with posts on. A phone the push service
+// says is gone (404, 410) is deleted; any other failure is logged and dropped,
+// never retried, and never fails the alert or the post.
+let webpushLib = null;
+function webpush() {
+  if (webpushLib !== null) return webpushLib;
+  const pub = process.env.VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
+  if (!pub || !priv) { webpushLib = false; return false; }
+  try { webpushLib = require('web-push'); webpushLib.setVapidDetails(process.env.VAPID_SUBJECT || 'https://www.tickrlab.com', pub, priv); }
+  catch (e) { console.warn('push: web-push unavailable:', e.message); webpushLib = false; }
+  return webpushLib;
+}
+const PUSH_TOPICS = ['alerts', 'posts'];
+// One message to one phone. Resolves to 'ok', 'gone' (deleted) or 'failed'.
+async function sendPush(sub, msg) {
+  const wp = webpush();
+  if (!wp) return 'failed';
+  try {
+    await wp.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(msg), { TTL: 24 * 3600, urgency: 'normal' });
+    store.notePushOk(sub.endpoint).catch(() => {});
+    return 'ok';
+  } catch (e) {
+    if (e && (e.statusCode === 404 || e.statusCode === 410)) { await store.deletePushSub(sub.endpoint).catch(() => {}); return 'gone'; }
+    console.warn('push: send failed', e && e.statusCode, String(e && e.message).slice(0, 120));
+    return 'failed';
+  }
+}
+async function pushToUser(userKey, topic, msg) {
+  const subs = (await store.readPushSubsFor(userKey).catch(() => [])).filter((s) => s.topics[topic]);
+  return Promise.all(subs.map((s) => sendPush(s, msg)));
+}
+async function pushToTopic(topic, msg) {
+  const subs = await store.readPushSubsTopic(topic).catch(() => []);
+  const out = { ok: 0, gone: 0, failed: 0 };
+  for (let i = 0; i < subs.length; i += 20) {
+    for (const r of await Promise.all(subs.slice(i, i + 20).map((s) => sendPush(s, msg)))) out[r]++;
+  }
+  return out;
+}
+const PUSH_ENDPOINT = /^https:\/\/[A-Za-z0-9.-]+(:\d+)?\/[\x21-\x7e]{1,800}$/;
+// The server POSTs to the endpoint, so only the browsers' own push services
+// are accepted: an endpoint is otherwise an address of the member's choosing
+// for this server to call.
+const PUSH_HOSTS = /^(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[a-z0-9-]+\.push\.apple\.com|[a-z0-9-]+\.notify\.windows\.com)$/i;
+const pushHostOk = (ep) => { try { const u = new URL(ep); return u.protocol === 'https:' && PUSH_HOSTS.test(u.hostname) && !u.port; } catch (e) { return false; } };
+const PUSH_KEY = /^[A-Za-z0-9_-]{8,200}$/;
+
+app.get('/api/push/key', requireMember, route(async (req, res) => {
+  if (!webpush()) return res.status(503).json({ error: 'Notifications are not set up yet.' });
+  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+}));
+app.post('/api/push/subscribe', requireMember, route(async (req, res) => {
+  const b = req.body || {}, sub = b.subscription || {};
+  if (!PUSH_ENDPOINT.test(String(sub.endpoint || '')) || !pushHostOk(sub.endpoint) || !sub.keys || !PUSH_KEY.test(String(sub.keys.p256dh || '')) || !PUSH_KEY.test(String(sub.keys.auth || ''))) {
+    return res.status(400).json({ error: 'That is not a notification subscription.' });
+  }
+  const topics = Object.fromEntries(PUSH_TOPICS.map((t) => [t, !!(b.topics && b.topics[t])]));
+  const key = await prefsKey(req);
+  if (!topics.alerts && !topics.posts) { await store.deletePushSub(sub.endpoint, key); return res.json({ ok: true, off: true }); }
+  await store.savePushSub(key, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } }, topics);
+  logAct(req, 'push', 'on:' + PUSH_TOPICS.filter((t) => topics[t]).join(','));
+  res.json({ ok: true, topics });
+}));
+app.post('/api/push/unsubscribe', requireMember, route(async (req, res) => {
+  const ep = String((req.body && req.body.endpoint) || '');
+  if (ep) await store.deletePushSub(ep, await prefsKey(req));
+  logAct(req, 'push', 'off');
+  res.json({ ok: true });
+}));
+// Which topics this phone has on, for the switches; only the member's own.
+app.post('/api/push/status', requireMember, route(async (req, res) => {
+  const s = await store.readPushSub(String((req.body && req.body.endpoint) || ''));
+  const mine = s && s.userKey === (await prefsKey(req));
+  res.json({ topics: mine ? s.topics : {} });
+}));
+
+// How to install the app: public, linked from /links and the bell's note.
+app.get('/app', route(async (req, res) => {
+  if (anonLogOk(req)) logAct(req, 'page', 'app');
+  res.sendFile(path.join(__dirname, 'private', 'app-install.html'));
+}));
+
 app.get('/api/my/portfolios', requireMember, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const mine = await store.readUserPortfolios(await prefsKey(req));
@@ -12613,7 +12703,12 @@ app.put('/api/admin/posts', requireAdmin, route(async (req, res) => {
     createdAt: (prev && prev.createdAt) || Date.now(),
   });
   logAct(req, 'post', `${status}:${slug}`.slice(0, 80));
-  res.json({ ok: true, post, html: renderMarkdown(post.body) });
+  // The app's push (2026-11-11): on the FIRST publish only, never an edit.
+  let pushed = null;
+  if (status === 'published' && !(prev && prev.status === 'published')) {
+    pushed = await pushToTopic('posts', { title: 'New on Tickr Lab', body: title.slice(0, 160), url: '/blog/' + slug, tag: 'post-' + slug }).catch(() => null);
+  }
+  res.json({ ok: true, post, html: renderMarkdown(post.body), pushed });
 }));
 
 // Send a post to a handful of people. ONE MESSAGE EACH, never a shared To
@@ -21198,6 +21293,8 @@ async function runAlertPass() {
     // only record that the thing the reader asked about actually happened.
     await store.addAlertEvent({ alertId: a.id, userKey: a.userKey, symbol: a.symbol, body: out.body, at });
     await store.noteAlertSide(a.id, out.side, at);
+    // The app's push (2026-11-11), after the record is safe; never fails the run.
+    await pushToUser(a.userKey, 'alerts', { title: a.symbol + ' alert', body: String(out.body || '').slice(0, 180), url: '/stock/' + encodeURIComponent(a.symbol), tag: 'alert-' + a.id }).catch(() => {});
     if (a.once) await store.disableAlert(a.id);
     fired++;
   }
@@ -22939,7 +23036,8 @@ app.delete('/api/activity', requireAdmin, route(async (req, res) => {
 // the person actually waited — where every other kind's is the server's own
 // elapsed time. `/activity` reads that distinction off the kind rather than
 // storing a flag beside it, so the two can never disagree.
-const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart', 'load']);
+// 'app' (2026-11-11): the installed app opened from the home screen, once a session (public/pwa.js); installs are counted from it.
+const CLIENT_ACT_KINDS = new Set(['sort', 'tab', 'picker', 'panel', 'chart', 'load', 'app']);
 // A browser-supplied duration is untrusted input like any other. Ten minutes is
 // far past any real interaction and keeps a junk value out of the percentiles.
 const ACT_MS_MAX = 600000;

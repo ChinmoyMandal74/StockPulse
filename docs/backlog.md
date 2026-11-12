@@ -3149,7 +3149,7 @@ ahead of time.
 
 ## 63. An iPhone app: installable first, the App Store only if it earns it — 2026-11-11
 
-*Area: Pages · Status: Open · Note: step 1 (an installable web app from the phone page) is a few days and free; step 2 (an App Store app) only if step 1's installs and alert use show demand*
+*Area: Pages · Status: Partly done · Note: step 1 built 2026-11-11 (installable /m, members only from the home screen, push for alerts and new posts, /app; see the-phone-page.md); step 2 (an App Store app) only if installs and push use show demand*
 
 The owner, 2026-11-11: "How should I go about creating an iphone app", then
 "add this to backlog". Where it starts: the phone page `/m` exists, but the
@@ -3189,8 +3189,8 @@ the owner's machine is Windows (an App Store build needs Xcode on a Mac).
   - A stock information app without trading is fine for an individual
     developer; the no buy/sell wording rule and "not advice" stay.
 
-**Not decided:** whether guests get the app or it is members only; what push
-sends (alerts only, or new posts too); the app's name in the store.
+**Decided 2026-11-11 (the owner):** members only; push for price alerts and new
+posts; named Tickr Lab. Step 1 is built.
 
 ## What is deliberately NOT on this list
 

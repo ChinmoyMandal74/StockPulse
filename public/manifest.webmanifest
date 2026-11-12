@@ -1,0 +1,16 @@
+{
+  "id": "/m",
+  "name": "Tickr Lab",
+  "short_name": "Tickr Lab",
+  "description": "Every stock measured the same way after every close.",
+  "start_url": "/m",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071120",
+  "theme_color": "#071120",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

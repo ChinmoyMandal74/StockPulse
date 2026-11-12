@@ -274,6 +274,8 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let mode = 'signin';
+    // Where to go once in: ?next= from the app (2026-11-11), one of this site's own paths, else the screener.
+    const NEXT = (() => { const n = new URLSearchParams(location.search).get('next') || ''; return /^\/[A-Za-z0-9\/_-]*$/.test(n) && !n.startsWith('//') ? n : '/'; })();
     let signupCodeRequired = false, approvalRequired = false;
     let mailReady = false;
     // On unless the server says otherwise: a form that hid the box and was then refused would be a dead end.
@@ -461,7 +463,7 @@
         setMsg((mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…')
           + subLine, 'ok');
         if (subLine) await new Promise((r) => setTimeout(r, 1800));
-        window.location.href = '/';
+        window.location.href = NEXT;
       } catch (err) {
         w.restore();
         busy = false;
@@ -504,7 +506,7 @@
         // Shown only when the server says it is configured. A button that
         // leads to a 404 is worse than no button.
         if (me.googleReady) $('googleWrap').style.display = '';
-        if (me.signedIn) { window.location.href = '/'; return; }
+        if (me.signedIn && !me.guest) { window.location.href = NEXT; return; }
       } catch { /* show the form */ }
       // The invite email links here with ?mode=register, so the person lands
       // on the form the code belongs in.

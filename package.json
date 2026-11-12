@@ -10,6 +10,7 @@
   "dependencies": {
     "@tursodatabase/serverless": "^1.4.0",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "web-push": "^3.6.7"
   }
 }

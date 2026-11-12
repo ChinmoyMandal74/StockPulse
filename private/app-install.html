@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="navy">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>The Tickr Lab app</title>
+  <meta name="description" content="Tickr Lab on your phone's home screen: the screens, every stock, and your alerts, for members." />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Tickr Lab" />
+  <meta name="theme-color" content="#071120" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* The app's install page (backlog 63, 2026-11-11). Public: Instagram's
+       link in bio reaches it through /links. Everything here is ai- . */
+    body { margin: 0; background: var(--void); color: var(--text); font-family: var(--sans); }
+    .ai { max-width: 560px; margin: 0 auto; padding: 48px max(18px, env(safe-area-inset-left)) 80px; }
+    .ai-hd { display: flex; gap: 16px; align-items: center; }
+    .ai-hd img { width: 72px; height: 72px; border-radius: 17px; }
+    .ai h1 { margin: 0; font-size: 30px; letter-spacing: -.03em; }
+    .ai-lede { margin: 14px 0 26px; color: var(--muted); font-size: 15.5px; line-height: 1.6; }
+    .ai h2 { margin: 26px 0 10px; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+    .ai ol { margin: 0; padding-left: 22px; line-height: 1.7; font-size: 15px; }
+    .ai ol b { color: var(--text); }
+    .ai-note { margin-top: 26px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 14px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+    .ai-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+    .ai-b { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--hair-2); color: var(--text); text-decoration: none; font-size: 15px; font-weight: 600; }
+    .ai-b.ai-p { background: var(--text); color: var(--void); border-color: transparent; }
+    .ai-foot { margin-top: 36px; font-size: 12.5px; color: var(--faint); }
+  </style>
+</head>
+<body>
+  <main class="ai">
+    <div class="ai-hd"><img src="/icons/apple-touch-icon.png" alt="" /><h1>The Tickr Lab app</h1></div>
+    <p class="ai-lede">Tickr Lab on your phone’s home screen: the ready-made screens, every stock the site tracks with its Signal and readings, and, if you turn them on, a notification when one of your price alerts fires or a new post goes up. It is for members, and free.</p>
+
+    <h2>On an iPhone</h2>
+    <ol>
+      <li>Open <b>tickrlab.com/m</b> in <b>Safari</b> and sign in.</li>
+      <li>Tap the <b>Share</b> button (the square with an arrow).</li>
+      <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+      <li>Open Tickr Lab from your home screen. For notifications, tap the bell at the top.</li>
+    </ol>
+
+    <h2>On Android</h2>
+    <ol>
+      <li>Open <b>tickrlab.com/m</b> in <b>Chrome</b> and sign in.</li>
+      <li>Tap <b>Install</b> when it is offered, or the menu (⋮) and <b>Add to Home screen</b>.</li>
+    </ol>
+
+    <div class="ai-note">Not a member yet? Create a free account first; the app opens with your sign-in. Notifications are only what you choose: your own alerts, new posts, or neither, and they can be turned off from the bell or the phone’s settings.</div>
+    <div class="ai-row"><a class="ai-b ai-p" href="/m">Open it</a><a class="ai-b" href="/login?mode=register&amp;next=/m">Create an account</a><a class="ai-b" href="/links">Latest posts</a></div>
+    <p class="ai-foot">Descriptive, not advice. Tickr Lab measures every stock the same way after every close.</p>
+  </main>
+</body>
+</html>

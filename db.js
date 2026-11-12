@@ -640,6 +640,21 @@ const SCHEMA = [
      note      text
    )`,
   `create index if not exists idx_paper_trades_user on paper_trades (user_key, id)`,
+  // The app's push subscriptions (backlog 63, 2026-11-11): one row a phone a
+  // member turned notifications on for, with the topics chosen (alerts,
+  // posts). The endpoint is the push service's address for that phone; the
+  // keys encrypt what is sent. Deleted when turned off, when the push service
+  // says the phone is gone, and with the account.
+  `create table if not exists push_subs (
+     endpoint   text primary key,
+     user_key   text not null,
+     p256dh     text not null,
+     auth       text not null,
+     topics     text not null,
+     created_at integer not null,
+     last_ok    integer
+   )`,
+  `create index if not exists idx_push_subs_user on push_subs (user_key)`,
   // The addresses an admin has used (2026-11-11): the admin is no longer
   // written to the activity log, and /blog-visitors leaves these out.
   `create table if not exists admin_ips (
@@ -7616,6 +7631,43 @@ async function seedAdminIps() {
   return Number(r.rowsAffected) || 0;
 }
 
+// ---- the app's push subscriptions ----
+const pushRow = (r) => ({ endpoint: r.endpoint, userKey: r.user_key, keys: { p256dh: r.p256dh, auth: r.auth }, topics: (() => { try { return JSON.parse(r.topics) || {}; } catch (e) { return {}; } })(), lastOk: r.last_ok == null ? null : Number(r.last_ok) });
+// A phone's subscription, made or updated. An endpoint is one phone's; if it
+// arrives under another account (a shared phone, signed in as someone else)
+// it moves to that account.
+async function savePushSub(userKey, sub, topics) {
+  await init();
+  await db.execute({ sql: `insert into push_subs (endpoint, user_key, p256dh, auth, topics, created_at) values (?, ?, ?, ?, ?, ?)
+    on conflict(endpoint) do update set user_key = excluded.user_key, p256dh = excluded.p256dh, auth = excluded.auth, topics = excluded.topics`,
+    args: [sub.endpoint, userKey, sub.keys.p256dh, sub.keys.auth, JSON.stringify(topics), Date.now()] });
+}
+async function readPushSub(endpoint) {
+  await init();
+  const r = await db.execute({ sql: 'select * from push_subs where endpoint = ?', args: [String(endpoint)] });
+  return r.rows[0] ? pushRow(r.rows[0]) : null;
+}
+async function deletePushSub(endpoint, userKey) {
+  await init();
+  if (userKey) await db.execute({ sql: 'delete from push_subs where endpoint = ? and user_key = ?', args: [String(endpoint), userKey] });
+  else await db.execute({ sql: 'delete from push_subs where endpoint = ?', args: [String(endpoint)] });
+}
+async function readPushSubsFor(userKey) {
+  await init();
+  const r = await db.execute({ sql: 'select * from push_subs where user_key = ?', args: [userKey] });
+  return r.rows.map(pushRow);
+}
+// Every subscription with a topic on (a small table: one row a phone).
+async function readPushSubsTopic(topic) {
+  await init();
+  const r = await db.execute('select * from push_subs');
+  return r.rows.map(pushRow).filter((s) => s.topics && s.topics[topic]);
+}
+async function notePushOk(endpoint) {
+  await init();
+  await db.execute({ sql: 'update push_subs set last_ok = ? where endpoint = ?', args: [Date.now(), String(endpoint)] });
+}
+
 // Wipes the log, like clearVisitors — the autoincrement resets too.
 async function clearActivity() {
   await init();
@@ -8224,6 +8276,7 @@ async function deleteUser(id) {
     stmts.push({ sql: 'delete from chat_usage where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from user_themes where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from paper_trades where user_key = ?', args: [email] });
+    stmts.push({ sql: 'delete from push_subs where user_key = ?', args: [email] });
     stmts.push({ sql: 'delete from paper_accounts where user_key = ?', args: [email] });
     // Paper competitions: a team the member was alone in is theirs and goes
     // with its ledger; a team with others keeps its ledger, and the captaincy
@@ -9088,6 +9141,7 @@ module.exports = {
   resetPaper,
   listAllPaper,
   noteAdminIp, readAdminIps, seedAdminIps,
+  savePushSub, readPushSub, deletePushSub, readPushSubsFor, readPushSubsTopic, notePushOk,
   listComps, readComp, createComp, updateComp, compTeams, readTeam, readTeamByCode, readTeamLedgers,
   createTeam, joinTeam, leaveTeam, setTeamShow, myCompEntries,
   removeSymbolFromUserPortfolios,

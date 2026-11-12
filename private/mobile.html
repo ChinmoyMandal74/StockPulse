@@ -9,6 +9,11 @@
   <script src="/theme.js"></script>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- The installable app (backlog 63, 2026-11-11): the manifest, the home-screen
+       icon and title, and public/pwa.js, which registers the service worker. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Tickr Lab" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -666,5 +671,8 @@
       showScreens();
     })();
   </script>
+  <!-- The app: members only from the home screen, the install offer, the bell. -->
+  <script src="/pwa.js"></script>
+  <script>window.TickrApp && TickrApp.init({ bellIn: document.querySelector('.top-row') });</script>
 </body>
 </html>
