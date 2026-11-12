@@ -22452,10 +22452,14 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   const now = Date.now();
   const mark = await store.readNewsBriefMark().catch(() => ({}));
   const today = NewsBrief.etDay(now);
-  if (!dry && !force && mark.day === today && mark.today && mark.next) return res.json({ sent: false, already: today });
+  // body.sample: both sent now marked [Sample], under their own mail kind (so
+  // the jobs email does not count them as the run), the mark left alone so
+  // the evening's briefs still go.
+  const sample = !!(req.body && req.body.sample === true);
+  if (!dry && !force && !sample && mark.day === today && mark.today && mark.next) return res.json({ sent: false, already: today });
   // The window starts where the last sent brief stopped; a resend of today's
   // keeps the same start.
-  const prevAt = mark.day === today && mark.prevAt ? mark.prevAt : (mark.at && now - mark.at < 4 * 864e5 ? mark.at : null);
+  const prevAt = mark.day === today ? (mark.prevAt || null) : (mark.at && now - mark.at < 4 * 864e5 ? mark.at : null);
   const d = await newsBriefData(now, prevAt);
   // The two calls at once: the day's re-read is the long one (about 35 seconds).
   const [tai, ai] = await Promise.all([newsBriefTodayAi(d, useAi), newsBriefNext(d, useAi)]);
@@ -22467,6 +22471,11 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();
   if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  if (sample) {
+    const sa = !!(await sendMail({ kind: 'newsbrief-sample', to, subject: '[Sample] ' + a.subject, text: a.text, html: a.html }));
+    const sb = !!(await sendMail({ kind: 'newsbrief-sample', to, subject: '[Sample] ' + b.subject, text: b.text, html: b.html }));
+    return res.json({ sample: true, sent: sa && sb, today: sa, next: sb, counts });
+  }
   const sentA = (mark.day === today && mark.today && !force) ? true : !!(await sendMail({ kind: 'news-brief-today', to, subject: a.subject, text: a.text, html: a.html }));
   const sentB = (mark.day === today && mark.next && !force) ? true : !!(await sendMail({ kind: 'news-brief-next', to, subject: b.subject, text: b.text, html: b.html }));
   try { await store.writeNewsBriefMark({ day: today, at: sentA ? now : mark.at || null, prevAt, today: sentA, next: sentB }); } catch { /* bookkeeping never fails the send */ }
