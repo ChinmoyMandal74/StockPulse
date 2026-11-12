@@ -1605,8 +1605,10 @@ function briefsHtml(base, day, b, days, view, now) {
   // Tickers and company names link to their stock pages (the owner, same day);
   // a visitor not signed in is asked to sign in and comes back to the stock.
   const sp = (sym) => '/stock/' + encodeURIComponent(sym);
-  const tick = (list) => (list || []).map((s) => `<a class="nb-t" href="${sp(s)}">${esc(s)}</a>`).join('');
-  const said = (x) => NewsBriefPage.linkNames(x.line, x.names || {}).map((p) => (p.symbol ? `<a class="nb-co" href="${sp(p.symbol)}">${esc(p.text)}</a>` : esc(p.text))).join('');
+  // In a new tab (the owner, same day), so the brief stays open.
+  const nt = ' target="_blank" rel="noopener"';
+  const tick = (list) => (list || []).map((s) => `<a class="nb-t" href="${sp(s)}"${nt}>${esc(s)}</a>`).join('');
+  const said = (x) => NewsBriefPage.linkNames(x.line, x.names || {}).map((p) => (p.symbol ? `<a class="nb-co" href="${sp(p.symbol)}"${nt}>${esc(p.text)}</a>` : esc(p.text))).join('');
   const builtAt = Math.max((t && t.at) || 0, (n && n.at) || 0);
   const upd = builtAt ? new Date(builtAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '';
   const wd = day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) : '';
@@ -1619,7 +1621,7 @@ function briefsHtml(base, day, b, days, view, now) {
   })() : '';
   const next = n && n.next ? (() => {
     const cal = (label, arr) => (arr && arr.length ? `<h3 class="nb-k">${label} (${arr.length})</h3><p class="nb-cal">`
-      + arr.slice(0, 80).map((r) => `<a class="nb-ce" href="${sp(r.symbol)}"><b>${esc(r.symbol)}</b> ${esc(r.name)}</a>`).join('') + '</p>' : '');
+      + arr.slice(0, 80).map((r) => `<a class="nb-ce" href="${sp(r.symbol)}"${nt}><b>${esc(r.symbol)}</b> ${esc(r.name)}</a>`).join('') + '</p>' : '');
     return `<section class="nb-s"><h2>Next session: ${esc(NewsBriefPage.dayName(n.next))}</h2>${n.intro ? `<p class="nb-in">${esc(n.intro)}</p>` : ''}`
       + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${said(x)}</p><div class="nb-ts">${tick(x.symbols)}</div></li>`).join('') + '</ol>' : '')
       + cal('Reporting before the open', n.before) + cal('Listed to report after the close', n.after) + '</section>';
