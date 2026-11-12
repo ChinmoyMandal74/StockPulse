@@ -2880,7 +2880,10 @@ async function confirmSubscribe(token) {
   let p = null;
   try { p = r.rows[0].pending ? JSON.parse(r.rows[0].pending) : null; } catch { p = null; }
   if (p && typeof p === 'object') {
-    const topics = Array.isArray(p.topics) ? p.topics : row.topics;
+    // An active reader asking for one more mailing (the news brief's own box,
+    // 2026-11-12) keeps the mailings they already have: added, not replaced.
+    const asked = Array.isArray(p.topics) ? p.topics : row.topics;
+    const topics = row.status === 'active' ? [...new Set(row.topics.concat(asked))] : asked;
     const unsub = crypto.randomBytes(24).toString('hex');
     await db.execute({
       sql: `update subscribers set status = 'active', confirm_hash = null, confirmed_at = ?, unsubscribed_at = null,

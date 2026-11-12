@@ -1682,6 +1682,7 @@ function briefsHtml(base, day, b, days, view, now) {
     + '.nb-foot{margin-top:28px;font-size:12px;line-height:1.55;color:var(--faint)}</style></head>'
     + `<body><main class="nb"><a class="nb-br" href="/links">Tickr <span>Lab</span></a><h1>Daily news brief</h1><p class="nb-dt">${esc(when)}${upd ? ' · updated ' + esc(upd) + ' New York time' : ''}</p>${lead}`
     + bar + empty + (v === 'next' ? (soon ? next.replace('<h2>Next session: ', '<h2>Today’s session: ') : next) : today)
+    + (day ? briefsSubscribeBox() : '')
     + '<div class="nb-cta">Tickr Lab measures every stock the same way after every close: returns, trend, fundamentals and a mechanical Signal that names the rule that fired. Free to join.'
     + '<div class="nb-row"><a class="nb-b" href="/login?mode=register">Create a free account</a><a class="nb-b" href="/blog">The blog</a><a class="nb-b" href="/app">Get the app</a></div></div>'
     + '<p class="nb-foot">Written by AI each evening from the day’s news coverage of the companies Tickr Lab follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice: nothing here is a recommendation to trade any security.</p>'
@@ -1766,6 +1767,8 @@ const SUB_TOPICS = [
   // 2026-10-23, the owner: "make this earning results email into an automated
   // email provided people opt for it". Anyone may ask; each weekday morning.
   { id: 'results', name: 'Earnings results', note: 'Each weekday morning: the quarterly results US companies filed since the last one, read from each press release by AI. None on a day with no results.' },
+  // 2026-11-12, the owner: a daily news briefing "in the morning" (/briefs).
+  { id: 'briefs', name: 'Daily news brief', note: 'Every morning: what to watch at the open and the news since the evening before, written by AI (at midday at the weekend).' },
 ];
 const SUB_TOPIC_IDS = new Set(SUB_TOPICS.map((t) => t.id));
 const subTopicName = (id) => (SUB_TOPICS.find((t) => t.id === id) || {}).name || id;
@@ -1829,6 +1832,21 @@ const subscribeBox = (source) =>
   + '<p class="fine">You will get one email asking you to confirm. Every message after that has a '
   + 'one-click unsubscribe, and it works without signing in. For the other mailings, such as '
   + 'Earnings results each weekday morning, see your <a href="/email-preferences">email preferences</a>.</p>'
+  + '</section>';
+
+// The news brief's own box (/briefs): the same form, asking for `briefs` only;
+// a reader already on another mailing keeps it (confirmSubscribe adds).
+const briefsSubscribeBox = () =>
+  '<section class="subbox">'
+  + '<h2>Get the news brief by email</h2>'
+  + '<p>One email every morning before the open: what to watch and the news since the evening before. At the weekend, at midday. No sharing your address with anyone.</p>'
+  + '<form method="post" action="/subscribe">'
+  + '<input type="hidden" name="source" value="briefs" /><input type="hidden" name="topics" value="briefs" />'
+  + SubForm.fields(SubForm.token(Date.now(), authMac))
+  + '<input type="email" name="email" required autocomplete="email" placeholder="you@example.com" aria-label="Your email address" />'
+  + '<button type="submit">Subscribe</button>'
+  + '</form>'
+  + '<p class="fine">You will get one email asking you to confirm. Every message after that has a one-click unsubscribe, and it works without signing in.</p>'
   + '</section>';
 
 const subBase = (req) => APP_URL || `https://${req.headers.host}`;
@@ -22709,6 +22727,110 @@ async function releaseDigestToList(req, res) {
   logAct(req, 'post', `list:${key} ${sent}/${batch.length} left ${remaining}`.slice(0, 80));
   res.json({ list: true, companies: companies || new Set(rels.map((r) => r.symbol)).size, sent, failed, deferred, remaining, total: subs.length });
 }
+
+// THE MORNING NEWS BRIEF BY EMAIL (2026-11-12, the owner: "Should we have a
+// daily news briefing subscribe feature, This should send one email everyday
+// may be in the morning", then "build it"). Everyone on the `briefs` topic,
+// once a day: the day's first scheduled edition of /briefs, which is the 08:40
+// update on weekdays (the session about to open and the news since the evening
+// before) and the 11:40 one at the weekend. news-brief-update.js calls this
+// after each publish ({ list: true } in a loop while `remaining` is above
+// zero); outside 08:30 to 13:30 Eastern, or with no edition of today on file,
+// it sends nothing, so a stale edition is never mailed as today's.
+//  - THE LEDGER is post_sends under 'briefs:<the Eastern day>', claimed before
+//    each send, as the results mailing does: nobody is mailed twice a day.
+//  - Short on purpose: the session lines, the high-importance news (fifteen at
+//    most), the calendar, and a button to the whole brief on /briefs.
+//  - The same rules as the page: the checked AI lines only, no outlet named,
+//    descriptive, with each reader's own unsubscribe and preferences links.
+function briefsMailEmail(base, day, b, opts) {
+  const n = b.next || {}, t = b.today || {};
+  const wd = new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' });
+  const soon = n.next === day;
+  const sessionName = n.next ? (soon ? 'Today’s session' : 'Next session: ' + NewsBrief.dayName(n.next)) : '';
+  const link = (sym) => `${base}/stock/${encodeURIComponent(sym)}`;
+  const linked = (x) => NewsBrief.linkNames(x.line, x.names || {}).map((p) => (p.symbol
+    ? `<a href="${mailEsc(link(p.symbol))}"${st(`color:${MC.ink};text-decoration:underline`)}>${mailEsc(p.text)}</a>` : mailEsc(p.text))).join('');
+  const head = (txt) => `<div${st(`margin:22px 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(txt)}</div>`;
+  const nItems = (n.items || []).slice(0, 10);
+  const hi = (t.items || []).filter((x) => x.importance === 'high');
+  const news = hi.slice(0, 15), more = (t.items || []).length - news.length;
+  // The subject names the first companies in the session lines, then the news.
+  const firsts = [];
+  for (const x of nItems.concat(news)) for (const nm of Object.values(x.names || {})) {
+    const short = String(nm).replace(/[,\s]+(inc\.?|corp\.?|corporation|holdings?|group|ltd\.?|plc|company|co\.?)$/i, '').trim();
+    if (short && !firsts.includes(short)) firsts.push(short);
+    if (firsts.length >= 3) break;
+  }
+  const subject = `${wd}’s news brief` + (firsts.length ? ': ' + firsts.join(', ') + ' and more' : '');
+  const intro = n.intro || t.intro || `The news at the companies ${BRAND} follows, and what the next session holds.`;
+  const html = [], text = [];
+  if (nItems.length) {
+    html.push(head(sessionName));
+    text.push('', sessionName.toUpperCase());
+    nItems.forEach((x, i) => {
+      html.push(`<div${st(`margin:0 0 12px;font-size:14px;line-height:1.55;color:${MC.body}`)}><b${st(`color:${MC.ink}`)}>${i + 1}.</b> ${linked(x)}</div>`);
+      text.push(`${i + 1}. ${x.line}`);
+    });
+  }
+  if (news.length) {
+    const label = 'The news since ' + (soon ? new Date(Date.parse(day + 'T12:00:00Z') - 864e5).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) + ' evening' : wd);
+    html.push(head(label));
+    text.push('', label.toUpperCase());
+    for (const x of news) {
+      const ticks = (x.symbols || []).map((s) => `<a href="${mailEsc(link(s))}"${st(`color:${MC.mute};font-size:11.5px;font-weight:700;text-decoration:none`)}>${mailEsc(s)}</a>`).join(' ');
+      html.push(`<div${st(`margin:0 0 11px;font-size:13.5px;line-height:1.5;color:${MC.body}`)}>${ticks}<br>${linked(x)}</div>`);
+      text.push(`${(x.symbols || []).join(' ')}: ${x.line}`);
+    }
+    if (more > 0) { html.push(`<div${st(`font-size:13px;color:${MC.mute}`)}>${JobsDigest.plural(more, 'more story', 'more stories')} in the full brief.</div>`); text.push('', JobsDigest.plural(more, 'more story', 'more stories') + ' in the full brief.'); }
+  }
+  const before = (n.before || []).slice(0, 25);
+  if (before.length) {
+    const label = soon ? 'Reporting before today’s open' : 'Reporting before the open';
+    html.push(head(label + ' (' + (n.before || []).length + ')'));
+    html.push(`<div${st(`font-size:13px;line-height:1.7;color:${MC.body}`)}>` + before.map((r) => `<a href="${mailEsc(link(r.symbol))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(r.symbol)}</a> ${mailEsc(r.name)}`).join(' · ') + '</div>');
+    text.push('', label.toUpperCase(), before.map((r) => r.symbol + ' ' + r.name).join(', '));
+  }
+  const full = `${base}/briefs/${day}`;
+  html.push(`<div${st('margin-top:20px')}>${mailButton(full, 'Read the full brief')}</div>`);
+  text.push('', 'The full brief: ' + full);
+  const note = (opts && opts.note ? opts.note + ' ' : '') + 'Written by AI from the day’s news coverage of the companies ' + BRAND + ' follows; every figure and company in a line is checked against the articles it came from, but it can still contain mistakes. Descriptive, not advice.';
+  const noteText = (opts && opts.noteText ? opts.noteText + ' ' : '') + 'Written by AI from the day’s news coverage; checked against the articles, but it can still contain mistakes. Descriptive, not advice.';
+  return { subject, html: emailShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, body: html.join(''), note }), text: textShell({ heading: 'News brief: ' + NewsBrief.dayName(day), intro, lines: text, note: noteText }) };
+}
+app.post('/api/cron/news-brief-list', route(async (req, res) => {
+  if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const topic = 'briefs';
+  const base = subBase(req);
+  const now = Date.now();
+  const day = NewsBrief.etDay(now);
+  const m = (() => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now)); return Number(p.find((x) => x.type === 'hour').value) * 60 + Number(p.find((x) => x.type === 'minute').value); })();
+  const nothing = (why) => res.json({ list: true, skipped: why, sent: 0, failed: 0, deferred: 0, remaining: 0, total: 0 });
+  if (m < 8 * 60 + 30 || m > 13 * 60 + 30) return nothing('not the morning');
+  const b = await store.readNewsBrief(day, NewsBrief.shownBuild).catch(() => ({}));
+  if (!b.today && !b.next) return nothing('no edition of today yet');
+  const key = 'briefs:' + day;
+  const [subs, already, postal] = await Promise.all([store.activeSubscribers(topic), store.readSentFor(key), postalAddress()]);
+  const due = subs.filter((s) => !already.has(s.email));
+  const claimed = new Set(due.length ? await store.claimSends(key, due.slice(0, MAIL_LIST_BATCH).map((s) => s.email)) : []);
+  const batch = due.slice(0, MAIL_LIST_BATCH).filter((s) => claimed.has(s.email));
+  let sent = 0, failed = 0, deferred = 0, first = true;
+  for (const sub of batch) {
+    if (!first) await pause(MAIL_RATE_MS);
+    first = false;
+    const d = briefsMailEmail(base, day, b, { note: listNote(base, sub, topic, postal), noteText: listNoteText(base, sub, topic, postal) });
+    const out = await sendMailResult({ kind: 'briefs-list', to: sub.email, subject: d.subject, html: d.html, text: d.text,
+      bulk: true, replyTo: process.env.MAIL_REPLY_TO || undefined, headers: listHeaders(base, sub, topic) });
+    if (out.retryable) { await store.releaseSend(key, sub.email); deferred++; continue; }
+    await store.noteSendResult(key, sub.email, out.ok, out.id);
+    if (out.ok) sent++; else failed++;
+  }
+  const done = await store.readSentFor(key);
+  const remaining = subs.filter((s) => !done.has(s.email)).length;
+  if (batch.length) logAct(req, 'post', `list:${key} ${sent}/${batch.length} left ${remaining}`.slice(0, 80));
+  res.json({ list: true, day, sent, failed, deferred, remaining, total: subs.length });
+}));
 
 app.get('/api/cron/watchdog', route(async (req, res) => {
   if (!isCron(req)) return res.status(401).json({ error: 'Bad or missing cron secret.' });

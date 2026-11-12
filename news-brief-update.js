@@ -6,5 +6,7 @@
 // in schedule.js); the 17:40 run of news-brief-ping.js sends the emails and
 // publishes the evening edition. One HTTP call, NOT `node server.js`.
 'use strict';
-process.argv.push('--publish');
+// --list: the morning mailing goes after the publish (the server sends it only
+// in the morning, once a day).
+process.argv.push('--publish', '--list');
 require('./news-brief-ping.js');

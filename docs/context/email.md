@@ -120,3 +120,6 @@ What changed (owner: "yes"):
   counted as **never confirmed** and hidden until "Show them"; the rows are
   kept, nothing deleted.
 - `subform-test.js`: 17 checks, no server and no mail.
+
+## The Daily news brief mailing (2026-11-12)
+Topic `briefs`, the third mailing: each morning's first edition of `/briefs` (weekdays after the 08:40 update, weekends after the 11:40 one), kind `briefs-list`, sent by `POST /api/cron/news-brief-list` from `news-brief-update.js`. Sign-up from the box on `/briefs`. Confirming a request from an active address now adds the mailing rather than replacing the reader's others. See `news-tone.md`.
