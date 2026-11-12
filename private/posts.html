@@ -587,8 +587,10 @@
     // a 404 for every reader, with nothing on screen to say it had happened.
     let currentStatus = 'draft';
 
+    // Drafts first, then the live posts; each keeps the server's order (a stable sort).
     function paintList() {
-      $('plist').innerHTML = posts.length ? posts.map((p) =>
+      const shown = [...posts].sort((a, b) => (a.status === 'published') - (b.status === 'published'));
+      $('plist').innerHTML = shown.length ? shown.map((p) =>
         `<button class="prow ${p.slug === current ? 'on' : ''}" data-slug="${we(p.slug)}">` +
         `<span class="t">${we(p.title)}</span>` +
         `<span class="pill ${p.status === 'published' ? 'live' : ''}">${p.status === 'published' ? 'live' : 'draft'}</span>` +
