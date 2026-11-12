@@ -27,6 +27,8 @@ const TASKS = [
   { name: 'TickrLab archive report', state: 'Ready', lastResult: 0, triggers: [] },
   { name: 'TickrLab local copy', state: 'Ready', lastRun: '2026-10-29T18:50:01.0000000-04:00', lastResult: 0, triggers: [] },
   { name: 'TickrLab onboard', state: 'Ready', lastResult: 0, triggers: [] },
+  { name: 'TickrLab websites', state: 'Ready', lastResult: 0, triggers: [] },
+  { name: 'TickrLab websites day', state: 'Ready', lastResult: 0, triggers: [] },
 ];
 function clean() {
   return {
@@ -35,7 +37,7 @@ function clean() {
     tone: toneTimes.map((t) => tone(t)),
     releases: [rel('09:15'), rel('18:15')],
     report: { at: NOW - 55 * 60000, tasks: TASKS },
-    mail: [{ at: at('09:20'), kind: 'release-digest', ok: true, subject: 'x' }],
+    mail: [{ at: at('09:20'), kind: 'release-digest', ok: true, subject: 'x' }, { at: at('17:40'), kind: 'news-brief-today', ok: true, subject: 't' }, { at: at('17:40'), kind: 'news-brief-next', ok: true, subject: 'n' }],
   };
 }
 const job = (d, id) => d.jobs.find((j) => j.id === id);
@@ -52,7 +54,12 @@ ok(job(d, 'releases').what === '100 results releases read, $0.60', 'releases: wh
 ok(job(d, 'nightly').what === '40,000 Twelve Data credits; 26 of 26 steps OK', 'nightly: the credits and the steps', job(d, 'nightly').what);
 ok(job(d, 'nightly').steps.length === 2 && job(d, 'nightly').steps[1].slot === '16:00' && job(d, 'nightly').steps[0].steps[3].name === 'SEC filings rotation', 'every step of each run, named for the email', job(d, 'nightly').steps);
 ok(realIssues(d).length === 0 && d.jobs.every((j) => j.status === 'ok'), 'a clean day: nothing to look at', d.issues);
-ok(d.mail.sent === 1 && d.mail.failed === 0, 'the day’s mail counted', d.mail);
+ok(d.mail.sent === 3 && d.mail.failed === 0, 'the day’s mail counted', d.mail);
+ok(job(d, 'newsbrief').runs === '1 of 1 ran' && job(d, 'newsbrief').what === '2 briefs sent', 'the news briefs: their two emails are the run', job(d, 'newsbrief'));
+{ const s2 = clean(); s2.mail = s2.mail.map((m) => (m.kind === 'news-brief-next' ? Object.assign({}, m, { ok: false }) : m)); const d2 = J.build(s2, NOW);
+  ok(d2.issues.some((x) => /Evening news briefs: 17:40 the next brief was refused/.test(x)), 'a refused brief is to look at', d2.issues); }
+{ const s3 = clean(); s3.mail = s3.mail.filter((m) => !/^news-brief/.test(m.kind)); const d3 = J.build(s3, NOW);
+  ok(d3.issues.includes('Evening news briefs: the 17:40 run did not start'), 'no brief sent: a missed run', d3.issues); }
 ok(!d.jobs.some((j) => j.id === 'digest' || j.id === 'schedule' || j.id === 'watchdog'), 'only jobs with run records get a row');
 
 // 2. A missed slot.

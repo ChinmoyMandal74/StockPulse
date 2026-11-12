@@ -151,6 +151,16 @@ const JOBS = [
     what: 'Emails the owner a one-screen summary of the day: for each job above, how many of its scheduled runs started and what they did, the laptop\'s tasks, the day\'s emails, and anything to look at (jobsdigest.js).',
     log: '/schedule',
   },
+  {
+    // THE EVENING NEWS BRIEFS (2026-11-12, the owner: two daily briefs of the
+    // news, "around 5:40 pm everyday New York time"). Every day, weekends too:
+    // the tone loader reads weekend articles, and Friday's brief looks to Monday.
+    id: 'newsbrief', name: 'Evening news briefs', task: null, host: 'fly', script: 'news-brief-ping.js',
+    days: ALL_DAYS, times: ['17:40'], minutes: 1, limit: 6,
+    spends: { kind: 'anthropic', text: 'One Claude Sonnet call a day, about $0.04' },
+    what: 'Emails the owner two briefs from the stored article readings (newsbrief.js): today\'s high and medium stories, a line each, most important first; and the next session: up to ten AI lines, each checked against what it cites, and who reports before the next open or reported after today\'s close.',
+    log: '/schedule',
+  },
 ];
 
 // THE TWELVE DATA WINDOWS nothing else may spend credits in: the nightly's

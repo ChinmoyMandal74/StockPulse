@@ -2991,6 +2991,9 @@ const readTdUnserved = () => readMetaJson('td_unserved');
 const writeTdUnserved = (v) => writeMetaJson('td_unserved', v);
 // The data check's memory (datacheck.js): first stored dates, findings seen, split hints.
 const readDataCheck = () => readMetaJson('data_check');
+// The evening news briefs (newsbrief.js): { day, at, today, next }, at the cutoff of the last sent.
+const readNewsBriefMark = () => readMetaJson('news_brief');
+const writeNewsBriefMark = (v) => writeMetaJson('news_brief', v);
 const writeDataCheck = (v) => writeMetaJson('data_check', v);
 // The nightly's refresh email, held until its later steps are on file
 // (2026-10-30): { runId, subject, text, html, at }, one at a time. Null clears it.
@@ -8863,13 +8866,13 @@ async function readNewsToneFacts(symbol, sinceIso) {
 async function readNewsToneWindow(fromIso, toIso) {
   await init();
   const r = await db.execute({
-    sql: `select id, symbol, published_at, headline, source, url, about, kind, tone, summary, complete, event from news_tone
+    sql: `select id, symbol, published_at, headline, source, url, about, kind, tone, summary, complete, event, scored_at from news_tone
            where published_at >= ? and published_at < ? and status = 'scored' order by published_at desc limit 6000`,
     args: [String(fromIso), String(toIso)],
   });
   return r.rows.map((x) => ({ id: x.id, symbol: x.symbol, published_at: x.published_at, headline: x.headline, source: x.source, url: x.url,
     about: x.about, kind: x.kind, tone: x.tone == null ? null : Number(x.tone), summary: x.summary || null,
-    complete: x.complete == null ? null : Number(x.complete) === 1, event: x.event == null ? null : Number(x.event) === 1 }));
+    complete: x.complete == null ? null : Number(x.complete) === 1, event: x.event == null ? null : Number(x.event) === 1, scored_at: Number(x.scored_at) || null }));
 }
 
 // How many headlines are stored for one symbol, so a page can say "10 of 43"
@@ -9201,7 +9204,7 @@ module.exports = {
   confirmSubscribe,
   subscriberByToken,
   unsubscribe,
-  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved, readDataCheck, writeDataCheck,
+  activeSubscribers, setSubscriberTopics, readResultsListMark, writeResultsListMark, readEarningsTodayMark, writeEarningsTodayMark, readJobsDigestMark, writeJobsDigestMark, readPriceAlerts, writePriceAlerts, readTdUnserved, writeTdUnserved, readDataCheck, writeDataCheck, readNewsBriefMark, writeNewsBriefMark,
   listSubscribers,
   deleteSubscriber,
   readSentFor,

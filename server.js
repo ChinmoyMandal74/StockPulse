@@ -22292,6 +22292,145 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
   if (sent && dc && dc.save) { try { await dc.save(); } catch (err) { console.warn('data check: state not saved:', err && err.message); } }
   res.json({ sent: !!sent, issues: d.issues.length, runs: d.runs, due: d.due });
 }));
+// THE EVENING NEWS BRIEFS (2026-11-12, newsbrief.js): at 17:40 Eastern every
+// day the Fly scheduler asks for two emails to the operator, built from the
+// article readings already stored. "Today": every high and medium story since
+// the last brief, a line each, most important first. "Next session": one
+// model call over the day's important stories and the results calendar, each
+// line checked against what it cites, with the calendar's two lists beneath.
+// Once a day (the mark); ?dry=1 answers both unsent (and still calls the
+// model, about $0.04), ?noai=1 leaves the model out; body.force sends again.
+const NewsBrief = require('./newsbrief.js');
+const NB_HTML_BUDGET = 85000;   // Gmail clips a message past about 102 KB
+async function newsBriefData(now, prevAt) {
+  const today = NewsBrief.etDay(now), next = NewsBrief.nextTradingDay(today);
+  const snap = await snapshotCached().catch(() => null);
+  const by = new Map(((snap && snap.stocks) || []).filter((x) => x && x.symbol && !x.error).map((x) => [x.symbol, x]));
+  const info = (s) => { const x = by.get(s); return x ? { name: x.shortName || x.name || s, cap: Number(x.marketCap) > 0 ? Number(x.marketCap) : null } : null; };
+  const rows = await store.readNewsToneWindow(new Date(now - 48 * 3600e3).toISOString(), new Date(now + 60e3).toISOString());
+  const list = NewsBrief.stories(rows, info, prevAt, now);
+  const calRaw = await store.readEarningsCalendarSeen(today, NewsBrief.addDays(today, -7)).catch(() => ({}));
+  const cal = NewsBrief.calendar(calRaw, info, today, next);
+  return { today, next, list, cal, symbols: new Set(by.keys()) };
+}
+async function newsBriefNext(d, useAi) {
+  const cands = NewsBrief.candidates(d.list, d.cal, d.today);
+  const out = { intro: '', items: [], dropped: [], error: null, spent: 0 };
+  if (!useAi) { out.error = 'left out on request'; return out; }
+  if (!ANTHROPIC_KEY) { out.error = 'no model key on this server'; return out; }
+  if (!cands.length) { out.error = 'nothing to read'; return out; }
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: AbortSignal.timeout(150000),
+      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(NewsBrief.request(cands, d.next)),
+    });
+    const data = await r.json().catch(() => null);
+    out.spent = NewsBrief.spend(data && data.usage);
+    if (!r.ok) { out.error = 'the model answered ' + r.status; return out; }
+    const txt = ((data && data.content) || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+    let ans = null;
+    try { ans = JSON.parse(txt); } catch { out.error = 'the answer was not readable'; return out; }
+    const c = NewsBrief.check(ans, cands, d.symbols, NewsBrief.dayName(d.next) + ' ' + d.next + ' ' + NewsBrief.dayName(d.today));
+    Object.assign(out, { intro: c.intro, items: c.items, dropped: c.dropped });
+    if (!c.items.length) out.error = 'no line passed the checks';
+  } catch (err) { out.error = 'the model could not be reached (' + String(err && err.name || 'error') + ')'; }
+  return out;
+}
+function newsBriefTodayEmail(d, prevAt) {
+  const site = APP_URL || '';
+  const when = NewsBrief.dayName(d.today);
+  const hi = d.list.filter((s) => s.importance === 'high'), med = d.list.filter((s) => s.importance === 'medium');
+  const low = d.list.length - hi.length - med.length;
+  const since = prevAt ? 'since yesterday’s brief at ' + new Date(prevAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : 'in the last 24 hours';
+  const subject = `Today’s news: ${hi.length} high, ${med.length} medium (${when})`;
+  const intro = `${JobsDigest.plural(hi.length + med.length, 'story', 'stories')} ${since} across the companies on the screener, one line each, most important first: ${hi.length} high and ${med.length} medium importance. ${JobsDigest.plural(low, 'low-importance story', 'low-importance stories')} not listed.`;
+  let size = 0, shownHi = 0, shownMed = 0;
+  const html = [], text = [];
+  const item = (s) => {
+    const meta = [s.name, s.kindLabel, s.coverage > 1 ? s.coverage + ' outlets' : null].filter(Boolean).join(' · ');
+    const sym = site ? `<a href="${mailEsc(site + '/stock/' + encodeURIComponent(s.symbol))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(s.symbol)}</a>` : `<b>${mailEsc(s.symbol)}</b>`;
+    return `<div${st(`margin:0 0 10px;font-size:13.5px;line-height:1.45;color:${MC.body}`)}>${sym} <span${st(`font-size:12px;color:${MC.mute}`)}>${mailEsc(meta)}</span><br>${mailEsc(NewsBrief.line(s.summary))}</div>`;
+  };
+  const head = (t) => `<div${st(`margin:20px 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(t)}</div>`;
+  for (const [label, arr, bump] of [['High importance', hi, () => shownHi++], ['Medium importance', med, () => shownMed++]]) {
+    if (!arr.length) continue;
+    const h = head(label + ' (' + arr.length + ')');
+    if (size + h.length > NB_HTML_BUDGET) break;
+    html.push(h); size += h.length; text.push('', label.toUpperCase() + ' (' + arr.length + ')');
+    for (const s of arr) {
+      const x = item(s);
+      if (size + x.length > NB_HTML_BUDGET) break;
+      html.push(x); size += x.length; bump();
+      text.push(`${s.symbol}  ${s.name} · ${s.kindLabel}${s.coverage > 1 ? ' · ' + s.coverage + ' outlets' : ''}`, '  ' + NewsBrief.line(s.summary));
+    }
+  }
+  const left = hi.length - shownHi + med.length - shownMed;
+  const more = left ? `${JobsDigest.plural(left, 'more story', 'more stories')} did not fit in one email; every one is on the news page.` : '';
+  if (!hi.length && !med.length) html.push(`<div${st(`font-size:13.5px;color:${MC.mute}`)}>No high or medium story was read ${mailEsc(since)}.</div>`);
+  if (more) { html.push(`<div${st(`margin-top:14px;font-size:13px;color:${MC.mute}`)}>${mailEsc(more)}</div>`); text.push('', more); }
+  if (site) { html.push(`<div${st('margin-top:18px')}>${mailButton(site + '/news', 'Open the news feed')}</div>`); text.push('', site + '/news'); }
+  const note = 'Each line is the AI reading of the story’s lead article; importance is the site’s rule (what the story is about, whether it is new, how many outlets carried it), not a view of the price. Sent every day at 5:40 PM Eastern.';
+  return { subject, shown: shownHi + shownMed, html: emailShell({ heading: 'Today’s news, ' + when, intro, body: html.join(''), note }), text: textShell({ heading: 'Today’s news, ' + when, intro, lines: text, note }) };
+}
+function newsBriefNextEmail(d, ai) {
+  const site = APP_URL || '';
+  const when = NewsBrief.dayName(d.next);
+  const subject = `Next session, ${when}: ${ai.items.length ? JobsDigest.plural(ai.items.length, 'thing') + ' to know' : d.cal.before.length + ' reporting before the open'}`;
+  const intro = ai.intro || (ai.error ? 'The AI note could not be written today (' + ai.error + '); the calendar is below.' : 'What the day’s news and the results calendar hold for the next session.');
+  const html = [], text = [];
+  const head = (t) => `<div${st(`margin:20px 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(t)}</div>`;
+  if (ai.items.length) {
+    html.push(head('To know for ' + when));
+    text.push('', 'TO KNOW FOR ' + when.toUpperCase());
+    ai.items.forEach((it, i) => {
+      const syms = it.symbols.map((s) => site ? `<a href="${mailEsc(site + '/stock/' + encodeURIComponent(s))}"${st(`color:${MC.mute};text-decoration:none`)}>${mailEsc(s)}</a>` : mailEsc(s)).join(' ');
+      html.push(`<div${st(`margin:0 0 12px;font-size:14px;line-height:1.5;color:${MC.body}`)}><b${st(`color:${MC.ink}`)}>${i + 1}.</b> ${mailEsc(it.line)}<br><span${st('font-size:12px')}>${syms}</span></div>`);
+      text.push(`${i + 1}. ${it.line}`, '   ' + it.symbols.join(' '));
+    });
+  }
+  const calList = (label, arr) => {
+    if (!arr.length) return;
+    html.push(head(label + ' (' + arr.length + ')'));
+    text.push('', label.toUpperCase() + ' (' + arr.length + ')');
+    const shown = arr.slice(0, 60);
+    html.push(`<div${st(`font-size:13px;line-height:1.6;color:${MC.body}`)}>` + shown.map((r) => `<b${st(`color:${MC.ink}`)}>${mailEsc(r.symbol)}</b> ${mailEsc(r.name)}${r.time ? '' : ` <span${st(`color:${MC.faint}`)}>(time not stated)</span>`}`).join('<br>') + (arr.length > shown.length ? `<br><span${st(`color:${MC.mute}`)}>and ${arr.length - shown.length} more</span>` : '') + '</div>');
+    for (const r of shown) text.push(`${r.symbol}  ${r.name}${r.time ? '' : ' (time not stated)'}`);
+  };
+  calList('Reporting before the open on ' + when, d.cal.before);
+  calList('Listed to report after today’s close', d.cal.after);
+  if (!ai.items.length && !d.cal.before.length && !d.cal.after.length) html.push(`<div${st(`font-size:13.5px;color:${MC.mute}`)}>Nothing on the calendar, and no note today.</div>`);
+  if (site) { html.push(`<div${st('margin-top:18px')}>${mailButton(site + '/news', 'Open the news feed')}</div>`); text.push('', site + '/news'); }
+  const note = 'The numbered lines are written by AI from the day’s stored story summaries and the results calendar; each is kept only if every figure and company in it is in what it cites' + (ai.dropped.length ? ` (${ai.dropped.length} dropped today)` : '') + '. Descriptive, not advice. The calendar lists are the stored calendar, not AI. Sent every day at 5:40 PM Eastern.';
+  return { subject, html: emailShell({ heading: 'Next session: ' + when, intro, body: html.join(''), note }), text: textShell({ heading: 'Next session: ' + when, intro, lines: text, note }) };
+}
+app.post('/api/cron/news-brief', route(async (req, res) => {
+  if (!(await cronOrAdmin(req))) return res.status(401).json({ error: 'Admin or the cron secret.' });
+  res.set('Cache-Control', 'no-store');
+  const dry = req.query.dry === '1', useAi = req.query.noai !== '1';
+  const force = !!(req.body && req.body.force === true);
+  const now = Date.now();
+  const mark = await store.readNewsBriefMark().catch(() => ({}));
+  const today = NewsBrief.etDay(now);
+  if (!dry && !force && mark.day === today && mark.today && mark.next) return res.json({ sent: false, already: today });
+  // The window starts where the last sent brief stopped; a resend of today's
+  // keeps the same start.
+  const prevAt = mark.day === today && mark.prevAt ? mark.prevAt : (mark.at && now - mark.at < 4 * 864e5 ? mark.at : null);
+  const d = await newsBriefData(now, prevAt);
+  const ai = await newsBriefNext(d, useAi);
+  const a = newsBriefTodayEmail(d, prevAt), b = newsBriefNextEmail(d, ai);
+  const counts = { stories: d.list.length, high: d.list.filter((s) => s.importance === 'high').length, medium: d.list.filter((s) => s.importance === 'medium').length,
+    shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error, spent: Math.round(ai.spent * 1e4) / 1e4 };
+  if (dry) return res.json({ dry: true, counts, today: { subject: a.subject, text: a.text, bytes: a.html.length }, next: { subject: b.subject, text: b.text, bytes: b.html.length } });
+  if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
+  const to = await operatorEmail();
+  if (!to) return res.status(400).json({ error: 'No address to send to.' });
+  const sentA = (mark.day === today && mark.today && !force) ? true : !!(await sendMail({ kind: 'news-brief-today', to, subject: a.subject, text: a.text, html: a.html }));
+  const sentB = (mark.day === today && mark.next && !force) ? true : !!(await sendMail({ kind: 'news-brief-next', to, subject: b.subject, text: b.text, html: b.html }));
+  try { await store.writeNewsBriefMark({ day: today, at: sentA ? now : mark.at || null, prevAt, today: sentA, next: sentB }); } catch { /* bookkeeping never fails the send */ }
+  res.json({ sent: sentA && sentB, today: sentA, next: sentB, counts });
+}));
+
 // The nightly ping's steps (SEC daily, the calendar, the refresh, and every
 // phase after it), each with its outcome, saved onto its run once the last
 // one ends. The jobs email reads them.

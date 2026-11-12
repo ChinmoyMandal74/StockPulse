@@ -49,6 +49,10 @@ const ADAPT = {
     at: r.startedAt, count: n0(r.results), spent: n0(r.spent),
     ...endState(r, now),
   })),
+  // The evening news briefs leave no run record: their two emails are the run.
+  newsbrief: (src) => (src.mail || []).filter((m) => /^news-brief-/.test(String(m.kind))).map((m) => ({
+    at: m.at, count: 1, state: m.ok ? 'ok' : 'problem', why: m.ok ? null : 'the ' + String(m.kind).slice(11) + ' brief was refused by the mail provider',
+  })),
   // The local research copy writes no run record anywhere (it never writes to
   // Turso), so its run is what Task Scheduler says in the laptop's latest
   // report: the last start and its result. One run a day, so the last is it.
@@ -109,6 +113,7 @@ const PHRASE = {
   tone: (t) => plural(t.count, 'article') + ' scored, ' + money(t.spent) + (t.left ? '; ' + plural(t.left, 'article') + ' left for the next run' : ''),
   releases: (t) => plural(t.count, 'results release') + ' read, ' + money(t.spent),
   localcopy: () => 'analysis.db brought up to date',
+  newsbrief: (t) => plural(t.count, 'brief') + ' sent',
 };
 
 // src: { refresh, news, tone, releases, report, mail }, each today's (or a
