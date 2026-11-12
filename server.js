@@ -1607,23 +1607,38 @@ function briefsHtml(base, day, b, days, view, now) {
   const sp = (sym) => '/stock/' + encodeURIComponent(sym);
   // In a new tab (the owner, same day), so the brief stays open.
   const nt = ' target="_blank" rel="noopener"';
+  const pricesAt = b.perfAt ? new Date(b.perfAt).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   const tick = (list) => (list || []).map((s) => `<a class="nb-t" href="${sp(s)}"${nt}>${esc(s)}</a>`).join('');
+  // HOW EACH STOCK HAS DONE, under its news (the owner, same day: "Is it possible
+  // to show the stock performance just below the news"): the latest price, and
+  // today, a week, a month and the year so far, from the served rows (b.perf).
+  // Green and red are price up and down; a figure the row lacks is left out.
+  const pctOf = (v, k) => (v == null || !Number.isFinite(Number(v)) ? '' : `<span class="nb-p${Number(v) > 0 ? ' up' : Number(v) < 0 ? ' dn' : ''}">${Number(v) > 0 ? '+' : Number(v) < 0 ? '−' : ''}${Math.abs(Number(v)).toFixed(1)}% ${k}</span>`);
+  const perf = (syms) => {
+    const rows = (syms || []).slice(0, 4).map((sym) => {
+      const p = b.perf && b.perf[sym];
+      if (!p || !(Number(p.price) > 0)) return '';
+      const parts = [pctOf(p.d, 'today'), pctOf(p.w, '1W'), pctOf(p.m, '1M'), pctOf(p.y, 'YTD')].filter(Boolean).join('');
+      return `<div class="nb-pf"><a href="${sp(sym)}"${nt}>${esc(sym)}</a><span class="nb-px">$${Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>${parts}</div>`;
+    }).filter(Boolean);
+    return rows.length ? '<div class="nb-pfs">' + rows.join('') + '</div>' : '';
+  };
   const said = (x) => NewsBriefPage.linkNames(x.line, x.names || {}).map((p) => (p.symbol ? `<a class="nb-co" href="${sp(p.symbol)}"${nt}>${esc(p.text)}</a>` : esc(p.text))).join('');
   const builtAt = Math.max((t && t.at) || 0, (n && n.at) || 0);
   const upd = builtAt ? new Date(builtAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : '';
   const wd = day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' }) : '';
   const today = t && t.items && t.items.length ? (() => {
     const hi = t.items.filter((x) => x.importance === 'high'), med = t.items.filter((x) => x.importance === 'medium');
-    const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${said(x)}</p></li>`).join('') + '</ul>' : '');
+    const list = (label, arr) => (arr.length ? `<h3 class="nb-k">${label}</h3><ul class="nb-l">` + arr.map((x) => `<li><div class="nb-ts">${tick(x.symbols)}</div><p>${said(x)}</p>${perf(x.symbols)}</li>`).join('') + '</ul>' : '');
     return `<section class="nb-s"><h2>What happened on ${esc(wd)}</h2>${t.intro ? `<p class="nb-in">${esc(t.intro)}</p>` : ''}`
-      + `<p class="nb-m">${t.items.length} stories, written by AI from ${Number(t.read || 0).toLocaleString('en-US')} articles, each piece of news once.</p>`
+      + `<p class="nb-m">${t.items.length} stories, written by AI from ${Number(t.read || 0).toLocaleString('en-US')} articles, each piece of news once.${pricesAt ? ' Prices as of ' + esc(pricesAt) + ' New York time.' : ''}</p>`
       + list('High importance', hi) + list('Medium importance', med) + '</section>';
   })() : '';
   const next = n && n.next ? (() => {
     const cal = (label, arr) => (arr && arr.length ? `<h3 class="nb-k">${label} (${arr.length})</h3><p class="nb-cal">`
       + arr.slice(0, 80).map((r) => `<a class="nb-ce" href="${sp(r.symbol)}"${nt}><b>${esc(r.symbol)}</b> ${esc(r.name)}</a>`).join('') + '</p>' : '');
     return `<section class="nb-s"><h2>Next session: ${esc(NewsBriefPage.dayName(n.next))}</h2>${n.intro ? `<p class="nb-in">${esc(n.intro)}</p>` : ''}`
-      + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${said(x)}</p><div class="nb-ts">${tick(x.symbols)}</div></li>`).join('') + '</ol>' : '')
+      + (n.items && n.items.length ? '<ol class="nb-o">' + n.items.map((x) => `<li><p>${said(x)}</p>${perf(x.symbols)}</li>`).join('') + '</ol>' : '')
       + cal('Reporting before the open', n.before) + cal('Listed to report after the close', n.after) + '</section>';
   })() : '';
   const empty = !today && !next ? '<p class="nb-in">The first brief is published at 5:40 PM New York time.</p>' : '';
@@ -1668,6 +1683,8 @@ function briefsHtml(base, day, b, days, view, now) {
     + '.nb-ts{display:flex;gap:6px;flex-wrap:wrap}.nb-t{font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;border:1px solid var(--hair-2);color:var(--muted)}'
     + '.nb-cal{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;color:var(--muted)}.nb-cal b{color:var(--text)}.nb-ce{color:var(--muted);text-decoration:none}.nb-ce:hover b{color:var(--accent)}'
     + 'a.nb-t{text-decoration:none}a.nb-t:hover{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}'
+    + '.nb-pfs{display:flex;flex-direction:column;gap:4px;margin-top:8px}.nb-pf{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font:12.5px/1.4 var(--mono);color:var(--muted)}'
+    + '.nb-pf a{color:var(--text);font-weight:700;text-decoration:none;min-width:44px}.nb-pf a:hover{color:var(--accent)}.nb-px{color:var(--text)}.nb-p.up{color:var(--green)}.nb-p.dn{color:var(--red)}'
     + '.nb-co{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--accent) 55%,transparent);text-underline-offset:3px}.nb-co:hover{color:var(--accent)}'
     + '.nb-now{margin:12px 0 0;padding:10px 14px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:0 10px 10px 0;font-size:14px;line-height:1.5;color:var(--text)}'
     + '.nb-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:22px;padding:10px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}'
@@ -1696,6 +1713,17 @@ app.get(['/briefs', '/briefs/:day'], route(async (req, res, next) => {
   const days = await store.readNewsBriefDays(60, NewsBriefPage.shownBuild).catch(() => []);
   const day = asked || days[0] || null;
   const b = day ? await store.readNewsBrief(day, NewsBriefPage.shownBuild).catch(() => ({})) : {};
+  // The served rows (kept in memory per instance); a cold fetch past 2.5 s draws
+  // the page without the figures rather than keeping the reader waiting.
+  const snap = await Promise.race([snapshotCached().catch(() => null), new Promise((r) => setTimeout(() => r(null), 2500))]);
+  if (snap && Array.isArray(snap.stocks)) {
+    const want = new Set();
+    for (const k of ['today', 'next']) for (const x of ((b[k] && b[k].items) || [])) for (const sym of x.symbols || []) want.add(sym);
+    const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    b.perf = {};
+    for (const r of snap.stocks) if (r && want.has(r.symbol) && !r.error) b.perf[r.symbol] = { price: num(r.price), d: num(r.todayPct), w: num(r.oneWeekPct), m: num(r.oneMonthPct), y: num(r.ytdPct) };
+    b.perfAt = snap.updatedAt || null;
+  }
   const view = req.query.v === 'next' ? 'next' : req.query.v === 'today' ? 'today' : null;
   if (asked && !b.today && !b.next) return res.status(404).type('html').send(briefsHtml(base, null, {}, days, view).replace('The first brief is published at 5:40 PM New York time.', 'No brief was published that day.'));
   res.set('Cache-Control', 'public, max-age=0, s-maxage=60');
