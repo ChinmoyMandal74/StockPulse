@@ -92,5 +92,32 @@ check('the request: the model, a schema, the session named', [req.model, req.out
 check('the request tells the model not to advise', /do not advise or forecast/.test(req.system) && /buy, sell, hold/.test(req.system), true);
 check('the cost of a call', Math.round(NB.spend({ input_tokens: 15000, output_tokens: 1000 }) * 1000) / 1000, 0.04);
 
+// ---- the day re-read by the model: the inputs ----------------------------------
+const day = NB.dayInputs(rows, info, prev, now);
+check('the re-read takes every article mainly about its company, with a summary, in the window', day.map((x) => x.symbol + ':' + x.kind), ['AAA:results', 'AAA:results', 'BBB:deal', 'CCC:analyst', 'CCC:opinion']);
+check('numbered r1.., most important first, the story\'s outlets on each', day.map((x) => x.id + ':' + x.importance + ':' + x.coverage), ['r1:high:2', 'r2:high:2', 'r3:high:1', 'r4:medium:1', 'r5:low:1']);
+const treq = NB.todayRequest(day, '2026-11-12');
+check('the request: Sonnet, the schema with importance, every article in the prompt', [treq.model, treq.output_config.format.schema.properties.items.items.properties.importance.enum, (treq.messages[0].content.match(/\nr\d+ \|/g) || []).length], ['claude-sonnet-5-5', ['high', 'medium'], 5]);
+check('the instructions: one event one line, never repeated, acquire not buy', /every article about one event goes into one line, never two/.test(treq.system) && /Never repeat a piece of news/.test(treq.system) && /write "acquire"/.test(treq.system), true);
+
+// ---- the day re-read: the checks ----------------------------------------------------
+const T = (items, intro) => NB.checkToday({ intro: intro || '', items }, day, syms, 'Thursday, November 12 2026-11-12');
+const ok1 = T([{ importance: 'high', ids: ['r1', 'r2'], line: 'Alpha reported results and beat estimates.' }, { importance: 'medium', ids: ['r4'], line: 'An analyst raised Gamma.' }, { importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm.' }]);
+check('clean lines kept, high before medium, the model\'s order within', ok1.items.map((x) => x.importance + ':' + x.symbols.join()), ['high:AAA', 'high:BBB', 'medium:CCC']);
+check('each line says how many articles it was drawn from', ok1.items[0].articles, 2);
+check('an article backing a second line: dropped', T([{ importance: 'high', ids: ['r1'], line: 'Alpha reported results.' }, { importance: 'high', ids: ['r2', 'r1'], line: 'Alpha beat estimates on its quarter.' }]).dropped, ['repeats an article an earlier line used']);
+check('the same news again in other articles: dropped', T([{ importance: 'high', ids: ['r1'], line: 'Alpha Holdings reported quarterly results above estimates today.' }, { importance: 'high', ids: ['r2'], line: 'Alpha Holdings reported quarterly results above estimates.' }]).dropped, ['repeats an earlier line']);
+check('a different event at the same company is kept', T([{ importance: 'high', ids: ['r1'], line: 'Alpha reported results.' }, { importance: 'medium', ids: ['r2'], line: 'Alpha beat estimates.' }]).items.length, 2);
+check('no importance: dropped', T([{ importance: 'low', ids: ['r5'], line: 'A columnist weighs Gamma.' }]).dropped, ['no importance']);
+check('the line checks hold: a figure, a word, a stray company', T([{ importance: 'high', ids: ['r1'], line: 'Alpha rose 9%.' }, { importance: 'high', ids: ['r3'], line: 'Beta is a buy.' }, { importance: 'high', ids: ['r3'], line: 'Beta and DDD agreed a deal.' }]).dropped,
+  ['a figure not in its inputs (9)', 'a word the site does not use (buy)', 'names a company its inputs do not (DDD)']);
+check('an analyst\'s pick list or price target: dropped', [T([{ importance: 'medium', ids: ['r4'], line: 'JPMorgan named Gamma a top pick.' }]).dropped, T([{ importance: 'medium', ids: ['r4'], line: 'Two banks raised targets on Gamma.' }]).dropped, T([{ importance: 'medium', ids: ['r4'], line: 'An analyst lowered its price target.' }]).dropped],
+  [['a ranking or target (top pick)'], ['a ranking or target (raised targets)'], ['a word the site does not use (price target)']]);
+check('a company\'s own target passes', T([{ importance: 'high', ids: ['r3'], line: 'Beta set a new target for reducing its debt.' }]).items.length, 1);
+check('at most sixty lines', NB.checkToday({ intro: '', items: Array.from({ length: 70 }, (_, i) => ({ importance: 'medium', ids: [], line: 'x' })) }, day, syms).items.length, 0);
+check('sixty kept of more', (() => { const many = Array.from({ length: 70 }, (_, i) => ({ id: 'r' + (i + 1), symbol: 'AAA', name: 'Alpha', text: 'event ' + 'w' + i + ' happened', kind: 'deal', importance: 'high', coverage: 1 }));
+  return NB.checkToday({ intro: '', items: many.map((m, i) => ({ importance: 'high', ids: [m.id], line: 'w' + i + 'aaaa w' + i + 'bbbb w' + i + 'cccc' })) }, many, syms).items.length; })(), 60);
+check('the count of articles read', ok1.read, 5);
+
 console.log(`\nnewsbrief-test: ${ran} checks, ${failed} failed`);
 process.exit(failed ? 1 : 0);

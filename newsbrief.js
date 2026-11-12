@@ -6,10 +6,16 @@
 //
 // Both are built from the article readings the tone loader already stores
 // (newstone.js: each article's kind, whether it is about the company, its
-// summary, and the importance rule), so the first costs nothing:
-//   Today      every high and medium story since the last brief, one line a
-//              story (its lead article's summary), high first, then by how
-//              many outlets told it, then by market value.
+// summary, and the importance rule):
+//   Today      (since the same day, the owner: "I want AI to re-read all the
+//              news of the day and then summarize .. news should not be
+//              repeated") one model call over every article since the last
+//              brief that is mainly about its company, written up as at most
+//              25 high and 35 medium lines, one an event; no article may back
+//              two lines and no company gets the same line twice. If the call
+//              fails, the line-a-story list below goes instead: every high and
+//              medium story, its lead article's summary, high first, then by
+//              how many outlets told it, then by market value.
 //   Next day   one model call over the day's important stories and the
 //              companies reporting before the next open or after today's
 //              close, asked for up to ten things that matter for the next
@@ -149,7 +155,7 @@ const SYSTEM = [
   'You are given numbered inputs: stories (each one a company\'s news today, with its kind, how many outlets carried it, when it was published, and a summary) and the results calendar (companies reporting before the next open, and companies listed to report after today\'s close).',
   'Pick at most ten things, most important first. Weigh results and guidance released after today\'s close or due before the next open, large companies, deals, legal or regulatory decisions, leadership changes, and stories many outlets carried. Join related inputs into one item (several companies in one industry reporting, one deal touching two companies).',
   'Each item is one or two plain sentences, under 240 characters, and cites the ids of every input it uses. Use only facts in the inputs: no figure, company or date that is not in them, and no outside knowledge.',
-  'Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target, and never rank stocks as picks.',
+  'Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks, and never rank stocks as picks.',
   'The intro is one sentence on what the next session has in store, under 300 characters, from the inputs only.',
 ].join(' ');
 const SCHEMA = {
@@ -180,30 +186,39 @@ const hasNumber = (n, text) => numbers(text).includes(n) || numbers(text).some((
 // abbreviation that happens to be one (AI, CEO, ON). `extra`: text the model
 // was also given (the session's date).
 const COMMON = new Set(['AI', 'CEO', 'CFO', 'COO', 'CTO', 'IPO', 'FDA', 'SEC', 'FTC', 'DOJ', 'EU', 'UK', 'US', 'USA', 'EPS', 'GAAP', 'ET', 'ON', 'IT', 'ALL', 'ARE', 'NOW', 'CAN', 'ANY', 'ONE', 'BIG', 'KEY', 'NEW', 'OUT', 'FY', 'TV', 'PC', 'EV', 'GPU', 'CPU', 'LLC', 'INC', 'API', 'AM', 'PM']);
+// Beyond the site's words: an analyst's list of picks and a moved price
+// target, which the first preview let through ("named it a top pick",
+// "Mizuho and Bernstein raised targets"). A company's own target (a debt
+// target, a margin target) is a fact and passes.
+const PICKS = /\btop picks?\b|\b(?:raise[sd]?|raising|cut|cuts|cutting|lower(?:s|ed|ing)?|trim(?:s|med|ming)?|boost(?:s|ed|ing)?|lift(?:s|ed|ing)?|hike[sd]?|slash(?:es|ed|ing)?|reiterat(?:es|ed|ing)?) (?:its |their |the )?(?:price )?targets?\b/i;
+// One line against the inputs it cites: null when it passes, else why not.
+function lineProblem(text, ids, cited, symbols, extra) {
+  if (!text) return 'empty';
+  if (!cited.length || cited.length !== ids.length) return 'cites an input that does not exist';
+  if (text.length > MAX_LINE) return 'too long';
+  if (NewsTone.BANNED.test(text)) return 'a word the site does not use (' + text.match(NewsTone.BANNED)[0] + ')';
+  if (PICKS.test(text)) return 'a ranking or target (' + text.match(PICKS)[0] + ')';
+  const src = cited.map((c) => c.name + ' ' + c.text).join(' ') + ' ' + (extra || '');
+  const bad = numbers(text).find((n) => !hasNumber(n, src));
+  if (bad) return 'a figure not in its inputs (' + bad + ')';
+  const own = new Set(cited.map((c) => c.symbol));
+  const inBrackets = (text.match(/\(([A-Z][A-Z.]{0,5})\)/g) || []).map((w) => w.slice(1, -1));
+  const bare = (text.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !COMMON.has(w));
+  const stray = inBrackets.concat(bare).find((w) => symbols.has(w) && !own.has(w));
+  if (stray) return 'names a company its inputs do not (' + stray + ')';
+  return null;
+}
+const lineOf = (it) => String(it && it.line || '').replace(/\s+/g, ' ').trim();
+const idsOf = (it) => [...new Set((it && Array.isArray(it.ids) ? it.ids : []).map(String))];
 function check(ans, cands, symbols, extra) {
   const byId = new Map(cands.map((c) => [c.id, c]));
   const dropped = [];
   const items = [];
   if (!ans || typeof ans !== 'object' || !Array.isArray(ans.items)) return { ok: false, intro: '', items: [], dropped: ['no answer'] };
   for (const it of ans.items.slice(0, MAX_ITEMS + 5)) {
-    const text = String(it && it.line || '').replace(/\s+/g, ' ').trim();
-    const ids = [...new Set((it && Array.isArray(it.ids) ? it.ids : []).map(String))];
+    const text = lineOf(it), ids = idsOf(it);
     const cited = ids.map((id) => byId.get(id)).filter(Boolean);
-    let why = null;
-    if (!text) why = 'empty';
-    else if (!cited.length || cited.length !== ids.length) why = 'cites an input that does not exist';
-    else if (text.length > MAX_LINE) why = 'too long';
-    else if (NewsTone.BANNED.test(text)) why = 'a word the site does not use (' + text.match(NewsTone.BANNED)[0] + ')';
-    else {
-      const src = cited.map((c) => c.name + ' ' + c.text).join(' ') + ' ' + (extra || '');
-      const bad = numbers(text).find((n) => !hasNumber(n, src));
-      if (bad) why = 'a figure not in its inputs (' + bad + ')';
-      const own = new Set(cited.map((c) => c.symbol));
-      const inBrackets = (text.match(/\(([A-Z][A-Z.]{0,5})\)/g) || []).map((w) => w.slice(1, -1));
-      const bare = (text.match(/\b[A-Z]{2,5}\b/g) || []).filter((w) => !COMMON.has(w));
-      const stray = inBrackets.concat(bare).find((w) => symbols.has(w) && !own.has(w));
-      if (!why && stray) why = 'names a company its inputs do not (' + stray + ')';
-    }
+    const why = lineProblem(text, ids, cited, symbols, extra);
     if (why) { dropped.push(why); continue; }
     if (items.length < MAX_ITEMS) items.push({ line: text, symbols: [...new Set(cited.map((c) => c.symbol))], ids });
   }
@@ -211,6 +226,90 @@ function check(ans, cands, symbols, extra) {
   if (intro && (intro.length > MAX_INTRO || NewsTone.BANNED.test(intro) || numbers(intro).some((n) => !hasNumber(n, cands.map((c) => c.name + ' ' + c.text).join(' ') + ' ' + (extra || ''))))) { dropped.push('intro'); intro = ''; }
   return { ok: items.length > 0, intro, items, dropped };
 }
+// ---- today's summary, re-read by the model (2026-11-12, the owner: "I want AI
+// to re-read all the news of the day and then summarize .. news should not be
+// repeated") ------------------------------------------------------------------
+// Every article in the window that is mainly about its company (about 950 a
+// weekday, some 66,000 tokens of summaries; the thousand that only mention a
+// company are left out), each with the site's importance and how many outlets
+// told its story, most important first. The model merges what is one event
+// into one line; the checks make sure no article backs two lines and no
+// company gets the same line twice.
+const MAX_TODAY = 60, MAX_TODAY_IN = 1400;
+function dayInputs(rows, info, prevAt, now) {
+  const use = (rows || []).filter((r) => r && r.symbol && r.about === 'primary' && r.summary && inWindow(r, prevAt, now));
+  const nameOf = (s) => ((info(s) || {}).name || '');
+  const groups = NewsTone.storyGroups(use, nameOf);
+  const outlets = new Map();
+  use.forEach((r, i) => { const g = groups[i]; if (!outlets.has(g)) outlets.set(g, new Set()); outlets.get(g).add(String(r.source || r.url)); });
+  const list = use.map((r, i) => {
+    const x = info(r.symbol) || {};
+    const coverage = outlets.get(groups[i]).size;
+    return { symbol: r.symbol, name: x.name || r.symbol, cap: Number.isFinite(x.cap) ? x.cap : null, kind: r.kind, importance: NewsTone.importance(r, coverage),
+      coverage, publishedAt: r.published_at, source: r.source || '', text: String(r.summary).replace(/\s+/g, ' ').trim() };
+  });
+  list.sort((a, b) => RANK[b.importance] - RANK[a.importance] || b.coverage - a.coverage || (b.cap || 0) - (a.cap || 0) || (a.publishedAt < b.publishedAt ? -1 : 1));
+  return list.slice(0, MAX_TODAY_IN).map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
+}
+const SYSTEM_TODAY = [
+  'You write the evening news summary for the owner of a stock screener: what happened today at the companies it covers.',
+  'You are given every article read today that is mainly about one company, numbered, each with the company, its market value, the kind of news, an importance level set by the site\'s rule, how many outlets told the same story, and a summary of the article.',
+  'Read them all, then write the day\'s news as separate lines. Many articles tell the same story: every article about one event goes into one line, never two. Never repeat a piece of news in a second line, even in other words; a company with two different events gets two lines.',
+  'Put each line in "high" (results, guidance, deals, legal or regulatory decisions, leadership changes, and other events that change a company\'s position) or "medium" (analyst actions, products and customers, dividends and buybacks, insider trades, notable moves with a stated reason). Leave out opinion pieces, price recaps with no reason and passing mentions unless they carry news found nowhere else.',
+  'At most 25 high lines and 35 medium lines, most important first within each: weigh the event, the size of the company, and how many outlets carried it. Each line is one or two plain sentences, under 240 characters, naming the company, and cites the ids of every article it uses.',
+  'Use only facts in the summaries: no figure, company or date that is not in the articles a line cites, and no outside knowledge. Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks.',
+  'The intro is one sentence on the day as a whole, under 300 characters, from the articles only.',
+].join(' ');
+const SCHEMA_TODAY = {
+  type: 'object', additionalProperties: false, required: ['intro', 'items'],
+  properties: {
+    intro: { type: 'string' },
+    items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['importance', 'ids', 'line'],
+      properties: { importance: { type: 'string', enum: ['high', 'medium'] }, ids: { type: 'array', items: { type: 'string' } }, line: { type: 'string' } } } },
+  },
+};
+function todayPrompt(inputs, today) {
+  const t = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+  return `Today is ${dayName(today)}. ${inputs.length} articles:\n` + inputs.map((c) =>
+    `${c.id} | ${c.symbol} ${c.name} | value ${capText(c.cap)} | ${c.kind}, ${c.importance}, ${c.coverage} outlet${c.coverage === 1 ? '' : 's'}, ${t(c.publishedAt)} | ${c.text}`).join('\n');
+}
+function todayRequest(inputs, today) {
+  return { model: MODEL, max_tokens: 9000, system: SYSTEM_TODAY, output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_TODAY } },
+    messages: [{ role: 'user', content: todayPrompt(inputs, today) }] };
+}
+// The same story twice: a later line about the same companies sharing most of
+// its words with an earlier one (Jaccard 0.5 on words of four letters or more).
+const wordSet = (s) => new Set(String(s).toLowerCase().replace(/[^a-z0-9%$ ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 4));
+function sameStory(a, b) {
+  if (a.symbols.join() !== b.symbols.join()) return false;
+  const p = wordSet(a.line), q = wordSet(b.line);
+  let both = 0; for (const w of p) if (q.has(w)) both++;
+  return p.size + q.size - both > 0 && both / (p.size + q.size - both) >= 0.5;
+}
+function checkToday(ans, inputs, symbols, extra) {
+  const byId = new Map(inputs.map((c) => [c.id, c]));
+  const dropped = [], items = [], used = new Set();
+  if (!ans || typeof ans !== 'object' || !Array.isArray(ans.items)) return { ok: false, intro: '', items: [], dropped: ['no answer'] };
+  for (const it of ans.items.slice(0, MAX_TODAY + 20)) {
+    const text = lineOf(it), ids = idsOf(it);
+    const cited = ids.map((id) => byId.get(id)).filter(Boolean);
+    let why = lineProblem(text, ids, cited, symbols, extra);
+    if (!why && !['high', 'medium'].includes(it.importance)) why = 'no importance';
+    const x = { importance: it.importance, line: text, symbols: [...new Set(cited.map((c) => c.symbol))].sort(), ids, articles: ids.length };
+    if (!why && ids.some((id) => used.has(id))) why = 'repeats an article an earlier line used';
+    if (!why && items.some((y) => sameStory(x, y))) why = 'repeats an earlier line';
+    if (why) { dropped.push(why); continue; }
+    if (items.length >= MAX_TODAY) break;
+    ids.forEach((id) => used.add(id));
+    items.push(x);
+  }
+  // High before medium; the model's order within each.
+  items.sort((a, b) => RANK[b.importance] - RANK[a.importance]);
+  let intro = String(ans.intro || '').replace(/\s+/g, ' ').trim();
+  if (intro && (intro.length > MAX_INTRO || NewsTone.BANNED.test(intro) || numbers(intro).some((n) => !hasNumber(n, inputs.map((c) => c.name + ' ' + c.text).join(' ') + ' ' + (extra || ''))))) { dropped.push('intro'); intro = ''; }
+  return { ok: items.length > 0, intro, items, dropped, read: inputs.length };
+}
+
 // The money one call cost, at the model's list price.
 const PRICE = { in: 2 / 1e6, out: 10 / 1e6 };
 const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in + (Number(usage.output_tokens) || 0) * PRICE.out : 0);
@@ -218,5 +317,6 @@ const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in +
 module.exports = {
   isTradingDay, nextTradingDay, holidays, easter, addDays, dayName, etDay,
   inWindow, stories, line, calendar, candidates, request, userPrompt, check, spend, capText,
-  SYSTEM, SCHEMA, MODEL, MAX_ITEMS, RANK,
+  dayInputs, todayRequest, todayPrompt, checkToday, sameStory,
+  SYSTEM, SCHEMA, SYSTEM_TODAY, SCHEMA_TODAY, MODEL, MAX_ITEMS, MAX_TODAY, RANK,
 };

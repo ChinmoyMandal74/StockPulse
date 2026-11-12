@@ -22294,12 +22294,13 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
 }));
 // THE EVENING NEWS BRIEFS (2026-11-12, newsbrief.js): at 17:40 Eastern every
 // day the Fly scheduler asks for two emails to the operator, built from the
-// article readings already stored. "Today": every high and medium story since
-// the last brief, a line each, most important first. "Next session": one
+// article readings already stored. "Today": one model call re-reads every
+// article since the last brief and writes the news once, an event a line
+// (every high and medium story, a line each, if it fails). "Next session": one
 // model call over the day's important stories and the results calendar, each
 // line checked against what it cites, with the calendar's two lists beneath.
 // Once a day (the mark); ?dry=1 answers both unsent (and still calls the
-// model, about $0.04), ?noai=1 leaves the model out; body.force sends again.
+// model twice, about $0.33), ?noai=1 leaves the model out; body.force sends again.
 const NewsBrief = require('./newsbrief.js');
 const NB_HTML_BUDGET = 85000;   // Gmail clips a message past about 102 KB
 async function newsBriefData(now, prevAt) {
@@ -22311,40 +22312,79 @@ async function newsBriefData(now, prevAt) {
   const list = NewsBrief.stories(rows, info, prevAt, now);
   const calRaw = await store.readEarningsCalendarSeen(today, NewsBrief.addDays(today, -7)).catch(() => ({}));
   const cal = NewsBrief.calendar(calRaw, info, today, next);
-  return { today, next, list, cal, symbols: new Set(by.keys()) };
+  return { today, next, list, cal, rows, info, prevAt, now, symbols: new Set(by.keys()) };
 }
-async function newsBriefNext(d, useAi) {
-  const cands = NewsBrief.candidates(d.list, d.cal, d.today);
+// One call to the model with a JSON answer; checked by `checkFn(ans)`. Never
+// throws: a failure is `error`, and the email says so.
+async function newsBriefCall(body, useAi, checkFn) {
   const out = { intro: '', items: [], dropped: [], error: null, spent: 0 };
   if (!useAi) { out.error = 'left out on request'; return out; }
   if (!ANTHROPIC_KEY) { out.error = 'no model key on this server'; return out; }
-  if (!cands.length) { out.error = 'nothing to read'; return out; }
+  if (!body) { out.error = 'nothing to read'; return out; }
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: AbortSignal.timeout(150000),
+      method: 'POST', signal: AbortSignal.timeout(200000),
       headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify(NewsBrief.request(cands, d.next)),
+      body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => null);
     out.spent = NewsBrief.spend(data && data.usage);
     if (!r.ok) { out.error = 'the model answered ' + r.status; return out; }
+    if (data && data.stop_reason === 'max_tokens') { out.error = 'the answer ran out of room'; return out; }
     const txt = ((data && data.content) || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
     let ans = null;
     try { ans = JSON.parse(txt); } catch { out.error = 'the answer was not readable'; return out; }
-    const c = NewsBrief.check(ans, cands, d.symbols, NewsBrief.dayName(d.next) + ' ' + d.next + ' ' + NewsBrief.dayName(d.today));
-    Object.assign(out, { intro: c.intro, items: c.items, dropped: c.dropped });
+    const c = checkFn(ans);
+    Object.assign(out, { intro: c.intro, items: c.items, dropped: c.dropped, read: c.read });
     if (!c.items.length) out.error = 'no line passed the checks';
   } catch (err) { out.error = 'the model could not be reached (' + String(err && err.name || 'error') + ')'; }
   return out;
 }
-function newsBriefTodayEmail(d, prevAt) {
+function newsBriefNext(d, useAi) {
+  const cands = NewsBrief.candidates(d.list, d.cal, d.today);
+  return newsBriefCall(cands.length ? NewsBrief.request(cands, d.next) : null, useAi,
+    (ans) => NewsBrief.check(ans, cands, d.symbols, NewsBrief.dayName(d.next) + ' ' + d.next + ' ' + NewsBrief.dayName(d.today)));
+}
+function newsBriefTodayAi(d, useAi) {
+  const inputs = NewsBrief.dayInputs(d.rows, d.info, d.prevAt, d.now);
+  return newsBriefCall(inputs.length ? NewsBrief.todayRequest(inputs, d.today) : null, useAi,
+    (ans) => NewsBrief.checkToday(ans, inputs, d.symbols, NewsBrief.dayName(d.today) + ' ' + d.today));
+}
+// The AI's summary: high then medium, a line an event, its companies and how
+// many articles it was drawn from.
+function newsBriefTodayAiEmail(d, ai, since) {
+  const site = APP_URL || '';
+  const when = NewsBrief.dayName(d.today);
+  const hi = ai.items.filter((x) => x.importance === 'high'), med = ai.items.filter((x) => x.importance === 'medium');
+  const subject = `Today’s news: ${JobsDigest.plural(ai.items.length, 'story', 'stories')} (${when})`;
+  const intro = (ai.intro ? ai.intro + ' ' : '') + `Written by AI from ${JobsDigest.plural(ai.read || 0, 'article')} ${since}, each piece of news once.`;
+  const html = [], text = [];
+  const head = (t) => `<div${st(`margin:20px 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${MC.faint}`)}>${mailEsc(t)}</div>`;
+  const syms = (list) => list.map((s) => site ? `<a href="${mailEsc(site + '/stock/' + encodeURIComponent(s))}"${st(`color:${MC.ink};font-weight:700;text-decoration:none`)}>${mailEsc(s)}</a>` : `<b>${mailEsc(s)}</b>`).join(' ');
+  for (const [label, arr] of [['High importance', hi], ['Medium importance', med]]) {
+    if (!arr.length) continue;
+    html.push(head(label + ' (' + arr.length + ')'));
+    text.push('', label.toUpperCase() + ' (' + arr.length + ')');
+    for (const x of arr) {
+      const n = x.articles > 1 ? x.articles + ' articles' : '1 article';
+      html.push(`<div${st(`margin:0 0 11px;font-size:13.5px;line-height:1.5;color:${MC.body}`)}>${syms(x.symbols)} <span${st(`font-size:12px;color:${MC.faint}`)}>${n}</span><br>${mailEsc(x.line)}</div>`);
+      text.push(`${x.symbols.join(' ')}  (${n})`, '  ' + x.line);
+    }
+  }
+  if (site) { html.push(`<div${st('margin-top:18px')}>${mailButton(site + '/news', 'Open the news feed')}</div>`); text.push('', site + '/news'); }
+  const note = 'Written by AI from the day’s stored article summaries: every article about one event in one line, each kept only if every figure and company in it is in the articles it cites' + (ai.dropped.length ? ` (${ai.dropped.length} dropped today)` : '') + '. Importance is the AI’s grouping, not a view of the price. Descriptive, not advice. Sent every day at 5:40 PM Eastern.';
+  return { subject, shown: ai.items.length, html: emailShell({ heading: 'Today’s news, ' + when, intro, body: html.join(''), note }), text: textShell({ heading: 'Today’s news, ' + when, intro, lines: text, note }) };
+}
+function newsBriefTodayEmail(d, prevAt, ai) {
+  const since = prevAt ? 'since yesterday’s brief at ' + new Date(prevAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : 'in the last 24 hours';
+  if (ai && ai.items.length) return newsBriefTodayAiEmail(d, ai, since);
   const site = APP_URL || '';
   const when = NewsBrief.dayName(d.today);
   const hi = d.list.filter((s) => s.importance === 'high'), med = d.list.filter((s) => s.importance === 'medium');
   const low = d.list.length - hi.length - med.length;
-  const since = prevAt ? 'since yesterday’s brief at ' + new Date(prevAt).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) : 'in the last 24 hours';
   const subject = `Today’s news: ${hi.length} high, ${med.length} medium (${when})`;
-  const intro = `${JobsDigest.plural(hi.length + med.length, 'story', 'stories')} ${since} across the companies on the screener, one line each, most important first: ${hi.length} high and ${med.length} medium importance. ${JobsDigest.plural(low, 'low-importance story', 'low-importance stories')} not listed.`;
+  const intro = (ai && ai.error ? `The AI summary could not be written today (${ai.error}), so here is every story instead. ` : '')
+    + `${JobsDigest.plural(hi.length + med.length, 'story', 'stories')} ${since} across the companies on the screener, one line each, most important first: ${hi.length} high and ${med.length} medium importance. ${JobsDigest.plural(low, 'low-importance story', 'low-importance stories')} not listed.`;
   let size = 0, shownHi = 0, shownMed = 0;
   const html = [], text = [];
   const item = (s) => {
@@ -22417,10 +22457,12 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   // keeps the same start.
   const prevAt = mark.day === today && mark.prevAt ? mark.prevAt : (mark.at && now - mark.at < 4 * 864e5 ? mark.at : null);
   const d = await newsBriefData(now, prevAt);
-  const ai = await newsBriefNext(d, useAi);
-  const a = newsBriefTodayEmail(d, prevAt), b = newsBriefNextEmail(d, ai);
+  // The two calls at once: the day's re-read is the long one (about 35 seconds).
+  const [tai, ai] = await Promise.all([newsBriefTodayAi(d, useAi), newsBriefNext(d, useAi)]);
+  const a = newsBriefTodayEmail(d, prevAt, tai), b = newsBriefNextEmail(d, ai);
   const counts = { stories: d.list.length, high: d.list.filter((s) => s.importance === 'high').length, medium: d.list.filter((s) => s.importance === 'medium').length,
-    shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error, spent: Math.round(ai.spent * 1e4) / 1e4 };
+    shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error,
+    todayRead: tai.read || 0, todayItems: tai.items.length, todayDropped: tai.dropped, todayError: tai.error, spent: Math.round((ai.spent + tai.spent) * 1e4) / 1e4 };
   if (dry) return res.json({ dry: true, counts, today: { subject: a.subject, text: a.text, bytes: a.html.length }, next: { subject: b.subject, text: b.text, bytes: b.html.length } });
   if (!MAIL_READY) return res.status(503).json({ error: 'Email is not configured on this server.' });
   const to = await operatorEmail();

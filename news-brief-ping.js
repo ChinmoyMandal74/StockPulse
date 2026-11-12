@@ -4,7 +4,7 @@
 // the work lives behind POST /api/cron/news-brief on the deployed app.
 //
 //   node news-brief-ping.js        send today's two briefs (once a day; a second call sends nothing)
-//   node news-brief-ping.js --dry  print both, send nothing (still calls the model, about $0.04)
+//   node news-brief-ping.js --dry  print both, send nothing (still calls the model twice, about $0.33)
 //   node news-brief-ping.js --base URL  point it somewhere else (a local server)
 //
 // The secret comes from .env beside this file (fly/cron.js writes one there),
@@ -48,7 +48,7 @@ function fromEnvFile(key) {
   const c = j.counts || {};
   console.log(j.already ? 'already sent today (' + j.already + ')'
     : (j.sent ? 'sent: ' : 'not all sent (today ' + j.today + ', next ' + j.next + '): ')
-      + c.high + ' high and ' + c.medium + ' medium stories (' + c.shown + ' shown), ' + c.items + ' next-session lines'
+      + c.todayItems + ' lines from ' + c.todayRead + ' articles' + (c.todayError ? ' (AI: ' + c.todayError + '; ' + c.shown + ' stories listed instead)' : '') + ', ' + c.items + ' next-session lines'
       + (c.aiError ? ' (AI: ' + c.aiError + ')' : '') + ', $' + c.spent);
   if (!j.sent && !j.already) process.exitCode = 1;
 })();

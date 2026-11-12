@@ -157,8 +157,8 @@ const JOBS = [
     // the tone loader reads weekend articles, and Friday's brief looks to Monday.
     id: 'newsbrief', name: 'Evening news briefs', task: null, host: 'fly', script: 'news-brief-ping.js',
     days: ALL_DAYS, times: ['17:40'], minutes: 1, limit: 6,
-    spends: { kind: 'anthropic', text: 'One Claude Sonnet call a day, about $0.04' },
-    what: 'Emails the owner two briefs from the stored article readings (newsbrief.js): today\'s high and medium stories, a line each, most important first; and the next session: up to ten AI lines, each checked against what it cites, and who reports before the next open or reported after today\'s close.',
+    spends: { kind: 'anthropic', text: 'Two Claude Sonnet calls a day: the day re-read (about $0.29, 110,000 tokens) and the next session (about $0.04)' },
+    what: 'Emails the owner two briefs from the stored article readings (newsbrief.js): today\'s news re-read by AI from every article about a company, each piece of news once, high then medium; and the next session: up to ten AI lines, each checked against what it cites, and who reports before the next open or reported after today\'s close.',
     log: '/schedule',
   },
 ];
