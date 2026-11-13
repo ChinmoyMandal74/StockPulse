@@ -177,5 +177,30 @@ for (const base of [EST, EARLY, WEAK]) {
 }
 check('the three rows are not all the same verdict (the check can tell)', new Set([EST, EARLY, WEAK].map((r) => JSON.stringify(verdict(r)))).size > 1, true);
 
+// THE WORKINGS FOR EVERYONE (2026-11-13): `parts` is `explain` packed for the
+// hover card, without the rule strings; the pillars' points add up to the score.
+{
+  const L = H.layout();
+  check('layout: five pillars, weights 30 25 20 15 10', L.map((p) => p.weight), [30, 25, 20, 15, 10]);
+  check('layout: thirteen check labels, no rules', [L.reduce((a, p) => a + p.checks.length, 0), JSON.stringify(L).includes('rule')], [13, false]);
+  const P = H.parts(row({}));
+  check('parts: score, raw, weight with data, no caps', P.slice(0, 4), [100, 100, 100, []]);
+  check('parts: every pillar earns its full weight', P[4].map((p) => p[0]), [30, 25, 20, 15, 10]);
+  check('parts: a check is [v, figure], in layout order', [P[4][0][1].length, P[4][0][1][0][0], typeof P[4][0][1][0][1]], [4, 1, 'string']);
+  check('parts: no rule text anywhere', /net margin 10% or more|under 5% 1/.test(JSON.stringify(P)), false);
+  // tone half (between), the rest full: sentiment earns 7.5, the raw score 97.5 rounds to 98
+  const T = H.parts(row({ toneAvg: 0 }));
+  check('parts: a half check halves its share of the pillar', [T[4][4][0], T[0]], [7.5, 98]);
+  check('parts: the pillars add up to the raw score', Math.round(T[4].reduce((a, p) => a + (p[0] || 0), 0)), T[1]);
+  // no results release: that pillar has no data and the score is over the other 75
+  const N = H.parts(row({ erVsEstWord: null, erVsEst: null, erGuideChange: null, oneMonthPct: -12 }));
+  check('parts: a pillar with no data is null and its weight left out', [N[4][1][0], N[2]], [null, 75]);
+  check('parts: earned over the weight with data gives the raw score', Math.round(N[4].reduce((a, p) => a + (p[0] || 0), 0) / N[2] * 100), N[1]);
+  const C = H.parts(row({ action: 'Very Weak' }));
+  check('parts: a cap is named with its ceiling and holds the score', [C[0], C[1], C[3]], [50, 100, [['The Signal reads Very Weak', 50]]]);
+  check('parts: a fund has none', H.parts(row({ instrumentType: 'ETF' })), null);
+  check('parts: the score is the column\'s score', [H.parts(row({ toneAvg: 0, sharesChg: 2 }))[0]], [H.score(row({ toneAvg: 0, sharesChg: 2 }))]);
+}
+
 console.log(`\n${n - failed} passed, ${failed} failed`);
 process.exit(failed || n < 100 ? 1 : 0);

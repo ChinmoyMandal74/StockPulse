@@ -23588,6 +23588,31 @@ app.get('/api/stock-health', requireAdmin, route(async (req, res) => {
   res.json({ symbol: row.symbol, name: row.shortName || row.name || row.symbol, signal: row.action || null, health: e });
 }));
 
+// THE WORKINGS FOR EVERYONE (2026-11-13, the owner: "everyone sees the health
+// breakdown"). Every stock's, in one request, for the hover card: it asks once
+// on the first hover and keeps the answer, so every later card draws at once
+// (one stock at a time took 0.7 to 1.2s, the whole pipeline each time).
+// Worked out exactly as /api/stock-health is, so the card's number is the
+// column's; without the rule strings (`Health.parts`), which stay on the admin
+// panel. A guest gets the twenty stocks they can see. About 80 KB compressed.
+app.get('/api/health-parts', requireAuth, route(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const guest = await isGuest(req);
+  const snap = await readSnapshot();
+  const all = ((snap && snap.stocks) || []).filter((s) => s && s.symbol);
+  await sourcedNow().catch(() => null);
+  scoreActionInto(all);
+  const [, pf] = await Promise.all([serveStamps(all), readPortfolios()]);
+  finishServe(all, pf);
+  const inp = await healthInputs().catch(() => ({ tone: {}, rel: {} }));
+  const rows = {};
+  for (const r of all) {
+    if (guest && !guestSet.has(String(r.symbol).toUpperCase())) continue;
+    try { const p = Health.parts(healthView(r, inp)); if (p) rows[r.symbol] = p; } catch (e) { /* that stock draws without its workings */ }
+  }
+  res.json({ layout: Health.layout(), rows, updatedAt: (snap && snap.updatedAt) || null });
+}));
+
 // The activity log's own three routes, beside the visitor log they mirror.
 app.get('/api/activity', requireAdmin, route(async (req, res) => {
   res.json(await store.readActivityStats(500));

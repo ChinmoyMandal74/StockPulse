@@ -211,4 +211,27 @@ function explain(r) {
 
 const score = (r) => { const e = explain(r); return e ? e.score : null; };
 
-module.exports = { PILLARS, CHECKS, CAPS, MIN_WEIGHT, explain, score };
+// THE WORKINGS FOR EVERYONE (2026-11-13, the owner: "everyone sees the health
+// breakdown"), drawn by the hover card. The same working as `explain`, without
+// the rule strings (the thresholds stay on the admin panel) and packed small,
+// since one request carries every stock: the labels and weights once
+// (`layout`), then per stock [score, raw, weight with data, caps, pillars],
+// a pillar as [points earned of its weight (null: no data), checks], a check
+// as [v, figure]. Points earned are the weight times the checks' mean, so the
+// pillars sum to the raw score times the weight with data over 100.
+const r1 = (x) => Math.round(x * 10) / 10;
+function layout() {
+  return PILLARS.map((p) => ({ id: p.id, label: p.label, weight: p.weight, checks: p.checks.map((id) => CHECKS[id].label) }));
+}
+function parts(r) {
+  const e = explain(r);
+  if (!e) return null;
+  return [e.score, e.raw, e.weighed, e.caps.map((c) => [c.label, c.max]),
+    e.pillars.map((p) => {
+      const got = p.checks.filter((c) => c.v != null);
+      const earned = got.length ? r1(p.weight * got.reduce((a, c) => a + c.v, 0) / got.length) : null;
+      return [earned, p.checks.map((c) => [c.v, c.value])];
+    })];
+}
+
+module.exports = { PILLARS, CHECKS, CAPS, MIN_WEIGHT, explain, score, layout, parts };

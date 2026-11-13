@@ -405,6 +405,7 @@ tbody tr:hover { background: var(--panel); }
 #rowcard {
   position: fixed; display: none; z-index: var(--z-tip);
   width: 660px; max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 20px); overflow-y: auto;   /* a short window scrolls the card, never cuts it */
   padding: 6px; border-radius: 20px;
   background: color-mix(in srgb, var(--wash) 3%, transparent); border: 1px solid var(--hair);
   backdrop-filter: blur(26px) saturate(160%); -webkit-backdrop-filter: blur(26px) saturate(160%);
@@ -427,6 +428,82 @@ tbody tr:hover { background: var(--panel); }
 }
 .rc-chart svg { display: block; width: 100%; height: 100%; }
 .rc-chart .ln { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+
+/* THE HEALTH CARD (2026-11-13), the hover since then and the card the reels
+   show: the year with its 50- and 200-day averages, how Health was reached,
+   the Signal. Markup from RowCard.healthCardHTML; everything under .hcard.
+   Price is green or red (up or down over the year); the averages blue and
+   orange; the Health bars and dots the accent, never green or red. */
+.hcard { background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 15px; box-shadow: var(--inset);
+  padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; font-size: 12px; color: var(--text); }
+.hcard .up { color: var(--green); } .hcard .dn { color: var(--red); }
+.hcard .hc-head { display: flex; align-items: baseline; gap: 10px; }
+.hcard .hc-sym { font-family: var(--mono); font-size: 16px; font-weight: 700; letter-spacing: 0.02em; }
+.hcard .hc-name { color: var(--muted); font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hcard .hc-price { font-family: var(--mono); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.hcard .hc-day { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.hcard .hc-msg { color: var(--faint); padding: 6px 2px; }
+.hcard .hc-chart { min-height: 190px; border: 1px solid var(--hair); border-radius: 12px; padding: 9px 11px 7px;
+  background: color-mix(in srgb, var(--wash) 2.2%, transparent); }
+.hcard .hc-lg { display: flex; gap: 14px; align-items: center; color: var(--muted); margin-bottom: 5px; }
+.hcard .hc-lg b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+.hcard .hc-lg b.up { color: var(--green); } .hcard .hc-lg b.dn { color: var(--red); }
+.hcard .hc-lg i { display: inline-block; width: 13px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 5px; }
+.hcard .hc-lg i.m50 { background: var(--blue); } .hcard .hc-lg i.m200 { background: var(--orange); }
+.hcard .hc-sp { flex: 1; }
+.hcard .hc-plot { height: 140px; }
+.hcard .hc-plot svg { display: block; width: 100%; height: 100%; }
+.hcard .hc-plot path { fill: none; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.hcard .hc-plot .hc-area { stroke: none; }
+.hcard .hc-plot .hc-m50 { stroke: var(--blue); stroke-width: 1.5; }
+.hcard .hc-plot .hc-m200 { stroke: var(--orange); stroke-width: 1.5; }
+.hcard .hc-plot .hc-px { stroke-width: 1.7; }
+.hcard .hc-chart.up .hc-px { stroke: var(--green); } .hcard .hc-chart.dn .hc-px { stroke: var(--red); }
+.hcard .hc-chart.up .hc-g0 { stop-color: var(--green); stop-opacity: 0.2; } .hcard .hc-chart.dn .hc-g0 { stop-color: var(--red); stop-opacity: 0.2; }
+.hcard .hc-g1 { stop-color: var(--surface); stop-opacity: 0; }
+.hcard .hc-ax { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 3px; }
+.hcard .hc-health { min-height: 120px; display: flex; flex-direction: column; gap: 10px; }
+.hcard .hc-score { display: grid; grid-template-columns: 104px 1fr; gap: 14px; align-items: center;
+  border: 1px solid var(--hair); border-radius: 12px; padding: 11px 14px; background: color-mix(in srgb, var(--wash) 2.2%, transparent); }
+.hcard .hc-big { display: flex; flex-direction: column; align-items: center; }
+.hcard .hc-k { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.hcard .hc-n { font-size: 46px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; }
+.hcard .hc-of { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.hcard .hc-stack { display: flex; gap: 4px; height: 12px; }
+.hcard .hc-seg { position: relative; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.hcard .hc-seg i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; }
+.hcard .hc-names { display: flex; gap: 4px; margin-top: 5px; font-size: 10.5px; color: var(--muted); }
+.hcard .hc-names span { white-space: nowrap; min-width: 0; }
+/* The last part's slice is a tenth of the bar, narrower than "Sentiment": its
+   name sits at the right edge and runs left, under Price, which has room. */
+.hcard .hc-names span:last-child { display: flex; justify-content: flex-end; }
+.hcard .hc-sum { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.hcard .hc-sum b { color: var(--text); }
+.hcard .hc-cap { margin-top: 6px; font-size: 11.5px; color: var(--amber); }
+.hcard .hc-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hcard .hc-p { border: 1px solid var(--hair); border-radius: 12px; padding: 9px 11px; display: flex; flex-direction: column; gap: 5px;
+  background: color-mix(in srgb, var(--wash) 2.2%, transparent); min-width: 0; }
+.hcard .hc-p.none { opacity: 0.6; }
+.hcard .hc-pt { display: flex; align-items: center; gap: 6px; }
+.hcard .hc-pt > span:first-child { font-weight: 650; font-size: 13px; flex: 1; }
+.hcard .hc-pill { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.hcard .hc-bar { height: 4px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hcard .hc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.hcard .hc-ck { display: grid; grid-template-columns: 11px minmax(0, 1fr); column-gap: 6px; }
+.hcard .hc-cl { font-weight: 550; font-size: 12px; }
+.hcard .hc-cv { grid-column: 2; font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.hcard .hc-cv.na { color: var(--faint); }
+.hcard .hc-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 3px; border: 1.5px solid var(--accent); display: inline-block; flex: none; }
+.hcard .hc-dot.full { background: var(--accent); }
+.hcard .hc-dot.half { background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+.hcard .hc-dot.na { border-color: var(--faint); border-style: dashed; }
+.hcard .hc-key { justify-content: center; gap: 7px; color: var(--faint); font-size: 11.5px; }
+.hcard .hc-key .hc-dot { margin: 0 6px 0 0; vertical-align: -1px; }
+.hcard .hc-sig { display: flex; gap: 9px; align-items: baseline; border-top: 1px solid var(--hair); padding-top: 10px; font-size: 12.5px; flex-wrap: wrap; }
+.hcard .hc-w { font-weight: 700; }
+.hcard .hc-why { color: var(--muted); }
+.hcard .hc-acts { display: flex; justify-content: flex-end; }
 .rc-chart .dot { stroke: none; }
 /* Sparklines in the table. Neutral on purpose: the five percentage columns
    immediately to the right are already green and red, and a sixth coloured

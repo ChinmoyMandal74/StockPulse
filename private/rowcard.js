@@ -1630,8 +1630,147 @@
       '</div>';
   }
 
+  // ---- the Health card (2026-11-13, the owner) -------------------------------
+  // THE HOVER SINCE 2026-11-13: one stock's year with its 50- and 200-day
+  // averages, how its Health was reached (each part's points of its weight,
+  // each check's dot and figure) and the Signal with its rule. The owner:
+  // "everyone sees the health breakdown .. most reel videos going forward
+  // need to show this as well", so it is ONE builder for every surface that
+  // draws it. The hover before it, every field of the row, is `buildHTML`
+  // above, kept by the owner's wish ("keep the existing hover code ..
+  // if needed we can refer it"); `attach({ legacy: true })` still draws it.
+  //
+  // The workings come from /api/health-parts, every stock's in one request,
+  // asked on the first card and kept for HEALTH_KEEP_MS. The server packs
+  // them (health.js `parts`): [score, raw, weight with data, caps, pillars],
+  // a pillar [points earned, checks], a check [v, figure].
+  const HEALTH_KEEP_MS = 10 * 60 * 1000;
+  let healthParts = null;   // { at, pr }
+  function loadHealthParts() {
+    if (healthParts && Date.now() - healthParts.at < HEALTH_KEEP_MS) return healthParts.pr;
+    const pr = fetch('/api/health-parts', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((j) => { if (!j) healthParts = null; return j; });   // a failure is asked again next time
+    healthParts = { at: Date.now(), pr };
+    return pr;
+  }
+
+  // The 200-day average needs 199 sessions before the first one drawn, so the
+  // card asks for that much more than the year it shows. The year is
+  // HISTORY_DAYS, the window the 1Y figure is measured over, so the chart's
+  // change agrees with it (see the note on HISTORY_DAYS).
+  const HC_DAYS = HISTORY_DAYS + 199;
+  let hcSeq = 0;
+
+  // Price, the 50-day and the 200-day over the last HISTORY_DAYS closes. A
+  // stretched SVG with non-scaling strokes; no text inside it (the labels are
+  // HTML). An average with too little history behind it starts where it can.
+  function maChartSVG(closes) {
+    const n = Math.min(HISTORY_DAYS, closes.length), off = closes.length - n;
+    const c = closes.slice(off), m50 = sma(closes, 50).slice(off), m200 = sma(closes, 200).slice(off);
+    const all = c.concat(m50, m200).filter((v) => v != null);
+    const lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), pad = (hi - lo) * 0.06 || 1;
+    const W = 600, H = 150, X = (i) => (n < 2 ? 0 : (i / (n - 1)) * W), Y = (v) => H - ((v - lo + pad) / (hi - lo + 2 * pad)) * H;
+    const path = (a) => a.map((v, i) => (v == null ? '' : `${a[i - 1] == null ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`)).join('');
+    const up = c[n - 1] >= c[0], id = 'hcg' + (++hcSeq);
+    const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+      `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="hc-g0"/><stop offset="1" class="hc-g1"/></linearGradient></defs>` +
+      `<path class="hc-area" fill="url(#${id})" d="${path(c)}L${W},${H}L0,${H}Z"/>` +
+      `<path class="hc-m200" d="${path(m200)}"/><path class="hc-m50" d="${path(m50)}"/><path class="hc-px" d="${path(c)}"/></svg>`;
+    return { svg, up, move: (c[n - 1] / c[0] - 1) * 100, m50: m50[n - 1], m200: m200[n - 1] };
+  }
+
+  // The card's frame, drawn at once; the chart and the workings fill in when
+  // their data lands (paintHealthCard). opts: { actions } as buildHTML takes.
+  function healthCardHTML(s, opts) {
+    const o = opts || {};
+    const price = ok(s.price) ? curSym(s.currency) + s.price.toFixed(2) : '';
+    const day = ok(s.todayPct) ? `<span class="hc-day ${s.todayPct >= 0 ? 'up' : 'dn'}">${s.todayPct >= 0 ? '+' : ''}${s.todayPct.toFixed(1)}%</span>` : '';
+    // The Signal travels with the rule that fired, as everywhere.
+    const word = s.action || '';
+    const why = String(s.actionFlag || '').replace(/^[^:]*:\s*/, '');
+    const sig = word ? '<div class="hc-sig"><span class="hc-k">Signal</span>' +
+      `<span class="hc-w ${/Strong/.test(word) ? 'up' : /Weak/.test(word) ? 'dn' : ''}">${esc(word)}</span>` +
+      (why ? `<span class="hc-why">${esc(why)}</span>` : '') + '</div>' : '';
+    const actions = (o.actions || []).map((a) =>
+      `<button class="rc-act${a.danger ? ' danger' : ''}" data-action="${esc(a.id)}">${esc(a.label)}</button>`).join('');
+    return `<div class="hcard" data-sym="${esc(s.symbol)}">` +
+      `<div class="hc-head"><span class="hc-sym">${esc(s.symbol)}</span><span class="hc-name">${esc(s.name || s.shortName || '')}</span>` +
+      `<span class="hc-price">${esc(price)}</span>${day}</div>` +
+      '<div class="hc-chart"><div class="hc-msg">…</div></div>' +
+      `<div class="hc-health">${isFund(s) ? '<div class="hc-msg">A fund has no Health number: it has no company figures.</div>' : '<div class="hc-msg">…</div>'}</div>` +
+      sig + (actions ? `<div class="hc-acts">${actions}</div>` : '') + '</div>';
+  }
+
+  const hcNum = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  function healthWorkingsHTML(lay, p) {
+    const [score, raw, weighed, caps, pillars] = p;
+    const earned = pillars.map((x) => x[0]);
+    const segs = lay.map((L, i) => `<span class="hc-seg" style="flex:${L.weight}"><i style="width:${earned[i] == null ? 0 : (earned[i] / L.weight) * 100}%"></i></span>`).join('');
+    const names = lay.map((L) => `<span style="flex:${L.weight}">${esc(L.label)}</span>`).join('');
+    const got = earned.filter((x) => x != null);
+    const total = got.reduce((a, x) => a + x, 0);
+    let sum = got.map(hcNum).join(' + ') + ' = ' + hcNum(Math.round(total * 10) / 10);
+    if (weighed < 100) sum += ` of ${weighed}`;
+    sum += ` → <b>${raw == null ? '—' : raw}</b>`;
+    const capLine = caps.length && score != null && raw != null && score < raw
+      ? `<div class="hc-cap">Held to ${score}: ${esc(caps.map((c) => c[0]).join('; '))}</div>` : '';
+    const thin = score == null ? `<div class="hc-cap">Too little data for a number: ${weighed} of 100 has data, at least 60 is needed.</div>` : '';
+    const head = '<div class="hc-score">' +
+      `<div class="hc-big"><span class="hc-k">Health</span><span class="hc-n">${score == null ? '—' : score}</span><span class="hc-of">of 100</span></div>` +
+      `<div class="hc-how"><div class="hc-stack">${segs}</div><div class="hc-names">${names}</div><div class="hc-sum">${sum}</div>${capLine}${thin}</div></div>`;
+    const dot = (v) => `<span class="hc-dot ${v == null ? 'na' : v >= 1 ? 'full' : v > 0 ? 'half' : 'miss'}"></span>`;
+    const tiles = lay.map((L, i) => {
+      const [pts, checks] = pillars[i];
+      return `<div class="hc-p${pts == null ? ' none' : ''}"><div class="hc-pt"><span>${esc(L.label)}</span>` +
+        `<span class="hc-pill">${pts == null ? '—' : hcNum(pts)} / ${L.weight}</span></div>` +
+        `<div class="hc-bar"><i style="width:${pts == null ? 0 : (pts / L.weight) * 100}%"></i></div>` +
+        L.checks.map((label, j) => {
+          const [v, fig] = checks[j] || [null, null];
+          return `<div class="hc-ck">${dot(v)}<span class="hc-cl">${esc(label)}</span>` +
+            `<span class="hc-cv${v == null ? ' na' : ''}">${v == null ? 'no reading, left out' : esc(String(fig || '').replace(/ \(latest quarters?(, filings)?\)$/, ''))}</span></div>`;
+        }).join('') + '</div>';
+    }).join('');
+    const key = '<div class="hc-p hc-key"><span>' + dot(1) + 'pass</span><span>' + dot(0.5) + 'half</span><span>' + dot(0) + 'miss</span>' +
+      '<span>' + dot(null) + 'no reading, left out</span></div>';
+    return head + `<div class="hc-grid">${tiles}${key}</div>`;
+  }
+
+  // Fills a card drawn by healthCardHTML. Bails if the card now shows another
+  // stock (the pointer moved on while the data was on its way).
+  function paintHealthCard(el, s) {
+    const card = el.querySelector('.hcard');
+    if (!card) return;
+    const sym = s.symbol, live = () => card.isConnected && card.dataset.sym === sym;
+    const chart = loadHistory(sym, HC_DAYS).then((data) => {
+      if (!live()) return;
+      const box = card.querySelector('.hc-chart');
+      const closes = (data && data.closes) || [];
+      if (closes.length < 2) { box.innerHTML = '<div class="hc-msg">No price history stored yet</div>'; return; }
+      const c = maChartSVG(closes);
+      const from = data.dates && data.dates[Math.max(0, closes.length - HISTORY_DAYS)];
+      const lg = (cls, label, v) => (v == null ? '' : `<span><i class="${cls}"></i>${label} <b>${fmtPrice(v)}</b></span>`);
+      box.classList.add(c.up ? 'up' : 'dn');
+      box.innerHTML = '<div class="hc-lg">' +
+        `<span>1 year <b class="${c.up ? 'up' : 'dn'}">${c.move >= 0 ? '+' : ''}${c.move.toFixed(1)}%</b></span><span class="hc-sp"></span>` +
+        lg('m50', '50-day', c.m50) + lg('m200', '200-day', c.m200) + '</div>' +
+        `<div class="hc-plot">${c.svg}</div>` +
+        `<div class="hc-ax"><span>${esc(from ? shortDay(from) : '')}</span><span>${esc(data.to ? shortDay(data.to) : '')}</span></div>`;
+    });
+    if (isFund(s)) return chart;
+    const health = loadHealthParts().then((j) => {
+      if (!live()) return;
+      const box = card.querySelector('.hc-health');
+      const p = j && j.rows && j.rows[sym];
+      box.innerHTML = p && j.layout ? healthWorkingsHTML(j.layout, p)
+        : '<div class="hc-msg">No Health number for this stock yet.</div>';
+    });
+    return Promise.all([chart, health]);
+  }
+
   // --- attach hover behaviour to a container ---------------------------------
-  // opts: { root, selector, getStock, colors, labels, onShow, actions, onAction }
+  // opts: { root, selector, getStock, colors, labels, onShow, actions, onAction, legacy }
   // CAN THE PRIMARY POINTER ACTUALLY HOVER? Asked once, here, so the hover
   // card and the score tooltip cannot disagree about it.
   //
@@ -1670,13 +1809,21 @@
       if (!s) return;
       if (opts.onShow) opts.onShow();
       current = s;
-      el.innerHTML = buildHTML(s, {
-        colors: opts.colors,
-        labels: opts.labels,
-        actions: opts.actions ? opts.actions(s) : null,
-      });
-      paintChart(el, s.symbol);
+      const actions = opts.actions ? opts.actions(s) : null;
+      if (opts.legacy) {
+        el.innerHTML = buildHTML(s, { colors: opts.colors, labels: opts.labels, actions });
+        paintChart(el, s.symbol);
+      } else {
+        // The Health card: drawn now, filled as its data lands, and placed
+        // again once full, since it grows to its height only then.
+        el.innerHTML = healthCardHTML(s, { actions });
+        paintHealthCard(el, s).then(() => { if (current === s && el.style.display === 'block') place(target); });
+      }
       el.style.display = 'block';
+      place(target);
+    }
+
+    function place(target) {
       const r = target.getBoundingClientRect();
       const pad = 10;
       const w = el.offsetWidth;
@@ -1885,7 +2032,7 @@
 
   global.RowCard = {
     srcNote, srcLabel,
-    buildHTML, attach, fmtMktCap, FIELD_SPEC,
+    buildHTML, attach, fmtMktCap, FIELD_SPEC, healthCardHTML, paintHealthCard, loadHealthParts, maChartSVG,
     gfUrl, yfUrl, reutersUrl, mwUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
