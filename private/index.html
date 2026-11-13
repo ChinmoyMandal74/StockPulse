@@ -6491,6 +6491,8 @@
         updateForwardViewUI();
         render();
         renderRefreshNote(asOfDate ? null : (data.refreshing || null));
+        // THE HEALTH CARD'S WORKINGS, asked once the table is drawn (2026-11-13): every stock's in one request of a second or so, so the first hover finds them already here. Only where the card can open.
+        if (!asOfDate && RowCard.canHover()) setTimeout(() => RowCard.loadHealthParts(), 1200);
         if (asOfDate) {
           setStatus(`Forward returns — as of ${asOfDate}`);
         } else if (!data.updatedAt) {
