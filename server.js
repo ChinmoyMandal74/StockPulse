@@ -23595,9 +23595,13 @@ app.get('/api/stock-health', requireAdmin, route(async (req, res) => {
 // Worked out exactly as /api/stock-health is, so the card's number is the
 // column's; without the rule strings (`Health.parts`), which stay on the admin
 // panel. A guest gets the twenty stocks they can see. About 80 KB compressed.
+// `?symbol=` answers that one stock only (the stock page's Health section,
+// the same day): the same working, a few hundred bytes back.
 app.get('/api/health-parts', requireAuth, route(async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const guest = await isGuest(req);
+  const only = req.query.symbol == null ? null : String(req.query.symbol).trim().toUpperCase();
+  if (only != null && !/^[A-Z0-9.-]{1,15}$/.test(only)) return res.status(400).json({ error: 'Bad symbol.' });
   const snap = await readSnapshot();
   const all = ((snap && snap.stocks) || []).filter((s) => s && s.symbol);
   await sourcedNow().catch(() => null);
@@ -23608,6 +23612,7 @@ app.get('/api/health-parts', requireAuth, route(async (req, res) => {
   const rows = {};
   for (const r of all) {
     if (guest && !guestSet.has(String(r.symbol).toUpperCase())) continue;
+    if (only && String(r.symbol).toUpperCase() !== only) continue;
     try { const p = Health.parts(healthView(r, inp)); if (p) rows[r.symbol] = p; } catch (e) { /* that stock draws without its workings */ }
   }
   res.json({ layout: Health.layout(), rows, updatedAt: (snap && snap.updatedAt) || null });

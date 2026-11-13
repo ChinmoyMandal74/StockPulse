@@ -73,6 +73,7 @@
     .gl-sec > .core { padding: 18px 20px 20px; }
     .gl-sec .sec-h { margin-bottom: 14px; }
     .gl-sec .gl-note { font-size: 12px; color: var(--faint); }
+    #health .hl-note { font-size: 12px; color: var(--faint); }
     .gl-sec .gl-tog { margin-left: auto; }
     .gl-sec.gl-closed .gl-grid { display: none; }
     .gl-sec.gl-closed .sec-h { margin-bottom: 0; }
@@ -3945,6 +3946,13 @@
 
         <nav class="jumps" id="jumps" aria-label="Sections on this page"></nav>
 
+        ${RowCard.isFund(stock) ? '' : `
+        <section class="bezel card" id="health" data-jump="Health" data-icon="i-pulse"><div class="core">
+          <div class="sec-h"><h2>Health</h2>
+            <span class="hl-note">How ${esc(stock.symbol)}'s Health was reached: each topic's points out of its weight, and the reading behind each. A description, not a rating.</span></div>
+          <div id="healthBody"><p class="msg">Loading…</p></div>
+        </div></section>`}
+
         ${payload.glance && payload.glance.cards && payload.glance.cards.length ? `
         <section class="bezel card gl-sec" id="glance"><div class="core">
           <div class="sec-h"><h2>At a glance</h2>
@@ -4291,6 +4299,9 @@
       earnSplit = (stock && stock.lastSplitDate) || null;
       paintEarnings();
       paintMonths();
+      // HEALTH, AT THE TOP (2026-11-13, the owner): the same workings as the
+      // screener's hover card, drawn by RowCard so the two cannot disagree.
+      { const hb = document.getElementById('healthBody'); if (hb) RowCard.paintHealthWorkings(hb, stock.symbol); }
       paintJumps();
       watchJumps();
       // At a glance: Hide / Show, remembered in this browser. A card whose
@@ -4409,17 +4420,21 @@
       // ---- score breakdown on hover -----------------------------------------
       // Markup from rowcard.js, so this page and the screener explain a score
       // identically.
-      const tipEl = document.getElementById('tip');
+      // LOOKED UP WHEN USED, not once here (2026-11-13): #tip sits at the end of
+      // the file, and on a fast answer this runs before the parser reaches it,
+      // so every scroll and resize then threw. Found by the Health card's harness.
+      const tipNow = () => document.getElementById('tip');
       const pulled = payload.updatedAt
         ? new Date(payload.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
         : null;
 
-      function hideTip() { tipEl.style.display = 'none'; }
+      function hideTip() { const t = tipNow(); if (t) t.style.display = 'none'; }
 
       document.querySelectorAll('[data-tip]').forEach((el) => {
         el.addEventListener('mouseenter', () => {
           const html = RowCard.scoreTip(stock, el.dataset.tip, { pulled });
-          if (!html) return;
+          const tipEl = tipNow();
+          if (!html || !tipEl) return;
           tipEl.innerHTML = `<div class="tipcore">${html}</div>`;
           tipEl.style.display = 'block';
           RowCard.placeTip(tipEl, el);

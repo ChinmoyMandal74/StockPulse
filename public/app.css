@@ -513,6 +513,19 @@ tbody tr:hover { background: var(--panel); }
 .hcard .hc-w { font-weight: 700; }
 .hcard .hc-why { color: var(--muted); }
 .hcard .hc-acts { display: flex; justify-content: flex-end; }
+/* The workings alone, inside a page's own section (the stock page, 2026-11-13):
+   no second card frame, and the part tiles spread across the wider page,
+   down to two then one a row on a phone. */
+.hcard.hc-flat { background: none; box-shadow: none; padding: 0; }
+.hcard.hc-flat .hc-score { grid-template-columns: 120px minmax(0, 1fr); }
+.hcard.hc-flat .hc-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+@media (max-width: 560px) {
+  .hcard.hc-flat .hc-score { grid-template-columns: 1fr; justify-items: center; }
+  .hcard.hc-flat .hc-how { width: 100%; }
+  /* the slices are too narrow for their names here ("Price" ran into
+     "Sentiment"); the tiles below name each part in the same colour */
+  .hcard.hc-flat .hc-names { display: none; }
+}
 .rc-chart .dot { stroke: none; }
 /* Sparklines in the table. Neutral on purpose: the five percentage columns
    immediately to the right are already green and red, and a sixth coloured

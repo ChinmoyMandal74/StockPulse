@@ -1756,6 +1756,25 @@
     return head + `<div class="hc-grid">${tiles}${key}</div>`;
   }
 
+  // THE WORKINGS ALONE, for a page about one stock (the stock page's Health
+  // section, 2026-11-13, the owner: "shown on top of the individual stock page
+  // as well"): the ring, the bar, the sum and the part tiles, without the
+  // card's own head, chart and Signal, which that page has already. Asks for
+  // that stock only, unless the whole set is already held. Resolves to the
+  // packed row, or null.
+  function paintHealthWorkings(box, symbol) {
+    const held = healthParts && Date.now() - healthParts.at < HEALTH_KEEP_MS ? healthParts.pr : null;
+    const pr = held || fetch('/api/health-parts?symbol=' + encodeURIComponent(symbol), { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    return pr.then((j) => {
+      if (!box.isConnected) return null;
+      const p = j && j.rows && j.rows[symbol];
+      box.innerHTML = p && j.layout ? `<div class="hcard hc-flat">${healthWorkingsHTML(j.layout, p)}</div>`
+        : '<div class="hcard hc-flat"><div class="hc-msg">No Health number for this stock yet.</div></div>';
+      return p || null;
+    });
+  }
+
   // Fills a card drawn by healthCardHTML. Bails if the card now shows another
   // stock (the pointer moved on while the data was on its way).
   function paintHealthCard(el, s) {
@@ -2051,7 +2070,7 @@
 
   global.RowCard = {
     srcNote, srcLabel,
-    buildHTML, attach, fmtMktCap, FIELD_SPEC, healthCardHTML, paintHealthCard, loadHealthParts, maChartSVG,
+    buildHTML, attach, fmtMktCap, FIELD_SPEC, healthCardHTML, paintHealthCard, loadHealthParts, maChartSVG, healthWorkingsHTML, paintHealthWorkings,
     gfUrl, yfUrl, reutersUrl, mwUrl, googleExchange, canHover,
     // used by the stock page
     buildSections, chartSVG, pctTicks, sparkSVG, stockCard, loadHistory, fmtPrice, shortDay, HISTORY_DAYS, sma, bands, rsiSeries, aoSeries, volSeries, stepSeries, fmtMktCap,
