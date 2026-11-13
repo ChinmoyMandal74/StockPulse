@@ -89,6 +89,7 @@
   - The release history stores outlook changes in lower case (`lowered`); Health matches `Lowered`, so the replay has to map them as `ReleaseView` does.
   - Before 2014 few companies have the 20 quarter-ends the P/E history needs, so valuation rests on the industry comparison alone.
 - **Against the S&P 500 (entry 28, the same day):** equal-weight baskets by Health band against SPY. 80+ was ahead before 2020 (+0.35 points over 42 sessions) and level from 2020 (−0.09), and behind the basket of every stock in both periods. Scripts `hl/analyse-spy.js`, plan `hl/PREREG-SPY.md`.
+- **The Very Weak cap (entry 29, 2026-11-13, the owner asked after NVIDIA showed 50 on parts of 88):** stock-months whose parts came above 50, split by whether the Signal read Very Weak, within bands of the uncapped score. Capped stocks did no worse in the typical case (42 sessions: +0.39 points against peers before 2020, +0.34 from 2020, both intervals across zero); both tails were about 3 points wider. The cap marks a sharp fall, not weaker months ahead; keeping it is a presentation choice. Script and plan in the session scratchpad (`hc/capstudy/cap.js`, `PLAN.md`), reading `HealthReplay.load()` and rescoring with today's rules.
 - **Stored history in production:** none. The inputs are all kept by date, so any day's Health can be rebuilt (the owner). Backlog 59 is Done.
 
 ### The kept history, for later tests (2026-11-07)

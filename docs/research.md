@@ -658,3 +658,50 @@ A high Health has not meant beating the index over one to two months; it has mea
 | 80+ minus every stock | −0.23 [−0.39, −0.06] | −0.92 [−2.48, −0.02] |
 
 Points per period against SPY's price return over the same sessions; each month's basket weights its stocks equally. Intervals are 95%, from resampling blocks of three months.
+
+## 29. Health's Very Weak cap — 2026-11-13
+
+*Family: Health · Verdict: No edge · Horizon: 1 to 2 months · Data: Company filings as filed, results releases, daily prices · Sample: 196 monthly readings, 2010–2026; 14,703 capped stock-months against 82,176 others over 42 sessions*
+
+### The idea
+Health is held at 50 whenever the Signal reads Very Weak, however well the five parts score (NVIDIA on 13 November: parts adding to 88, shown as 50). The question is whether that cap describes anything: did stocks it held down do worse over the next one or two months than stocks with the same parts whose Signal was not Very Weak?
+
+### What was done
+The rebuilt Health of entries 27 and 28, rescored with today's rules, with each stock-month's score worked out both before and after the caps. Only stock-months whose parts came to more than 50 were kept, the ones the cap can lower. Within each month, stocks were split into those whose Signal read Very Weak (capped) and the rest (peers), in three bands of the uncapped score (51–64, 65–79, 80 and above), and each stock's return over the next 21 and 42 sessions was set against the average stock's. The test was written down before any result was read: the cap would count as describing something only if capped stocks did worse than their peers in the typical case and in the worst tenth, in both periods, with the gap between the two baskets clear of zero in at least one.
+
+### Outcome
+No edge. Capped stocks did not do worse in the typical case: over 42 sessions the capped basket was ahead of its peers by 0.39 points before 2020 and 0.34 from 2020, both intervals straddling zero, and it was ahead in about half the months. What differed was the spread. Capped stocks had a worse worst tenth (−12.9 against −10.8 before 2020, −19.5 against −16.5 from 2020), and an equally better best tenth (+13.9 against +10.4, and +17.3 against +14.1). They moved more in both directions; they did not move down more.
+
+### What follows
+The cap does not mark weaker months ahead; it marks a stock in a sharp fall, which the Price part already scores. Whether to keep it is a question of presentation, not of evidence: it stops Health and the Signal from reading as a contradiction, at the cost of folding very different businesses into the same 50. Nothing here changes Health or the Signal.
+
+### Caveats
+- **The same lookalike as entry 27:** the estimate, short interest and tone checks are missing throughout, and the outlook check before 2017.
+- **Survivorship:** today's list of stocks is used for every month, which lifts the stocks that fell and came back.
+- **Only the Very Weak cap was tested,** and only whether it describes anything, not whether a different ceiling (60 or 65) would; searching for the best ceiling would fit the past.
+- **Overlap:** monthly readings of a 42-session return overlap; the intervals resample blocks of three months.
+
+### Numbers
+
+| 42 sessions, against the average stock | Capped: average · typical · worst tenth | Peers: average · typical · worst tenth | Capped basket less peers basket [95%] · months ahead |
+|---|---|---|---|
+| 2010–2019, parts 51–64 | +0.83 · −0.25 · −13.80 | +0.25 · −0.20 · −11.52 | +0.61 [−0.63, +2.14] · 58% |
+| 2010–2019, parts 65–79 | +0.34 · −0.01 · −12.63 | −0.12 · −0.34 · −11.19 | +0.39 [−0.35, +1.13] · 55% |
+| 2010–2019, parts 80+ | +0.78 · +0.39 · −10.75 | −0.28 · −0.35 · −10.09 | +0.46 [−0.54, +1.53] · 58% |
+| 2010–2019, all above 50 | +0.58 · −0.02 · −12.90 | −0.11 · −0.33 · −10.77 | +0.39 [−0.38, +1.10] · 56% |
+| 2020–2026, parts 51–64 | −0.72 · −2.20 · −20.65 | −1.21 · −1.91 · −18.14 | +0.12 [−0.95, +1.82] · 46% |
+| 2020–2026, parts 65–79 | −0.70 · −1.56 · −18.74 | −1.40 · −1.78 · −16.74 | +0.61 [−0.47, +2.12] · 47% |
+| 2020–2026, parts 80+ | −0.47 · −0.34 · −16.80 | −0.87 · −1.19 · −14.95 | +0.14 [−1.66, +2.15] · 48% |
+| 2020–2026, all above 50 | −0.68 · −1.69 · −19.47 | −1.16 · −1.60 · −16.45 | +0.34 [−0.72, +1.88] · 49% |
+
+| 21 sessions, all above 50 | Capped basket less peers basket [95%] · months ahead |
+|---|---|
+| 2010–2019 | +0.16 [−0.32, +0.51] · 52% |
+| 2020–2026 | +0.13 [−0.52, +0.89] · 51% |
+
+| Best tenth, 42 sessions | Capped | Peers |
+|---|---|---|
+| 2010–2019 | +13.91 | +10.42 |
+| 2020–2026 | +17.33 | +14.12 |
+
+Points per period against the equal-weight average stock over the same sessions. Intervals are 95%, from resampling blocks of three months.
