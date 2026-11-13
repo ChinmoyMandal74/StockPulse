@@ -25,7 +25,6 @@
 'use strict';
 
 const Filters = require('./private/filters.js');
-const Action = require('./private/action.js');
 
 const PILLARS = [
   { id: 'business', label: 'Business', weight: 30, checks: ['growth', 'profit', 'balance', 'dilution'] },
@@ -177,7 +176,6 @@ const CHECKS = {
 // The deal-breakers: whatever the rest reads, the score goes no higher.
 const CAPS = [
   { id: 'guide', max: 60, label: 'Guidance lowered or withdrawn', test: (r) => /^(Lowered|Withdrawn)$/.test(r.erGuideChange || '') },
-  { id: 'signal', max: 50, label: 'The Signal reads Very Weak', test: (r) => Action.canon(r.action) === 'Very Weak' },
   { id: 'dilution', max: 70, label: 'Shares up more than 10% in a year', test: (r) => num(r.sharesChg) != null && num(r.sharesChg) > 10 },
 ];
 

@@ -5,7 +5,7 @@
 **Agreed the same day, after two proposals:**
 - Weights set by the owner's judgement on five pillars, not fitted to past returns. A fit would learn noise: ten of eleven backtests found nothing that predicts the next one to two months.
 - Checks share their pillar's weight, so adding a check does not make its topic heavier.
-- Three caps act as deal-breakers.
+- Three caps acted as deal-breakers; two since 2026-11-13, when the owner dropped the Very Weak cap (below).
 - The field is called **Health**. Everyone sees the number; **only admin sees the workings**, "like Signal".
 
 ### The rules (`health.js`, repository root)
@@ -22,7 +22,7 @@
 - **Floor:** under 60% of the weight with data, the score is null (a dash). Funds and error rows are null.
 - **Caps:**
   - guidance Lowered or Withdrawn: at most 60
-  - the Signal reads Very Weak (through `canon`): at most 50
+  - ~~the Signal reads Very Weak: at most 50~~ dropped 2026-11-13 by the owner after research entry 29 found capped stocks did no worse than their peers; Health no longer reads the Signal at all (`health-test.js` holds it: a Very Weak row scores as its parts do)
   - shares up more than 10% in a year: at most 70
 
   The lowest firing cap holds.
@@ -33,7 +33,7 @@
 
 **On the server, as rows are served** (`stampHealth` in `server.js`), never in the browser and never stored:
 - **Read paths:** `/api/stocks`, `/api/stock`, the phone's `mobileRows` and the CSV export.
-- **Order:** it runs last, after `scoreActionInto`, `serveStamps` and `finishServe`, because it reads the Signal, the folded filings figures (`sharesChg`, `peVsMed`, `intCover`) and the peer ratios.
+- **Order:** it runs last, after `scoreActionInto`, `serveStamps` and `finishServe`, because it reads the folded filings figures (`sharesChg`, `peVsMed`, `intCover`) and the peer ratios.
 - **Tone and release inputs:** these are members-only surfaces. `healthView` lays them over each row through `Object.create(row)`, so the row itself gets only `healthScore`. A guest is served the same number as a member without ever receiving the inputs (checked by the harness).
 
 **Why not in the browser like the Signal:**
@@ -73,7 +73,7 @@
 ### Today's spread (2026-11-07, 1,281 rows)
 
 - **Coverage:** 1,229 rows carry a number. The rest are 24 funds and 28 companies without enough data, mostly foreign filers.
-- **Distribution:** median 67, quartiles 50 and 80, p10 44, p90 88. A peak at 50 comes from the Very Weak cap: 383 rows read Very Weak.
+- **Distribution:** median 67, quartiles 50 and 80, p10 44, p90 88. A peak at 50 came from the Very Weak cap: 383 rows read Very Weak (figures from before the cap was dropped on 2026-11-13).
 - **Examples:**
   - MSFT 98
   - NVDA 90: one month −19% and a mixed trend
@@ -89,7 +89,7 @@
   - The release history stores outlook changes in lower case (`lowered`); Health matches `Lowered`, so the replay has to map them as `ReleaseView` does.
   - Before 2014 few companies have the 20 quarter-ends the P/E history needs, so valuation rests on the industry comparison alone.
 - **Against the S&P 500 (entry 28, the same day):** equal-weight baskets by Health band against SPY. 80+ was ahead before 2020 (+0.35 points over 42 sessions) and level from 2020 (−0.09), and behind the basket of every stock in both periods. Scripts `hl/analyse-spy.js`, plan `hl/PREREG-SPY.md`.
-- **The Very Weak cap (entry 29, 2026-11-13, the owner asked after NVIDIA showed 50 on parts of 88):** stock-months whose parts came above 50, split by whether the Signal read Very Weak, within bands of the uncapped score. Capped stocks did no worse in the typical case (42 sessions: +0.39 points against peers before 2020, +0.34 from 2020, both intervals across zero); both tails were about 3 points wider. The cap marks a sharp fall, not weaker months ahead; keeping it is a presentation choice. Script and plan in the session scratchpad (`hc/capstudy/cap.js`, `PLAN.md`), reading `HealthReplay.load()` and rescoring with today's rules.
+- **The Very Weak cap (entry 29, 2026-11-13, the owner asked after NVIDIA showed 50 on parts of 88):** stock-months whose parts came above 50, split by whether the Signal read Very Weak, within bands of the uncapped score. Capped stocks did no worse in the typical case (42 sessions: +0.39 points against peers before 2020, +0.34 from 2020, both intervals across zero); both tails were about 3 points wider. The cap marks a sharp fall, not weaker months ahead; keeping it was a presentation choice. **The owner dropped it the same day**: NVIDIA now reads its parts, 88. Script and plan in the session scratchpad (`hc/capstudy/cap.js`, `PLAN.md`), reading `HealthReplay.load()` and rescoring with today's rules.
 - **Stored history in production:** none. The inputs are all kept by date, so any day's Health can be rebuilt (the owner). Backlog 59 is Done.
 
 ### The kept history, for later tests (2026-11-07)

@@ -673,7 +673,7 @@ The rebuilt Health of entries 27 and 28, rescored with today's rules, with each 
 No edge. Capped stocks did not do worse in the typical case: over 42 sessions the capped basket was ahead of its peers by 0.39 points before 2020 and 0.34 from 2020, both intervals straddling zero, and it was ahead in about half the months. What differed was the spread. Capped stocks had a worse worst tenth (−12.9 against −10.8 before 2020, −19.5 against −16.5 from 2020), and an equally better best tenth (+13.9 against +10.4, and +17.3 against +14.1). They moved more in both directions; they did not move down more.
 
 ### What follows
-The cap does not mark weaker months ahead; it marks a stock in a sharp fall, which the Price part already scores. Whether to keep it is a question of presentation, not of evidence: it stops Health and the Signal from reading as a contradiction, at the cost of folding very different businesses into the same 50. Nothing here changes Health or the Signal.
+The cap does not mark weaker months ahead; it marks a stock in a sharp fall, which the Price part already scores. Whether to keep it is a question of presentation, not of evidence: it stops Health and the Signal from reading as a contradiction, at the cost of folding very different businesses into the same 50. On this result the cap was dropped the same day: Health now scores a Very Weak stock by its parts, and the fall shows in the Price part. The Signal is unchanged.
 
 ### Caveats
 - **The same lookalike as entry 27:** the estimate, short interest and tone checks are missing throughout, and the outlook check before 2017.

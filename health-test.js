@@ -4,7 +4,7 @@
 //
 // A row that reads well everywhere scores 100; both sides of every check's
 // thresholds; the blanks (null is not zero) and the rescaling around them;
-// the weight floor; the three caps; funds; the pillar weights; and the
+// the weight floor; the two caps; funds; the pillar weights; and the
 // boundary with the Signal: the same rows score identically with Health
 // absent, present and lying.
 
@@ -138,15 +138,17 @@ check('under it (50%: business and valuation) is not', H.score(row({ erVsEstWord
 console.log('THE CAPS');
 check('guidance lowered caps at 60', sc({ erGuideChange: 'Lowered' }), 60);
 check('guidance withdrawn caps at 60', sc({ erGuideChange: 'Withdrawn' }), 60);
-check('Very Weak caps at 50', sc({ action: 'Very Weak' }), 50);
-check('the old word for it does too', sc({ action: 'Sell Immediately' }), 50);
+// The Very Weak cap was dropped on 2026-11-13 (the owner, after research entry 29): Health does not read the Signal.
+check('Very Weak does not cap', sc({ action: 'Very Weak' }), 100);
+check('nor the old word for it', sc({ action: 'Sell Immediately' }), 100);
 check('Weak does not cap', sc({ action: 'Weak' }), 100);
 check('shares up 10.1% caps at 70', sc({ sharesChg: 10.1 }), Math.min(70, Math.round(30 * 0.75 + 70)));
 check('shares up 10% does not cap', H.explain(row({ sharesChg: 10 })).caps.length, 0);
-check('two caps: the lower holds', sc({ action: 'Very Weak', erGuideChange: 'Lowered' }), 50);
-check('a cap never raises a low score', sc({ action: 'Very Weak', revenueGrowthYoY: -20, profitMargin: -30, fcfMargin: -20, oneMonthPct: -20, threeYearPct: -50, vs200ma: -20, maBullish: false, peVsMed: 80, peerPe: 2 }) <= 50, true);
-check('the workings show raw and capped', (() => { const e = H.explain(row({ action: 'Very Weak' })); return [e.raw, e.score, e.capped, e.caps.map((c) => c.id)]; })(), [100, 50, true, ['signal']]);
-check('no cap on a dash', H.score(Object.assign({}, thin, { action: 'Very Weak' })), null);
+check('two caps: the lower holds', (() => { const e = H.explain(row({ sharesChg: 10.1, erGuideChange: 'Lowered' })); return [e.caps.map((c) => c.id).sort(), e.score === Math.min(60, e.raw)]; })(), [['dilution', 'guide'], true]);
+check('a cap never raises a low score', sc({ erGuideChange: 'Lowered', revenueGrowthYoY: -20, profitMargin: -30, fcfMargin: -20, oneMonthPct: -20, threeYearPct: -50, vs200ma: -20, maBullish: false, peVsMed: 80, peerPe: 2 }) <= 50, true);
+check('a Very Weak row scores as its parts do', H.explain(row({ action: 'Very Weak', oneMonthPct: -20 })).score, H.explain(row({ oneMonthPct: -20 })).score);
+check('the workings show raw and capped', (() => { const e = H.explain(row({ sharesChg: 10.1 })); return [e.score === Math.min(70, e.raw), e.raw > 70, e.capped, e.caps.map((c) => c.id)]; })(), [true, true, true, ['dilution']]);
+check('no cap on a dash', H.score(Object.assign({}, thin, { sharesChg: 20 })), null);
 
 console.log('FUNDS AND ERRORS');
 check('a fund: no Health', H.explain(row({ instrumentType: 'ETF' })), null);
@@ -196,8 +198,8 @@ check('the three rows are not all the same verdict (the check can tell)', new Se
   const N = H.parts(row({ erVsEstWord: null, erVsEst: null, erGuideChange: null, oneMonthPct: -12 }));
   check('parts: a pillar with no data is null and its weight left out', [N[4][1][0], N[2]], [null, 75]);
   check('parts: earned over the weight with data gives the raw score', Math.round(N[4].reduce((a, p) => a + (p[0] || 0), 0) / N[2] * 100), N[1]);
-  const C = H.parts(row({ action: 'Very Weak' }));
-  check('parts: a cap is named with its ceiling and holds the score', [C[0], C[1], C[3]], [50, 100, [['The Signal reads Very Weak', 50]]]);
+  const C = H.parts(row({ sharesChg: 10.1 }));
+  check('parts: a cap is named with its ceiling and holds the score', [C[0], C[1] > 70, C[3]], [70, true, [['Shares up more than 10% in a year', 70]]]);
   check('parts: a fund has none', H.parts(row({ instrumentType: 'ETF' })), null);
   check('parts: the score is the column\'s score', [H.parts(row({ toneAvg: 0, sharesChg: 2 }))[0]], [H.score(row({ toneAvg: 0, sharesChg: 2 }))]);
 }
