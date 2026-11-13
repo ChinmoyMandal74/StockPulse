@@ -1264,13 +1264,9 @@
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-layers" /></svg>Consolidated
         </a>
         <!-- Three pages that lived in the ... menu until 2026-10-28, brought up
-             to the bar. Ids unchanged: News and Paper positions are members'
+             to the bar. Ids unchanged: Paper positions is a member'
              pages and hide for guests with the research link; Earnings results
              is public and stays for everyone. -->
-        <a class="btn" id="newsLink" href="/news" target="_blank" rel="noopener"
-           title="News — every article read by AI, by day and importance">
-          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>News
-        </a>
         <a class="btn" id="resultsLink" href="/results" target="_blank" rel="noopener"
            title="Earnings results — the latest results releases, read by AI">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>Earnings
@@ -1297,6 +1293,11 @@
         <!-- The blog (2026-11-03, owner): public, so it stays for guests too. -->
         <a class="btn" id="blogLink" href="/blog" target="_blank" rel="noopener" title="Blog — posts from Tickr Lab, written from the data">
           <svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil" /></svg>Blog
+        </a>
+        <!-- The news brief (2026-11-12, owner: moved after Blog, and it opens /briefs, the daily news brief, instead of /news). Public, so it stays for guests. -->
+        <a class="btn" id="newsLink" href="/briefs" target="_blank" rel="noopener"
+           title="News — the daily news brief: today’s stock news on one page, written by AI">
+          <svg class="ic ic-sm" aria-hidden="true"><use href="#i-news" /></svg>News
         </a>
         <!-- The forward-returns VIEW still belongs to this page: it is a mode of
              the table, with its own banner and its own column group. Only the
@@ -5991,7 +5992,7 @@
         signedIn = me.signedIn !== false;
         currentUser = me.user || null;
         isGuest = !!me.guest;
-        for (const id of ['researchLink', 'paperLink', 'competeLink', 'filingsLink', 'iposLink', 'selloffLink', 'trendingLink', 'newsLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
+        for (const id of ['researchLink', 'paperLink', 'competeLink', 'filingsLink', 'iposLink', 'selloffLink', 'trendingLink']) { const el = document.getElementById(id); if (el) el.style.display = isGuest ? 'none' : ''; }
       } catch {
         isAdmin = true; authRequired = false; signedIn = true; currentUser = null; isGuest = false;
       }
