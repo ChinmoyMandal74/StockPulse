@@ -1708,7 +1708,7 @@
   // the same on its slice of the bar, the ring, its tile, pill, bar and dots.
   // Not green or red (price) and not amber (stale or wrong); the averages
   // above are blue and orange. Tokens, so the light theme has its own.
-  const PART_COLOR = { business: 'indigo', results: 'cyan', value: 'fuchsia', price: 'sand', sentiment: 'pink' };
+  const PART_COLOR = { business: 'indigo', results: 'cyan', value: 'orange', price: 'sand', sentiment: 'blue' };
   const partColor = (L) => `--pc:var(--${PART_COLOR[L.id] || 'accent'})`;
   function healthWorkingsHTML(lay, p) {
     const [score, raw, weighed, caps, pillars] = p;
