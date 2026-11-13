@@ -1704,11 +1704,30 @@
   }
 
   const hcNum = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  // A colour a part (2026-11-13, the owner: "a little bit more colorful"),
+  // the same on its slice of the bar, the ring, its tile, pill, bar and dots.
+  // Not green or red (price) and not amber (stale or wrong); the averages
+  // above are blue and orange. Tokens, so the light theme has its own.
+  const PART_COLOR = { business: 'indigo', results: 'cyan', value: 'fuchsia', price: 'sand', sentiment: 'pink' };
+  const partColor = (L) => `--pc:var(--${PART_COLOR[L.id] || 'accent'})`;
   function healthWorkingsHTML(lay, p) {
     const [score, raw, weighed, caps, pillars] = p;
     const earned = pillars.map((x) => x[0]);
-    const segs = lay.map((L, i) => `<span class="hc-seg" style="flex:${L.weight}"><i style="width:${earned[i] == null ? 0 : (earned[i] / L.weight) * 100}%"></i></span>`).join('');
-    const names = lay.map((L) => `<span style="flex:${L.weight}">${esc(L.label)}</span>`).join('');
+    const segs = lay.map((L, i) => `<span class="hc-seg" style="flex:${L.weight};${partColor(L)}"><i style="width:${earned[i] == null ? 0 : (earned[i] / L.weight) * 100}%"></i></span>`).join('');
+    const names = lay.map((L) => `<span style="flex:${L.weight};${partColor(L)}">${esc(L.label)}</span>`).join('');
+    // THE RING: each part's share of the raw score, in its colour, round from
+    // the top; the rest of the circle is track. Over the weight with data, so a
+    // full ring is 100 whatever was left out.
+    let at = 0;
+    const arcs = [];
+    lay.forEach((L, i) => {
+      if (earned[i] == null || !weighed) return;
+      const to = at + (earned[i] / weighed) * 360;
+      arcs.push(`var(--${PART_COLOR[L.id] || 'accent'}) ${at.toFixed(2)}deg ${to.toFixed(2)}deg`);
+      at = to;
+    });
+    arcs.push(`var(--hc-track) ${at.toFixed(2)}deg 360deg`);
+    const ring = `--ring:conic-gradient(${arcs.join(', ')})`;
     const got = earned.filter((x) => x != null);
     const total = got.reduce((a, x) => a + x, 0);
     let sum = got.map(hcNum).join(' + ') + ' = ' + hcNum(Math.round(total * 10) / 10);
@@ -1718,12 +1737,12 @@
       ? `<div class="hc-cap">Held to ${score}: ${esc(caps.map((c) => c[0]).join('; '))}</div>` : '';
     const thin = score == null ? `<div class="hc-cap">Too little data for a number: ${weighed} of 100 has data, at least 60 is needed.</div>` : '';
     const head = '<div class="hc-score">' +
-      `<div class="hc-big"><span class="hc-k">Health</span><span class="hc-n">${score == null ? '—' : score}</span><span class="hc-of">of 100</span></div>` +
+      `<div class="hc-big"><span class="hc-k">Health</span><span class="hc-ring" style="${ring}"><span class="hc-n">${score == null ? '—' : score}</span></span><span class="hc-of">of 100</span></div>` +
       `<div class="hc-how"><div class="hc-stack">${segs}</div><div class="hc-names">${names}</div><div class="hc-sum">${sum}</div>${capLine}${thin}</div></div>`;
     const dot = (v) => `<span class="hc-dot ${v == null ? 'na' : v >= 1 ? 'full' : v > 0 ? 'half' : 'miss'}"></span>`;
     const tiles = lay.map((L, i) => {
       const [pts, checks] = pillars[i];
-      return `<div class="hc-p${pts == null ? ' none' : ''}"><div class="hc-pt"><span>${esc(L.label)}</span>` +
+      return `<div class="hc-p hc-part${pts == null ? ' none' : ''}" style="${partColor(L)}"><div class="hc-pt"><span>${esc(L.label)}</span>` +
         `<span class="hc-pill">${pts == null ? '—' : hcNum(pts)} / ${L.weight}</span></div>` +
         `<div class="hc-bar"><i style="width:${pts == null ? 0 : (pts / L.weight) * 100}%"></i></div>` +
         L.checks.map((label, j) => {
