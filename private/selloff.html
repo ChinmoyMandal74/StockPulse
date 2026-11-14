@@ -48,11 +48,23 @@
     .masthead { margin: 18px 0 14px; }
 
     .sw-bar { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; flex-wrap: wrap; }
-    .sw-tab { font: 500 12px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--hair);
-              background: none; color: var(--muted); cursor: pointer; }
-    .sw-tab.on { color: var(--text); border-color: var(--accent); }
-    .sw-tab .sw-n { font-family: var(--mono); color: var(--faint); margin-left: 4px; }
-    .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
+    /* The tabs (owner, 2026-11-13: "more prominent"): a grid of tiles of equal width on their own rows, the chosen one
+       lit in the accent, the count a badge; the controls sit on the row beneath. */
+    .sw-tabs { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+    .sw-tab { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left;
+              font: 600 14px/1.25 var(--sans); letter-spacing: -0.01em; padding: 13px 14px 13px 16px; border-radius: 14px;
+              border: 1px solid var(--hair); background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted); cursor: pointer;
+              transition: color .15s, border-color .15s, background .15s; }
+    .sw-tab:hover { color: var(--text); border-color: var(--hair-2); background: var(--surface); }
+    .sw-tab.on { color: var(--text); border-color: var(--accent);
+                 background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+                 box-shadow: 0 10px 30px -18px var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+    .sw-tab .sw-n { flex: none; font: 600 12px var(--mono); color: var(--muted); background: var(--surface-2);
+                    border: 1px solid var(--hair); border-radius: 999px; padding: 2px 9px; min-width: 2.4em; text-align: center; }
+    .sw-tab .sw-n:empty { display: none; }
+    .sw-tab.on .sw-n { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+    .sw-gap { flex: 1; }
+    .sw-win { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
     .sw-win select { font: 500 12px var(--sans); color: var(--text); background: var(--surface-2); border: 1px solid var(--hair-2); border-radius: 999px; padding: 6px 10px; }
     .sw-xl { font-size: 12px; padding: 7px 14px; }
     .sw-side { display: inline-flex; border: 1px solid var(--hair); border-radius: 999px; padding: 2px; gap: 2px; }
@@ -120,7 +132,9 @@
     .sw-fstat button { font: 500 12px var(--sans); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--hair-2); background: none; color: var(--muted); cursor: pointer; }
     .sw-fstat button:hover { color: var(--text); border-color: var(--accent); }
     .sw-foot { margin: 16px 6px 0; font-size: 12px; color: var(--faint); line-height: 1.65; max-width: 110ch; }
-    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } .sw-win { margin-left: 0; } }
+    @media (max-width: 1100px) { .sw-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 860px) { .page { padding: 0 16px; } .hide-sm { display: none !important; } }
+    @media (max-width: 560px) { .sw-tabs { grid-template-columns: minmax(0, 1fr); } .sw-tab { padding: 11px 12px 11px 14px; } }
     @media (max-width: 1279px) { .sw-card > .core { overflow: hidden; } .sw-wrap { overflow-x: auto; } .sw-wrap thead th { position: static; } }
   </style>
 </head>
@@ -150,7 +164,7 @@
 
     <div class="sw-bar">
       <!-- At /trending (2026-11-07) the script swaps these for the four trending tabs. -->
-      <span id="tabs" style="display:contents">
+      <div class="sw-tabs" id="tabs" role="tablist">
       <!-- First, and the tab the page opens on (owner, 2026-11-03). -->
       <button class="sw-tab" data-v="watch">AI watchlist<span class="sw-n" id="nwatch"></span></button>
       <button class="sw-tab" data-v="tech">Tech: strong results, fell anyway<span class="sw-n" id="ntech"></span></button>
@@ -161,10 +175,11 @@
       <button class="sw-tab" data-v="divlow">Dividend growers near their lows<span class="sw-n" id="ndivlow"></span></button>
       <button class="sw-tab" data-v="insider">Insider buying clusters<span class="sw-n" id="ninsider"></span></button>
       <button class="sw-tab" data-v="quiet">Strong three years, quiet this year<span class="sw-n" id="nquiet"></span></button>
-      </span>
+      </div>
       <!-- Trending's volume and market cap tabs: the rises or the falls. -->
       <span class="sw-side" id="sideWrap" style="display:none"><button type="button" data-side="up">Price up</button><button type="button" data-side="down">Price down</button></span>
       <span class="sw-fstat" id="fstat"><span>Showing <b id="fshown"></b> of <b id="ftotal"></b></span><button type="button" id="fclear">Clear filters</button></span>
+      <span class="sw-gap"></span>
       <label class="sw-win" id="winWrap"><span id="winLabel">Releases from the past</span>
         <select id="days" aria-label="How far back a results release counts"></select>
       </label>

@@ -190,3 +190,10 @@ Verified in headless Chrome over a real `/api/selloff` answer: 18 checks, coveri
 
 ## Health column (2026-11-11, owner)
 Health (0 to 100, `health.js`) is the third column on every Ideas and Trending tab, after Company and, where a tab has one, Group or Sector, and the third column of every Excel sheet (`Health (0 to 100)`, after Symbol and Company). `pageRows` now runs `stampHealth` last, as the screener does, so the figure is the screener's own; `Selloff.fields` carries it as `health`. Uncoloured, the number only, a dash when there is none; sortable and filterable like any number. Display only, never the Signal.
+
+## The tabs as tiles (2026-11-13)
+Owner: "make the tab headings more prominent, make it look good". The tabs were small outlined pills in one line with the controls. Now:
+- **Layout:** a grid of tiles on their own rows (`.sw-tabs`): four across, two below 1100px, one below 560px. On Ideas that is two rows of four; on Trending, one row of four.
+- **Each tile:** the name at 14px semibold, and the count as a badge on the right. The chosen tile has an accent border, an accent-tinted fill and an accent badge.
+- **The controls** (Price up/down, filter status, window or period, Export to Excel) sit on the row below the tiles, with the window and Excel pushed right by a spacer (`.sw-gap`).
+- **Unchanged:** the buttons are still `.sw-tab` with `data-v`, and `#tabs` is still the container Trending fills, so the script did not change.
