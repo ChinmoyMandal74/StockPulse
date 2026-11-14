@@ -406,6 +406,7 @@ const SYSTEM_TODAY = [
   'At most 25 high lines and 35 medium lines, most important first within each: weigh the event, the size of the company, and how many outlets carried it. Each line is one or two plain sentences, under 240 characters, naming the company, and cites the ids of every article it uses.',
   'Use only facts in the summaries: no figure, company or date that is not in the articles a line cites, and no outside knowledge. Describe; do not advise or forecast. Never say a share price will rise or fall, never use buy, sell, hold, bullish, bearish, outperform, underperform, overweight, underweight or price target; name days by their weekday (Thursday, the Friday open), never today, tonight or tomorrow, since the note is read the next morning too; never name a newspaper, website or other news outlet (say "a report"); write "acquire" for a purchase of a company, and leave out analysts\' price targets and lists of picks.',
   'The intro is one sentence on the day as a whole, under 300 characters, from the articles only.',
+  'After the articles come the lines the briefs of the last few days already published, marked e1, e2 and so on. Readers have seen those stories: do not tell one again, even in other words or with new articles about it. Write about such a story only when the articles report a new development (a decision, an announcement, a result, or a figure, date or person the earlier line does not have), and then say only what is new, without restating what the earlier line said. Never cite an e id.',
 ].join(' ');
 const SCHEMA_TODAY = {
   type: 'object', additionalProperties: false, required: ['intro', 'items'],
@@ -415,14 +416,20 @@ const SCHEMA_TODAY = {
       properties: { importance: { type: 'string', enum: ['high', 'medium'] }, ids: { type: 'array', items: { type: 'string' } }, line: { type: 'string' } } } },
   },
 };
-function todayPrompt(inputs, today) {
+// earlier: the lines the briefs of the last few days published ({ symbols, line }),
+// so a story still in the news is not told a second day (2026-11-14, the owner:
+// the brief "is sometimes repeating the story").
+function todayPrompt(inputs, today, earlier) {
   const t = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+  const before = (earlier || []).filter((x) => x && x.line);
   return `Today is ${dayName(today)}. ${inputs.length} articles:\n` + inputs.map((c) =>
-    `${c.id} | ${c.symbol} ${c.name} | value ${capText(c.cap)} | ${c.kind}, ${c.importance}, ${c.coverage} outlet${c.coverage === 1 ? '' : 's'}, ${t(c.publishedAt)} | ${c.text}`).join('\n');
+    `${c.id} | ${c.symbol} ${c.name} | value ${capText(c.cap)} | ${c.kind}, ${c.importance}, ${c.coverage} outlet${c.coverage === 1 ? '' : 's'}, ${t(c.publishedAt)} | ${c.text}`).join('\n')
+    + (before.length ? `\n\nAlready published in the last few days' briefs (${before.length} lines; do not tell these stories again):\n`
+      + before.map((x, i) => `e${i + 1} | ${(x.symbols || []).join(' ')} | ${x.line}`).join('\n') : '');
 }
-function todayRequest(inputs, today) {
+function todayRequest(inputs, today, earlier) {
   return { model: MODEL, max_tokens: 16000, system: SYSTEM_TODAY, output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA_TODAY } },
-    messages: [{ role: 'user', content: todayPrompt(inputs, today) }] };
+    messages: [{ role: 'user', content: todayPrompt(inputs, today, earlier) }] };
 }
 // The same story twice: a later line about the same companies sharing most of
 // its words with an earlier one (Jaccard 0.5 on words of four letters or more).
@@ -433,7 +440,13 @@ function sameStory(a, b) {
   let both = 0; for (const w of p) if (q.has(w)) both++;
   return p.size + q.size - both > 0 && both / (p.size + q.size - both) >= 0.5;
 }
-function checkToday(ans, inputs, symbols, extra, outlets) {
+// A line telling again what an earlier day's brief told: a company in common and
+// most of the words (the same Jaccard 0.5; the companies cited may differ from day to day).
+function toldBefore(x, y) {
+  if (!(y.symbols || []).some((s) => x.symbols.includes(s))) return false;
+  return sameStory(x, { symbols: x.symbols, line: y.line });
+}
+function checkToday(ans, inputs, symbols, extra, outlets, earlier) {
   const byId = new Map(inputs.map((c) => [c.id, c]));
   const dropped = [], items = [], used = new Set();
   if (!ans || typeof ans !== 'object' || !Array.isArray(ans.items)) return { ok: false, intro: '', items: [], dropped: ['no answer'] };
@@ -445,6 +458,7 @@ function checkToday(ans, inputs, symbols, extra, outlets) {
     const x = { importance: it.importance, line: text, symbols: [...new Set(cited.map((c) => c.symbol))].sort(), ids, articles: ids.length };
     if (!why && ids.some((id) => used.has(id))) why = 'repeats an article an earlier line used';
     if (!why && items.some((y) => sameStory(x, y))) why = 'repeats an earlier line';
+    if (!why && (earlier || []).some((y) => y && y.line && toldBefore(x, y))) why = 'told in an earlier brief';
     if (why) { dropped.push(why); continue; }
     if (items.length >= MAX_TODAY) break;
     ids.forEach((id) => used.add(id));
@@ -464,6 +478,6 @@ const spend = (usage) => (usage ? (Number(usage.input_tokens) || 0) * PRICE.in +
 module.exports = {
   isTradingDay, nextTradingDay, holidays, easter, addDays, dayName, etDay,
   inWindow, stories, line, calendar, outletIn, OUTLETS, eveningBuild, eveningOf, shownBuild, nextSession, PAGE_SLOTS, moment, nextUpdate, UPDATES, linkNames, candidates, request, userPrompt, check, spend, capText,
-  dayInputs, todayRequest, todayPrompt, checkToday, sameStory,
+  dayInputs, todayRequest, todayPrompt, checkToday, sameStory, toldBefore,
   SYSTEM, SCHEMA, SYSTEM_TODAY, SCHEMA_TODAY, MODEL, MAX_ITEMS, MAX_TODAY, RANK,
 };

@@ -119,6 +119,18 @@ check('sixty kept of more', (() => { const many = Array.from({ length: 70 }, (_,
   return NB.checkToday({ intro: '', items: many.map((m, i) => ({ importance: 'high', ids: [m.id], line: 'w' + i + 'aaaa w' + i + 'bbbb w' + i + 'cccc' })) }, many, syms).items.length; })(), 60);
 check('the count of articles read', ok1.read, 5);
 
+// ---- a story told in an earlier day's brief is not told again (2026-11-14) ----------
+const EARLIER = [{ symbols: ['AAA', 'ZZZ'], line: 'Alpha Holdings reported quarterly results above estimates and raised guidance.' }, { symbols: ['BBB'], line: 'Beta agreed to acquire a firm.' }];
+const TE = (items) => NB.checkToday({ intro: '', items }, day, syms, 'Thursday, November 12 2026-11-12', [], EARLIER);
+check('a line retelling an earlier brief\'s story, other companies cited: dropped', TE([{ importance: 'high', ids: ['r1'], line: 'Alpha Holdings reported quarterly results above estimates and raised its guidance.' }]).dropped, ['told in an earlier brief']);
+check('a new development at the same company is kept', TE([{ importance: 'high', ids: ['r1'], line: 'Alpha named a new chief financial officer.' }]).items.length, 1);
+check('the same words about another company are not matched', TE([{ importance: 'high', ids: ['r4'], line: 'Gamma agreed to acquire a firm.' }]).dropped, []);
+check('no earlier lines: nothing dropped for it', NB.checkToday({ intro: '', items: [{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm.' }] }, day, syms).items.length, 1);
+const ereq = NB.todayRequest(day, '2026-11-12', EARLIER);
+check('the earlier lines go in the prompt after the articles, numbered e1..', [/Already published in the last few days' briefs \(2 lines/.test(ereq.messages[0].content), /\ne1 \| AAA ZZZ \| Alpha Holdings/.test(ereq.messages[0].content), /\ne2 \| BBB \| Beta agreed/.test(ereq.messages[0].content)], [true, true, true]);
+check('without earlier lines the prompt has no such section', /Already published/.test(treq.messages[0].content), false);
+check('the instructions: not told again, only what is new, never an e id', /do not tell one again/.test(NB.SYSTEM_TODAY) && /say only what is new/.test(NB.SYSTEM_TODAY) && /Never cite an e id/.test(NB.SYSTEM_TODAY), true);
+
 // ---- no news outlet named (the briefs are public) ----------------------------------
 check('a well-known outlet in a line: dropped', T([{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm, Bloomberg reported.' }]).dropped, ['names a news outlet (Bloomberg)']);
 check('the day\'s own outlet names too', NB.checkToday({ intro: '', items: [{ importance: 'high', ids: ['r3'], line: 'Beta agreed to acquire a firm, per Daily Widget News.' }] }, day, syms, '', ['Daily Widget News', 'example.com']).dropped, ['names a news outlet (Daily Widget News)']);

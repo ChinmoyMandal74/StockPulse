@@ -22473,6 +22473,18 @@ app.post('/api/cron/jobs-digest', route(async (req, res) => {
 // model twice, about $0.33), ?noai=1 leaves the model out; body.force sends again.
 const NewsBrief = require('./newsbrief.js');
 const NB_HTML_BUDGET = 85000;   // Gmail clips a message past about 102 KB
+// The lines the published briefs of the last three days before `today` told
+// (each day's newest shown build), so the re-read does not tell a story again
+// (2026-11-14, the owner: the brief "is sometimes repeating the story").
+async function newsBriefEarlier(today) {
+  const days = (await store.readNewsBriefDays(6, NewsBriefPage.shownBuild)).filter((d) => d < today).slice(0, 3);
+  const out = [];
+  for (const d of days) {
+    const b = await store.readNewsBrief(d, NewsBriefPage.shownBuild);
+    for (const x of ((b.today && b.today.items) || [])) if (x && x.line) out.push({ symbols: Array.isArray(x.symbols) ? x.symbols : [], line: String(x.line) });
+  }
+  return out;
+}
 async function newsBriefData(now, prevAt) {
   const today = NewsBrief.etDay(now), next = NewsBrief.nextSession(today, now);
   const snap = await snapshotCached().catch(() => null);
@@ -22484,7 +22496,8 @@ async function newsBriefData(now, prevAt) {
   const cal = NewsBrief.calendar(calRaw, info, today, next);
   // The day's outlet names, so no line naming one is kept (the page is public).
   const outlets = [...new Set(rows.map((r) => String(r.source || '')).filter(Boolean))];
-  return { today, next, list, cal, rows, info, prevAt, now, outlets, symbols: new Set(by.keys()) };
+  const earlier = await newsBriefEarlier(today).catch(() => []);
+  return { today, next, list, cal, rows, info, prevAt, now, outlets, earlier, symbols: new Set(by.keys()) };
 }
 // One call to the model with a JSON answer; checked by `checkFn(ans)`. Never
 // throws: a failure is `error`, and the email says so.
@@ -22519,8 +22532,8 @@ function newsBriefNext(d, useAi) {
 }
 function newsBriefTodayAi(d, useAi) {
   const inputs = NewsBrief.dayInputs(d.rows, d.info, d.prevAt, d.now);
-  return newsBriefCall(inputs.length ? NewsBrief.todayRequest(inputs, d.today) : null, useAi,
-    (ans) => NewsBrief.checkToday(ans, inputs, d.symbols, NewsBrief.dayName(d.today) + ' ' + d.today, d.outlets));
+  return newsBriefCall(inputs.length ? NewsBrief.todayRequest(inputs, d.today, d.earlier) : null, useAi,
+    (ans) => NewsBrief.checkToday(ans, inputs, d.symbols, NewsBrief.dayName(d.today) + ' ' + d.today, d.outlets, d.earlier));
 }
 // The AI's summary: high then medium, a line an event, its companies and how
 // many articles it was drawn from.
@@ -22646,7 +22659,7 @@ app.post('/api/cron/news-brief', route(async (req, res) => {
   const a = newsBriefTodayEmail(d, prevAt, tai), b = newsBriefNextEmail(d, ai);
   const counts = { stories: d.list.length, high: d.list.filter((s) => s.importance === 'high').length, medium: d.list.filter((s) => s.importance === 'medium').length,
     shown: a.shown, before: d.cal.before.length, after: d.cal.after.length, items: ai.items.length, dropped: ai.dropped, aiError: ai.error,
-    todayRead: tai.read || 0, todayItems: tai.items.length, todayDropped: tai.dropped, todayError: tai.error, spent: Math.round((ai.spent + tai.spent) * 1e4) / 1e4 };
+    todayRead: tai.read || 0, todayEarlier: d.earlier.length, todayItems: tai.items.length, todayDropped: tai.dropped, todayError: tai.error, spent: Math.round((ai.spent + tai.spent) * 1e4) / 1e4 };
   if (dry) return res.json({ dry: true, counts, today: { subject: a.subject, text: a.text, bytes: a.html.length }, next: { subject: b.subject, text: b.text, bytes: b.html.length } });
   // Each line keeps its companies' names, so the page can link them where they appear.
   const briefNames = (dd, syms) => Object.fromEntries((syms || []).map((x) => [x, ((dd.info(x) || {}).name) || x]));
