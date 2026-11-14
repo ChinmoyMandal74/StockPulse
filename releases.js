@@ -29,13 +29,16 @@ const SCALE = { units: 1, thousands: 1e3, millions: 1e6, billions: 1e9 };
 // The site's rule: nothing recommends, rates or targets (newstone.js's list).
 const BANNED = /\b(buy|sell|hold|bullish|bearish|outperform|underperform|overweight|underweight|price target|target price|strong|weak)\b/i;
 
+const cp = (c) => (c > 0 && c <= 0x10FFFF ? String.fromCodePoint(c) : ' ');
+
 // HTML to text that keeps table rows readable: a row a line, cells by " | ".
 function toText(html) {
   return String(html || '')
     .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<\/(td|th)>/gi, ' | ').replace(/<(br|\/p|\/div|\/tr|\/h\d|\/li)\b[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(Number(n))).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16)))
+    // A code past U+10FFFF makes fromCodePoint throw; one bad page stopped the website crawl (2026-11-13).
+    .replace(/&#(\d+);/g, (m, n) => cp(Number(n))).replace(/&#x([0-9a-f]+);/gi, (m, n) => cp(parseInt(n, 16)))
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&rsquo;/g, '’')
     .split('\n').map((l) => l.replace(/[ \t ]+/g, ' ').replace(/(\s*\|\s*)+/g, ' | ').replace(/^\s*\|\s*|\s*\|\s*$/g, '').trim()).filter(Boolean).join('\n');
 }
