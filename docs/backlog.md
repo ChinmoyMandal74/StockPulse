@@ -3054,6 +3054,39 @@ request at a time, a daily cap, any refusal stops), kept in `formd.db`.
   obeyed, read by AI with every phrase checked. **Pilot built
   2026-11-10** (`website-load.js`, 200 employers); results in
   `docs/context/company-websites.md`.
+- **E18. Job postings from the companies' hiring systems** (owner,
+  2026-11-14, on the backlog not built): Greenhouse, Lever, Ashby,
+  Workable, SmartRecruiters, BambooHR and the like publish each employer's
+  open jobs as a public list meant to be read (title, location,
+  department, date posted). The website read now only says yes or no
+  (`open_jobs` set for 391 of 5,580 reads, no job listed). Steps: the
+  crawl keeps the careers page's link addresses (it keeps page text only,
+  so links are lost today: 3,175 companies' pages mention LinkedIn, almost
+  none with the address); tell the system from the link; read the list;
+  again weekly, each week's list kept, so hiring up or down shows. Free,
+  no blocking, no terms problem; a firm posting only on its own site gets
+  the yes or no alone. Local `formd.db`, never served.
+- **E19. LinkedIn company pages, through Apify** (owner, 2026-11-14,
+  company facts only, never people): the employee count and band,
+  industry, founded, headquarters, the company's own website, funding
+  where listed; job postings too. Direct reading is out: one plain request
+  from this machine got a 403, and getting past it means evading
+  LinkedIn's bot defences from the owner's address (which the SEC has
+  already blocked once) against terms that forbid it. Apify's community
+  tools do it without a login: `harvestapi/linkedin-company` (about
+  34,000 users, 4.86 stars, $2.50 to $4 per 1,000 companies; by name or
+  LinkedIn address) and `alfalfa/linkedin-jobs-scraper` (filters by
+  company, from $0.35 per 1,000 jobs); prices as listed 2026-11-14, check
+  before a run. Match by name, kept only when the website LinkedIn lists
+  is the one the crawl confirmed. A 300-company pilot about $1 to $2, the
+  5,592 confirmed sites about $15 to $25; report the match rate, how the
+  headcount compares with Form 5500, PPP and SBA, and the cost per
+  company, before the rest. Needs an Apify account and `APIFY_TOKEN` in
+  `.env`. Each look kept by date (headcount over time is the growth
+  signal); local `formd.db`, never Turso or the site. LinkedIn's terms
+  forbid scraping (hiQ v. LinkedIn: public pages not a computer-fraud
+  matter, but hiQ lost on the terms), so the risk is the owner's; people
+  profiles stay out (personal data).
 - Also possible: NLRB cases (bargaining-unit sizes), EPA facility records,
   SAM.gov entity registrations, public pension funds' private-equity
   holdings reports (fund returns, as PitchBook uses), bankruptcy filings
